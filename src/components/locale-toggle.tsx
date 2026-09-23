@@ -3,12 +3,13 @@
 import type { Locale } from '@/lib/locale';
 
 export function LocaleToggle({ locale, onChange }: { locale: Locale; onChange: (locale: Locale) => void }) {
-  return <div className="locale-toggle" role="group" aria-label="Language">
-    <button type="button" aria-label="English" title="English" aria-pressed={locale === 'en'} onClick={() => onChange('en')}>
-      <span aria-hidden="true">🇬🇧</span>
-    </button>
-    <button type="button" aria-label="한국어" title="한국어" aria-pressed={locale === 'ko'} onClick={() => onChange('ko')}>
-      <span aria-hidden="true">🇰🇷</span>
+  const nextLocale = locale === 'en' ? 'ko' : 'en';
+  const currentLabel = locale === 'en' ? 'English' : '한국어';
+  const nextLabel = nextLocale === 'en' ? 'English' : '한국어';
+
+  return <div className="locale-toggle">
+    <button type="button" aria-label={`Language: ${currentLabel}. Switch to ${nextLabel}.`} title={`Switch to ${nextLabel}`} onClick={() => onChange(nextLocale)}>
+      <img src={locale === 'en' ? '/images/flags/i18n_en.jpg' : '/images/flags/i18n_ko.jpg'} alt="" aria-hidden="true" />
     </button>
   </div>;
 }
