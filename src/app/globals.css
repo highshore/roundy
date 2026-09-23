@@ -34,3 +34,24 @@
 .route-me .intro>.eyebrow{display:none}
 .route-me .poster{background:var(--ink);color:var(--paper)}
 .route-me .poster .eyebrow{color:var(--lime)}
+.header-signin{font-size:13px;font-weight:700;border:1px solid var(--border);border-radius:30px;padding:10px 16px;white-space:nowrap}
+.sign-in-panel{display:flex;flex-direction:column;gap:26px}
+.signin-back{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--muted);width:fit-content;min-height:44px}
+.signin-art{height:174px;position:relative;overflow:hidden;display:grid;place-items:center}
+.signin-art span{position:absolute;width:140px;height:140px;border:1px solid var(--ink);border-radius:50%;transform:translateX(-42px)}
+.signin-art span:nth-child(2){background:var(--lime);transform:translateX(42px)}
+.signin-art i{z-index:1;font-size:62px;font-weight:700;font-style:normal;transform:rotate(-12deg)}
+.sign-in-panel .intro h1{max-width:12ch}
+.button.kakao-button{background:#fee500;color:#191919;border-radius:14px}
+.button.kakao-button:hover{background:#f5dc00}
+.signin-privacy{display:flex;align-items:center;justify-content:center;gap:9px;font-size:12px;color:var(--muted)}
+.signin-notice{font-size:14px;background:var(--surface);border:1px solid var(--border);padding:16px;border-radius:12px}
+.route-signin .content{padding-bottom:48px}
+.venue-map{border:1px solid var(--border);border-radius:22px;overflow:hidden;background:var(--paper)}
+.venue-map-heading{display:flex;gap:14px;padding:22px;align-items:center}
+.venue-map-heading p{font-size:14px;color:var(--muted);margin-top:6px}
+.naver-map-canvas{width:100%;height:280px;background:var(--surface)}
+.map-unavailable{padding:26px 22px;background:var(--surface);color:var(--muted);font-size:14px}
+.venue-map-footer{padding:20px 22px;display:grid;gap:14px;font-size:14px}
+.venue-map-footer a{display:flex;align-items:center;gap:8px;font-weight:700;text-decoration:underline;min-height:44px}
+.venue-map>.note{padding:8px 22px}

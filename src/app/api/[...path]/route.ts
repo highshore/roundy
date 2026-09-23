@@ -4,12 +4,13 @@ import { interests } from '@/lib/data';
 export const dynamic='force-dynamic';
 const json=(data:unknown,status=200)=>NextResponse.json(data,{status,headers:{'Cache-Control':'private, no-store'}});
 async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}){
- if(!process.env.NEXT_PUBLIC_SUPABASE_URL||!process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY)return json({error:'Backend is not configured. This build is an interactive preview.'},503);
+ if(!process.env.NEXT_PUBLIC_SUPABASE_URL||!process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY)return json({error:'Roundy is being connected. Please try again soon.'},503);
  if(req.method!=='GET'&&req.headers.get('origin')!==req.nextUrl.origin)return json({error:'Invalid request origin'},403);
  const path=(await params).path;const supabase=await createClient();
  try{
   if(path[0]==='events'&&req.method==='GET'){const {data,error}=await supabase.from('wis_events').select('*').order('starts_at');if(error)throw error;return json({events:data});}
   const {data:{user},error:authError}=await supabase.auth.getUser();if(authError||!user)return json({error:'Sign in required'},401);
+  if(user.app_metadata.provider!=='kakao')return json({error:'Please sign in with Kakao'},403);
   if(path[0]==='photos'){
    if(req.method==='POST'){
     const form=await req.formData();const photo=form.get('photo');

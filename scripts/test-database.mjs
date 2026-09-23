@@ -3,6 +3,8 @@ import {readFile,readdir} from 'node:fs/promises';
 import assert from 'node:assert/strict';
 const db=new PGlite();
 await db.exec(`create role anon;create role authenticated;create schema auth;create table auth.users(id uuid primary key);create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;grant usage on schema auth to anon,authenticated;grant execute on function auth.uid() to anon,authenticated;create schema storage;create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);create table storage.objects(id uuid,name text,bucket_id text);create function storage.foldername(text) returns text[] language sql immutable as $$select string_to_array($1,'/')$$;`);
+// Reproduce hosted default privileges, not just a restrictive local database.
+await db.exec('alter default privileges in schema public grant all on tables to anon, authenticated');
 for(const f of (await readdir('supabase/migrations')).sort())await db.exec(await readFile('supabase/migrations/'+f,'utf8'));
 const uid=n=>`00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
 const eid=uid(100);const encounter=n=>uid(200+n);
