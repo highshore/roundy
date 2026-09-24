@@ -171,7 +171,7 @@ const koreanUi: Record<string, string> = {
   'Reports are confidential, not anonymous. Our team reviews them directly.': '신고는 비공개이지만 익명은 아니에요. 팀에서 직접 검토해요.',
   'Harassment, intoxication, hate speech, unwanted contact, recording and sharing identities can lead to permanent removal. ': '괴롭힘, 과도한 음주, 혐오 표현, 원치 않는 연락, 녹음과 신원 공유는 영구 이용 제한으로 이어질 수 있어요. ',
   'Read our safety principles.': '안전 원칙을 읽어 보세요.',
-  'Create a reusable profile, apply, and wait for a curated room. Once approved, use a ticket or checkout.': '재사용 가능한 프로필을 만들고 신청하세요. 검토 후 승인되면 티켓 또는 결제로 좌석을 확정할 수 있어요.',
+  'Create a reusable profile and get verified once. Then reserve an available event directly with a valid ticket or payment.': '재사용 가능한 프로필을 만들고 한 번 인증받으세요. 이후 유효한 티켓 또는 결제로 잔여 좌석이 있는 이벤트를 바로 예약할 수 있어요.',
   'Bring ID and arrive early. Meet through 15-minute English rounds. No alcohol is provided. Entry closes 15 minutes after the start.': '신분증을 지참하고 일찍 도착하세요. 15분씩 영어로 대화해요. 주류는 제공되지 않으며 시작 후 15분이 지나면 입장할 수 없어요.',
   'Choose up to 3 Yes. Both say Yes? You see each other’s profile, name and phone number after the event.': '최대 3명에게 Yes를 선택할 수 있어요. 두 사람 모두 Yes를 선택하면 이벤트 후 서로의 프로필, 이름과 전화번호를 확인해요.',
   'Photos, identity, social handles and choices are private. Rich dating profiles and phone numbers are available only to mutual matches. Verification handles are never shared.': '사진, 신원, 소셜 계정과 선택은 비공개예요. 상세 프로필과 전화번호는 상호 매칭된 경우에만 확인할 수 있으며, 인증에 사용한 계정은 공유되지 않아요.',
