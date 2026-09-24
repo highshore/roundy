@@ -5,10 +5,10 @@ export function eventInput(body:unknown) {
  const int=(k:string,min:number,max:number)=>{const x=v[k];if(typeof x!=='number'||!Number.isInteger(x)||x<min||x>max)throw new Error(`Invalid ${k}.`);return x;};
  const starts_at=text('starts_at',40);if(!/^\d{4}-\d{2}-\d{2}T/.test(starts_at)||!Number.isFinite(Date.parse(starts_at)))throw new Error('Choose a valid event date and time.');
  const age_min=int('age_min',18,100),age_max=int('age_max',18,100);if(age_max<age_min)throw new Error('Choose a valid age range.');
- const capacity=int('capacity',2,100);if(capacity%2)throw new Error('Max participants must be an even number.');
+ const capacity=int('capacity',2,100);
  const duration_minutes=int('duration_minutes',15,1440),lockdown_minutes=int('lockdown_minutes',0,43200);
  const reminder_minutes=v.reminder_minutes===null?null:int('reminder_minutes',0,43200);
- const status=text('status',20);if(!['draft','published','live','closed','cancelled'].includes(status))throw new Error('Invalid event visibility.');
+ const status=text('status',20);if(!['draft','live'].includes(status))throw new Error('Invalid event visibility.');
  const latitude=v.latitude,longitude=v.longitude;
  if((latitude===null)!==(longitude===null)||!(latitude===null||typeof latitude==='number'&&Number.isFinite(latitude)&&Math.abs(latitude)<=90)||!(longitude===null||typeof longitude==='number'&&Number.isFinite(longitude)&&Math.abs(longitude)<=180))throw new Error('Select a valid location.');
  const images=v.images;
