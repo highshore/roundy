@@ -76,15 +76,18 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
   if(path[0]==='verification'&&req.method==='POST'){
    const body=await req.json();const method=body.verification_method;
    let instagram='',linkedin='',document_path='';
-   if(method==='instagram'){instagram=String(body.instagram??'').trim().replace(/^@/,'');if(!/^[A-Za-z0-9_.]{1,30}$/.test(instagram)||instagram.includes('..'))return json({error:'Enter an Instagram handle, for example @kimsookyum.'},400);}
-   else if(method==='linkedin'){try{const url=new URL(String(body.linkedin??''));if(url.protocol!=='https:'||!['linkedin.com','www.linkedin.com'].includes(url.hostname)||!/^\/in\/[A-Za-z0-9%_-]+\/?$/.test(url.pathname))throw new Error();linkedin='https://www.linkedin.com'+url.pathname;}catch{return json({error:'Enter a valid LinkedIn profile URL.'},400);}}
+   if(method==='instagram'){instagram=String(body.instagram??'').trim();if(!/^[A-Za-z0-9_.]{1,30}$/.test(instagram)||instagram.includes('..'))return json({error:'Enter only your Instagram username.'},400);}
+   else if(method==='linkedin'){const username=String(body.linkedin??'').trim();if(!/^[A-Za-z0-9_-]{1,100}$/.test(username))return json({error:'Enter only the LinkedIn username after /in/.'},400);linkedin='https://www.linkedin.com/in/'+username;}
    else if(method==='document'){document_path=String(body.document_path??'');if(!document_path.startsWith(user.id+'/')||!new RegExp('^[a-f0-9-]+/[a-f0-9-]+\\.(pdf|jpg|png|webp)$').test(document_path))return json({error:'Upload your work or student proof.'},400);const {data,error}=await supabase.storage.from('wis-verification-documents').list(user.id,{search:document_path.split('/')[1]});if(error||!data?.some(f=>f.name===document_path.split('/')[1]))return json({error:'Document upload could not be verified.'},400);}
    else return json({error:'Choose one verification method.'},400);
    const {data:existing,error:readError}=await supabase.from('wis_verifications').select('user_id').eq('user_id',user.id).maybeSingle();if(readError)throw readError;
    const payload={instagram,linkedin,document_path,method};const {error}=existing?await supabase.from('wis_verifications').update(payload).eq('user_id',user.id):await supabase.from('wis_verifications').insert({user_id:user.id,...payload});if(error)throw error;return json({saved:true});
   }
   if(path[0]==='checkout')return json({error:'Payments are not enabled. No charge has been made.'},503);
-  if(path[0]==='bookings'&&req.method==='POST'){const body=await req.json();const {data,error}=await supabase.rpc('wis_redeem',{p_event:body.eventId});if(error)throw error;return json({id:data});}
+  if(path[0]==='bookings'){
+   if(req.method==='GET'){const {data,error}=await supabase.from('wis_bookings').select('id,wis_events(slug)');if(error)throw error;return json({bookings:(data??[]).map(b=>({id:b.id,event_slug:(b.wis_events as unknown as {slug:string})?.slug}))});}
+   if(req.method==='POST'){const body=await req.json();const {data,error}=await supabase.rpc('wis_redeem',{p_event:body.eventId});if(error)throw error;return json({id:data});}
+  }
   if(path[0]==='choices'&&req.method==='POST'){const body=await req.json();const {error}=await supabase.rpc('wis_choose',{p_encounter:body.encounterId,p_choice:body.choice});if(error)throw error;return json({saved:true});}
   if(path[0]==='matches'&&req.method==='GET'){
    if(path[1]){const {data,error}=await supabase.rpc('wis_match_profile',{p_match:path[1]});if(error)throw error;return json({profile:data});}
