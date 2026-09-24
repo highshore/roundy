@@ -1,62 +1,53 @@
 # Roundy
 
-Mobile-first Next.js + Tailwind implementation foundation, with a Supabase migration and Vercel configuration.
+Next.js 16, React 19, Supabase and Vercel. Production: https://roundy.team
 
-Figma: https://www.figma.com/design/in15ghtoWrlRr0Zivaa3zy
+Design: https://www.figma.com/design/in15ghtoWrlRr0Zivaa3zy
 
-## Run
+## Development
 
-Requires Node 22 or later.
+Node 22 or later is required. Run `npm ci`, copy `.env.example` to `.env.local`, then `npm run dev`. Check with `npm test`, `npm run typecheck` and `npm run build`.
 
-```sh
-npm ci
-npm run dev
-npm run build
-npm test
-```
+Missing credentials never enable demo authentication. Public pages remain accessible; private pages require Kakao authentication. API routes independently verify the user and database-enforced admin role.
 
-Without Supabase environment variables, public pages remain accessible, sign-in shows a setup-pending notice, and private routes redirect to sign-in. Fictional events and sessionStorage are not used as a live-data fallback.
+## September 24 refresh
 
-## Design structure
+- Coral `#FF6666` brand and black navbar sign-in; the supplied animated WebP is centered during navigation, data loading, uploads and saves. Reduced-motion users receive a text loading state.
+- Admin event editor: title, description, Seoul date/time, Naver location search and coordinate resolution, duration, participant capacity, age range, registration cutoff, uploaded images and Kakao reminder offsets. Images accept JPEG/PNG/WebP, up to 5 MB each and 10 per event.
+- Database-derived `MM-DD-YYYY` slugs, stable numeric suffixes for same-date events, aliases after date changes, derived end times and remaining capacity calculated from confirmed bookings.
+- Create, edit, duplicate, generate seating and share/download a seating PNG. Seating requires verified, balanced confirmed attendees, respects pair exclusions, and locks once event choices begin. A host-only roster maps codes to attendees; exported images contain codes only.
+- Prominent profile progress/save bar, localized 195-country flag dropdown, 120 categorized emoji interests, automatic general work descriptions, and main-photo avatars.
+- One verification method: Instagram handle, LinkedIn profile, or private work/student proof (PDF/JPEG/PNG/WebP, 5 MB). Only the owner and administrators can read proof files. Changing evidence resets approval.
+- Figma brand tokens and onboarding updated; native admin/editor/search/seating/loading states are on `08 — ADMIN & LOADING`. The loading design uses a still frame from the supplied animation; the website plays the original animation.
 
-The Figma file contains 37 screen frames in 00 Public Web, 01 Discover, 02 Onboarding, 03 Application, 04 Event Night, 05 Matches and 06 My Account, with 07 Components & States separately. The revised screens use purpose-specific layouts: photo-led event detail, one-decision setup, interest chips, photo slots, checkout line items, QR ticket, dark timer, circular choices, profile detail, contact reveal, wallet and settings rows. Status variants remain intentionally related. It is an editable storyboard, not a fully wired interaction prototype. Figma photography remains labeled placeholders because its upload endpoint rejected the uploads. Local website assets contain the actual neighborhood photographs.
+## Production services
 
-The current app starts those flows; it is not a complete production implementation of every Figma frame. In particular, event-night starting table, round and choice screens are currently combined in a preview view, and live matching results use a simple list pending the full profile presentation.
+All refresh migrations are applied to Roundy's Seoul Supabase project `sruzwoiyfjnebjmyxucy`. The `roundy-reminders` Edge Function and a once-per-minute `pg_cron` job are deployed. The scheduler uses the public anon JWT for gateway verification; provider credentials and the service-role key are never shipped to the browser. No 1 Cup production data or credentials were changed.
 
-## Implemented foundation
+Configure server-only values through the corresponding project's environment settings, never in source or chat:
 
-- Responsive public landing, event discovery/filtering and event detail, with separate product navigation: Discover / My Events / Matches / Profile.
-- Kakao-only sign-in, safe OAuth return paths, server-protected private pages and independently authenticated API routes. Public discovery remains accessible without signing in.
-- Naver Maps JavaScript SDK integration with a venue marker when a client ID and verified coordinates are available; explicit pending/error states and an external directions link otherwise.
-- Six-step resumable preview profile flow, 1–3 photo upload UI, 3–10 interest selection, private contact consent and social verification submission.
-- Application status preview, approved checkout preview, sample QR, check-in and private round-choice preview.
-- Supabase SSR clients, session refresh proxy, OAuth code callback with internal redirect allowlist, authenticated API routes and owner-only private photo storage routes.
-- SQL with explicit grants/RLS, owner-only profiles/applications/credits, no attendee directory, idempotent application/redeem, row-locking credit redemption, event-scoped maximum three Yes choices, reciprocal matching after close and authorized contact reveal.
-- Manual verification is reset when social handles change. Clients cannot self-approve, issue credits, check themselves in or read other attendees' records.
-- Local PGlite tests execute the migration and validate privacy, authorization and workflow invariants. They use mock auth/storage schemas and do not replace testing on the selected Supabase project.
+| Feature | Configuration |
+| --- | --- |
+| Naver place search | Vercel `NAVER_SEARCH_CLIENT_ID`, `NAVER_SEARCH_CLIENT_SECRET` from Naver Developers Local Search |
+| Naver address geocoding | Vercel `NAVER_MAP_CLIENT_ID`, `NAVER_MAP_CLIENT_SECRET` from Naver Cloud Maps |
+| Venue map display | Vercel `NEXT_PUBLIC_NAVER_MAP_CLIENT_ID`; allow Roundy's domain in Naver |
+| General work descriptions | Vercel `OPENAI_API_KEY`; optional `PROFILE_SUMMARY_MODEL` (default `gpt-4.1-mini`) |
+| Kakao reminders | Supabase Edge secrets `KAKAO_APPKEY`, `KAKAO_SECRET_KEY`, `KAKAO_SENDER_KEY`, `KAKAO_TEMPLATE_CODE` |
 
-## Live setup still needed
+Naver search and geocoding use different Naver applications. If geocoding is unavailable, location resolution uses a unique Local Search result; ambiguous results require selection. Work summaries send only occupation/workplace fields, never documents, photos or contact details. If generation is unavailable, a generic description is saved with `summary_status: pending` and retried on a subsequent profile save.
 
-The dedicated Roundy Free organization and Seoul Supabase project (`sruzwoiyfjnebjmyxucy`) are provisioned. Both checked-in migrations have been applied. All 12 public tables have RLS enabled, and hosted default grants were explicitly hardened. The public GitHub repository is linked to the Vercel project at https://roundy-phi.vercel.app/. Existing 1 Cup English production data was not changed.
+The Kakao adapter follows 1cup-web's NHN Alimtalk integration and requires a **Roundy-approved** template with `meetup-time`, `meetup-location`, `meetup-link` substitutions. Its deployed health check currently reports `configured: false`. The admin editor clearly shows unavailable reminder delivery. Only due reminders for confirmed bookings are claimed; disabling/rescheduling cancels stale queued jobs. Atomic claims, a unique event/user/start key, and the provider idempotency header prevent repeated dispatch. At-start reminders allow 10 minutes of scheduler grace. `sent` means provider acceptance, not confirmed handset delivery. Ambiguous failures stay failed for manual provider reconciliation; they are not automatically retried. SMS fallback is disabled. Changing provider settings requires an authorized test recipient before claiming delivery is verified.
 
-1. Copy `.env.example` to `.env.local` and configure the public Supabase URL and publishable key locally and in Vercel. These values must exist when Next.js builds. Redeploy after changing them.
-2. Create the Roundy Kakao Developers app and enable Kakao Login. Register `https://sruzwoiyfjnebjmyxucy.supabase.co/auth/v1/callback` in Kakao. Configure the Kakao provider in Supabase, disable unused auth providers including email, set the site URL, and allow the exact application callback `https://roundy-phi.vercel.app/auth/callback` (plus localhost for development). The client requests nickname/photo scopes, not email. Kakao initial-photo import is pending. Provider credentials are not yet configured.
-3. Add real event data and authorized staff accounts. Build the staff approval, verification, ID/QR check-in, seating/exclusion and event-close interfaces. No client can directly write those privileged states.
-4. Integrate a payment provider: server-side gender/returner pricing, promo/referral rules, idempotent provider verification/webhooks, paid credit issuance, transactional booking and refunds. Checkout currently fails closed with 503 and never issues paid credits. Existing-ticket redemption has a real RPC.
-5. Add live ticket issuance/signing, arrival enforcement, realtime round schedule, match-profile photo grants and display, communication reminders, cancellation and credit history views. Add rate limiting/abuse controls before public launch.
-6. Resolve whether an already-used ticket is refundable within the 90-day window. The UI records the stated policy but no automated refund logic is active.
-7. Create a Naver Cloud Maps application with Web Dynamic Map enabled and restrict it to the production/development domains. Set `NEXT_PUBLIC_NAVER_MAP_CLIENT_ID` and redeploy. Store verified venue latitude/longitude in `wis_events`; no illustrative address is assigned a guessed map pin. Naver credentials and real event data are not yet configured. `vercel.json` selects Next.js and Seoul region.
+## Boundaries inherited from the existing application
 
-Do not expose a Supabase service-role key in client code. The application currently requires only the publishable key and relies on user sessions plus database policies.
+Payment checkout remains disabled until a real provider/webhook and refund adapter exist. Existing-ticket redemption is implemented. Staff approval, document review UI, ID/QR check-in, live event round controls and complete match-photo presentation still need their own implementation; the new admin seating controls do not replace those workflows. A database administrator can review uploaded proof using protected storage. Existing profile and match privacy constraints remain in place.
+
+## Verification
+
+`npm test` covers private-route return paths and database privacy/workflows: application/redeem idempotency, maximum three Yes choices, reciprocal matching, event close, date slugs and aliases, derived capacity, lockdown, seating exclusions/authorization, document ownership, admin image upload, reminder deduplication and cancellation. Tests execute application migrations in PGlite with mock auth/storage schemas; hosted `pg_cron`/`pg_net` setup is verified on Supabase separately.
+
+Build and type checking pass. The production scheduler reports a successful run. Protected upload/search/save workflows and external provider delivery still require a signed-in admin session and configured provider credentials for end-to-end verification.
 
 ## Reference reuse
 
-See REUSE-NOTES.md. Neighborhood images come from the user's public `highshore/1cup-web` repository and are labeled as neighborhood scenery, not venue photographs. The 1 Cup event structure informed the event detail layout. Roundy's attendee privacy is stricter, and its 1/3 ticket, 90-day rules differ from 1 Cup's credit constants.
-
-## Verification in this workspace
-
-- `npm run build`: passed (Next.js production compilation and TypeScript).
-- `npm test`: passed (safe return-path tests, PGlite migrations and privacy/workflow invariants, including hosted default-grant regression coverage).
-- Hosted SQL checks confirm clients cannot self-verify or self-approve and anonymous users cannot read profiles.
-- Figma screenshots checked for distinct layouts and clipping; photo heights and matched-profile metadata widths corrected.
-- Automated browser interaction verification could not complete: agent-browser's daemon failed to start, the standard browser download was invalid, and the alternate Chromium renderer exited in this environment. Mobile visual/interaction QA still needs a working browser before launch.
+See `REUSE-NOTES.md`. Existing neighborhood photographs come from the user's `highshore/1cup-web` repository and remain labeled illustrative in preview mode. Its event editor, Naver search and messaging flow informed this implementation. Roundy's privacy and ticket rules remain separate.

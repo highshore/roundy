@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { ArrowLeft, LockKeyhole, MessageCircle } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { authConfigured, safeReturnPath } from '@/lib/auth-routing';
+import { LoadingScreen } from './loading-screen';
 import { tr, type Locale } from '@/lib/locale';
 
 export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Locale }) {
@@ -36,7 +37,7 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
     }
   }
 
-  return <section className="sign-in-panel">
+  return <section className="sign-in-panel">{busy&&<LoadingScreen/>}
     <Link className="signin-back" href={eventSlug ? '/events/' + eventSlug : '/discover'}><ArrowLeft size={18}/> {tr(locale, 'Keep Exploring', '이벤트 더 둘러보기')}</Link>
     <div className="signin-art" aria-hidden="true"><span/><span/><i>R</i></div>
     <h1 className="sr-only">{tr(locale, 'Sign In', '로그인')}</h1>

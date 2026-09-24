@@ -1,155 +1,58 @@
 'use client';
-
-import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { CalendarDays, ChevronLeft, MapPin, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { FormEvent,useEffect,useRef,useState } from 'react';
+import Image from 'next/image';
+import { CalendarDays,ChevronLeft,Copy,Download,MapPin,Pencil,Plus,Search,Share2,Trash2,Users,X } from 'lucide-react';
 import type { Event } from '@/lib/data';
-import { dateLabelForLocale, timeLabelForLocale, tr, ui, type Locale } from '@/lib/locale';
+import { dateLabelForLocale,timeLabelForLocale,tr,ui,type Locale } from '@/lib/locale';
+import type { Place } from '@/lib/naver';
+import { uploadFile } from '@/lib/uploads';
+import { LoadingScreen } from './loading-screen';
 
-type EventForm = {
-  id?: string;
-  slug: string;
-  title: string;
-  neighborhood: string;
-  starts_at: string;
-  ends_at: string;
-  venue: string;
-  address: string;
-  age_min: string;
-  age_max: string;
-  capacity: string;
-  seats_remaining: string;
-  theme: string;
-  description: string;
-  image: string;
-  status: string;
-  latitude: string;
-  longitude: string;
-};
-
-const emptyForm = (): EventForm => ({
-  slug: '', title: '', neighborhood: 'Hongdae', starts_at: '', ends_at: '', venue: '', address: '',
-  age_min: '25', age_max: '35', capacity: '16', seats_remaining: '16', theme: '', description: '',
-  image: '/images/yeouido.webp', status: 'draft', latitude: '', longitude: '',
-});
-
-function toSeoulInput(value: string) {
-  if (!value) return '';
-  const local = new Date(new Date(value).getTime() + 9 * 60 * 60 * 1000);
-  return local.toISOString().slice(0, 16);
-}
-
-function toForm(event: Event): EventForm {
-  return {
-    id: event.id, slug: event.slug, title: event.title, neighborhood: event.neighborhood,
-    starts_at: toSeoulInput(event.starts_at), ends_at: toSeoulInput(event.ends_at), venue: event.venue,
-    address: event.address, age_min: String(event.age_min), age_max: String(event.age_max),
-    capacity: String(event.capacity), seats_remaining: String(event.seats_remaining), theme: event.theme,
-    description: event.description, image: event.image || '/images/yeouido.webp', status: event.status,
-    latitude: event.latitude == null ? '' : String(event.latitude), longitude: event.longitude == null ? '' : String(event.longitude),
-  };
-}
-
-async function request(path: string, init?: RequestInit) {
-  const response = await fetch('/api/' + path, init);
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || 'Could not save the event.');
-  return data;
-}
-
-export function AdminEvents({ locale }: { locale: Locale }) {
-  const [events, setEvents] = useState<Event[]>([]);
-  const [form, setForm] = useState<EventForm | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-
-  const isEditing = Boolean(form?.id);
-  const publishedCount = useMemo(() => events.filter((event) => event.status === 'published').length, [events]);
-
-  async function loadEvents() {
-    setLoading(true);
-    try {
-      const data = await request('admin/events');
-      setEvents(data.events ?? []);
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Could not load events.');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => { void loadEvents(); }, []);
-
-  function update<K extends keyof EventForm>(key: K, value: EventForm[K]) {
-    setForm((current) => current ? { ...current, [key]: value } : current);
-  }
-
-  async function save(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!form) return;
-    setSaving(true);
-    setError('');
-    const payload = {
-      ...form,
-      age_min: Number(form.age_min), age_max: Number(form.age_max), capacity: Number(form.capacity),
-      seats_remaining: Number(form.seats_remaining),
-      starts_at: new Date(form.starts_at + "+09:00").toISOString(), ends_at: new Date(form.ends_at + "+09:00").toISOString(),
-      latitude: form.latitude === '' ? null : Number(form.latitude), longitude: form.longitude === '' ? null : Number(form.longitude),
-    };
-    try {
-      await request(form.id ? 'admin/events/' + form.id : 'admin/events', {
-        method: form.id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
-      });
-      setForm(null);
-      await loadEvents();
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Could not save the event.');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function remove(event: Event) {
-    if (!window.confirm(tr(locale, `Delete “${event.title}”? This cannot be undone.`, `“${event.title}” 이벤트를 삭제할까요? 이 작업은 되돌릴 수 없어요.`))) return;
-    setSaving(true);
-    setError('');
-    try {
-      await request('admin/events/' + event.id, { method: 'DELETE' });
-      await loadEvents();
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Could not delete the event.');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  if (form) return <section className="admin-panel">
-    <div className="admin-toolbar">
-      <button className="admin-back" onClick={() => setForm(null)}><ChevronLeft size={18}/>{tr(locale, 'All Events', '전체 이벤트')}</button>
-      <span className="admin-kicker">{tr(locale, isEditing ? 'Edit Event' : 'New Event', isEditing ? '이벤트 수정' : '새 이벤트')}</span>
-    </div>
-    <div className="admin-heading"><h1>{tr(locale, isEditing ? 'Update Event Details' : 'Create an Event', isEditing ? '이벤트 정보 수정' : '이벤트 만들기')}</h1><p>{tr(locale, 'Draft first, then publish when the room is ready.', '먼저 초안을 저장하고, 준비가 되면 공개하세요.')}</p></div>
-    <form className="admin-form" onSubmit={save}>
-      <label><span>{tr(locale, 'Event Name', '이벤트 이름')}</span><input required value={form.title} onChange={(event) => update('title', event.target.value)} placeholder={tr(locale, 'Friday First Hello', '금요일 퍼스트 헬로')}/></label>
-      <label><span>{tr(locale, 'URL Slug', 'URL 슬러그')}</span><input required pattern="[a-z0-9]+(?:-[a-z0-9]+)*" value={form.slug} onChange={(event) => update('slug', event.target.value.toLowerCase())} placeholder="friday-first-hello"/></label>
-      <div className="admin-two"><label><span>{tr(locale, 'Neighborhood', '지역')}</span><input required value={form.neighborhood} onChange={(event) => update('neighborhood', event.target.value)} placeholder="Hongdae"/></label><label><span>{tr(locale, 'Theme', '테마')}</span><input required value={form.theme} onChange={(event) => update('theme', event.target.value)} placeholder={tr(locale, 'A Fresh Start', '새로운 시작')}/></label></div>
-      <label><span>{tr(locale, 'Description', '소개')}</span><textarea required rows={4} value={form.description} onChange={(event) => update('description', event.target.value)} placeholder={tr(locale, 'What makes this evening worth joining?', '이 이벤트를 소개해 주세요.')}/></label>
-      <div className="admin-two"><label><span>{tr(locale, 'Starts (KST)', '시작 시간 (한국 시간)')}</span><input required type="datetime-local" value={form.starts_at} onChange={(event) => update('starts_at', event.target.value)}/></label><label><span>{tr(locale, 'Ends (KST)', '종료 시간 (한국 시간)')}</span><input required type="datetime-local" value={form.ends_at} onChange={(event) => update('ends_at', event.target.value)}/></label></div>
-      <label><span>{tr(locale, 'Venue', '장소명')}</span><input required value={form.venue} onChange={(event) => update('venue', event.target.value)} placeholder={tr(locale, 'Venue name', '장소 이름')}/></label>
-      <label><span>{tr(locale, 'Address', '주소')}</span><input required value={form.address} onChange={(event) => update('address', event.target.value)} placeholder={tr(locale, 'Street address', '도로명 주소')}/></label>
-      <div className="admin-two"><label><span>{tr(locale, 'Latitude', '위도')}</span><input inputMode="decimal" value={form.latitude} onChange={(event) => update('latitude', event.target.value)} placeholder="37.5563"/></label><label><span>{tr(locale, 'Longitude', '경도')}</span><input inputMode="decimal" value={form.longitude} onChange={(event) => update('longitude', event.target.value)} placeholder="126.9236"/></label></div>
-      <div className="admin-three"><label><span>{tr(locale, 'Min Age', '최소 연령')}</span><input required type="number" min="18" value={form.age_min} onChange={(event) => update('age_min', event.target.value)}/></label><label><span>{tr(locale, 'Max Age', '최대 연령')}</span><input required type="number" min="18" value={form.age_max} onChange={(event) => update('age_max', event.target.value)}/></label><label><span>{tr(locale, 'Capacity', '정원')}</span><input required type="number" min="12" max="24" step="2" value={form.capacity} onChange={(event) => update('capacity', event.target.value)}/></label></div>
-      <div className="admin-two"><label><span>{tr(locale, 'Seats Remaining', '남은 자리')}</span><input required type="number" min="0" value={form.seats_remaining} onChange={(event) => update('seats_remaining', event.target.value)}/></label><label><span>{tr(locale, 'Visibility', '공개 상태')}</span><select value={form.status} onChange={(event) => update('status', event.target.value)}><option value="draft">{tr(locale, 'Draft', '초안')}</option><option value="published">{tr(locale, 'Published', '공개')}</option><option value="live">{tr(locale, 'Live', '진행 중')}</option><option value="closed">{tr(locale, 'Closed', '종료')}</option><option value="cancelled">{tr(locale, 'Cancelled', '취소')}</option></select></label></div>
-      <label><span>{tr(locale, 'Cover Image', '커버 이미지')}</span><select value={form.image} onChange={(event) => update('image', event.target.value)}><option value="/images/yeouido.webp">{tr(locale, 'Yeouido', '여의도')}</option><option value="/images/anam-korea-university.webp">{tr(locale, 'Anam', '안암')}</option></select></label>
-      {error && <p role="alert" className="admin-error">{ui(locale,error)}</p>}
-      <div className="admin-form-actions"><button type="button" className="admin-secondary" onClick={() => setForm(null)}>{tr(locale, 'Cancel', '취소')}</button><button disabled={saving} className="admin-primary" type="submit">{saving ? tr(locale, 'Saving…', '저장 중…') : tr(locale, isEditing ? 'Save Changes' : 'Create Event', isEditing ? '변경사항 저장' : '이벤트 만들기')}</button></div>
-    </form>
-  </section>;
-
-  return <section className="admin-panel">
-    <div className="admin-toolbar"><span className="admin-kicker">{tr(locale, 'Roundy Admin', 'Roundy 관리자')}</span><button className="admin-add" onClick={() => setForm(emptyForm())}><Plus size={18}/>{tr(locale, 'New Event', '새 이벤트')}</button></div>
-    <div className="admin-heading"><h1>{tr(locale, 'Events', '이벤트')}</h1><p>{tr(locale, `${events.length} total · ${publishedCount} published`, `전체 ${events.length}개 · 공개 ${publishedCount}개`)}</p></div>
-    {error && <p role="alert" className="admin-error">{ui(locale,error)}</p>}
-    {loading ? <p className="admin-empty">{tr(locale, 'Loading events…', '이벤트를 불러오는 중…')}</p> : events.length === 0 ? <div className="admin-empty"><CalendarDays size={28}/><p>{tr(locale, 'Your first Roundy event starts here.', '첫 번째 Roundy 이벤트를 만들어 보세요.')}</p><button className="admin-primary" onClick={() => setForm(emptyForm())}><Plus size={18}/>{tr(locale, 'Create Event', '이벤트 만들기')}</button></div> : <div className="admin-event-list">{events.map((event) => <article className="admin-event" key={event.id}><div className="admin-event-meta"><span className={'admin-status '+event.status}>{tr(locale, event.status[0].toUpperCase() + event.status.slice(1), { draft: '초안', published: '공개', live: '진행 중', closed: '종료', cancelled: '취소' }[event.status] ?? event.status)}</span><span>{event.seats_remaining}/{event.capacity} {tr(locale, 'places', '자리')}</span></div><h2>{event.title}</h2><p><CalendarDays size={16}/>{dateLabelForLocale(event.starts_at, locale)} · {timeLabelForLocale(event.starts_at, locale)} KST</p><p><MapPin size={16}/>{event.venue || event.neighborhood}</p><div className="admin-event-actions"><button onClick={() => setForm(toForm(event))}><Pencil size={17}/>{tr(locale, 'Edit', '수정')}</button><button className="admin-delete" disabled={saving} onClick={() => void remove(event)} aria-label={tr(locale, 'Delete event', '이벤트 삭제')}><Trash2 size={17}/></button></div></article>)}</div>}
-  </section>;
+type Form = {id?:string;title:string;description:string;date:string;time:string;venue:string;address:string;latitude:number|null;longitude:number|null;duration_minutes:number;capacity:number;age_min:number;age_max:number;lockdown_minutes:number;reminder_minutes:number|null;images:string[];status:string};
+type Seating = {round:number;table:number;left:string;right:string}[];
+const empty=():Form=>({title:'',description:'',date:'',time:'19:00',venue:'',address:'',latitude:null,longitude:null,duration_minutes:120,capacity:16,age_min:25,age_max:35,lockdown_minutes:60,reminder_minutes:null,images:[],status:'draft'});
+const toForm=(e:Event):Form=>{const local=new Date(Date.parse(e.starts_at)+9*3600000).toISOString();return {id:e.id,title:e.title,description:e.description,date:local.slice(0,10),time:local.slice(11,16),venue:e.venue,address:e.address,latitude:e.latitude??null,longitude:e.longitude??null,duration_minutes:e.duration_minutes??Math.round((Date.parse(e.ends_at)-Date.parse(e.starts_at))/60000),capacity:e.capacity,age_min:e.age_min,age_max:e.age_max,lockdown_minutes:e.lockdown_minutes??60,reminder_minutes:e.reminder_minutes??null,images:e.images?.length?e.images:e.image?[e.image]:[],status:e.status};};
+async function request(path:string,init?:RequestInit){const r=await fetch('/api/'+path,init);const d=await r.json();if(!r.ok)throw new Error(d.error||'Request failed');return d;}
+function Offset({value,onChange,locale}:{value:number;onChange:(n:number)=>void;locale:Locale}){return <div className="offset-inputs"><label><span>{tr(locale,'Hours before','시간 전')}</span><input aria-label={tr(locale,'Hours before event','이벤트 전 시간')} type="number" min={0} max={720} value={Math.floor(value/60)} onChange={e=>onChange(Number(e.target.value)*60+value%60)}/></label><label><span>{tr(locale,'Minutes before','분 전')}</span><input aria-label={tr(locale,'Minutes before event','이벤트 전 분')} type="number" min={0} max={59} value={value%60} onChange={e=>onChange(Math.floor(value/60)*60+Number(e.target.value))}/></label></div>;}
+function Modal({title,close,children}:{title:string;close:()=>void;children:React.ReactNode}){const ref=useRef<HTMLDivElement>(null);const closeRef=useRef(close);closeRef.current=close;useEffect(()=>{const previous=document.activeElement as HTMLElement|null;const root=ref.current;root?.querySelector<HTMLElement>('button,input')?.focus();const onKey=(e:KeyboardEvent)=>{if(e.key==='Escape')closeRef.current();if(e.key==='Tab'&&root){const els=[...root.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),a[href],select')];const first=els[0],last=els.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus();}}};document.addEventListener('keydown',onKey);const overflow=document.body.style.overflow;document.body.style.overflow='hidden';return()=>{document.removeEventListener('keydown',onKey);document.body.style.overflow=overflow;previous?.focus();};},[]);return <div className="modal-backdrop" onClick={e=>{if(e.target===e.currentTarget)close();}}><div className="roundy-modal" role="dialog" aria-modal="true" aria-label={title} ref={ref}><header><h2>{title}</h2><button type="button" className="icon-button" aria-label="Close / 닫기" onClick={close}><X/></button></header>{children}</div></div>;}
+export function AdminEvents({locale}:{locale:Locale}){
+ const [events,setEvents]=useState<Event[]>([]),[form,setForm]=useState<Form|null>(null),[busy,setBusy]=useState(true),[error,setError]=useState(''),[notice,setNotice]=useState('');
+ const [search,setSearch]=useState(false),[query,setQuery]=useState(''),[places,setPlaces]=useState<Place[]>([]),[searchError,setSearchError]=useState('');
+ const [seating,setSeating]=useState<{event:Event;rows:Seating;skipped:number;roster:{code:string;name:string}[]}|null>(null),[round,setRound]=useState(1);
+ const [integrations,setIntegrations]=useState<{naver:boolean;reminders:boolean;summaries:boolean}|null>(null);
+ const [shareFile,setShareFile]=useState<File|null>(null),[shareUrl,setShareUrl]=useState('');
+ async function load(){const d=await request('admin/events');setEvents(d.events||[]);return d.events as Event[];}
+ useEffect(()=>{void Promise.all([load().then(es=>{const id=new URLSearchParams(window.location.search).get('event');const e=es.find(e=>e.id===id);if(e)setForm(toForm(e));}),request('admin/integrations').then(setIntegrations)]).catch(e=>setError(e.message)).finally(()=>setBusy(false));},[]);
+ useEffect(()=>()=>{if(shareUrl)URL.revokeObjectURL(shareUrl);},[shareUrl]);
+ function update<K extends keyof Form>(key:K,value:Form[K]){setForm(f=>f?{...f,[key]:value}:f);}
+ async function work(fn:()=>Promise<void>){setBusy(true);setError('');setNotice('');try{await fn();}catch(e){setError(e instanceof Error?e.message:'Request failed');}finally{setBusy(false);}}
+ async function save(e:FormEvent){e.preventDefault();if(!form)return;await work(async()=>{const payload={...form,starts_at:new Date(form.date+'T'+form.time+':00+09:00').toISOString()};const result=await request('admin/events'+(form.id?'/'+form.id:''),{method:form.id?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});setForm(null);await load();setNotice(tr(locale,'Event saved: /events/','이벤트가 저장되었어요: /events/')+result.event.slug);});}
+ async function findPlaces(e:FormEvent){e.preventDefault();setBusy(true);setSearchError('');try{const d=await request('admin/places?q='+encodeURIComponent(query));setPlaces(d.places);if(!d.places.length)setSearchError(tr(locale,'No places found. Try a more specific name or address.','검색 결과가 없어요. 정확한 장소명이나 주소를 입력해 주세요.'));}catch(e){setSearchError(e instanceof Error?e.message:'Search failed');}finally{setBusy(false);}}
+ async function generate(event:Event){await work(async()=>{const d=await request('admin/events/'+event.id+'/seating',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});setSeating({event,rows:d.rows,skipped:d.skipped,roster:d.roster??[]});setRound(1);setShareFile(null);});}
+ async function openSeating(event:Event){await work(async()=>{const d=await request('admin/events/'+event.id+'/seating');setSeating({event,rows:d.rows,skipped:d.skipped,roster:d.roster??[]});setRound(1);setShareFile(null);});}
+ async function prepareImage(){if(!seating)return;await work(async()=>{await document.fonts.ready;const rows=seating.rows.filter(r=>r.round===round);const canvas=document.createElement('canvas');canvas.width=1080;canvas.height=320+rows.length*90;const c=canvas.getContext('2d');if(!c)throw new Error('Image export unavailable');c.fillStyle='#fffefa';c.fillRect(0,0,canvas.width,canvas.height);c.fillStyle='#ff6666';c.fillRect(0,0,1080,18);c.fillStyle='#20211f';c.font='bold 50px "DM Sans", sans-serif';c.fillText('roundy',60,95);c.font='bold 32px "DM Sans", sans-serif';c.fillText(seating.event.title.slice(0,45),60,150);c.font='26px "DM Sans", sans-serif';c.fillText(`${dateLabelForLocale(seating.event.starts_at,locale)} — ${tr(locale,'Round','라운드')} ${round}`,60,202);rows.forEach((r,i)=>{const y=260+i*90;c.fillStyle=i%2?'#fff0f0':'#f3f3ee';c.fillRect(50,y-34,980,70);c.fillStyle='#20211f';c.fillText(`${tr(locale,'Table','테이블')} ${r.table}`,75,y+10);c.fillText(`${r.left}     ↔     ${r.right}`,460,y+10);});const blob=await new Promise<Blob>((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error('Export failed')),'image/png'));const file=new File([blob],`roundy-${seating.event.slug}-round-${round}.png`,{type:'image/png'});setShareFile(file);setShareUrl(URL.createObjectURL(blob));});}
+ const modal=search?<Modal title={tr(locale,'Search Naver Maps','네이버 지도 장소 검색')} close={()=>setSearch(false)}><form onSubmit={findPlaces} className="location-search-row"><input required value={query} onChange={e=>setQuery(e.target.value)} placeholder={tr(locale,'Place name or street address','장소명 또는 도로명 주소')} aria-label={tr(locale,'Location search','장소 검색')}/><button className="admin-primary" disabled={busy}><Search size={18}/>{tr(locale,'Search','검색')}</button></form><div className="place-results">{places.map((p,i)=><button type="button" className="place-result" key={i} onClick={()=>{setForm(f=>f?{...f,venue:p.title,address:p.address,latitude:p.latitude,longitude:p.longitude}:f);setSearch(false);}}><strong>{p.title}</strong><span>{p.address}</span></button>)}</div>{searchError&&<p role="alert" className="admin-error">{searchError}</p>}</Modal>:null;
+ return <section className="admin-panel">{busy&&<LoadingScreen/>}{error&&<p role="alert" className="admin-error">{ui(locale,error)}</p>}{notice&&<p role="status" className="feedback">{notice}</p>}{form?<>
+ <div className="admin-toolbar"><button className="admin-back" onClick={()=>setForm(null)}><ChevronLeft size={18}/>{tr(locale,'All Events','전체 이벤트')}</button><span className="admin-kicker">{tr(locale,form.id?'Edit Event':'Create New Event',form.id?'이벤트 수정':'새 이벤트 만들기')}</span></div>
+ <div className="admin-heading"><h1>{tr(locale,form.id?'Edit Event':'Create New Event',form.id?'이벤트 수정':'새 이벤트 만들기')}</h1></div>
+ <form className="admin-form" onSubmit={save}>
+ <label><span>{tr(locale,'Title','제목')}</span><input required maxLength={120} value={form.title} onChange={e=>update('title',e.target.value)}/></label>
+ <label><span>{tr(locale,'Description','설명')}</span><textarea required maxLength={3000} rows={4} value={form.description} onChange={e=>update('description',e.target.value)}/></label>
+ <div className="admin-two"><label><span>{tr(locale,'Event Date','이벤트 날짜')}</span><input required type="date" value={form.date} onChange={e=>update('date',e.target.value)}/></label><label><span>{tr(locale,'Event Time (KST)','이벤트 시간 (한국 시간)')}</span><input required type="time" value={form.time} onChange={e=>update('time',e.target.value)}/></label></div>
+ <p className="admin-help">{tr(locale,'Automatic URL','자동 URL')}: /events/{form.date?form.date.slice(5)+'-'+form.date.slice(0,4):'MM-DD-YYYY'} {tr(locale,'(same-day events receive a number)','(같은 날짜의 이벤트에는 번호가 붙어요)')}</p>
+ <label><span>{tr(locale,'Location','장소')}</span><div className="location-search-row"><input required maxLength={160} value={form.venue} onChange={e=>{update('venue',e.target.value);update('latitude',null);update('longitude',null);}} placeholder={tr(locale,'Place name / location description','장소명 / 장소 설명')}/><button type="button" className="admin-secondary" onClick={()=>{setQuery(form.venue);setPlaces([]);setSearchError('');setSearch(true);}}><Search size={18}/>{tr(locale,'Search','검색')}</button></div></label>
+ <label><span>{tr(locale,'Address','주소')}</span><input value={form.address} onChange={e=>{update('address',e.target.value);update('latitude',null);update('longitude',null);}} placeholder={tr(locale,'Filled automatically after selection','장소 선택 시 자동 입력')}/></label>
+ <p className="admin-help">{tr(locale,'Search to fill coordinates automatically, or we will resolve the location name/address when you save.','검색하면 좌표가 자동 입력돼요. 직접 입력한 장소명이나 주소는 저장할 때 좌표를 확인해요.')}</p>
+ {form.latitude!==null&&<div className="place-preview"><MapPin size={16}/> {form.address}<br/>{tr(locale,'Latitude / Longitude','위도 / 경도')}: {form.latitude}, {form.longitude}</div>}
+ <div className="admin-two"><label><span>{tr(locale,'Duration (minutes)','진행 시간 (분)')}</span><input type="number" required min={15} max={1440} value={form.duration_minutes} onChange={e=>update('duration_minutes',Number(e.target.value))}/></label><label><span>{tr(locale,'Max Participants','최대 참가자 수')}</span><input type="number" required min={2} max={100} step={2} value={form.capacity} onChange={e=>update('capacity',Number(e.target.value))}/></label></div>
+ <div className="admin-two"><label><span>{tr(locale,'Minimum Age','최소 연령')}</span><input type="number" required min={18} max={100} value={form.age_min} onChange={e=>update('age_min',Number(e.target.value))}/></label><label><span>{tr(locale,'Maximum Age','최대 연령')}</span><input type="number" required min={form.age_min} max={100} value={form.age_max} onChange={e=>update('age_max',Number(e.target.value))}/></label></div>
+ <fieldset><legend>{tr(locale,'Lockdown before event','이벤트 신청 마감')}</legend><Offset value={form.lockdown_minutes} onChange={n=>update('lockdown_minutes',n)} locale={locale}/></fieldset>
+ <fieldset><legend>{tr(locale,'Event Images','이벤트 이미지')}</legend><label className="document-upload"><strong>{tr(locale,'Upload event images','이벤트 이미지 업로드')}</strong><input type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={busy||form.images.length>=10} onChange={e=>{const files=[...(e.target.files||[])];e.target.value='';if(!files.length)return;void work(async()=>{if(files.length+form.images.length>10)throw new Error(tr(locale,'Choose up to 10 images.','이미지는 최대 10개까지 선택할 수 있어요.'));const urls:string[]=[];try{for(const file of files)urls.push(await uploadFile(file,'wis-event-images'));}finally{if(urls.length)setForm(f=>f?{...f,images:[...f.images,...urls]}:f);}});}}/><small>📸 {tr(locale,'JPEG, PNG or WebP · Max 5 MB each · Up to 10 images','JPEG, PNG, WebP · 장당 최대 5 MB · 최대 10장')}</small></label><div className="event-image-previews">{form.images.map((src,i)=><div key={src} className="event-image-preview"><Image src={src} alt={tr(locale,'Event image ','이벤트 이미지 ')+(i+1)} width={120} height={100} unoptimized/><button type="button" aria-label={tr(locale,'Remove image','이미지 삭제')} onClick={()=>update('images',form.images.filter((_,j)=>j!==i))}><X size={16}/></button></div>)}</div></fieldset>
+ <fieldset><legend>{tr(locale,'Send Reminder via Kakao','카카오 알림 보내기')}</legend><label className="check-row"><input type="checkbox" checked={form.reminder_minutes!==null} onChange={e=>update('reminder_minutes',e.target.checked?1440:null)}/><span>{tr(locale,'Send a reminder before this event','이벤트 시작 전 알림 보내기')}</span></label>{form.reminder_minutes!==null&&<Offset value={form.reminder_minutes} onChange={n=>update('reminder_minutes',n)} locale={locale}/>} {form.reminder_minutes!==null&&!integrations?.reminders&&<p className="admin-integration-note">{tr(locale,'Kakao delivery is not connected yet. This timing will be saved, but reminders cannot be sent until the messaging provider is configured.','카카오 발송 서비스가 아직 연결되지 않았어요. 시간을 저장할 수 있지만 발송 서비스 연결 전에는 알림이 전송되지 않아요.')}</p>}</fieldset>
+ <label><span>{tr(locale,'Visibility','공개 상태')}</span><select value={form.status} onChange={e=>update('status',e.target.value)}>{[['draft','Draft','초안'],['published','Published','공개'],['live','Live','진행 중'],['closed','Closed','종료'],['cancelled','Cancelled','취소']].map(([v,en,ko])=><option key={v} value={v}>{tr(locale,en,ko)}</option>)}</select></label>
+ <div className="admin-form-actions"><button type="button" className="admin-secondary" onClick={()=>setForm(null)}>{tr(locale,'Cancel','취소')}</button><button className="admin-primary" disabled={busy} type="submit">{tr(locale,'Save Event','이벤트 저장')}</button></div></form></>:<>
+ <div className="admin-toolbar"><span className="admin-kicker">Roundy Admin</span><button className="admin-add" onClick={()=>setForm(empty())}><Plus size={18}/>{tr(locale,'Create New Event','새 이벤트 만들기')}</button></div><div className="admin-heading"><h1>{tr(locale,'Events','이벤트')}</h1></div>
+ {!events.length&&!busy?<div className="admin-empty"><CalendarDays size={28}/><p>{tr(locale,'Create your first event.','첫 이벤트를 만들어 보세요.')}</p></div>:<div className="admin-event-list">{events.map(event=><article className="admin-event" key={event.id}><div className="admin-event-meta"><span className={'admin-status '+event.status}>{tr(locale,event.status,({draft:'초안',published:'공개',live:'진행 중',closed:'종료',cancelled:'취소'} as Record<string,string>)[event.status])}</span><span>{event.seats_remaining}/{event.capacity} {tr(locale,'places left','자리 남음')}</span></div><h2>{event.title}</h2><p><CalendarDays size={16}/>{dateLabelForLocale(event.starts_at,locale)} / {timeLabelForLocale(event.starts_at,locale)} KST</p><p><MapPin size={16}/>{event.venue}</p><div className="admin-event-actions"><button onClick={()=>setForm(toForm(event))}><Pencil size={16}/>{tr(locale,'Edit Event','이벤트 수정')}</button><button onClick={()=>{const f=toForm(event);delete f.id;f.date='';f.status='draft';setForm(f);}}><Copy size={16}/>{tr(locale,'Duplicate Event','이벤트 복제')}</button><button onClick={()=>void generate(event)}><Users size={16}/>{tr(locale,'Generate Seating','좌석 배치 생성')}</button><button onClick={()=>void openSeating(event)}><Share2 size={16}/>{tr(locale,'Share Seating Image','좌석 배치 이미지 공유')}</button><button className="admin-delete" aria-label={tr(locale,'Delete event','이벤트 삭제')} onClick={()=>{if(window.confirm(tr(locale,'Delete this event?','이 이벤트를 삭제할까요?')))void work(async()=>{await request('admin/events/'+event.id,{method:'DELETE'});await load();});}}><Trash2 size={16}/></button></div></article>)}</div>}</>}
+ {modal}{seating&&<Modal title={tr(locale,'Seating Plan','좌석 배치')} close={()=>{setSeating(null);setShareFile(null);}}><p>{seating.event.title}</p>{seating.skipped>0&&<p className="note">{tr(locale,`${seating.skipped} excluded pairings are rest breaks.`,`${seating.skipped}개의 제외된 대화는 휴식 시간이에요.`)}</p>}<label>{tr(locale,'Round','라운드')} <select value={round} onChange={e=>{setRound(Number(e.target.value));setShareFile(null);}}>{[...new Set(seating.rows.map(r=>r.round))].map(n=><option key={n} value={n}>{n}</option>)}</select></label><table className="seating-grid"><thead><tr><th>{tr(locale,'Table','테이블')}</th><th>{tr(locale,'Participant codes','참가자 번호')}</th></tr></thead><tbody>{seating.rows.filter(r=>r.round===round).map(r=><tr key={r.table}><td>{r.table}</td><td>{r.left} ↔ {r.right}</td></tr>)}</tbody></table><details className="seating-roster"><summary>{tr(locale,'Host-only participant roster','호스트 전용 참가자 명단')}</summary><ul>{seating.roster.map(p=><li key={p.code}><strong>{p.code}</strong> {p.name}</li>)}</ul></details><p className="note">{tr(locale,'Share images use participant codes only. No names, photos or contact details are included.','공유 이미지에는 참가자 번호만 표시돼요. 이름, 사진, 연락처는 포함되지 않아요.')}</p>{!shareFile?<button className="admin-primary" onClick={()=>void prepareImage()}><Download size={18}/>{tr(locale,'Prepare Seating Image','좌석 배치 이미지 만들기')}</button>:<><Image src={shareUrl} alt={tr(locale,'Seating image preview','좌석 배치 이미지 미리보기')} width={1080} height={320+seating.rows.filter(r=>r.round===round).length*90} style={{width:'100%',height:'auto'}} unoptimized/><a className="admin-secondary" href={shareUrl} download={shareFile.name}><Download size={18}/>{tr(locale,'Download PNG','PNG 다운로드')}</a><button className="admin-primary" onClick={async()=>{try{if(navigator.canShare?.({files:[shareFile]}))await navigator.share({files:[shareFile],title:seating.event.title});else{const a=document.createElement('a');a.href=shareUrl;a.download=shareFile.name;a.click();}}catch(e){if(e instanceof Error&&e.name!=='AbortError')setError(e.message);}}}><Share2 size={18}/>{tr(locale,'Share Image','이미지 공유')}</button></>}</Modal>}
+ </section>;
 }

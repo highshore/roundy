@@ -7,6 +7,7 @@ export function tr(locale: Locale, english: string, korean: string) {
 }
 
 const koreanUi: Record<string, string> = {
+  'WORKPLACE / SCHOOL':'직장 또는 학교',
   'Reviewing':'검토 중', 'Waitlisted':'대기 중', 'Approved':'승인 완료', 'Confirmed':'예약 확정', 'Completed':'완료',
   'Not started':'인증 전', 'Verified':'인증 완료', 'Rejected':'반려',
   'Update contact details':'연락처 수정', 'Complete your verification':'인증을 완료해 주세요', 'We’re reviewing your account.':'계정을 검토하고 있어요.',
