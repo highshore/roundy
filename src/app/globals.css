@@ -78,6 +78,18 @@
 .wizard-header .icon-button{justify-self:start}.wizard-header .save-leave{justify-self:end;white-space:nowrap}
 .wizard-header progress{appearance:none;display:block;width:100%;height:2px;border:0;background:var(--border)}
 .wizard-header progress::-webkit-progress-bar{background:var(--border)}.wizard-header progress::-webkit-progress-value{background:var(--brand)}.wizard-header progress::-moz-progress-bar{background:var(--brand)}
+
+/* Keep admin form controls contained on narrow mobile layouts. */
+.admin-two>label,.admin-three>label{min-width:0}
+.admin-form input,.admin-form select,.admin-form textarea{min-width:0}
+.admin-form-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:stretch}
+.admin-form-actions .admin-secondary,.admin-form-actions .admin-primary{width:100%;min-height:52px;padding:12px 18px;font-size:14px;line-height:1.2;display:inline-flex;align-items:center;justify-content:center}
+
+@media(max-width:520px){
+ .route-admin .admin-two,.route-admin .admin-three{grid-template-columns:1fr}
+ .route-admin .admin-form-actions{grid-template-columns:repeat(2,minmax(0,1fr));position:sticky;bottom:0;background:var(--paper);padding:12px 0 calc(12px + env(safe-area-inset-bottom));margin:0 -2px}
+ .route-admin .admin-form-actions>*{min-width:0}
+}
 .verification-methods label>span{display:flex;align-items:center;gap:10px}.verification-methods label>span>svg,.verification-methods label>span>img{width:20px;height:20px;flex:0 0 20px}
 .document-upload input[type=file]{width:100%;min-width:0;border:0;border-radius:0;padding:0;background:transparent;font-size:14px;color:var(--muted)}
 .document-upload input[type=file]::file-selector-button{appearance:none;border:0;border-radius:999px;background:#000;color:#fff;min-height:44px;padding:10px 18px;margin-right:12px;font:inherit;font-weight:700;cursor:pointer}
