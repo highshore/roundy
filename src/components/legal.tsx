@@ -36,7 +36,7 @@ const koreanPrivacy: LegalSection[] = [
 
 export function TermsOfUse({ locale }: { locale: Locale }) {
   const korean = locale === 'ko';
-  return <LegalPage eyebrow={korean ? '이용약관' : 'TERMS OF USE'} title={korean ? 'Roundy 이용약관' : 'Roundy Terms of Use'} updated={korean ? '최종 업데이트 2026년 9월 24일' : 'Last updated September 24, 2026'} sections={korean ? koreanTerms : [
+  return <LegalPage eyebrow={korean ? '이용약관' : 'TERMS OF USE'} title={korean ? 'Roundy 이용약관' : 'Roundy Terms of Use'} updated={korean ? '최종 업데이트 2026년 9월 25일' : 'Last updated September 25, 2026'} sections={korean ? koreanTerms : [
     {title:'1. Purpose and Scope',children:<p>These terms govern your use of Roundy, including event discovery, profile setup, event reservations, tickets, event participation and post-event mutual matching. By using Roundy, you agree to these terms and to the <Link href="/privacy">Privacy Policy</Link>.</p>},
     {title:'2. Who Can Use Roundy',children:<p>You must be at least 18 years old, provide accurate information, and be able to participate in English conversations. Roundy may require photo ID and verification before admission. We may refuse, suspend or end access where information is inaccurate, safety is at risk, or these terms are breached.</p>},
     {title:'3. Event Reservations and Confirmed Places',children:<p>Once your profile and verification are approved, you may reserve an available event by redeeming a valid ticket or completing payment. A seat is confirmed when Roundy records the booking. For 1:1 Speed Meetups, the gender on your approved profile is used to place you in the corresponding roster group, subject to availability.</p>},
@@ -51,7 +51,7 @@ export function TermsOfUse({ locale }: { locale: Locale }) {
 
 export function PrivacyPolicy({ locale }: { locale: Locale }) {
   const korean = locale === 'ko';
-  return <LegalPage eyebrow={korean ? '개인정보 처리방침' : 'PRIVACY POLICY'} title={korean ? 'Roundy 개인정보 처리방침' : 'Roundy Privacy Policy'} updated={korean ? '최종 업데이트 2026년 9월 24일' : 'Last updated September 24, 2026'} sections={korean ? koreanPrivacy : [
+  return <LegalPage eyebrow={korean ? '개인정보 처리방침' : 'PRIVACY POLICY'} title={korean ? 'Roundy 개인정보 처리방침' : 'Roundy Privacy Policy'} updated={korean ? '최종 업데이트 2026년 9월 25일' : 'Last updated September 25, 2026'} sections={korean ? koreanPrivacy : [
     {title:'1. Who Is Responsible',children:<p>Roundy Team is responsible for personal information handled through Roundy. Contact us at <a href="mailto:hello@roundy.team">hello@roundy.team</a>. This policy applies to roundy.team and Roundy event services in Seoul.</p>},
     {title:'2. Information We Collect',children:<p>We collect Kakao account identifiers, nickname and profile image for sign-in; profile details such as legal name, date of birth, gender, nationality, photos, height, work or school information, interests and phone number; public social account links submitted for verification; and reservation, ticket, attendance, choice, match, report and support records. We collect only information needed to operate and safeguard the service.</p>},
     {title:'3. Why We Use It',children:<p>We use information to authenticate you, build and review your profile, curate events, issue and administer tickets, check participants in, operate mutual matching, respond to reports, prevent abuse, meet legal obligations and improve service reliability. We do not create an attendee directory or disclose private choice data.</p>},
