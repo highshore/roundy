@@ -190,19 +190,17 @@ export function ui(locale: Locale, english: string) {
   return english;
 }
 
-type EventCopy = { title: string; theme: string; description: string; venue: string; address: string };
+type EventCopy = { title: string; description: string; venue: string; address: string };
 
 const koreanEvents: Record<string, EventCopy> = {
   'saturday-social': {
     title: '토요일 소셜',
-    theme: '새로운 시작',
     description: '작은 공간에서 새로운 얼굴들을 만나 보세요. 한 사람씩, 온전히 영어로 나누는 대화가 좋은 연결로 이어집니다.',
     venue: '예시 장소',
     address: '서울 여의도 — 예시 이벤트',
   },
   'sunday-slow-dating': {
     title: '일요일 슬로우 데이팅',
-    theme: '천천히, 여유롭게',
     description: '예상하지 못한 연결을 위한 여유를 만들어 보세요. 다정한 호스트와 함께하는 깊이 있는 대화, 잘 보낸 일요일 오후입니다.',
     venue: '예시 장소',
     address: '서울 안암 — 예시 이벤트',
