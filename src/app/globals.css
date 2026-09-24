@@ -302,3 +302,51 @@
   padding:22px 20px calc(22px + env(safe-area-inset-bottom));
  }
 }
+
+
+/* Detail card shell removal, Figma map mark, and global feedback placement. */
+.route-events .detail-facts{
+ grid-template-columns:1fr;
+ padding:0;
+ border:0;
+ border-radius:0;
+ background:transparent;
+}
+.route-events .detail-facts .event-fact{
+ width:100%;
+}
+.map-fallback-marker.map-marker-logo{
+ display:grid!important;
+ place-items:center;
+ width:56px!important;
+ height:56px!important;
+ padding:10px;
+ border:3px solid var(--paper)!important;
+ border-radius:50%!important;
+ background:var(--ink);
+ color:#fff;
+ box-shadow:0 7px 18px rgba(0,0,0,.28);
+ filter:none!important;
+}
+.map-marker-logo svg{display:block;width:32px;height:32px}
+
+.feedback{
+ top:94px;
+ right:max(24px,calc((100vw - 1180px)/2));
+ bottom:auto;
+ left:auto;
+ transform:none;
+ width:min(420px,calc(100vw - 48px));
+ max-width:420px;
+ padding:14px 16px;
+ z-index:1200;
+ box-shadow:0 14px 36px rgba(0,0,0,.16);
+}
+@media(max-width:759px){
+ .feedback{
+  top:76px;
+  right:16px;
+  width:calc(100vw - 32px);
+  max-width:none;
+ }
+}
