@@ -10,10 +10,11 @@ await db.exec('alter default privileges in schema public grant all on tables to 
 for(const f of (await readdir('supabase/migrations')).sort().filter(f=>!f.endsWith('_roundy_reminder_schedule.sql')))await db.exec(await readFile('supabase/migrations/'+f,'utf8'));
 const uid=n=>`00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
 const eid=uid(100);const encounter=n=>uid(200+n);
-await db.exec(`insert into auth.users select ('00000000-0000-0000-0000-'||lpad(n::text,12,'0'))::uuid from generate_series(1,6)n;insert into wis_events(id,slug,title,neighborhood,starts_at,ends_at,venue,address,capacity,seats_remaining) values('${eid}','test','Test','Seoul',now()+interval '1 day',now()+interval '2 days','Test','Test',12,12);update wis_events set status='published';`);
+await db.exec(`insert into auth.users select ('00000000-0000-0000-0000-'||lpad(n::text,12,'0'))::uuid from generate_series(1,6)n;insert into wis_events(id,slug,title,neighborhood,starts_at,ends_at,venue,address,capacity,seats_remaining) values('${eid}','test','Test','Seoul',now()+interval '1 day',now()+interval '2 days','Test','Test',12,12);update wis_events set status='live';`);
 await db.exec(`insert into wis_user_roles(user_id,role) values('${uid(6)}','admin');`);
-const profile={full_name:'Private Person',birth_date:'1997-05-10',gender:'female',nationality:'Korean',height_cm:170,job_title:'Private role',workplace:'Private employer',public_job:'Designer',public_workplace:'A studio',phone:'+821012345678',contact_consent:true,photos:['private/photo'],interests:['Coffee','Art','Travel']};
+const profile={full_name:'Private Person',birth_date:'1997-05-10',gender:'female',nationality:'Korean',height_cm:170,job_title:'Private role',workplace:'Private employer',public_job:'Designer',public_workplace:'A studio',phone:'010-1234-5678',contact_consent:true,photos:['private/photo'],interests:['Coffee','Art','Travel']};
 for(let n=1;n<=6;n++)await db.query('insert into wis_profiles(user_id,profile) values($1,$2)',[uid(n),profile]);
+await db.exec(`insert into wis_verifications(user_id,instagram,status) values('${uid(1)}','initial','Verified');`);
 async function as(n,sql,args=[]){await db.exec('set role authenticated');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[uid(n)]);try{return await db.query(sql,args);}finally{await db.exec('reset role');}}
 async function denied(n,sql,pattern){await assert.rejects(()=>as(n,sql),pattern);}
 assert.equal((await as(1,'select * from wis_profiles')).rows.length,1,'RLS hides other profiles');
@@ -45,11 +46,11 @@ const revealed=(await as(1,'select wis_match_profile($1) p',[match])).rows[0].p;
 assert.equal(revealed.phone,profile.phone);assert.ok(!('birth_date'in revealed)&&!('workplace'in revealed)&&!('job_title'in revealed),'Private fields stay hidden');
 await denied(3,`select wis_match_profile('${match}')`,/Match unavailable/);
 await denied(1,`select wis_choose('${encounter(2)}','no')`,/Choices are closed/);
-await as(1,"insert into wis_verifications(user_id,instagram) values(auth.uid(),'old')");await db.exec("update wis_verifications set status='Verified'");await as(1,"update wis_verifications set instagram='new'");assert.equal((await as(1,'select status from wis_verifications')).rows[0].status,'Reviewing');
+await as(1,"update wis_verifications set instagram='old'");await db.exec("update wis_verifications set status='Verified'");await as(1,"update wis_verifications set instagram='new'");assert.equal((await as(1,'select status from wis_verifications')).rows[0].status,'Reviewing');
 await denied(1,"update wis_verifications set status='Verified'",/permission denied/);
 // Event changes derive URL, end time and capacity from canonical inputs.
 const f=uid(101);
-await as(6,"insert into wis_events(id,title,starts_at,duration_minutes,venue,address,capacity,age_min,age_max,status) values($1,'Derived','2030-09-28T10:00:00Z',90,'Venue','Address',4,18,100,'published')",[f]);
+await as(6,"insert into wis_events(id,title,starts_at,duration_minutes,venue,address,capacity,age_min,age_max,status) values($1,'Derived','2030-09-28T10:00:00Z',90,'Venue','Address',4,18,100,'live')",[f]);
 let derived=(await as(6,'select * from wis_events where id=$1',[f])).rows[0];
 assert.equal(derived.slug,'09-28-2030');assert.equal(derived.seats_remaining,4);assert.equal(new Date(derived.ends_at).toISOString(),'2030-09-28T11:30:00.000Z');
 const duplicate=(await as(6,"insert into wis_events(title,starts_at,venue,address,capacity,status) values('Same date','2030-09-28T12:00:00Z','Venue','Address',4,'draft') returning slug")).rows[0];
@@ -71,6 +72,7 @@ const safe=(await as(6,'select wis_generate_seating($1) plan',[f])).rows[0].plan
 assert.equal(safe.rows.length,3);assert.equal(safe.skipped,1);
 assert.equal((await as(6,'select wis_get_seating($1) plan',[f])).rows[0].plan.rows.length,3);
 await db.exec(`update wis_events set starts_at=now()+interval '30 minutes',lockdown_minutes=60 where id='${f}';`);
+await db.exec(`insert into wis_verifications(user_id,instagram,status) values('${uid(5)}','five','Verified');`);
 await denied(5,`select wis_apply('${f}')`,/locked/);
 assert.equal((await db.query("select public from storage.buckets where id='wis-verification-documents'")).rows[0].public,false);
 await denied(1,"update wis_verifications set method='document',document_path='someone-else/proof.pdf' where user_id=auth.uid()",/private verification document/);

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { interests } from '@/lib/data';
+import { formatKoreanPhone, interests, isKoreanPhone } from '@/lib/data';
 import { countryCodes,normalizeNationality } from '@/lib/profile-options';
 import { eventInput } from '@/lib/event-input';
 import { searchPlaces,resolvePlace } from '@/lib/naver';
@@ -21,6 +21,8 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
    if(path[1]==='role'&&req.method==='GET')return json({isAdmin:admin});
    if(!admin)return json({error:'Administrator access required'},403);
    if(path[1]==='integrations'&&req.method==='GET'){const {data:{session}}=await supabase.auth.getSession();const health=await fetch(process.env.NEXT_PUBLIC_SUPABASE_URL+'/functions/v1/roundy-reminders',{headers:{Authorization:'Bearer '+session?.access_token,apikey:process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!},signal:AbortSignal.timeout(5000)}).then(r=>r.ok?r.json():null).catch(()=>null);return json({naver:Boolean(process.env.NAVER_API_HUB_CLIENT_ID&&process.env.NAVER_API_HUB_CLIENT_SECRET),reminders:Boolean(health?.configured),summaries:Boolean(process.env.OPENAI_API_KEY)});}
+   if(path[1]==='members'&&path.length===2&&req.method==='GET'){const {data,error}=await supabase.rpc('wis_admin_members');if(error)throw error;return json({members:data??[]});}
+   if(path[1]==='members'&&path.length===3&&req.method==='PATCH'){const body=await req.json();const id=path[2];const status=body.status;const reason=typeof body.rejection_reason==='string'?body.rejection_reason:'';if(!/^[0-9a-f-]{36}$/i.test(id)||!['Approved','Rejected'].includes(status))return json({error:'Invalid member review.'},400);if(status==='Rejected'&&!reason)return json({error:'Choose a rejection reason.'},400);const {data,error}=await supabase.rpc('wis_admin_review_member',{p_member:id,p_status:status,p_rejection_reason:reason});if(error)throw error;return json({member:data});}
    if(path[1]==='places'&&req.method==='GET'){const query=req.nextUrl.searchParams.get('q')?.trim();if(!query||query.length>200)return json({error:'Enter a place name or Korean address.'},400);return json({places:await searchPlaces(query)});}
    if(path[1]==='events'&&path.length===4&&path[3]==='seating'&&['GET','POST'].includes(req.method)){const {data,error}=await supabase.rpc(req.method==='POST'?'wis_generate_seating':'wis_get_seating',{p_event:path[2]});if(error)throw error;return json(data);}
    if(path[1]==='events'&&path.length===2&&req.method==='GET'){
@@ -44,7 +46,7 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
     const {error}=await supabase.storage.from('wis-profile-photos').upload(key,photo,{contentType:photo.type,upsert:false});if(error)throw error;
     return json({url:'/api/photos/'+key});
    }
-   if(req.method==='GET'&&path.length===3&&path[1]===user.id){const {data,error}=await supabase.storage.from('wis-profile-photos').download(path.slice(1).join('/'));if(error)throw error;return new NextResponse(data,{headers:{'Content-Type':data.type,'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'}});}
+   if(req.method==='GET'&&path.length===3){if(path[1]!==user.id&&!await isAdmin(supabase))return json({error:'Photo unavailable'},404);const {data,error}=await supabase.storage.from('wis-profile-photos').download(path.slice(1).join('/'));if(error)throw error;return new NextResponse(data,{headers:{'Content-Type':data.type,'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'}});}
    return json({error:'Photo unavailable'},404);
   }
   if(path[0]==='profile'){
@@ -52,6 +54,7 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
    if(req.method==='PUT'){
     const body=await req.json();const profile:Record<string,unknown>={};
     for(const key of ['full_name','birth_date','gender','nationality','job_title','workplace','phone']){if(typeof body[key]!=='string'||body[key].length>200)return json({error:'Invalid profile field'},400);profile[key]=body[key].trim();}
+    profile.phone=formatKoreanPhone(String(profile.phone));if(profile.phone&&!isKoreanPhone(String(profile.phone)))return json({error:'Use a Korean mobile number in the format 010-1234-5678.'},400);
     if(!Number.isInteger(body.height_cm)||body.height_cm<100||body.height_cm>250||typeof body.contact_consent!=='boolean')return json({error:'Invalid height or consent'},400);
     if(!Array.isArray(body.interests)||body.interests.length>10||body.interests.some((x:unknown)=>typeof x!=='string'||!interests.includes(x))||new Set(body.interests).size!==body.interests.length)return json({error:'Choose up to 10 distinct interests'},400);
     if(!Array.isArray(body.photos)||body.photos.length>3||body.photos.some((x:unknown)=>typeof x!=='string'||!x.startsWith('/api/photos/'+user.id+'/')||!/^\/api\/photos\/[a-f0-9-]+\/[a-f0-9-]+\.(jpg|png|webp)$/.test(x)))return json({error:'Invalid photo reference'},400);
@@ -67,8 +70,8 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
    if(req.method==='GET'){const {data,error}=await supabase.from('wis_applications').select('id,status,wis_events(slug)');if(error)throw error;return json({applications:(data??[]).map(a=>({id:a.id,status:a.status,event_slug:(a.wis_events as unknown as {slug:string})?.slug}))});}
    if(req.method==='POST'){const body=await req.json();const {data,error}=await supabase.rpc('wis_apply',{p_event:body.eventId});if(error)throw error;return json({id:data,status:'Reviewing'},201);}
   }
-  if(path[0]==='verification-documents'&&req.method==='GET'&&path.length===3&&path[1]===user.id){
-   const {data,error}=await supabase.storage.from('wis-verification-documents').download(path.slice(1).join('/'));if(error)throw error;return new NextResponse(data,{headers:{'Content-Type':data.type,'Cache-Control':'private, no-store','Content-Disposition':'attachment','X-Content-Type-Options':'nosniff'}});
+  if(path[0]==='verification-documents'&&req.method==='GET'&&path.length===3){
+   if(path[1]!==user.id&&!await isAdmin(supabase))return json({error:'Document unavailable'},404);const {data,error}=await supabase.storage.from('wis-verification-documents').download(path.slice(1).join('/'));if(error)throw error;return new NextResponse(data,{headers:{'Content-Type':data.type,'Cache-Control':'private, no-store','Content-Disposition':'attachment','X-Content-Type-Options':'nosniff'}});
   }
   if(path[0]==='verification'&&req.method==='POST'){
    const body=await req.json();const method=body.verification_method;
@@ -91,4 +94,4 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
   return json({error:'Not found'},404);
  }catch(error){const message=error instanceof Error?error.message:typeof error==='object'&&error&&'message'in error?String(error.message):'Request failed';return json({error:message},400);}
 }
-export {handle as GET,handle as POST,handle as PUT,handle as DELETE};
+export {handle as GET,handle as POST,handle as PUT,handle as PATCH,handle as DELETE};
