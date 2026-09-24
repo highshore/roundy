@@ -28,13 +28,13 @@ Configure server-only values through the corresponding project's environment set
 
 | Feature | Configuration |
 | --- | --- |
-| Naver place search | Vercel `NAVER_SEARCH_CLIENT_ID`, `NAVER_SEARCH_CLIENT_SECRET` from Naver Developers Local Search |
-| Naver address geocoding | Vercel `NAVER_MAP_CLIENT_ID`, `NAVER_MAP_CLIENT_SECRET` from Naver Cloud Maps |
-| Venue map display | Vercel `NEXT_PUBLIC_NAVER_MAP_CLIENT_ID`; allow Roundy's domain in Naver |
+| Naver address search and geocoding | Vercel `NAVER_MAP_CLIENT_ID`, `NAVER_MAP_CLIENT_SECRET` from Naver Cloud Maps |
+| Venue map display | Vercel `NEXT_PUBLIC_NAVER_MAP_CLIENT_ID`; the same Naver Cloud Maps Client ID, with Roundy's domain allowed |
+| Optional legacy venue-name search | Existing Naver Developers `NAVER_SEARCH_CLIENT_ID`, `NAVER_SEARCH_CLIENT_SECRET`; new accounts may not see Search in that console |
 | General work descriptions | Vercel `OPENAI_API_KEY`; optional `PROFILE_SUMMARY_MODEL` (default `gpt-4.1-mini`) |
 | Kakao reminders | Supabase Edge secrets `KAKAO_APPKEY`, `KAKAO_SECRET_KEY`, `KAKAO_SENDER_KEY`, `KAKAO_TEMPLATE_CODE` |
 
-Naver search and geocoding use different Naver applications. If geocoding is unavailable, location resolution uses a unique Local Search result; ambiguous results require selection. Work summaries send only occupation/workplace fields, never documents, photos or contact details. If generation is unavailable, a generic description is saved with `summary_status: pending` and retried on a subsequent profile save.
+Naver Cloud Maps Geocoding is the default address-to-coordinate path. Its address popup accepts Korean road-name or land-lot addresses. Existing, already-authorized Naver Developers Local Search credentials remain an optional fallback for venue-name search; ambiguous results require selection. Work summaries send only occupation/workplace fields, never documents, photos or contact details. If generation is unavailable, a generic description is saved with `summary_status: pending` and retried on a subsequent profile save.
 
 The Kakao adapter follows 1cup-web's NHN Alimtalk integration and requires a **Roundy-approved** template with `meetup-time`, `meetup-location`, `meetup-link` substitutions. Its deployed health check currently reports `configured: false`. The admin editor clearly shows unavailable reminder delivery. Only due reminders for confirmed bookings are claimed; disabling/rescheduling cancels stale queued jobs. Atomic claims, a unique event/user/start key, and the provider idempotency header prevent repeated dispatch. At-start reminders allow 10 minutes of scheduler grace. `sent` means provider acceptance, not confirmed handset delivery. Ambiguous failures stay failed for manual provider reconciliation; they are not automatically retried. SMS fallback is disabled. Changing provider settings requires an authorized test recipient before claiming delivery is verified.
 
