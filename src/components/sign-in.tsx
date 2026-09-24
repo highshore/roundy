@@ -39,7 +39,7 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
   return <section className="sign-in-panel">
     <Link className="signin-back" href={eventSlug ? '/events/' + eventSlug : '/discover'}><ArrowLeft size={18}/> {tr(locale, 'Keep Exploring', '이벤트 더 둘러보기')}</Link>
     <div className="signin-art" aria-hidden="true"><span/><span/><i>R</i></div>
-    <div className="intro"><p className="eyebrow">{tr(locale, 'YOUR NEXT HELLO', '다음 인연을 만날 시간')}</p><h1>{tr(locale, 'Good Company Starts Here', '좋은 인연은 여기서 시작돼요')}</h1><p className="description">{tr(locale, 'Sign in with Kakao to save your profile, join an evening, and see your mutual matches.', '카카오로 로그인하고 프로필을 저장하세요. 이벤트에 참여하고 서로에게 선택받은 인연도 확인할 수 있어요.')}</p></div>
+    <h1 className="sr-only">{tr(locale, 'Sign In', '로그인')}</h1>
     <button className="button kakao-button" disabled={busy || !authConfigured()} onClick={signIn}><MessageCircle size={22} fill="currentColor"/>{busy ? tr(locale, 'Connecting to Kakao…', '카카오에 연결하는 중…') : tr(locale, 'Continue with Kakao', '카카오로 계속하기')}</button>
     {!authConfigured() && <p role="status" className="signin-notice">{tr(locale, 'Sign-in is being set up. You can still explore Roundy.', '로그인 설정을 진행 중이에요. Roundy는 계속 둘러볼 수 있어요.')}</p>}
     {error && <p role="alert" className="signin-notice">{error}</p>}

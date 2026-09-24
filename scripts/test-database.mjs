@@ -9,11 +9,15 @@ for(const f of (await readdir('supabase/migrations')).sort())await db.exec(await
 const uid=n=>`00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
 const eid=uid(100);const encounter=n=>uid(200+n);
 await db.exec(`insert into auth.users select ('00000000-0000-0000-0000-'||lpad(n::text,12,'0'))::uuid from generate_series(1,6)n;insert into wis_events(id,slug,title,neighborhood,starts_at,ends_at,venue,address,capacity,seats_remaining) values('${eid}','test','Test','Seoul',now()+interval '1 day',now()+interval '2 days','Test','Test',12,12);update wis_events set status='published';`);
+await db.exec(`insert into wis_user_roles(user_id,role) values('${uid(6)}','admin');`);
 const profile={full_name:'Private Person',birth_date:'1997-05-10',gender:'female',nationality:'Korean',height_cm:170,job_title:'Private role',workplace:'Private employer',public_job:'Designer',public_workplace:'A studio',phone:'+821012345678',contact_consent:true,photos:['private/photo'],interests:['Coffee','Art','Travel']};
 for(let n=1;n<=6;n++)await db.query('insert into wis_profiles(user_id,profile) values($1,$2)',[uid(n),profile]);
 async function as(n,sql,args=[]){await db.exec('set role authenticated');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[uid(n)]);try{return await db.query(sql,args);}finally{await db.exec('reset role');}}
 async function denied(n,sql,pattern){await assert.rejects(()=>as(n,sql),pattern);}
 assert.equal((await as(1,'select * from wis_profiles')).rows.length,1,'RLS hides other profiles');
+await denied(1,`insert into wis_events(slug,title,neighborhood,starts_at,ends_at,venue,address,capacity,seats_remaining) values('unauthorized','No','Seoul',now()+interval '3 days',now()+interval '4 days','No','No',12,12)`,/permission denied|row-level security/);
+await as(6,`insert into wis_events(slug,title,neighborhood,starts_at,ends_at,venue,address,capacity,seats_remaining) values('admin-event','Admin','Seoul',now()+interval '3 days',now()+interval '4 days','Admin','Admin',12,12)`);
+assert.equal((await as(6,`select wis_is_admin() admin`)).rows[0].admin,true,'Admin role is database-enforced');
 await denied(1,'select * from wis_encounters',/permission denied/);
 const a=(await as(1,'select wis_apply($1) id',[eid])).rows[0].id;
 assert.equal((await as(1,'select wis_apply($1) id',[eid])).rows[0].id,a,'Application retries are idempotent');
