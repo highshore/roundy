@@ -1,4 +1,4 @@
-const privateRoots = new Set(['onboarding', 'applications', 'checkout', 'ticket', 'event-night', 'matches', 'me']);
+const privateRoots = new Set(['onboarding', 'applications', 'checkout', 'ticket', 'event-night', 'matches', 'me', 'admin']);
 
 export function isPrivatePath(path: string) {
   return privateRoots.has(path.replace(/^\//, '').split('/')[0]);
