@@ -12,7 +12,7 @@ export default async function Page({params}:{params:Promise<{path?:string[]}>}) 
   const {data:{user},error}=await supabase.auth.getUser();
   if (error || !user || user.app_metadata.provider !== 'kakao') redirect(signInPath(pathname));
   if (path[0] === 'admin') {
-   const { data: isAdmin, error: adminError } = await supabase.rpc('wis_is_admin');
+   const { data: isAdmin, error: adminError } = await supabase.rpc('is_admin');
    if (adminError || !isAdmin) redirect('/me');
   }
  }
