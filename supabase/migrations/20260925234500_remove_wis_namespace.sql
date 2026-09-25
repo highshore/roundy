@@ -175,7 +175,7 @@ begin
 end;
 $$;
 
--- Clean the remaining visible database object names. Auth-owned trigger names are left alone because Supabase does not grant application migrations ownership of auth.users.
+-- Clean the remaining application-owned database object names. Auth-owned triggers and storage-owned policies are left alone because Supabase does not grant application migrations ownership of those system tables.
 do $$
 declare
   r record;
@@ -214,6 +214,7 @@ begin
     select schemaname,tablename,policyname
     from pg_policies
     where policyname like 'wis_%'
+      and schemaname='public'
   loop
     clean_name:=regexp_replace(r.policyname,'^wis_','');
     execute format('alter policy %I on %I.%I rename to %I',
