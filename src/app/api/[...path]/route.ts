@@ -71,6 +71,13 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
     const profileRow={user_id:user.id,profile,updated_at:new Date().toISOString()};const write=old?await supabase.from('profiles').update(profileRow).eq('user_id',user.id):await supabase.from('profiles').insert(profileRow);if(write.error)throw write.error;return json({saved:true});
    }
   }
+  if(path[0]==='credits'&&req.method==='GET'){
+   const now=new Date().toISOString();
+   const {data,error}=await supabase.from('credit_lots').select('remaining,expires_at').gt('remaining',0).gt('expires_at',now);if(error)throw error;
+   const balance=(data??[]).reduce((sum,row)=>sum+Number(row.remaining||0),0);
+   const nextExpiry=(data??[]).map(row=>String(row.expires_at||'')).filter(Boolean).sort()[0]??null;
+   return json({balance,nextExpiry});
+  }
   if(path[0]==='applications'){
    if(req.method==='GET'){const {data,error}=await supabase.from('applications').select('id,status,event_id');if(error)throw error;const rows=data??[];const slugs=await eventSlugMap(supabase,[...new Set(rows.map(a=>String(a.event_id)))]);return json({applications:rows.map(a=>({id:a.id,status:a.status,event_slug:slugs.get(String(a.event_id))}))});}
    if(req.method==='POST'){const body=await req.json();const {data,error}=await supabase.rpc('apply',{p_event:body.eventId});if(error)throw error;return json({id:data,status:'Reviewing'},201);}
