@@ -438,14 +438,19 @@
 }
 
 /* Referral codes */
-.referral-box{border:1px solid var(--border);border-radius:22px;padding:22px;display:grid;gap:18px;background:var(--paper)}
-.referral-box h3{margin-top:5px}.referral-box>div:first-child>p:last-child{margin-top:8px;color:var(--muted);font-size:14px;line-height:1.5}
-.referral-entry{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px}
-.referral-entry input{min-width:0;border:1px solid var(--border);border-radius:999px;background:var(--surface);padding:13px 18px;text-transform:uppercase;letter-spacing:.12em;font-weight:700;outline:none}
-.referral-entry input:focus{border-color:var(--ink)}
-.referral-entry .button{width:auto;min-height:50px;padding:12px 20px}
-.referral-message{font-size:13px;font-weight:600}.referral-message.success{color:#27613f}.referral-message.error{color:#8d3029}
+.referral-box{padding:4px 0 8px;display:grid;gap:8px}
+.referral-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.referral-head h3{margin:0;font-size:15px;letter-spacing:-.01em}
+.referral-head span{font-size:12px;font-weight:500;color:var(--muted)}
+.referral-help{font-size:12px;line-height:18px;color:var(--muted)}
+.referral-entry{display:grid;grid-template-columns:minmax(0,1fr) 92px;gap:8px;margin-top:2px}
+.referral-entry input{height:48px;min-width:0;border:1.5px solid var(--ink);border-radius:12px;background:var(--paper);padding:0 16px;text-transform:uppercase;letter-spacing:.08em;font-size:14px;font-weight:600;outline:none}
+.referral-entry input::placeholder{text-transform:none;letter-spacing:0;font-weight:400;color:#91958a}
+.referral-entry input:focus{box-shadow:0 0 0 2px rgba(255,102,102,.16)}
+.referral-apply{height:48px;border:1px solid var(--ink);border-radius:12px;background:var(--brand);color:white;font-size:14px;font-weight:700}
+.referral-apply:disabled{cursor:not-allowed;opacity:.45}
+.referral-message{margin-top:2px;font-size:12px;line-height:18px;font-weight:600}.referral-message.success{color:#27613f}.referral-message.error{color:#8d3029}
 .referral-code-value{font-size:28px!important;font-weight:800;letter-spacing:.16em;color:var(--ink)!important;margin-bottom:8px}
-.checkout-summary{display:grid}.price-row.discount strong{font-size:20px;color:#27613f}.price-row.total{border-bottom:0;padding-top:24px}.price-row.total strong{font-size:36px}
+.price-row.total{border-bottom:0;padding-top:14px}.price-row.total strong{font-size:36px}
 .checkout-terms{border:1px solid var(--border);border-radius:18px;padding:16px;background:var(--surface);line-height:1.5}.checkout-terms a{text-decoration:underline}
-@media(max-width:480px){.referral-entry{grid-template-columns:1fr}.referral-entry .button{width:100%}}
+@media(max-width:400px){.referral-entry{grid-template-columns:minmax(0,1fr) 78px}}
