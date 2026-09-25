@@ -29,6 +29,21 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
    if(path[1]==='members'&&path.length===2&&req.method==='GET'){const {data,error}=await supabase.rpc('admin_members');if(error)throw error;return json({members:data??[]});}
    if(path[1]==='members'&&path.length===3&&req.method==='PATCH'){const body=await req.json();const id=path[2];const status=body.status;const reason=typeof body.rejection_reason==='string'?body.rejection_reason:'';if(!/^[0-9a-f-]{36}$/i.test(id)||!['Approved','Rejected'].includes(status))return json({error:'Invalid member review.'},400);if(status==='Rejected'&&!reason)return json({error:'Choose a rejection reason.'},400);const {data,error}=await supabase.rpc('admin_review_member',{p_member:id,p_status:status,p_rejection_reason:reason});if(error)throw error;return json({member:data});}
    if(path[1]==='places'&&req.method==='GET'){const query=req.nextUrl.searchParams.get('q')?.trim();if(!query||query.length>200)return json({error:'Enter a place name or Korean address.'},400);return json({places:await searchPlaces(query)});}
+   if(path[1]==='events'&&path.length===4&&path[3]==='event-night'){
+    const eventId=path[2];if(!/^[0-9a-f-]{36}$/i.test(eventId))return json({error:'Invalid event ID'},400);
+    if(req.method==='GET'){const {data,error}=await supabase.rpc('admin_event_night_state',{p_event:eventId});if(error)throw error;return json({state:data});}
+    if(req.method==='POST'){
+     const body=await req.json();const action=String(body.action||'');
+     if(action==='check-in'){const userId=String(body.userId||'');if(!/^[0-9a-f-]{36}$/i.test(userId)||typeof body.checked!=='boolean')return json({error:'Invalid check-in request'},400);const {error}=await supabase.rpc('admin_set_check_in',{p_event:eventId,p_user:userId,p_checked:body.checked});if(error)throw error;}
+     else if(action==='prepare'){const {error}=await supabase.rpc('admin_prepare_event_night',{p_event:eventId});if(error)throw error;}
+     else if(action==='start'){const {error}=await supabase.rpc('admin_start_event_night',{p_event:eventId});if(error)throw error;}
+     else if(action==='advance'){const {error}=await supabase.rpc('admin_advance_event_night',{p_event:eventId});if(error)throw error;}
+     else if(action==='finish'){const {error}=await supabase.rpc('admin_finish_event_night',{p_event:eventId});if(error)throw error;}
+     else return json({error:'Invalid meetup action'},400);
+     const {data,error}=await supabase.rpc('admin_event_night_state',{p_event:eventId});if(error)throw error;return json({state:data});
+    }
+    return json({error:'Method not allowed'},405);
+   }
    if(path[1]==='events'&&path.length===4&&path[3]==='seating'&&['GET','POST'].includes(req.method)){const {data,error}=await supabase.rpc(req.method==='POST'?'generate_seating':'get_seating',{p_event:path[2]});if(error)throw error;return json(data);}
    if(path[1]==='events'&&path.length===2&&req.method==='GET'){
     const {data,error}=await supabase.from('events').select('*').order('starts_at',{ascending:false});if(error)throw error;return json({events:data});
@@ -123,6 +138,18 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
    if(body.termsAccepted!==true)return json({error:'Confirm the cancellation guidelines and terms before enrolling'},400);
    if(!/^[0-9a-f-]{36}$/i.test(eventId)||![1,3].includes(quantity)||!/^[A-Z0-9]{6}$/.test(referralCode))return json({error:'Invalid checkout request'},400);
    const {data,error}=await supabase.rpc('redeem_referral',{p_event:eventId,p_quantity:quantity,p_code:referralCode,p_terms_accepted:true});if(error)throw error;return json({free:true,result:data});
+  }
+  if(path[0]==='event-night'&&path.length===2){
+   const eventId=path[1];if(!/^[0-9a-f-]{36}$/i.test(eventId))return json({error:'Invalid event ID'},400);
+   if(req.method==='GET'){const {data,error}=await supabase.rpc('event_night_state',{p_event:eventId});if(error)throw error;return json({state:data});}
+   if(req.method==='POST'){
+    const body=await req.json();const action=String(body.action||'');
+    if(action==='choice'){const encounterId=String(body.encounterId||'');const choice=String(body.choice||'');if(!/^[0-9a-f-]{36}$/i.test(encounterId)||!['no','maybe','yes'].includes(choice))return json({error:'Invalid choice'},400);const {error}=await supabase.rpc('choose',{p_encounter:encounterId,p_choice:choice});if(error)throw error;}
+    else if(action==='submit'){const {error}=await supabase.rpc('submit_event_choices',{p_event:eventId});if(error)throw error;}
+    else return json({error:'Invalid meetup action'},400);
+    const {data,error}=await supabase.rpc('event_night_state',{p_event:eventId});if(error)throw error;return json({state:data});
+   }
+   return json({error:'Method not allowed'},405);
   }
   if(path[0]==='bookings'){
    if(req.method==='GET'){const {data,error}=await supabase.from('bookings').select('id,event_id');if(error)throw error;const rows=data??[];const slugs=await eventSlugMap(supabase,[...new Set(rows.map(b=>String(b.event_id)))]);return json({bookings:rows.map(b=>({id:b.id,event_slug:slugs.get(String(b.event_id))}))});}
