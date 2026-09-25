@@ -83,6 +83,12 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
    const {data:existing,error:readError}=await supabase.from('wis_verifications').select('user_id').eq('user_id',user.id).maybeSingle();if(readError)throw readError;
    const payload={instagram,linkedin,document_path,method};const {error}=existing?await supabase.from('wis_verifications').update(payload).eq('user_id',user.id):await supabase.from('wis_verifications').insert({user_id:user.id,...payload});if(error)throw error;return json({saved:true});
   }
+  if(path[0]==='referral'){
+   if(path.length===1&&req.method==='GET'){const {data,error}=await supabase.rpc('wis_get_my_referral_code');if(error)throw error;return json({referralCode:data??''});}
+   if(path.length===1&&req.method==='POST'){const {data,error}=await supabase.rpc('wis_get_or_create_referral_code');if(error)throw error;return json({referralCode:data});}
+   if(path[1]==='quote'&&req.method==='POST'){const body=await req.json();const code=typeof body.code==='string'?body.code.trim().toUpperCase():'';const quantity=Number(body.quantity);if(!/^[A-Z0-9]{6}$/.test(code)||![1,3].includes(quantity))return json({error:'Enter a valid 6-character referral code.'},400);const {data,error}=await supabase.rpc('wis_referral_quote',{p_code:code,p_quantity:quantity});if(error)throw error;return json({quote:data});}
+   return json({error:'Not found'},404);
+  }
   if(path[0]==='account'&&req.method==='DELETE'){
    const body=await req.json().catch(()=>({}));
    if(body.confirmation!=='delete account')return json({error:'Type "delete account" to confirm.'},400);
@@ -98,7 +104,14 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
    if(!response.ok)return json({error:typeof result.error==='string'?result.error:'Could not delete account.'},response.status);
    return json({deleted:true});
   }
-  if(path[0]==='checkout')return json({error:'Payments are not enabled. No charge has been made.'},503);
+  if(path[0]==='checkout'){
+   if(req.method!=='POST')return json({error:'Method not allowed'},405);
+   const body=await req.json();const eventId=typeof body.eventId==='string'?body.eventId:'';const quantity=Number(body.quantity);const referralCode=typeof body.referralCode==='string'?body.referralCode.trim().toUpperCase():'';
+   if(!referralCode)return json({error:'Payments are not enabled yet. Enter a valid referral code to use the 100% discount, or use an existing ticket.'},503);
+   if(body.termsAccepted!==true)return json({error:'Confirm the cancellation guidelines and terms before enrolling'},400);
+   if(!/^[0-9a-f-]{36}$/i.test(eventId)||![1,3].includes(quantity)||!/^[A-Z0-9]{6}$/.test(referralCode))return json({error:'Invalid checkout request'},400);
+   const {data,error}=await supabase.rpc('wis_redeem_referral',{p_event:eventId,p_quantity:quantity,p_code:referralCode,p_terms_accepted:true});if(error)throw error;return json({free:true,result:data});
+  }
   if(path[0]==='bookings'){
    if(req.method==='GET'){const {data,error}=await supabase.from('wis_bookings').select('id,wis_events(slug)');if(error)throw error;return json({bookings:(data??[]).map(b=>({id:b.id,event_slug:(b.wis_events as unknown as {slug:string})?.slug}))});}
    if(req.method==='POST'){const body=await req.json();if(body.termsAccepted!==true)return json({error:'Confirm the cancellation guidelines and terms before enrolling'},400);const {data,error}=await supabase.rpc('wis_redeem',{p_event:body.eventId,p_terms_accepted:true});if(error)throw error;return json({id:data});}
