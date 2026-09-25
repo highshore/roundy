@@ -40,7 +40,7 @@ The Kakao adapter follows 1cup-web's NHN Alimtalk integration and requires a **R
 
 ## Boundaries inherited from the existing application
 
-Payment checkout remains disabled until a real provider/webhook and refund adapter exist. Existing-ticket redemption is implemented. Staff approval, document review UI, ID/QR check-in, live event round controls and complete match-photo presentation still need their own implementation; the new admin seating controls do not replace those workflows. A database administrator can review uploaded proof using protected storage. Existing profile and match privacy constraints remain in place.
+Paid checkout remains disabled until a real provider/webhook and refund adapter exist. Existing-ticket redemption and 100%-off referral checkout are implemented; a valid referral code can issue the selected ticket pack and confirm an event without contacting a payment provider. Staff approval, document review UI, ID/QR check-in, live event round controls and complete match-photo presentation still need their own implementation; the new admin seating controls do not replace those workflows. A database administrator can review uploaded proof using protected storage. Existing profile and match privacy constraints remain in place.
 
 ## Verification
 
