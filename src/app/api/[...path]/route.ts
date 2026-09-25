@@ -14,9 +14,13 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
  if(req.method!=='GET'&&req.headers.get('origin')!==req.nextUrl.origin)return json({error:'Invalid request origin'},403);
  const path=(await params).path;const supabase=await createClient();
  try{
-  if(path[0]==='events'&&req.method==='GET'){const {data,error}=await supabase.from('events').select('*').order('starts_at');if(error)throw error;return json({events:data});}
+  if(path[0]==='events'&&path.length===1&&req.method==='GET'){const {data,error}=await supabase.from('events').select('*').order('starts_at');if(error)throw error;return json({events:data});}
   const {data:{user},error:authError}=await supabase.auth.getUser();if(authError||!user)return json({error:'Sign in required'},401);
   if(user.app_metadata.provider!=='kakao')return json({error:'Please sign in with Kakao'},403);
+  if(path[0]==='events'&&path.length===3&&path[2]==='attendees'&&req.method==='GET'){
+   const eventId=path[1];if(!/^[0-9a-f-]{36}$/i.test(eventId))return json({error:'Invalid event ID'},400);
+   const {data,error}=await supabase.rpc('event_attendees',{p_event:eventId});if(error)throw error;return json({attendees:data});
+  }
   if(path[0]==='admin'){
    const admin=await isAdmin(supabase);
    if(path[1]==='role'&&req.method==='GET')return json({isAdmin:admin});
@@ -47,7 +51,7 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
     const {error}=await supabase.storage.from('wis-profile-photos').upload(key,photo,{contentType:photo.type,upsert:false});if(error)throw error;
     return json({url:'/api/photos/'+key});
    }
-   if(req.method==='GET'&&path.length===3){if(path[1]!==user.id&&!await isAdmin(supabase))return json({error:'Photo unavailable'},404);const {data,error}=await supabase.storage.from('wis-profile-photos').download(path.slice(1).join('/'));if(error)throw error;return new NextResponse(data,{headers:{'Content-Type':data.type,'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'}});}
+   if(req.method==='GET'&&path.length===3){if(path[1]!==user.id&&!await isAdmin(supabase)){const {data:canView,error:visibilityError}=await supabase.rpc('can_view_attendee_photo',{p_member:path[1]});if(visibilityError||canView!==true)return json({error:'Photo unavailable'},404);}const {data,error}=await supabase.storage.from('wis-profile-photos').download(path.slice(1).join('/'));if(error)throw error;return new NextResponse(data,{headers:{'Content-Type':data.type,'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'}});}
    return json({error:'Photo unavailable'},404);
   }
   if(path[0]==='profile'){
@@ -116,6 +120,7 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
   if(path[0]==='bookings'){
    if(req.method==='GET'){const {data,error}=await supabase.from('bookings').select('id,event_id');if(error)throw error;const rows=data??[];const slugs=await eventSlugMap(supabase,[...new Set(rows.map(b=>String(b.event_id)))]);return json({bookings:rows.map(b=>({id:b.id,event_slug:slugs.get(String(b.event_id))}))});}
    if(req.method==='POST'){const body=await req.json();if(body.termsAccepted!==true)return json({error:'Confirm the cancellation guidelines and terms before enrolling'},400);const {data,error}=await supabase.rpc('redeem',{p_event:body.eventId,p_terms_accepted:true});if(error)throw error;return json({id:data});}
+   if(req.method==='DELETE'){const body=await req.json();const eventId=typeof body.eventId==='string'?body.eventId:'';if(!/^[0-9a-f-]{36}$/i.test(eventId))return json({error:'Invalid event ID'},400);const {data,error}=await supabase.rpc('cancel_booking',{p_event:eventId});if(error)throw error;return json({cancelled:data===true});}
   }
   if(path[0]==='choices'&&req.method==='POST'){const body=await req.json();const {error}=await supabase.rpc('choose',{p_encounter:body.encounterId,p_choice:body.choice});if(error)throw error;return json({saved:true});}
   if(path[0]==='matches'&&req.method==='GET'){
