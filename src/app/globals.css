@@ -351,3 +351,15 @@
   max-width:none;
  }
 }
+
+
+/* Sign-in brand lockup. */
+.signin-brand-wrap{display:flex;justify-content:center;align-items:center;padding:24px 0 18px}
+.signin-brand-lockup{gap:10px}
+.signin-brand-lockup .roundy-mark{width:58px;height:58px}
+.signin-brand-lockup .roundy-name{font-size:38px;letter-spacing:-2px}
+@media(max-width:759px){
+ .signin-brand-wrap{padding:18px 0 12px}
+ .signin-brand-lockup .roundy-mark{width:52px;height:52px}
+ .signin-brand-lockup .roundy-name{font-size:34px}
+}
