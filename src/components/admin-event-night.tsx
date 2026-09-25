@@ -12,9 +12,16 @@ type AdminNightState={
  current_round:number;
  round_duration_seconds:number;
  round_started_at:string|null;
+ starts_at:string;
+ ends_at:string;
+ check_in_open:boolean;
+ can_prepare:boolean;
+ can_start:boolean;
  attendees:Attendee[];
  checked_men:number;
  checked_women:number;
+ checked_total:number;
+ submitted_count:number;
  matches:number;
 };
 
@@ -69,16 +76,16 @@ export function AdminEventNight({event,locale}:{event:Event;locale:Locale}){
    {state.attendees.map(person=><div className="admin-checkin-row" key={person.user_id}>
     <span className="admin-checkin-avatar" style={person.photo?{backgroundImage:`url("${person.photo}")`}:undefined}>{!person.photo&&(person.full_name?.[0]||'?')}</span>
     <div><b>{person.full_name}</b><span>{person.gender==='female'?tr(locale,'Woman','여성'):person.gender==='male'?tr(locale,'Man','남성'):tr(locale,'Not set','미설정')}</span></div>
-    <button type="button" className={person.checked_in_at?'checked':''} disabled={busy||state.state!=='waiting'} onClick={()=>void act('check-in',{userId:person.user_id,checked:!person.checked_in_at})}>{person.checked_in_at?<><UserX size={16}/>{tr(locale,'Undo','취소')}</>:<><UserCheck size={16}/>{tr(locale,'Check in','체크인')}</>}</button>
+    <button type="button" className={person.checked_in_at?'checked':''} disabled={busy||state.state!=='waiting'||!state.check_in_open} onClick={()=>void act('check-in',{userId:person.user_id,checked:!person.checked_in_at})}>{person.checked_in_at?<><UserX size={16}/>{tr(locale,'Undo','취소')}</>:<><UserCheck size={16}/>{tr(locale,'Check in','체크인')}</>}</button>
    </div>)}
    {!state.attendees.length&&<p className="note">{tr(locale,'No confirmed attendees yet.','확정된 참가자가 아직 없습니다.')}</p>}
   </section>
 
   <section className="admin-night-actions">
-   {state.state==='waiting'&&<><p>{balanced?tr(locale,'Check-in is balanced. Prepare the rotation to assign starting tables.','체크인 인원이 균형을 이뤘습니다. 로테이션을 준비해 시작 테이블을 배정하세요.'):tr(locale,'Check in an equal number of women and men before preparing the meetup.','밋업 준비 전 여성과 남성의 체크인 인원을 같게 맞춰 주세요.')}</p><button className="admin-primary" disabled={busy||!balanced} onClick={()=>void act('prepare')}><RotateCw size={17}/>{tr(locale,'Prepare Meetup','밋업 준비')}</button></>}
-   {state.state==='ready'&&<><p>{tr(locale,'Starting tables are assigned. Participants can see their table now.','시작 테이블이 배정되었습니다. 참가자 화면에 테이블이 표시됩니다.')}</p><button className="admin-primary" disabled={busy} onClick={()=>void act('start')}><Play size={17}/>{tr(locale,'Start Meetup','밋업 시작')}</button></>}
+   {state.state==='waiting'&&<><p>{!state.check_in_open?tr(locale,'The 15-minute check-in grace period has ended.','15분 체크인 유예 시간이 종료되었습니다.'):!balanced?tr(locale,'Check in an equal number of women and men before preparing the meetup.','밋업 준비 전 여성과 남성의 체크인 인원을 같게 맞춰 주세요.'):state.can_prepare?tr(locale,'Check-in is balanced. Prepare the rotation to assign starting tables.','체크인 인원이 균형을 이뤘습니다. 로테이션을 준비해 시작 테이블을 배정하세요.'):tr(locale,'Check-in is balanced. Meetup preparation opens 30 minutes before the event.','체크인 인원이 균형을 이뤘습니다. 밋업 준비는 시작 30분 전부터 가능합니다.')}</p><button className="admin-primary" disabled={busy||!balanced||!state.can_prepare} onClick={()=>void act('prepare')}><RotateCw size={17}/>{tr(locale,'Prepare Meetup','밋업 준비')}</button></>}
+   {state.state==='ready'&&<><p>{state.can_start?tr(locale,'Starting tables are assigned. Participants can see their table now.','시작 테이블이 배정되었습니다. 참가자 화면에 테이블이 표시됩니다.'):tr(locale,'Starting tables are ready. The Start button unlocks 15 minutes before the scheduled event time.','시작 테이블이 준비되었습니다. 시작 버튼은 예정 시간 15분 전부터 활성화됩니다.')}</p><button className="admin-primary" disabled={busy||!state.can_start} onClick={()=>void act('start')}><Play size={17}/>{tr(locale,'Start Meetup','밋업 시작')}</button></>}
    {state.state==='live'&&<><p>{tr(locale,'Round ','라운드 ')}{state.current_round} / {state.total_rounds}</p><button className="admin-primary" disabled={busy} onClick={()=>void act('advance')}><RotateCw size={17}/>{state.current_round<state.total_rounds?tr(locale,'Start Next Round','다음 라운드 시작'):tr(locale,'Open Final Choices','최종 선택 열기')}</button></>}
-   {state.state==='final_choices'&&<><p>{tr(locale,'Participants are reviewing their choices. Finish the meetup when you are ready to publish mutual matches.','참가자들이 선택을 검토 중입니다. 준비가 되면 밋업을 종료해 서로 선택한 매칭을 공개하세요.')}</p><button className="admin-primary" disabled={busy} onClick={()=>void act('finish')}><Square size={17}/>{tr(locale,'Finish Meetup','밋업 종료')}</button></>}
+   {state.state==='final_choices'&&<><p>{state.submitted_count>=state.checked_total?tr(locale,'Everyone has submitted. Finish the meetup to publish mutual matches.','모든 참가자가 제출했습니다. 밋업을 종료하면 서로 선택한 매칭이 공개됩니다.'):tr(locale,`${state.submitted_count} of ${state.checked_total} checked-in participants have submitted final choices.`,`체크인한 참가자 ${state.checked_total}명 중 ${state.submitted_count}명이 최종 선택을 제출했습니다.`)}</p><button className="admin-primary" disabled={busy||state.submitted_count<state.checked_total} onClick={()=>void act('finish')}><Square size={17}/>{tr(locale,'Finish Meetup','밋업 종료')}</button></>}
    {state.state==='finished'&&<div className="admin-night-finished"><Check size={20}/><b>{tr(locale,'Meetup finished','밋업 종료')}</b><span>{state.matches} {tr(locale,'mutual matches','서로 선택한 매칭')}</span></div>}
   </section>
 
