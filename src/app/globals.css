@@ -774,3 +774,137 @@ html:lang(ko) li{
   .booking-ticket{border-radius:24px}
   .booking-ticket-main h2{font-size:23px}
 }
+
+
+/* Simplified attendees + category filters */
+.event-category-filters{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+}
+.event-category-filters .chip{
+  min-height:46px;
+  padding:11px 18px;
+  border:1px solid var(--border);
+  border-radius:999px;
+  background:var(--surface);
+  color:var(--ink);
+  font-size:14px;
+  font-weight:750;
+}
+.event-category-filters .chip.selected{
+  background:var(--brand);
+  border-color:var(--brand);
+  color:#fff!important;
+}
+.event-tags span:first-child,
+.chip.selected{
+  color:#fff!important;
+}
+
+.route-events .attendee-list{
+  display:grid;
+  gap:14px;
+  padding:4px 0 132px;
+}
+.route-events .attendee-list>h2{
+  display:flex;
+  align-items:baseline;
+  gap:8px;
+  margin:0;
+  font-size:24px;
+  line-height:1.2;
+  letter-spacing:-.04em;
+}
+.route-events .attendee-list>h2 span{
+  color:var(--muted);
+  font-size:18px;
+  font-weight:700;
+  letter-spacing:-.025em;
+}
+.attendee-simple-panel{
+  overflow:hidden;
+  border:1px solid var(--border);
+  border-radius:22px;
+  background:var(--paper);
+}
+.attendee-simple-row{
+  display:grid;
+  gap:14px;
+  min-height:104px;
+  padding:18px 20px;
+}
+.attendee-simple-row+.attendee-simple-row{
+  border-top:1px solid var(--border);
+}
+.attendee-simple-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+}
+.attendee-simple-head b{
+  font-size:16px;
+  line-height:1.2;
+}
+.attendee-simple-head span{
+  color:var(--muted);
+  font-size:14px;
+  font-weight:750;
+}
+.attendee-simple-row .attendee-stack{
+  min-height:58px;
+  padding-left:8px;
+}
+.attendee-simple-row .attendee-avatar{
+  width:56px;
+  height:56px;
+  flex-basis:56px;
+  margin-left:-14px;
+  border:3px solid var(--paper);
+  background:#f0eee8;
+  box-shadow:0 4px 12px rgba(32,33,31,.12);
+}
+.attendee-simple-row .attendee-avatar:first-child{margin-left:0}
+.attendee-simple-row .attendee-avatar svg{width:22px;height:22px}
+.attendee-simple-row .attendee-avatar.more{font-size:11px}
+
+/* Avatar images should preserve the full photo inside the circular frame. */
+.attendee-avatar img,
+.nav-avatar img,
+.profile-summary .avatar img,
+.member-avatar img{
+  width:100%!important;
+  height:100%!important;
+  object-fit:contain!important;
+  object-position:center!important;
+  background:#f0eee8;
+}
+
+/* Keep text legible on coral/pink UI surfaces. */
+.event-tags span:first-child,
+.event-category-filters .chip.selected,
+.choice.chosen,
+.referral-apply{
+  color:#fff!important;
+}
+
+@media(max-width:759px){
+  .event-category-filters{gap:8px}
+  .event-category-filters .chip{
+    min-height:44px;
+    padding:10px 15px;
+    font-size:13px;
+  }
+  .route-events .attendee-list{padding-bottom:0}
+  .attendee-simple-row{
+    min-height:98px;
+    padding:16px 17px;
+  }
+  .attendee-simple-row .attendee-avatar{
+    width:52px;
+    height:52px;
+    flex-basis:52px;
+    margin-left:-13px;
+  }
+}
