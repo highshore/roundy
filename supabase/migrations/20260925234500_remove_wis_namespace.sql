@@ -175,7 +175,7 @@ begin
 end;
 $$;
 
--- Clean the remaining visible database object names.
+-- Clean the remaining visible database object names. Auth-owned trigger names are left alone because Supabase does not grant application migrations ownership of auth.users.
 do $$
 declare
   r record;
@@ -203,6 +203,7 @@ begin
     select distinct event_object_schema,event_object_table,trigger_name
     from information_schema.triggers
     where trigger_name like 'wis_%'
+      and event_object_schema='public'
   loop
     clean_name:=regexp_replace(r.trigger_name,'^wis_','');
     execute format('alter trigger %I on %I.%I rename to %I',
