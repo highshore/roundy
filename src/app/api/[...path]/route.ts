@@ -86,7 +86,7 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
   if(path[0]==='checkout')return json({error:'Payments are not enabled. No charge has been made.'},503);
   if(path[0]==='bookings'){
    if(req.method==='GET'){const {data,error}=await supabase.from('wis_bookings').select('id,wis_events(slug)');if(error)throw error;return json({bookings:(data??[]).map(b=>({id:b.id,event_slug:(b.wis_events as unknown as {slug:string})?.slug}))});}
-   if(req.method==='POST'){const body=await req.json();const {data,error}=await supabase.rpc('wis_redeem',{p_event:body.eventId});if(error)throw error;return json({id:data});}
+   if(req.method==='POST'){const body=await req.json();if(body.termsAccepted!==true)return json({error:'Confirm the cancellation guidelines and terms before enrolling'},400);const {data,error}=await supabase.rpc('wis_redeem',{p_event:body.eventId,p_terms_accepted:true});if(error)throw error;return json({id:data});}
   }
   if(path[0]==='choices'&&req.method==='POST'){const body=await req.json();const {error}=await supabase.rpc('wis_choose',{p_encounter:body.encounterId,p_choice:body.choice});if(error)throw error;return json({saved:true});}
   if(path[0]==='matches'&&req.method==='GET'){
