@@ -319,8 +319,8 @@
  display:flex!important;
  align-items:center;
  justify-content:center;
- width:44px!important;
- height:44px!important;
+ width:36px!important;
+ height:36px!important;
  padding:0!important;
  border:0!important;
  border-radius:50%!important;
@@ -329,7 +329,7 @@
  box-shadow:none!important;
  filter:none!important;
 }
-.map-marker-logo svg{display:block;width:25px;height:25px;margin:0}
+.map-marker-logo svg{display:block;width:20px;height:20px;margin:0}
 
 .feedback{
  top:94px;
