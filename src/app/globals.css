@@ -363,3 +363,76 @@
  .signin-brand-lockup .roundy-mark{width:52px;height:52px}
  .signin-brand-lockup .roundy-name{font-size:34px}
 }
+
+
+/* Account deletion. */
+.account-danger-zone{
+ display:grid;
+ gap:10px;
+ margin-top:8px;
+ padding:24px;
+ border:1px solid #e9b7b0;
+ border-radius:20px;
+ background:#fff8f6;
+}
+.account-danger-zone h2{font-size:20px;letter-spacing:-.03em}
+.account-danger-zone>p:not(.eyebrow){color:#74534f;font-size:14px;line-height:1.55}
+.danger-button{
+ min-height:52px;
+ padding:14px 20px;
+ border:1px solid #c95c4c;
+ border-radius:999px;
+ background:transparent;
+ color:#a63e31;
+ font:inherit;
+ font-weight:750;
+ display:flex;
+ align-items:center;
+ justify-content:center;
+ gap:10px;
+}
+.danger-button:hover{background:#fff0ed}
+.danger-button.solid{background:#a63e31;color:#fff;border-color:#a63e31}
+.danger-button.solid:hover{background:#8f3429}
+.danger-button:disabled{opacity:.45;cursor:not-allowed}
+.account-delete-modal{max-width:500px}
+.account-delete-modal header>div{display:grid;gap:6px}
+.account-delete-warning{
+ display:grid;
+ gap:10px;
+ padding:16px;
+ border-radius:16px;
+ background:#fff0ed;
+ color:#683c35;
+ font-size:14px;
+ line-height:1.55;
+}
+.delete-confirm-field{display:grid;gap:8px;font-size:13px;font-weight:650}
+.delete-confirm-field span{color:var(--muted)}
+.delete-confirm-field b{color:var(--ink)}
+.delete-confirm-field input{
+ width:100%;
+ min-height:50px;
+ padding:12px 14px;
+ border:1px solid var(--border);
+ border-radius:14px;
+ background:var(--paper);
+ color:var(--ink);
+ font:inherit;
+ outline:none;
+}
+.delete-confirm-field input:focus{border-color:#a63e31}
+.account-delete-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.account-delete-actions .button,.account-delete-actions .danger-button{min-height:52px}
+
+@media(max-width:759px){
+ .account-delete-backdrop{align-items:end;padding:0}
+ .account-delete-modal{
+  width:100%;
+  max-width:none;
+  max-height:88dvh;
+  border-radius:24px 24px 0 0;
+  padding:22px 20px calc(22px + env(safe-area-inset-bottom));
+ }
+ .account-delete-actions{grid-template-columns:1fr}
+}
