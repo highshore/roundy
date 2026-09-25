@@ -83,6 +83,21 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
    const {data:existing,error:readError}=await supabase.from('wis_verifications').select('user_id').eq('user_id',user.id).maybeSingle();if(readError)throw readError;
    const payload={instagram,linkedin,document_path,method};const {error}=existing?await supabase.from('wis_verifications').update(payload).eq('user_id',user.id):await supabase.from('wis_verifications').insert({user_id:user.id,...payload});if(error)throw error;return json({saved:true});
   }
+  if(path[0]==='account'&&req.method==='DELETE'){
+   const body=await req.json().catch(()=>({}));
+   if(body.confirmation!=='delete account')return json({error:'Type "delete account" to confirm.'},400);
+   const {data:{session},error:sessionError}=await supabase.auth.getSession();
+   if(sessionError||!session?.access_token)return json({error:'Sign in required'},401);
+   const response=await fetch(process.env.NEXT_PUBLIC_SUPABASE_URL+'/functions/v1/roundy-delete-account',{
+    method:'POST',
+    headers:{Authorization:'Bearer '+session.access_token,apikey:process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,'Content-Type':'application/json'},
+    body:JSON.stringify({confirmation:'delete account'}),
+    signal:AbortSignal.timeout(15000)
+   });
+   const result=await response.json().catch(()=>({}));
+   if(!response.ok)return json({error:typeof result.error==='string'?result.error:'Could not delete account.'},response.status);
+   return json({deleted:true});
+  }
   if(path[0]==='checkout')return json({error:'Payments are not enabled. No charge has been made.'},503);
   if(path[0]==='bookings'){
    if(req.method==='GET'){const {data,error}=await supabase.from('wis_bookings').select('id,wis_events(slug)');if(error)throw error;return json({bookings:(data??[]).map(b=>({id:b.id,event_slug:(b.wis_events as unknown as {slug:string})?.slug}))});}
