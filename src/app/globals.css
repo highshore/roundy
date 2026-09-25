@@ -908,3 +908,11 @@ html:lang(ko) li{
     margin-left:-13px;
   }
 }
+
+
+/* White copy on coral/pink surfaces. */
+.poster,
+.poster .eyebrow,
+.poster>span:last-child{
+  color:#fff!important;
+}
