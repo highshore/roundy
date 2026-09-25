@@ -869,16 +869,27 @@ html:lang(ko) li{
 .attendee-simple-row .attendee-avatar svg{width:22px;height:22px}
 .attendee-simple-row .attendee-avatar.more{font-size:11px}
 
-/* Avatar images should preserve the full photo inside the circular frame. */
+/* Circular avatar crops: always fill the frame without stretching or letterboxing. */
+.attendee-avatar,
+.nav-avatar,
+.profile-summary .avatar,
+.member-avatar{
+  overflow:hidden;
+  border-radius:50%;
+}
 .attendee-avatar img,
 .nav-avatar img,
 .profile-summary .avatar img,
 .member-avatar img{
+  display:block!important;
   width:100%!important;
   height:100%!important;
-  object-fit:contain!important;
-  object-position:center!important;
-  background:#f0eee8;
+  max-width:none!important;
+  max-height:none!important;
+  object-fit:cover!important;
+  object-position:50% 50%!important;
+  border-radius:50%!important;
+  background:transparent!important;
 }
 
 /* Keep text legible on coral/pink UI surfaces. */
@@ -915,4 +926,30 @@ html:lang(ko) li{
 .poster .eyebrow,
 .poster>span:last-child{
   color:#fff!important;
+}
+
+
+/* Verified profile state */
+.profile-summary-copy{min-width:0;display:grid;gap:8px}
+.profile-summary-copy h2{margin:0}
+.profile-status-line{display:flex;align-items:center;gap:9px;min-width:0;flex-wrap:wrap}
+.profile-status-line p{margin:0}
+.verified-tag{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  min-height:24px;
+  padding:4px 9px;
+  border-radius:999px;
+  background:#e7f4ec;
+  color:#17623e;
+  font-size:11px;
+  font-weight:800;
+  line-height:1;
+  white-space:nowrap;
+}
+.verified-tag svg{flex:0 0 auto;stroke-width:2.5}
+@media(max-width:759px){
+  .profile-status-line{gap:7px}
+  .verified-tag{font-size:10px;padding:4px 8px}
 }
