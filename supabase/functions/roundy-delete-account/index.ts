@@ -61,7 +61,7 @@ Deno.serve(async (req: Request) => {
       removeUserFiles(admin, "wis-verification-documents", userId),
     ]);
 
-    const { error: anonymizeError } = await userClient.rpc("wis_anonymize_account");
+    const { error: anonymizeError } = await userClient.rpc("anonymize_account");
     if (anonymizeError) throw anonymizeError;
 
     const { error: deleteError } = await admin.auth.admin.deleteUser(userId);
