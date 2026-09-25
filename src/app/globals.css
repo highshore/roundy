@@ -436,3 +436,16 @@
  }
  .account-delete-actions{grid-template-columns:1fr}
 }
+
+/* Referral codes */
+.referral-box{border:1px solid var(--border);border-radius:22px;padding:22px;display:grid;gap:18px;background:var(--paper)}
+.referral-box h3{margin-top:5px}.referral-box>div:first-child>p:last-child{margin-top:8px;color:var(--muted);font-size:14px;line-height:1.5}
+.referral-entry{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px}
+.referral-entry input{min-width:0;border:1px solid var(--border);border-radius:999px;background:var(--surface);padding:13px 18px;text-transform:uppercase;letter-spacing:.12em;font-weight:700;outline:none}
+.referral-entry input:focus{border-color:var(--ink)}
+.referral-entry .button{width:auto;min-height:50px;padding:12px 20px}
+.referral-message{font-size:13px;font-weight:600}.referral-message.success{color:#27613f}.referral-message.error{color:#8d3029}
+.referral-code-value{font-size:28px!important;font-weight:800;letter-spacing:.16em;color:var(--ink)!important;margin-bottom:8px}
+.checkout-summary{display:grid}.price-row.discount strong{font-size:20px;color:#27613f}.price-row.total{border-bottom:0;padding-top:24px}.price-row.total strong{font-size:36px}
+.checkout-terms{border:1px solid var(--border);border-radius:18px;padding:16px;background:var(--surface);line-height:1.5}.checkout-terms a{text-decoration:underline}
+@media(max-width:480px){.referral-entry{grid-template-columns:1fr}.referral-entry .button{width:100%}}
