@@ -466,3 +466,311 @@
 .attendee-groups .attendee-stack{min-height:30px;padding-left:5px}
 .route-events .sticky-action .button.secondary{background:var(--paper);color:var(--ink);border:1px solid var(--border)}
 .route-events .sticky-action .button.secondary:not(:disabled):hover{background:var(--surface)}
+
+
+/* 2026-09-26 profile/event polish */
+html:lang(ko) body,
+html:lang(ko) button,
+html:lang(ko) input,
+html:lang(ko) select,
+html:lang(ko) textarea{
+  font-family:var(--font-noto-sans-kr),"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+}
+html:lang(ko) body,
+html:lang(ko) h1,
+html:lang(ko) h2,
+html:lang(ko) h3,
+html:lang(ko) h4,
+html:lang(ko) h5,
+html:lang(ko) h6,
+html:lang(ko) p,
+html:lang(ko) span,
+html:lang(ko) a,
+html:lang(ko) button,
+html:lang(ko) label,
+html:lang(ko) li{
+  line-height:1.5;
+}
+
+/* Larger overlapping attendee avatars */
+.event-card .attendee-stack{padding-left:7px}
+.event-card .attendee-avatar{
+  width:38px;
+  height:38px;
+  flex-basis:38px;
+  margin-left:-10px;
+  border:3px solid var(--paper);
+  background:#f2f0e9;
+  box-shadow:0 3px 10px rgba(32,33,31,.12);
+}
+.event-card .attendee-avatar:first-child{margin-left:0}
+.event-card .attendee-avatar img{width:100%;height:100%}
+.event-card .attendee-avatar svg{width:17px;height:17px}
+.event-card .attendee-avatar.more{font-size:10px}
+.event-card .event-attendance>div{gap:10px}
+
+.route-events .attendee-list{
+  gap:18px;
+  padding:10px 0 132px;
+}
+.attendee-list-heading{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:18px;
+}
+.attendee-list-heading>div{display:grid;gap:5px}
+.attendee-list-heading .eyebrow{margin:0}
+.route-events .attendee-list-heading h2{
+  display:flex;
+  align-items:baseline;
+  gap:10px;
+  margin:0;
+  font-size:28px;
+  letter-spacing:-.045em;
+}
+.route-events .attendee-list-heading h2 span{
+  color:var(--muted);
+  font-size:16px;
+  font-weight:700;
+  letter-spacing:-.02em;
+}
+.attendee-list-heading>svg{color:var(--brand);margin-bottom:4px}
+.route-events .attendee-groups{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:14px;
+}
+.route-events .attendee-group-card{
+  position:relative;
+  min-height:132px;
+  padding:20px;
+  border:1px solid var(--border);
+  border-radius:24px;
+  background:
+    radial-gradient(circle at 100% 0%,rgba(255,102,102,.09),transparent 42%),
+    var(--paper);
+  box-shadow:0 10px 28px rgba(32,33,31,.045);
+  overflow:hidden;
+}
+.route-events .attendee-group-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+  margin-bottom:18px;
+}
+.route-events .attendee-group-head p{
+  margin:0;
+  font-size:17px;
+  font-weight:800;
+  letter-spacing:-.025em;
+}
+.route-events .attendee-group-head span{
+  color:var(--muted);
+  font-size:14px;
+  font-weight:800;
+}
+.route-events .attendee-group-card .attendee-stack{
+  min-height:52px;
+  padding-left:8px;
+}
+.route-events .attendee-group-card .attendee-avatar{
+  width:50px;
+  height:50px;
+  flex-basis:50px;
+  margin-left:-13px;
+  border:3px solid var(--paper);
+  background:#f1efe9;
+  box-shadow:0 4px 14px rgba(32,33,31,.15);
+}
+.route-events .attendee-group-card .attendee-avatar:first-child{margin-left:0}
+.route-events .attendee-group-card .attendee-avatar img{width:100%;height:100%}
+.route-events .attendee-group-card .attendee-avatar svg{width:20px;height:20px}
+.route-events .attendee-group-card .attendee-avatar.more{font-size:11px}
+
+/* Ticket balance */
+.ticket-balance-page{display:grid;gap:24px}
+.ticket-balance-card{
+  display:grid;
+  justify-items:center;
+  gap:26px;
+  padding:30px 24px 28px;
+  border:1px solid var(--border);
+  border-radius:30px;
+  background:
+    radial-gradient(circle at 12% 8%,rgba(255,102,102,.12),transparent 34%),
+    linear-gradient(180deg,#fff 0%,#fbfaf6 100%);
+  box-shadow:0 18px 45px rgba(32,33,31,.07);
+  text-align:center;
+}
+.ticket-balance-ring{
+  width:226px;
+  height:226px;
+  border-radius:50%;
+  padding:13px;
+  display:grid;
+  place-items:center;
+  box-shadow:0 18px 40px rgba(255,102,102,.13);
+}
+.ticket-balance-inner{
+  width:100%;
+  height:100%;
+  border-radius:50%;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:7px;
+  background:var(--paper);
+  box-shadow:inset 0 0 0 1px rgba(32,33,31,.08),0 6px 20px rgba(32,33,31,.08);
+}
+.ticket-balance-inner strong{
+  font-size:72px;
+  line-height:.9;
+  letter-spacing:-.07em;
+  font-weight:800;
+  color:var(--ink);
+}
+.ticket-balance-inner span{
+  color:var(--muted);
+  font-size:14px;
+  font-weight:750;
+  text-transform:uppercase;
+  letter-spacing:.08em;
+}
+.ticket-balance-copy{display:grid;gap:7px;max-width:360px}
+.ticket-balance-copy .eyebrow{margin:0;color:var(--brand)}
+.ticket-balance-copy h1{
+  margin:0;
+  font-size:32px;
+  line-height:1.05;
+  letter-spacing:-.045em;
+}
+.ticket-balance-copy>p:last-child{
+  margin:0;
+  color:var(--muted);
+  font-size:14px;
+  line-height:1.55;
+}
+.ticket-balance-page>.button{width:100%}
+
+/* One-depth My Events ticket cards */
+.my-events-page{display:grid;gap:22px}
+.subpage-heading{display:grid;gap:6px}
+.subpage-heading .eyebrow{margin:0}
+.subpage-heading h1{
+  margin:0;
+  font-size:34px;
+  line-height:1.05;
+  letter-spacing:-.05em;
+}
+.my-events-list{display:grid;gap:18px}
+.booking-ticket{
+  position:relative;
+  overflow:hidden;
+  display:grid;
+  border:1px solid var(--border);
+  border-radius:28px;
+  background:
+    radial-gradient(circle at 100% 0%,rgba(255,102,102,.11),transparent 38%),
+    var(--paper);
+  box-shadow:0 14px 36px rgba(32,33,31,.07);
+}
+.booking-ticket::before,
+.booking-ticket::after{
+  content:"";
+  position:absolute;
+  top:118px;
+  width:24px;
+  height:24px;
+  border-radius:50%;
+  background:var(--paper);
+  box-shadow:0 0 0 1px var(--border);
+  z-index:2;
+}
+.booking-ticket::before{left:-13px}
+.booking-ticket::after{right:-13px}
+.booking-ticket-top{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:20px 22px 10px;
+  color:var(--brand);
+  font-size:12px;
+  font-weight:850;
+  letter-spacing:.09em;
+}
+.booking-ticket-top svg{
+  width:28px;
+  height:28px;
+  padding:6px;
+  border-radius:50%;
+  background:var(--brand);
+  color:white;
+}
+.booking-ticket-main{
+  display:grid;
+  gap:10px;
+  padding:4px 22px 22px;
+}
+.booking-ticket-main h2{
+  margin:0;
+  font-size:25px;
+  line-height:1.12;
+  letter-spacing:-.04em;
+}
+.booking-ticket-venue{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin:0;
+  color:var(--ink);
+  font-size:16px;
+  font-weight:750;
+}
+.booking-ticket-venue svg{color:var(--brand);flex:0 0 auto}
+.booking-ticket-divider{
+  margin:0 22px;
+  border-top:1px dashed #d9d7cf;
+}
+.booking-ticket-notes{
+  display:grid;
+  gap:8px;
+  padding:20px 22px 22px;
+}
+.booking-ticket-notes p{
+  margin:0;
+  color:var(--muted);
+  font-size:13px;
+  line-height:1.55;
+}
+.booking-ticket-notes p:first-child{
+  color:var(--ink);
+  font-weight:700;
+}
+
+@media(max-width:759px){
+  .route-events .attendee-groups{grid-template-columns:1fr;gap:12px}
+  .route-events .attendee-group-card{min-height:118px;padding:17px 18px}
+  .route-events .attendee-group-head{margin-bottom:14px}
+  .route-events .attendee-group-card .attendee-avatar{
+    width:48px;
+    height:48px;
+    flex-basis:48px;
+    margin-left:-12px;
+  }
+  .event-card .attendee-avatar{
+    width:36px;
+    height:36px;
+    flex-basis:36px;
+  }
+  .ticket-balance-card{padding:26px 20px 24px;border-radius:26px}
+  .ticket-balance-ring{width:206px;height:206px;padding:12px}
+  .ticket-balance-inner strong{font-size:66px}
+  .ticket-balance-copy h1{font-size:29px}
+  .subpage-heading h1{font-size:30px}
+  .booking-ticket{border-radius:24px}
+  .booking-ticket-main h2{font-size:23px}
+}
