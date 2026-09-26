@@ -28,5 +28,5 @@ export function lockdownNotice(minutes:number,locale:Locale){
  if(!minutes) return tr(locale,'You can cancel until the event starts.','이벤트 시작 전까지 취소할 수 있어요.');
  const hours=Math.floor(minutes/60),rest=minutes%60;
  const duration=locale==='ko'?`${hours?hours+'시간 ':''}${rest?rest+'분':''}`.trim():[hours?`${hours} hour${hours===1?'':'s'}`:'',rest?`${rest} minute${rest===1?'':'s'}`:''].filter(Boolean).join(' ');
- return tr(locale,`This event has a lockdown period. You cannot cancel from ${duration} before the event starts. You can still apply during this period; your registration cannot be cancelled.`,`이 이벤트에는 취소 제한 시간이 있어요. 시작 ${duration} 전부터 취소할 수 없습니다. 이 시간에도 신청할 수 있지만, 신청 후 취소는 불가능합니다.`);
+ return tr(locale,`Cancellation closes ${duration} before the event. You can still apply.`,`시작 ${duration} 전부터 취소할 수 없지만 신청은 가능해요.`);
 }
