@@ -67,11 +67,11 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
     const {data,error}=await supabase.from('events').select('*').is('deleted_at',null).order('starts_at',{ascending:false});if(error)throw error;return json({events:data});
    }
    if(path[1]==='events'&&path.length===2&&req.method==='POST'){
-    const input=eventInput(await req.json());if(input.latitude===null){const place=await resolvePlace(input.venue,input.address);if(!place)return json({error:'Select a location from search results to confirm its coordinates.'},400);Object.assign(input,{address:place.address,latitude:place.latitude,longitude:place.longitude});}const {data,error}=await supabase.from('events').insert(input).select('*').single();if(error)throw error;return json({event:data},201);
+    const input=eventInput(await req.json());if(input.latitude===null){const place=await resolvePlace(input.venue,input.address);if(!place)return json({error:'Select a location from search results to confirm its coordinates.'},400);Object.assign(input,{address:input.address||place.address,latitude:place.latitude,longitude:place.longitude});}const {data,error}=await supabase.from('events').insert(input).select('*').single();if(error)throw error;return json({event:data},201);
    }
    if(path[1]==='events'&&path.length===3){
     const id=path[2];if(!/^[0-9a-f-]{36}$/i.test(id))return json({error:'Invalid event ID'},400);
-    if(req.method==='PUT'){const input=eventInput(await req.json());if(input.latitude===null){const place=await resolvePlace(input.venue,input.address);if(!place)return json({error:'Select a location from search results to confirm its coordinates.'},400);Object.assign(input,{address:place.address,latitude:place.latitude,longitude:place.longitude});}const {data,error}=await supabase.from('events').update(input).eq('id',id).is('deleted_at',null).select('*').single();if(error)throw error;return json({event:data});}
+    if(req.method==='PUT'){const input=eventInput(await req.json());if(input.latitude===null){const place=await resolvePlace(input.venue,input.address);if(!place)return json({error:'Select a location from search results to confirm its coordinates.'},400);Object.assign(input,{address:input.address||place.address,latitude:place.latitude,longitude:place.longitude});}const {data,error}=await supabase.from('events').update(input).eq('id',id).is('deleted_at',null).select('*').single();if(error)throw error;return json({event:data});}
     if(req.method==='DELETE'){const {data,error}=await supabase.rpc('admin_delete_event',{p_event:id});if(error)throw error;return json(data);}
    }
    return json({error:'Not found'},404);

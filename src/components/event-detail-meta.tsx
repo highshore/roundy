@@ -6,7 +6,7 @@ import { type NationalityRequirements, type NationalityRule } from '@/lib/event-
 type Props={requirements?:NationalityRequirements;locale:Locale};
 function ruleLabel(rule:NationalityRule,locale:Locale){
  if(rule.mode==='all')return tr(locale,'All nationalities','모든 국적');
- if(rule.mode==='korean')return tr(locale,'Korea','한국');
+ if(rule.mode==='korean')return tr(locale,'Korean','한국');
  if(rule.mode==='non_korean')return tr(locale,'Non-Korean','한국 외');
  const names=new Intl.DisplayNames([locale],{type:'region'});
  return rule.countries.map(code=>names.of(code)||code).join(', ');
@@ -25,7 +25,7 @@ export function EventCategoryBadges({category,requirements,locale}:Props&{catego
 }
 export function NationalityFact({requirements,locale}:Props){
  if(!requirements||(['female','male'] as const).every(g=>requirements[g].mode==='all'))return null;
- return <div className="event-fact nationality-fact"><span className="fact-icon"><Globe size={20}/></span><div className="fact-copy"><b>{tr(locale,'Nationality requirements','국적 조건')}</b><span className="nationality-text">{(['female','male'] as const).map(g=>genderLabel(g,locale)+': '+ruleLabel(requirements[g],locale)).join(' | ')}</span></div></div>;
+ return <div className="event-fact nationality-fact"><span className="fact-icon"><Globe size={20}/></span><div className="fact-copy"><b>{tr(locale,'Nationality requirements','국적 조건')}</b><span className="nationality-text">{(['female','male'] as const).map(g=>genderLabel(g,locale)+': '+ruleLabel(requirements[g],locale)).join('\n')}</span></div></div>;
 }
 export function VenueFact({venue,address,description,locale}:{venue:string;address:string;description?:string;locale:Locale}){
  return <div className="event-fact venue-fact"><span className="fact-icon"><MapPin size={20}/></span><span className="fact-copy"><b>{tr(locale,'Venue','장소')}</b><span className="venue-address">{venue}{address?` (${address})`:''}</span>{description?.trim()&&<small className="venue-description">{description}</small>}</span></div>;

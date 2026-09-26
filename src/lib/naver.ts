@@ -21,8 +21,8 @@ export async function searchPlaces(query:string):Promise<Place[]> {
  return geocode(query);
 }
 export async function resolvePlace(venue:string,address:string):Promise<Place|null> {
- const hubResults=await apiHubPlaceSearch([venue,address].filter(Boolean).join(' '));
- if(hubResults.length===1)return hubResults[0];
- if(address){const addresses=await geocode(address);if(addresses.length===1)return {...addresses[0],title:venue||addresses[0].title};}
- return null;
+ // The entered address is authoritative; a venue-name search can resolve an old branch.
+ if(address){const addresses=await geocode(address);return addresses.length===1?{...addresses[0],title:venue||addresses[0].title}:null;}
+ const hubResults=await apiHubPlaceSearch(venue);
+ return hubResults.length===1?hubResults[0]:null;
 }

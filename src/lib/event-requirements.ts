@@ -20,7 +20,7 @@ export function nationalitySummary(requirements:NationalityRequirements|undefine
  const names=countries(locale);
  return (['female','male'] as const).filter(g=>requirements[g].mode!=='all').map(g=>{
   const rule=requirements[g];
-  const label=rule.mode==='korean'?tr(locale,'Korea','한국'):rule.mode==='non_korean'?tr(locale,'Non-Korean','한국 외'):rule.countries.map(code=>names.find(c=>c.code===code)?.name||code).join(', ');
+  const label=rule.mode==='korean'?tr(locale,'Korean','한국'):rule.mode==='non_korean'?tr(locale,'Non-Korean','한국 외'):rule.countries.map(code=>names.find(c=>c.code===code)?.name||code).join(', ');
   return tr(locale,g==='female'?'Ladies':'Gents',g==='female'?'여성':'남성')+': '+label;
  }).join(' | ');
 }

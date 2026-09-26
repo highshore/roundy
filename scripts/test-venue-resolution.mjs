@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import vm from 'node:vm';
+import ts from 'typescript';
+const calls=[];let addresses=[{roadAddress:'Normalized address without floor',jibunAddress:'',x:'126.95',y:'37.56'}];
+const module={exports:{}};
+const code=ts.transpileModule(await readFile('src/lib/naver.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+vm.runInNewContext(code,{module,exports:module.exports,require:()=>({}),AbortSignal,process:{env:{NAVER_MAP_CLIENT_ID:'test',NAVER_MAP_CLIENT_SECRET:'test',NAVER_API_HUB_CLIENT_ID:'test',NAVER_API_HUB_CLIENT_SECRET:'test'}},fetch:async url=>{calls.push(url);return {ok:true,json:async()=>url.includes('geocode')?{addresses}:{items:[{title:'Old venue',roadAddress:'Old address',mapx:'1269000000',mapy:'375500000'}]}};}});
+const {resolvePlace}=module.exports;
+const place=await resolvePlace('Old venue name','New street 123, second floor');
+assert.equal(place.latitude,37.56);assert.equal(place.longitude,126.95);
+assert.equal(calls.length,1);assert.ok(calls[0].includes(encodeURIComponent('New street 123, second floor')));assert.ok(calls[0].includes('geocode'));
+addresses=[];assert.equal(await resolvePlace('Old venue name','Unresolved address'),null,'Do not fall back to an old venue when the new address is unresolved');
+const byName=await resolvePlace('Cafe','');assert.equal(byName.address,'Old address');
+console.log('PASS entered address determines coordinates; unresolved addresses cannot silently resolve to the old venue; name search remains available without an address');
