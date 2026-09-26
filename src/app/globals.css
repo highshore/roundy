@@ -1416,3 +1416,279 @@ html:lang(ko) li{
 .attendee-simple-row .attendee-avatar{
   border:0!important;
 }
+
+
+/* Global notifications */
+.global-toast-viewport{
+  position:fixed;
+  inset:calc(env(safe-area-inset-top) + 72px) 16px auto;
+  z-index:5000;
+  display:grid;
+  justify-items:center;
+  pointer-events:none;
+}
+.global-toast{
+  position:relative;
+  width:min(100%,520px);
+  min-height:58px;
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr) auto;
+  align-items:center;
+  gap:11px;
+  padding:14px 15px 15px;
+  overflow:hidden;
+  border:1px solid #3b3d38;
+  border-radius:18px;
+  background:#20211f;
+  color:#fff;
+  box-shadow:0 14px 42px rgba(0,0,0,.22);
+  pointer-events:auto;
+  animation:toast-in .18s ease-out;
+}
+.global-toast.error{
+  background:#fff1ed;
+  color:#7b2c1b;
+  border-color:#e8c3ba;
+}
+.global-toast.success .global-toast-icon{color:#9ce0bb}
+.global-toast.error .global-toast-icon{color:#b94b35}
+.global-toast.info .global-toast-icon{color:#fff}
+.global-toast-copy{
+  min-width:0;
+  font-size:14px;
+  font-weight:650;
+  line-height:1.4;
+}
+.global-toast button{
+  width:34px;
+  height:34px;
+  display:grid;
+  place-items:center;
+  border:0;
+  border-radius:50%;
+  background:transparent;
+  color:inherit;
+}
+.global-toast-progress{
+  position:absolute;
+  left:0;
+  right:0;
+  bottom:0;
+  height:3px;
+  background:currentColor;
+  opacity:.38;
+  transform-origin:left;
+  animation:toast-progress linear forwards;
+}
+@keyframes toast-in{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes toast-progress{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+
+/* Participant check-in QR */
+.checkin-qr-card{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  align-items:center;
+  gap:18px;
+  padding:20px;
+  border:1px solid var(--border);
+  border-radius:24px;
+  background:var(--paper);
+  box-shadow:0 10px 28px rgba(32,33,31,.055);
+}
+.checkin-qr-card>div:first-child{display:grid;gap:7px}
+.checkin-qr-card .eyebrow{margin:0;color:var(--brand)}
+.checkin-qr-card h2{
+  margin:0;
+  font-size:20px;
+  line-height:1.18;
+  letter-spacing:-.03em;
+}
+.checkin-qr-card p:last-child{
+  margin:0;
+  color:var(--muted);
+  font-size:12px;
+  line-height:1.5;
+}
+.checkin-qr-card img,
+.qr-placeholder{
+  width:132px;
+  height:132px;
+  border-radius:14px;
+  background:var(--surface);
+}
+.checkin-qr-card img{
+  display:block;
+  padding:8px;
+  object-fit:contain;
+}
+
+/* Admin QR scanner */
+.qr-scanner{
+  display:grid;
+  gap:16px;
+  padding-top:4px;
+}
+.qr-scanner-head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:16px;
+}
+.qr-scanner-head>div{display:grid;gap:4px}
+.qr-scanner-head .eyebrow{margin:0}
+.qr-scanner-head h3{font-size:22px}
+.qr-camera{
+  position:relative;
+  overflow:hidden;
+  aspect-ratio:1/1;
+  border-radius:22px;
+  background:#111;
+}
+.qr-camera video{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+}
+.qr-camera-frame{
+  position:absolute;
+  inset:18%;
+  border:3px solid #fff;
+  border-radius:24px;
+  box-shadow:0 0 0 999px rgba(0,0,0,.26);
+}
+.qr-camera p{
+  position:absolute;
+  left:16px;
+  right:16px;
+  bottom:14px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:7px;
+  margin:0;
+  padding:10px 12px;
+  border-radius:999px;
+  background:rgba(0,0,0,.66);
+  color:#fff;
+  font-size:12px;
+  font-weight:700;
+  backdrop-filter:blur(6px);
+}
+.qr-camera-fallback{
+  display:grid;
+  justify-items:center;
+  gap:10px;
+  padding:26px 20px;
+  border-radius:20px;
+  background:var(--surface);
+  text-align:center;
+}
+.qr-camera-fallback>svg{color:var(--brand)}
+.qr-camera-fallback b{font-size:16px}
+.qr-camera-fallback p{
+  max-width:38ch;
+  margin:0;
+  color:var(--muted);
+  font-size:12px;
+  line-height:1.55;
+}
+.qr-manual-entry{
+  display:grid;
+  gap:8px;
+}
+.qr-manual-entry label{
+  display:flex;
+  align-items:center;
+  gap:7px;
+  color:var(--muted);
+  font-size:12px;
+  font-weight:700;
+}
+.qr-manual-entry>div{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:8px;
+}
+.qr-manual-entry input{
+  min-width:0;
+  height:46px;
+  border:1px solid var(--border);
+  border-radius:13px;
+  padding:0 13px;
+  background:var(--paper);
+  font:inherit;
+}
+.qr-manual-entry button{
+  min-width:96px;
+  border:0;
+  border-radius:13px;
+  background:var(--ink);
+  color:#fff;
+  padding:0 15px;
+  font-weight:750;
+}
+.qr-scan-button{
+  white-space:nowrap;
+}
+.admin-night-section-head>div{
+  display:grid;
+  gap:3px;
+}
+.admin-night-section-head>div span{
+  color:var(--muted);
+  font-size:10px;
+}
+
+/* QR URL landing after native iPhone Camera scan */
+.qr-checkin-result{
+  min-height:460px;
+  display:grid;
+  justify-items:start;
+  align-content:center;
+  gap:12px;
+}
+.qr-checkin-result>svg{color:var(--brand)}
+.qr-checkin-result.success>svg{color:#17623e}
+.qr-checkin-result .eyebrow{margin:0}
+.qr-checkin-result h1{
+  margin:0;
+  font-size:40px;
+  line-height:1.03;
+  letter-spacing:-.05em;
+}
+.qr-checkin-result p{
+  margin:0;
+  color:var(--muted);
+  line-height:1.5;
+}
+.qr-checkin-result>span{
+  padding:5px 9px;
+  border-radius:999px;
+  background:var(--surface);
+  color:var(--muted);
+  font-size:11px;
+  font-weight:750;
+}
+.qr-checkin-result .button{margin-top:10px}
+
+@media(max-width:759px){
+  .global-toast-viewport{
+    inset:calc(env(safe-area-inset-top) + 72px) 14px auto;
+  }
+  .global-toast{
+    border-radius:16px;
+    padding:13px 14px 14px;
+  }
+  .checkin-qr-card{
+    grid-template-columns:1fr;
+    justify-items:center;
+    text-align:center;
+  }
+  .checkin-qr-card img,
+  .qr-placeholder{
+    width:190px;
+    height:190px;
+  }
+  .qr-manual-entry>div{grid-template-columns:1fr}
+  .qr-manual-entry button{min-height:46px}
+}
