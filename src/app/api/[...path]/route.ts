@@ -29,6 +29,10 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
    if(path[1]==='members'&&path.length===2&&req.method==='GET'){const {data,error}=await supabase.rpc('admin_members');if(error)throw error;return json({members:data??[]});}
    if(path[1]==='members'&&path.length===3&&req.method==='PATCH'){const body=await req.json();const id=path[2];const status=body.status;const reason=typeof body.rejection_reason==='string'?body.rejection_reason:'';if(!/^[0-9a-f-]{36}$/i.test(id)||!['Approved','Rejected'].includes(status))return json({error:'Invalid member review.'},400);if(status==='Rejected'&&!reason)return json({error:'Choose a rejection reason.'},400);const {data,error}=await supabase.rpc('admin_review_member',{p_member:id,p_status:status,p_rejection_reason:reason});if(error)throw error;return json({member:data});}
    if(path[1]==='places'&&req.method==='GET'){const query=req.nextUrl.searchParams.get('q')?.trim();if(!query||query.length>200)return json({error:'Enter a place name or Korean address.'},400);return json({places:await searchPlaces(query)});}
+   if(path[1]==='check-in'&&req.method==='POST'){
+    const body=await req.json();const token=String(body.token||'').trim();if(!/^[0-9a-f-]{36}$/i.test(token))return json({error:'Invalid check-in QR'},400);
+    const {data,error}=await supabase.rpc('admin_check_in_by_token',{p_token:token});if(error)throw error;return json({checkIn:data});
+   }
    if(path[1]==='events'&&path.length===4&&path[3]==='event-night'){
     const eventId=path[2];if(!/^[0-9a-f-]{36}$/i.test(eventId))return json({error:'Invalid event ID'},400);
     if(req.method==='GET'){const {data,error}=await supabase.rpc('admin_event_night_state',{p_event:eventId});if(error)throw error;return json({state:data});}
@@ -141,7 +145,7 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
   }
   if(path[0]==='event-night'&&path.length===2){
    const eventId=path[1];if(!/^[0-9a-f-]{36}$/i.test(eventId))return json({error:'Invalid event ID'},400);
-   if(req.method==='GET'){const {data,error}=await supabase.rpc('event_night_state',{p_event:eventId});if(error)throw error;return json({state:data});}
+   if(req.method==='GET'){const {data,error}=await supabase.rpc('event_night_state',{p_event:eventId});if(error)throw error;const {data:booking,error:bookingError}=await supabase.from('bookings').select('check_in_token').eq('event_id',eventId).eq('user_id',user.id).maybeSingle();if(bookingError)throw bookingError;const checkInUrl=booking?.check_in_token?'https://roundy.team/check-in/'+booking.check_in_token:null;return json({state:{...(data??{}),check_in_url:checkInUrl}});}
    if(req.method==='POST'){
     const body=await req.json();const action=String(body.action||'');
     if(action==='choice'){const encounterId=String(body.encounterId||'');const choice=String(body.choice||'');if(!/^[0-9a-f-]{36}$/i.test(encounterId)||!['no','maybe','yes'].includes(choice))return json({error:'Invalid choice'},400);const {error}=await supabase.rpc('choose',{p_encounter:encounterId,p_choice:choice});if(error)throw error;}
