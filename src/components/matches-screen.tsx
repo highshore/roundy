@@ -44,7 +44,7 @@ export function MatchExperience({matches,locale,ownPhoto,initialProfile=false}:{
  const match=matches[index];
  if(!match)return null;
  const name=match.full_name?.trim()||tr(locale,'Your match','매칭 상대'),shortName=name.split(/\s+/)[0];
- const nationality=normalizeNationality(match.nationality),country=nationality==='KR'?tr(locale,'Korea','한국'):countries(locale).find(c=>c.code===nationality)?.name||match.nationality;
+ const nationality=normalizeNationality(match.nationality||''),country=nationality==='KR'?tr(locale,'Korea','한국'):countries(locale).find(c=>c.code===nationality)?.name||match.nationality;
  const work=[match.public_job,match.public_workplace].filter(Boolean).join(locale==='ko'?' / ':' at ');
  function changeMatch(next:number){contactRequest.current?.abort();setIndex(next);setPhase('reveal');setPhotoIndex(0);setShowInfo(false);setContact(null);setContactError('');setRevealing(false);heading.current?.focus();}
  function openProfile(){setPhase('profile');setShowInfo(false);requestAnimationFrame(()=>heading.current?.focus());}
