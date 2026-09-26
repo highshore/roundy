@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { formatKoreanPhone, interests, isKoreanPhone } from '@/lib/data';
 import { countryCodes,normalizeNationality } from '@/lib/profile-options';
+import { marketingApi } from '@/lib/marketing';
 import { eventInput } from '@/lib/event-input';
 import { searchPlaces,resolvePlace } from '@/lib/naver';
 import { summarizeWork } from '@/lib/profile-summary';
@@ -25,6 +26,7 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
    const admin=await isAdmin(supabase);
    if(path[1]==='role'&&req.method==='GET')return json({isAdmin:admin});
    if(!admin)return json({error:'Administrator access required'},403);
+   if(path[1]==='marketing')return await marketingApi(req,supabase,path.slice(2));
    if(path[1]==='overview'&&path.length===2&&req.method==='GET'){
     const now=new Date().toISOString();
     const [members,pending,upcoming,drafts,events]=await Promise.all([

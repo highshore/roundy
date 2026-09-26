@@ -26,7 +26,8 @@
     "build": "next build",
     "start": "next start --hostname 0.0.0.0",
     "typecheck": "tsc --noEmit",
-    "test": "node scripts/test-auth.mjs && node scripts/test-admin-routing.mjs && node scripts/test-database.mjs"
+    "test": "node scripts/test-auth.mjs && node scripts/test-admin-routing.mjs && node scripts/test-database.mjs",
+    "test:event-management": "node scripts/test-event-management.mjs"
   },
   "engines": {
     "node": ">=22"

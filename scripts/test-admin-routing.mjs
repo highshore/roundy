@@ -19,7 +19,7 @@ const modules = {
 const exports = {};
 new Function('require', 'exports', outputText)(name => modules[name], exports);
 const render = path => exports.default({ params: Promise.resolve({ path }) });
-for (const path of [[], ['members'], ['events'], ['events', 'new'], ['members', '00000000-0000-0000-0000-000000000001']]) {
+for (const path of [[], ['marketing'], ['members'], ['events'], ['events', 'new'], ['members', '00000000-0000-0000-0000-000000000001']]) {
   assert.deepEqual((await render(path)).path, path);
   role = false;
   await assert.rejects(render(path), /redirect:\/me/);
@@ -40,4 +40,5 @@ await assert.rejects(render([]), /redirect:\/signin/);
 configured = true;
 await assert.rejects(render(['unknown']), /not-found/);
 await assert.rejects(render(['members', 'not-a-member']), /not-found/);
+await assert.rejects(render(['marketing','new']), /not-found/);
 console.log('PASS: admin route auth, non-admin denial, role error fail-closed, nested routes and invalid routes');
