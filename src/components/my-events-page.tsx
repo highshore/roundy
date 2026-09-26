@@ -2,8 +2,8 @@
 
 import Link from 'next/link';
 import { ArrowRight,Check,MapPin } from 'lucide-react';
-import { dateLabelForLocale,timeLabelForLocale,tr,type Locale } from '@/lib/locale';
-import { eventCategory,localizeEvent,type Event } from '@/lib/data';
+import { dateLabelForLocale,timeLabelForLocale,tr,localizeEvent,type Locale } from '@/lib/locale';
+import { eventCategory,type Event } from '@/lib/data';
 
 export function MyEventsPage({events,booked,locale,hasActiveEvent}:{events:Event[];booked:Record<string,boolean>;locale:Locale;hasActiveEvent:boolean}){
  const bookedEvents=events.filter(event=>booked[event.slug]);
