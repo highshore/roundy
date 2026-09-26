@@ -176,8 +176,12 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
   }
   if(path[0]==='choices'&&req.method==='POST'){const body=await req.json();const {error}=await supabase.rpc('choose',{p_encounter:body.encounterId,p_choice:body.choice});if(error)throw error;return json({saved:true});}
   if(path[0]==='matches'&&req.method==='GET'){
-   if(path[1]){const {data,error}=await supabase.rpc('match_profile',{p_match:path[1]});if(error)throw error;return json({profile:data});}
-   const {data,error}=await supabase.from('matches').select('id,event_id,created_at');if(error)throw error;return json({matches:data});
+   if(path[1]&&!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(path[1]))return json({error:'Invalid match ID'},400);
+   if(path.length===3&&path[2]==='contact'){const {data,error}=await supabase.rpc('match_contact',{p_match:path[1]});if(error)throw error;return json({contact:data});}
+   if(path.length>2)return json({error:'Not found'},404);
+   const {data,error}=await supabase.rpc('match_cards',{p_match:path[1]??null});if(error)throw error;
+   if(path[1]&&!data?.length)return json({error:'Match unavailable'},404);
+   return json({matches:data??[]});
   }
   if(path[0]==='reports'&&req.method==='POST'){const body=await req.json();if(typeof body.reason!=='string'||body.reason.length<10||body.reason.length>5000||typeof body.context!=='string'||body.context.length>500)return json({error:'Include event context and a description of 10–5,000 characters.'},400);const {error}=await supabase.from('reports').insert({user_id:user.id,context:body.context,reason:body.reason});if(error)throw error;return json({submitted:true},201);}
   return json({error:'Not found'},404);
