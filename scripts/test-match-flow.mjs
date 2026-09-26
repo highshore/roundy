@@ -24,6 +24,13 @@ await db.query('insert into matches(id,event_id,user_a,user_b) values($1,$2,$3,$
 await db.query("insert into storage.objects(id,name,bucket_id) values($1,$2,'wis-profile-photos')",[uid(500),uid(2)+'/photo.webp']);
 async function as(n,sql,args=[]){await db.exec('set role authenticated');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[n?uid(n):'']);try{return await db.query(sql,args);}finally{await db.exec('reset role');}}
 const cards=async n=>(await as(n,'select match_cards() cards')).rows[0].cards;
+assert.equal((await cards(1))[0].mbti,null,'Legacy profile has no MBTI');
+await as(2,"update profiles set profile=jsonb_set(profile,'{mbti}','\"ENFP\"') where user_id=$1",[uid(2)]);
+assert.equal((await cards(1))[0].mbti,'ENFP','Saved MBTI appears for mutual match');
+await assert.rejects(()=>as(2,"update profiles set profile=jsonb_set(profile,'{mbti}','\"INVALID\"') where user_id=$1",[uid(2)]),/profiles_mbti_valid/);
+await assert.rejects(()=>as(2,"update profiles set profile=jsonb_set(profile,'{mbti}','123') where user_id=$1",[uid(2)]),/profiles_mbti_valid/);
+await as(2,"update profiles set profile=jsonb_set(profile,'{mbti}','\"\"') where user_id=$1",[uid(2)]);
+assert.equal((await cards(1))[0].mbti,null,'MBTI can be cleared');
 const mine=await cards(1);assert.equal(mine.length,1);assert.equal(mine[0].full_name,'Member 2');assert.equal(mine[0].round_number,3);assert.equal(mine[0].table_number,5);assert.equal(mine[0].photos.length,1);assert.equal(mine[0].nationality,'KR');
 for(const field of ['phone','birth_date','job_title','workplace','instagram','linkedin','user_id'])assert.equal(mine[0][field],undefined,'No private '+field+' in initial payload');
 assert.equal((await cards(2))[0].full_name,'Member 1');assert.deepEqual(await cards(3),[]);assert.deepEqual((await as(3,'select match_cards($1) cards',[match])).rows[0].cards,[]);

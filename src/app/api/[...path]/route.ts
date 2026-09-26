@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { formatKoreanPhone, interests, isKoreanPhone } from '@/lib/data';
+import { mbtiTypes, formatKoreanPhone, interests, isKoreanPhone } from '@/lib/data';
 import { countryCodes,normalizeNationality } from '@/lib/profile-options';
 import { marketingApi } from '@/lib/marketing';
 import { eventInput } from '@/lib/event-input';
@@ -109,6 +109,7 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
     if(!Array.isArray(body.photos)||body.photos.length>3||body.photos.some((x:unknown)=>typeof x!=='string'||!x.startsWith('/api/photos/'+user.id+'/')||!/^\/api\/photos\/[a-f0-9-]+\/[a-f0-9-]+\.(jpg|png|webp)$/.test(x)))return json({error:'Invalid photo reference'},400);
     profile.nationality=normalizeNationality(String(profile.nationality));if(profile.nationality&&!countryCodes.includes(String(profile.nationality)))return json({error:'Choose a nationality from the list.'},400);
     const {data:old,error:oldError}=await supabase.from('profiles').select('profile').eq('user_id',user.id).maybeSingle();if(oldError)throw oldError;
+    const mbti=body.mbti===undefined?(old?.profile?.mbti??''):body.mbti;if(typeof mbti!=='string'||(mbti!==''&&!mbtiTypes.includes(mbti as typeof mbtiTypes[number])))return json({error:'Choose a valid MBTI type or leave it blank.'},400);profile.mbti=mbti;
     const summary=old?.profile?.job_title===profile.job_title&&old?.profile?.workplace===profile.workplace&&old?.profile?.summary_status==='generated'?{public_job:old.profile.public_job,public_workplace:old.profile.public_workplace,summary_status:'generated'}:await summarizeWork(String(profile.job_title),String(profile.workplace));
     Object.assign(profile,summary);
     Object.assign(profile,{height_cm:body.height_cm,contact_consent:body.contact_consent,interests:body.interests,photos:body.photos});

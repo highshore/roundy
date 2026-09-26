@@ -61,6 +61,7 @@ function MemberModal({ member, locale, busy, onClose, onReview, inline=false }: 
     [tr(locale, 'Gender', '성별'), value(profile, 'gender') || '—'],
     [tr(locale, 'Nationality', '국적'), value(profile, 'nationality') || '—'],
     [tr(locale, 'Height', '키'), value(profile, 'height_cm') ? value(profile, 'height_cm') + ' cm' : '—'],
+    ['MBTI', value(profile, 'mbti') || '—'],
     [tr(locale, 'Job title', '직업'), value(profile, 'job_title') || '—'],
     [tr(locale, 'Workplace / school', '직장 또는 학교'), value(profile, 'workplace') || '—'],
   ];

@@ -48,11 +48,11 @@ export function AdminCenter({ path }: { path: string[] }) {
   const [locale, setLocale] = useState<Locale>('en');
   useEffect(() => { try { if (localStorage.getItem('roundy-locale') === 'ko') setLocale('ko'); } catch {} }, []);
   const links = [
-    { href: '/admin/reports', label: tr(locale, 'Reports & feedback', '신고 및 피드백'), icon: Megaphone, active: path[0] === 'reports' },
     { href: '/admin', label: tr(locale, 'Overview', '개요'), icon: LayoutDashboard, active: !path.length },
     { href: '/admin/members', label: tr(locale, 'Members', '회원'), icon: UsersRound, active: path[0] === 'members' },
     { href: '/admin/events', label: tr(locale, 'Events', '이벤트'), icon: CalendarDays, active: path[0] === 'events' },
     { href: '/admin/marketing', label: tr(locale, 'Marketing', '마케팅'), icon: Megaphone, active: path[0] === 'marketing' },
+    { href: '/admin/reports', label: tr(locale, 'Reports & feedback', '신고 및 피드백'), icon: Megaphone, active: path[0] === 'reports' },
   ];
   return <div className="experience route-admin admin-center"><a className="skip" href="#admin-main">{tr(locale, 'Skip to content', '본문으로 건너뛰기')}</a>
     <header className="admin-topbar"><Link href="/admin" className="admin-brand"><RoundyBrand/><span>Admin</span></Link><div className="admin-topbar-actions"><LocaleToggle locale={locale} onChange={next => { setLocale(next); try { localStorage.setItem('roundy-locale', next); } catch {} }}/><Link href="/me">{tr(locale, 'Back to Roundy', 'Roundy로 돌아가기')}<ArrowUpRight size={16}/></Link></div></header>
