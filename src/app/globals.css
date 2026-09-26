@@ -488,8 +488,16 @@ html:lang(ko) span,
 html:lang(ko) a,
 html:lang(ko) button,
 html:lang(ko) label,
-html:lang(ko) li{
-  line-height:1.5;
+html:lang(ko) li,
+html:lang(ko) small,
+html:lang(ko) strong,
+html:lang(ko) b,
+html:lang(ko) dt,
+html:lang(ko) dd,
+html:lang(ko) input,
+html:lang(ko) select,
+html:lang(ko) textarea{
+  line-height:1.2!important;
 }
 
 /* Larger overlapping attendee avatars */
@@ -1819,7 +1827,7 @@ body:not(:has(.route-admin)) .global-toast{border-radius:16px;padding:13px 14px 
 
 .admin-main .marketing-panel .admin-form-actions{position:static;margin:0;}.marketing-days input{padding:0;border:0}.nationality-badge{display:inline-block;margin-left:10px}
 /* Compact eligibility badges and readable venue details. */
-.event-detail-badges{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:16px}.event-detail-badge{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:34px;padding:6px 11px;border:1px solid var(--border);border-radius:999px;background:var(--paper);font-size:12px;font-weight:600;line-height:1.4;color:var(--ink);max-width:100%}.event-detail-badge.category-badge{background:var(--surface);border-color:transparent}.requirement-gender{flex:0 0 auto}.requirement-gender.female{color:#c04478}.requirement-gender.male{color:#3478bd}.requirement-flags{font-size:19px;line-height:1.1;overflow-wrap:anywhere}.route-events .detail-facts .venue-fact .venue-address{line-height:1.6;overflow-wrap:anywhere}.route-events .detail-facts .venue-fact .venue-description{white-space:pre-line;line-height:1.6;margin-top:8px;font-weight:400;color:var(--muted)}
+.event-detail-badges{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:16px}.event-detail-badge{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:34px;padding:6px 11px;border:1px solid var(--border);border-radius:999px;background:var(--paper);font-size:12px;font-weight:600;line-height:1.4;color:var(--ink);max-width:100%}.event-detail-badge.category-badge{background:var(--surface);border-color:transparent}.requirement-gender{flex:0 0 auto}.requirement-gender.female{color:#c04478}.requirement-gender.male{color:#3478bd}.requirement-flags{font-size:19px;line-height:1.1;overflow-wrap:anywhere}.route-events .detail-facts .venue-fact .venue-address{line-height:1.6;overflow-wrap:anywhere}.route-events .detail-facts .venue-fact .venue-description{white-space:pre-line;line-height:1.4;margin-top:0;font-weight:400;color:var(--muted)}
 
 .route-events .detail-facts .requirement-gender{width:18px;height:18px;margin:0}
 
