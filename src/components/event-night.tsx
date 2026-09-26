@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
+import QRCode from 'qrcode';
 import { ArrowRight, Check, Clock3, MapPin, UsersRound } from 'lucide-react';
 import { LoadingScreen } from '@/components/loading-screen';
 import { dateLabelForLocale, timeLabelForLocale, tr, type Locale } from '@/lib/locale';
@@ -25,6 +27,7 @@ type NightState={
  no_count:number;
  submitted:boolean;
  matches:number;
+ check_in_url:string|null;
 };
 
 async function request(eventId:string,body?:unknown){
@@ -43,6 +46,7 @@ export function EventNight({event,locale}:{event:Event;locale:Locale}){
  const [loading,setLoading]=useState(true);
  const [busy,setBusy]=useState(false);
  const [error,setError]=useState('');
+ const [checkInQr,setCheckInQr]=useState('');
  const [now,setNow]=useState(Date.now());
 
  async function load(silent=false){
@@ -54,6 +58,7 @@ export function EventNight({event,locale}:{event:Event;locale:Locale}){
 
  useEffect(()=>{void load();const poll=window.setInterval(()=>void load(true),5000);return()=>window.clearInterval(poll);},[event.id]); // eslint-disable-line react-hooks/exhaustive-deps
  useEffect(()=>{const timer=window.setInterval(()=>setNow(Date.now()),1000);return()=>window.clearInterval(timer);},[]);
+ useEffect(()=>{if(!state?.check_in_url||state.checked_in_at){setCheckInQr('');return;}let active=true;void QRCode.toDataURL(state.check_in_url,{width:300,margin:1,color:{dark:'#20211f',light:'#fffefa'}}).then(url=>{if(active)setCheckInQr(url);}).catch(()=>{if(active)setCheckInQr('');});return()=>{active=false;};},[state?.check_in_url,state?.checked_in_at]);
 
  const secondsLeft=useMemo(()=>{
   if(!state?.round_started_at)return state?.round_duration_seconds??900;
@@ -94,6 +99,7 @@ export function EventNight({event,locale}:{event:Event;locale:Locale}){
   return <section className="event-night-shell">
    <div className="event-night-heading"><p className="eyebrow">{tr(locale,'MEETUP MODE','밋업 모드')}</p><h1>{tr(locale,'Check-in pending','체크인 대기 중')}</h1><p>{tr(locale,'Show your photo ID to the host when you arrive. Your meetup screen will unlock after the host checks you in.','도착하면 호스트에게 사진이 있는 신분증을 보여 주세요. 호스트가 체크인을 완료하면 밋업 화면이 열립니다.')}</p></div>
    <div className="event-night-info-card"><UsersRound/><div><b>{event.title}</b><span>{dateLabelForLocale(event.starts_at,locale)} · {timeLabelForLocale(event.starts_at,locale)} KST</span><span>{event.venue}</span></div></div>
+   <section className="checkin-qr-card"><div><p className="eyebrow">{tr(locale,'CHECK-IN QR','체크인 QR')}</p><h2>{tr(locale,'Show QR to host','호스트에게 QR을 보여 주세요')}</h2><p>{tr(locale,'The host can scan this code with Roundy or the iPhone Camera. Bring photo ID for identity verification.','호스트가 Roundy 또는 iPhone 카메라로 이 코드를 스캔할 수 있어요. 본인 확인을 위해 사진이 있는 신분증을 지참하세요.')}</p></div>{checkInQr?<Image src={checkInQr} alt={tr(locale,'Roundy check-in QR code','Roundy 체크인 QR 코드')} width={184} height={184} unoptimized/>:<div className="qr-placeholder"/>}</section>
    <a className="button secondary" href={mapUrl} target="_blank" rel="noopener noreferrer"><MapPin size={18}/>{tr(locale,'View venue map','장소 지도 보기')}</a>
    <Link className="button secondary" href="/me/events">{tr(locale,'Back to My Events','내 이벤트로 돌아가기')}</Link>
   </section>;
