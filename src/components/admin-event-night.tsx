@@ -1,9 +1,11 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { Check, Play, RotateCw, Square, UserCheck, UserX } from 'lucide-react';
+import { useCallback,useEffect, useMemo, useState } from 'react';
+import { Check, Play, RotateCw, ScanLine, Square, UserCheck, UserX } from 'lucide-react';
 import { tr, type Locale } from '@/lib/locale';
 import type { Event } from '@/lib/data';
+import { useToast } from '@/components/toast';
+import { AdminQrScanner } from '@/components/admin-qr-scanner';
 
 type Attendee={user_id:string;full_name:string;gender:string;photo:string|null;checked_in_at:string|null;created_at:string};
 type AdminNightState={
@@ -35,21 +37,36 @@ async function request(eventId:string,body?:unknown){
 export function AdminEventNight({event,locale}:{event:Event;locale:Locale}){
  const [state,setState]=useState<AdminNightState|null>(null);
  const [busy,setBusy]=useState(false);
+ const {showToast}=useToast();
  const [error,setError]=useState('');
- const [notice,setNotice]=useState('');
+ const [scannerOpen,setScannerOpen]=useState(false);
 
  async function load(){
   const d=await request(event.id);
   setState(d.state as AdminNightState);
  }
  useEffect(()=>{void load().catch(e=>setError(e.message));const poll=window.setInterval(()=>void load().catch(()=>{}),5000);return()=>window.clearInterval(poll);},[event.id]); // eslint-disable-line react-hooks/exhaustive-deps
+ const scanToken=useCallback(async(token:string)=>{
+  setBusy(true);setError('');
+  try{
+   const r=await fetch('/api/admin/check-in',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token})});
+   const d=await r.json();
+   if(!r.ok)throw new Error(d.error||'QR check-in failed.');
+   await load();
+   setScannerOpen(false);
+   const name=String(d.checkIn?.full_name||tr(locale,'Attendee','참가자'));
+   showToast(d.checkIn?.already_checked_in?tr(locale,`${name} is already checked in.`,`${name}님은 이미 체크인했습니다.`):tr(locale,`${name} checked in.`,`${name}님 체크인이 완료되었습니다.`),'success');
+  }catch(e){setError(e instanceof Error?e.message:'QR check-in failed.');throw e;}
+  finally{setBusy(false);}
+ },[event.id,locale,showToast]); // eslint-disable-line react-hooks/exhaustive-deps
+
 
  async function act(action:string,extra?:Record<string,unknown>){
-  setBusy(true);setError('');setNotice('');
+  setBusy(true);setError('');
   try{
    await request(event.id,{action,...extra});
    await load();
-   setNotice(action==='check-in'?tr(locale,'Check-in updated.','체크인이 업데이트되었습니다.'):tr(locale,'Meetup state updated.','밋업 상태가 업데이트되었습니다.'));
+   showToast(action==='check-in'?tr(locale,'Check-in updated.','체크인이 업데이트되었습니다.'):tr(locale,'Meetup state updated.','밋업 상태가 업데이트되었습니다.'),'success');
   }catch(e){setError(e instanceof Error?e.message:'Meetup control failed.');}
   finally{setBusy(false);}
  }
@@ -72,7 +89,7 @@ export function AdminEventNight({event,locale}:{event:Event;locale:Locale}){
   </div>
 
   <section className="admin-checkin-list">
-   <div className="admin-night-section-head"><h4>{tr(locale,'Attendee check-in','참가자 체크인')}</h4><span>{tr(locale,'Lock after preparation','준비 후 잠금')}</span></div>
+   <div className="admin-night-section-head"><div><h4>{tr(locale,'Attendee check-in','참가자 체크인')}</h4><span>{tr(locale,'QR scan or manual check-in','QR 스캔 또는 수동 체크인')}</span></div><button type="button" className="admin-secondary qr-scan-button" disabled={busy||state.state!=='waiting'||!state.check_in_open} onClick={()=>setScannerOpen(true)}><ScanLine size={16}/>{tr(locale,'Scan QR','QR 스캔')}</button></div>
    {state.attendees.map(person=><div className="admin-checkin-row" key={person.user_id}>
     <span className="admin-checkin-avatar" style={person.photo?{backgroundImage:`url("${person.photo}")`}:undefined}>{!person.photo&&(person.full_name?.[0]||'?')}</span>
     <div><b>{person.full_name}</b><span>{person.gender==='female'?tr(locale,'Woman','여성'):person.gender==='male'?tr(locale,'Man','남성'):tr(locale,'Not set','미설정')}</span></div>
@@ -89,7 +106,7 @@ export function AdminEventNight({event,locale}:{event:Event;locale:Locale}){
    {state.state==='finished'&&<div className="admin-night-finished"><Check size={20}/><b>{tr(locale,'Meetup finished','밋업 종료')}</b><span>{state.matches} {tr(locale,'mutual matches','서로 선택한 매칭')}</span></div>}
   </section>
 
+  {scannerOpen&&<AdminQrScanner locale={locale} onScan={scanToken} onClose={()=>setScannerOpen(false)}/>} 
   {error&&<p role="alert" className="admin-error">{error}</p>}
-  {notice&&<p role="status" className="note">{notice}</p>}
  </div>;
 }
