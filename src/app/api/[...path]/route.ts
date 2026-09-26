@@ -26,6 +26,17 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
    const admin=await isAdmin(supabase);
    if(path[1]==='role'&&req.method==='GET')return json({isAdmin:admin});
    if(!admin)return json({error:'Administrator access required'},403);
+   if(path[1]==='reports'&&path.length===2&&req.method==='GET'){
+    const status=req.nextUrl.searchParams.get('status')||'all';const kind=req.nextUrl.searchParams.get('kind')||'all';const page=Number(req.nextUrl.searchParams.get('page')||0);
+    if(!['all','new','reviewing','resolved','dismissed'].includes(status)||!['all','report','feedback'].includes(kind)||!Number.isInteger(page)||page<0||page>100000)return json({error:'Invalid filters'},400);
+    let query=supabase.from('reports').select('id,user_id,context,reason,kind,status,created_at,report_reviews(notes,updated_at)',{count:'exact'}).order('created_at',{ascending:false}).order('id').range(page*30,page*30+29);
+    if(status!=='all')query=query.eq('status',status);if(kind!=='all')query=query.eq('kind',kind);
+    const {data,error,count}=await query;if(error)throw error;return json({reports:data??[],total:count??0});
+   }
+   if(path[1]==='reports'&&path.length===3&&req.method==='PATCH'){
+    const body=await req.json();if(!/^[0-9a-f-]{36}$/i.test(path[2])||!['new','reviewing','resolved','dismissed'].includes(body.status)||typeof body.notes!=='string'||body.notes.length>10000)return json({error:'Invalid review'},400);
+    const {error}=await supabase.rpc('admin_review_report',{p_report:path[2],p_status:body.status,p_notes:body.notes});if(error)throw error;return json({saved:true});
+   }
    if(path[1]==='marketing')return await marketingApi(req,supabase,path.slice(2));
    if(path[1]==='overview'&&path.length===2&&req.method==='GET'){
     const now=new Date().toISOString();
@@ -183,7 +194,7 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
    if(path[1]&&!data?.length)return json({error:'Match unavailable'},404);
    return json({matches:data??[]});
   }
-  if(path[0]==='reports'&&req.method==='POST'){const body=await req.json();if(typeof body.reason!=='string'||body.reason.length<10||body.reason.length>5000||typeof body.context!=='string'||body.context.length>500)return json({error:'Include event context and a description of 10–5,000 characters.'},400);const {error}=await supabase.from('reports').insert({user_id:user.id,context:body.context,reason:body.reason});if(error)throw error;return json({submitted:true},201);}
+  if(path[0]==='reports'&&req.method==='POST'){const body=await req.json();if(typeof body.reason!=='string'||body.reason.length<10||body.reason.length>5000||typeof body.context!=='string'||body.context.length>500)return json({error:'Include event context and a description of 10–5,000 characters.'},400);if(body.kind!==undefined&&!['report','feedback'].includes(body.kind))return json({error:'Invalid submission type'},400);const {error}=await supabase.from('reports').insert({user_id:user.id,context:body.context,reason:body.reason,kind:body.kind??'report'});if(error)throw error;return json({submitted:true},201);}
   return json({error:'Not found'},404);
  }catch(error){const message=error instanceof Error?error.message:typeof error==='object'&&error&&'message'in error?String(error.message):'Request failed';return json({error:message},400);}
 }

@@ -88,4 +88,15 @@ await as(4,"update events set starts_at=now()-interval '3 hours' where id=$1",[o
 assert.equal((await as(4,'select admin_delete_event($1) result',[original])).rows[0].result.tickets_returned,0,'Past attendance is not refunded');
 assert.equal((await db.query('select count(*)::int n from bookings where event_id=$1',[original])).rows[0].n,1);
 console.log('PASS duplicate edit identity, description/image persistence, date aliases, deletion with bookings, preserved history, one-time future ticket return, no past refund, anonymous/member denial');
+const report=(await as(1,"insert into reports(user_id,context,reason,kind) values($1,'General feedback','Please add more weekend events','feedback') returning id",[uid(1)])).rows[0].id;
+assert.equal((await as(2,'select * from reports where id=$1',[report])).rows.length,0,'Other members cannot read reports');
+assert.equal((await as(4,'select * from reports where id=$1',[report])).rows.length,1,'Admins can read reports');
+await denied(1,`select admin_review_report('${report}','resolved','private')`,/Administrator/);
+await as(4,'select admin_review_report($1,$2,$3)',[report,'reviewing','Private investigation']);
+assert.equal((await as(1,'select * from report_reviews')).rows.length,0,'Reporter cannot read staff notes');
+assert.equal((await as(4,'select notes from report_reviews where report_id=$1',[report])).rows[0].notes,'Private investigation');
+assert.equal((await as(1,'select status from reports where id=$1',[report])).rows[0].status,'reviewing');
+await denied(1,`update reports set status='resolved' where id='${report}'`,/permission/);
+await denied(4,`select admin_review_report('${report}','invalid','')`,/Invalid review/);
+console.log('PASS reports: own-only submissions, admin inbox, private staff notes, status updates, non-admin and invalid-state denial');
 await db.close();
