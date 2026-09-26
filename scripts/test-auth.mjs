@@ -4,7 +4,7 @@ import ts from 'typescript';
 const source=await readFile('src/lib/auth-routing.ts','utf8');
 const {outputText}=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext}});
 const {safeReturnPath,isPrivatePath,signInPath}=await import('data:text/javascript;base64,'+Buffer.from(outputText).toString('base64'));
-for(const path of ['/me','/me/events','/matches/abc-123','/ticket/friday','/checkout/friday','/event-night/friday','/applications/friday','/onboarding/basics/friday']) {
+for(const path of ['/admin','/admin/members','/admin/members/abc-123','/admin/events','/admin/events/new','/admin/events/abc-123','/me','/me/events','/matches/abc-123','/ticket/friday','/checkout/friday','/event-night/friday','/applications/friday','/onboarding/basics/friday']) {
  assert.equal(isPrivatePath(path),true);
  assert.equal(safeReturnPath(path),path);
  assert.equal(signInPath(path),'/signin?next='+encodeURIComponent(path));

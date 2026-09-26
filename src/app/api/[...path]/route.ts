@@ -25,6 +25,18 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
    const admin=await isAdmin(supabase);
    if(path[1]==='role'&&req.method==='GET')return json({isAdmin:admin});
    if(!admin)return json({error:'Administrator access required'},403);
+   if(path[1]==='overview'&&path.length===2&&req.method==='GET'){
+    const now=new Date().toISOString();
+    const [members,pending,upcoming,drafts,events]=await Promise.all([
+     supabase.from('profiles').select('user_id',{count:'exact',head:true}),
+     supabase.from('verifications').select('user_id',{count:'exact',head:true}).eq('status','Reviewing'),
+     supabase.from('events').select('id',{count:'exact',head:true}).eq('status','live').gt('starts_at',now),
+     supabase.from('events').select('id',{count:'exact',head:true}).eq('status','draft'),
+     supabase.from('events').select('*').eq('status','live').gt('starts_at',now).order('starts_at').limit(5)
+    ]);
+    for(const result of [members,pending,upcoming,drafts,events])if(result.error)throw result.error;
+    return json({members:members.count??0,pending:pending.count??0,upcoming:upcoming.count??0,drafts:drafts.count??0,events:events.data??[]});
+   }
    if(path[1]==='integrations'&&req.method==='GET'){const {data:{session}}=await supabase.auth.getSession();const health=await fetch(process.env.NEXT_PUBLIC_SUPABASE_URL+'/functions/v1/roundy-reminders',{headers:{Authorization:'Bearer '+session?.access_token,apikey:process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!},signal:AbortSignal.timeout(5000)}).then(r=>r.ok?r.json():null).catch(()=>null);return json({naver:Boolean(process.env.NAVER_API_HUB_CLIENT_ID&&process.env.NAVER_API_HUB_CLIENT_SECRET),reminders:Boolean(health?.configured),summaries:Boolean(process.env.OPENAI_API_KEY)});}
    if(path[1]==='members'&&path.length===2&&req.method==='GET'){const {data,error}=await supabase.rpc('admin_members');if(error)throw error;return json({members:data??[]});}
    if(path[1]==='members'&&path.length===3&&req.method==='PATCH'){const body=await req.json();const id=path[2];const status=body.status;const reason=typeof body.rejection_reason==='string'?body.rejection_reason:'';if(!/^[0-9a-f-]{36}$/i.test(id)||!['Approved','Rejected'].includes(status))return json({error:'Invalid member review.'},400);if(status==='Rejected'&&!reason)return json({error:'Choose a rejection reason.'},400);const {data,error}=await supabase.rpc('admin_review_member',{p_member:id,p_status:status,p_rejection_reason:reason});if(error)throw error;return json({member:data});}

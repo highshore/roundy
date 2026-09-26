@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { BadgeCheck, ChevronRight, ExternalLink, FileText, ShieldCheck, UserRound, UsersRound, X } from 'lucide-react';
 import { LoadingScreen } from './loading-screen';
 import { tr, type Locale } from '@/lib/locale';
@@ -36,19 +38,20 @@ function status(member: Member, locale: Locale) {
   return tr(locale, 'Profile incomplete', '프로필 미완성');
 }
 
-function MemberModal({ member, locale, busy, onClose, onReview }: { member: Member; locale: Locale; busy: boolean; onClose: () => void; onReview: (next: 'Approved' | 'Rejected', reason?: string) => void }) {
+function MemberModal({ member, locale, busy, onClose, onReview, inline=false }: { inline?: boolean; member: Member; locale: Locale; busy: boolean; onClose: () => void; onReview: (next: 'Approved' | 'Rejected', reason?: string) => void }) {
   const [reason, setReason] = useState('');
   const ref = useRef<HTMLDivElement>(null);
   const profile = member.profile;
   const photos = Array.isArray(profile.photos) ? profile.photos.filter((photo): photo is string => typeof photo === 'string') : [];
   const documentName = member.verification.document_path.split('/').at(-1);
   useEffect(() => {
+    if (inline) return;
     const previous = document.activeElement as HTMLElement | null;
     ref.current?.querySelector<HTMLElement>('button,select,a[href]')?.focus();
     const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
     document.addEventListener('keydown', onKey);
     return () => { document.removeEventListener('keydown', onKey); previous?.focus(); };
-  }, [onClose]);
+  }, [inline, onClose]);
   const detail = [
     [tr(locale, 'Name', '이름'), value(profile, 'full_name')],
     [tr(locale, 'Email', '이메일'), member.email || '—'],
@@ -61,7 +64,7 @@ function MemberModal({ member, locale, busy, onClose, onReview }: { member: Memb
     [tr(locale, 'Workplace / school', '직장 또는 학교'), value(profile, 'workplace') || '—'],
   ];
   const interests = Array.isArray(profile.interests) ? profile.interests.filter((item): item is string => typeof item === 'string') : [];
-  return <div className="modal-backdrop" onClick={event => { if (event.target === event.currentTarget) onClose(); }}><div className="roundy-modal member-modal" role="dialog" aria-modal="true" aria-label={tr(locale, 'Member details', '회원 상세')} ref={ref}><header><div><p className="admin-kicker">{tr(locale, 'Member profile', '회원 프로필')}</p><h2>{value(profile, 'full_name') || tr(locale, 'Incomplete profile', '미완성 프로필')}</h2></div><button type="button" className="icon-button" aria-label={tr(locale, 'Close', '닫기')} onClick={onClose}><X /></button></header>
+  return <div className={inline?'member-detail-page':'modal-backdrop'} onClick={event => { if (!inline && event.target === event.currentTarget) onClose(); }}><div className={inline?'member-detail-content':'roundy-modal member-modal'} role={inline?undefined:'dialog'} aria-modal={inline?undefined:true} aria-label={tr(locale, 'Member details', '회원 상세')} ref={ref}><header><div><p className="admin-kicker">{tr(locale, 'Member profile', '회원 프로필')}</p><h2>{value(profile, 'full_name') || tr(locale, 'Incomplete profile', '미완성 프로필')}</h2></div><button type="button" className="icon-button" aria-label={tr(locale, 'All members', '전체 회원')} onClick={onClose}><X /></button></header>
     <div className="member-status-row"><span className={'member-status '+member.verification.status.toLowerCase()}>{status(member, locale)}</span><span>{tr(locale, 'Verification', '인증')}: {member.verification.method || '—'}</span></div>
     {photos.length > 0 && <div className="member-photo-grid">{photos.map((photo, index) => <img src={photo} key={photo} alt={tr(locale, 'Profile photo ', '프로필 사진 ') + (index + 1)} />)}</div>}
     <dl className="member-profile-details">{detail.map(([label, content]) => <div key={label}><dt>{label}</dt><dd>{content}</dd></div>)}</dl>
@@ -72,13 +75,15 @@ function MemberModal({ member, locale, busy, onClose, onReview }: { member: Memb
   </div></div>;
 }
 
-export function AdminMembers({ locale }: { locale: Locale }) {
+export function AdminMembers({ locale, memberId }: { locale: Locale; memberId?: string }) {
+  const router=useRouter();const params=useSearchParams();
+  const [query,setQuery]=useState('');const [filter,setFilter]=useState(params.get('status')||'all');const [gender,setGender]=useState('all');const [page,setPage]=useState(0);
   const [members, setMembers] = useState<Member[]>([]);
   const [selected, setSelected] = useState<Member | null>(null);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState('');
   async function load() { const result = await request('admin/members'); setMembers(result.members || []); return result.members as Member[]; }
-  useEffect(() => { void load().catch(error => setError(error instanceof Error ? error.message : 'Request failed')).finally(() => setBusy(false)); }, []);
+  useEffect(() => { void load().then(members=>{if(memberId){const member=members.find(member=>member.user_id===memberId);if(!member)throw new Error(tr(locale,'Member not found.','회원을 찾을 수 없어요.'));setSelected(member);}}).catch(error => setError(error instanceof Error ? error.message : 'Request failed')).finally(() => setBusy(false)); }, []);
   async function review(next: 'Approved' | 'Rejected', reason?: string) {
     if (!selected) return;
     setBusy(true); setError('');
@@ -88,5 +93,16 @@ export function AdminMembers({ locale }: { locale: Locale }) {
     } catch (error) { setError(error instanceof Error ? error.message : 'Request failed'); }
     finally { setBusy(false); }
   }
-  return <section className="admin-panel admin-members">{busy && !selected && <LoadingScreen />}{error && <p role="alert" className="admin-error">{error}</p>}<div className="admin-toolbar"><span className="admin-kicker">Roundy Admin</span></div><div className="admin-heading"><h1>{tr(locale, 'Member Management', '회원 관리')}</h1><p>{tr(locale, 'Review profiles, verification, payments and event eligibility.', '프로필, 인증, 결제 및 이벤트 참여 자격을 검토하세요.')}</p></div><div className="member-list">{members.map(member => { const profile = member.profile; const photo = Array.isArray(profile.photos) && typeof profile.photos[0] === 'string' ? profile.photos[0] : ''; return <button type="button" className="member-row" key={member.user_id} onClick={() => setSelected(member)}><span className="member-avatar">{photo ? <img src={photo} alt="" /> : <UserRound size={22} />}</span><span><b>{value(profile, 'full_name') || tr(locale, 'Incomplete profile', '미완성 프로필')}</b><small>{value(profile, 'job_title') || member.email || tr(locale, 'No profile details yet', '아직 프로필 정보가 없어요')}</small></span><span className={'member-status '+member.verification.status.toLowerCase()}>{status(member, locale)}</span><ChevronRight size={18} /></button>; })}</div>{!busy && members.length === 0 && <div className="admin-empty"><UsersRound size={28}/><p>{tr(locale, 'No members yet.', '아직 회원이 없어요.')}</p></div>}{selected && <MemberModal member={selected} locale={locale} busy={busy} onClose={() => setSelected(null)} onReview={review} />}</section>;
+  const filtered=members.filter(member=>(filter==='all'||member.verification.status===filter)&&(gender==='all'||value(member.profile,'gender')===gender)&&[value(member.profile,'full_name'),member.email||''].some(text=>text.toLowerCase().includes(query.toLowerCase())));
+  const pageCount=Math.max(1,Math.ceil(filtered.length/25));
+  const currentPage=Math.min(page,pageCount-1);
+  return <section className="admin-panel admin-members">{busy && !selected && <LoadingScreen />}{error && <p role="alert" className="admin-error">{error}</p>}
+    {memberId ? <><Link className="admin-back" href="/admin/members">← {tr(locale,'All members','전체 회원')}</Link>{selected&&<MemberModal inline member={selected} locale={locale} busy={busy} onClose={()=>router.push('/admin/members')} onReview={review}/>}</> : <>
+    <div className="admin-heading"><p className="admin-kicker">Roundy Admin</p><h1>{tr(locale, 'Members', '회원')}</h1><p>{tr(locale, 'Review profiles, verification, payments and event eligibility.', '프로필, 인증, 결제 및 이벤트 참여 자격을 검토하세요.')}</p></div>
+    <div className="admin-filters"><label><span>{tr(locale,'Search members','회원 검색')}</span><input value={query} onChange={event=>{setQuery(event.target.value);setPage(0);}} placeholder={tr(locale,'Name or email','이름 또는 이메일')}/></label><label><span>{tr(locale,'Status','상태')}</span><select value={filter} onChange={event=>{setFilter(event.target.value);setPage(0);}}>{[['all','All statuses','전체 상태'],['Reviewing','Review needed','검토 필요'],['Verified','Approved','승인됨'],['Rejected','Rejected','반려됨'],['Not started','Not started','미시작']].map(([id,en,ko])=><option value={id} key={id}>{tr(locale,en,ko)}</option>)}</select></label><label><span>{tr(locale,'Gender','성별')}</span><select value={gender} onChange={event=>{setGender(event.target.value);setPage(0);}}>{[['all','All genders','전체 성별'],['male','Male','남성'],['female','Female','여성']].map(([id,en,ko])=><option value={id} key={id}>{tr(locale,en,ko)}</option>)}</select></label></div>
+    <table className="admin-member-table"><thead><tr><th>{tr(locale,'Member','회원')}</th><th>{tr(locale,'Status','상태')}</th><th>{tr(locale,'Gender','성별')}</th><th>{tr(locale,'Credits','크레딧')}</th><th>{tr(locale,'Actions','관리')}</th></tr></thead><tbody>{filtered.slice(currentPage*25,(currentPage+1)*25).map(member=>{const photo=Array.isArray(member.profile.photos)&&typeof member.profile.photos[0]==='string'?member.profile.photos[0]:'';return <tr key={member.user_id}><td><div className="admin-member-identity"><span className="member-avatar">{photo?<img src={photo} alt=""/>:<UserRound size={22}/>}</span><span><b>{value(member.profile,'full_name')||tr(locale,'Incomplete profile','미완성 프로필')}</b><small>{member.email||value(member.profile,'job_title')}</small></span></div></td><td><span className={'member-status '+member.verification.status.toLowerCase()}>{status(member,locale)}</span></td><td>{value(member.profile,'gender')||'—'}</td><td>{member.payments.credits_remaining} {tr(locale,'credits','크레딧')}</td><td><Link className="admin-secondary" href={'/admin/members/'+member.user_id}>{tr(locale,'View profile','프로필 보기')}<ChevronRight size={16}/></Link></td></tr>;})}</tbody></table>
+    {!busy&&!filtered.length&&<div className="admin-empty"><UsersRound size={28}/><p>{tr(locale,'No members match this view.','표시할 회원이 없어요.')}</p></div>}
+    <div className="admin-pagination"><span>{filtered.length} {tr(locale,'members','명')} / {currentPage+1} – {pageCount}</span><button className="admin-secondary" disabled={currentPage===0} onClick={()=>setPage(currentPage-1)}>{tr(locale,'Previous','이전')}</button><button className="admin-secondary" disabled={currentPage>=pageCount-1} onClick={()=>setPage(currentPage+1)}>{tr(locale,'Next','다음')}</button></div>
+    </>}
+  </section>;
 }
