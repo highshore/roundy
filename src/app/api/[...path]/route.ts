@@ -155,9 +155,6 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
    }
    return json({error:'Method not allowed'},405);
   }
-  if(path[0]==='activity'&&req.method==='GET'){
-   const {data,error}=await supabase.rpc('my_event_attention');if(error)throw error;return json({activity:data});
-  }
   if(path[0]==='bookings'){
    if(req.method==='GET'){const {data,error}=await supabase.from('bookings').select('id,event_id');if(error)throw error;const rows=data??[];const slugs=await eventSlugMap(supabase,[...new Set(rows.map(b=>String(b.event_id)))]);return json({bookings:rows.map(b=>({id:b.id,event_slug:slugs.get(String(b.event_id))}))});}
    if(req.method==='POST'){const body=await req.json();if(body.termsAccepted!==true)return json({error:'Confirm the cancellation guidelines and terms before enrolling'},400);const {data,error}=await supabase.rpc('redeem',{p_event:body.eventId,p_terms_accepted:true});if(error)throw error;return json({id:data});}
@@ -166,9 +163,7 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
   if(path[0]==='choices'&&req.method==='POST'){const body=await req.json();const {error}=await supabase.rpc('choose',{p_encounter:body.encounterId,p_choice:body.choice});if(error)throw error;return json({saved:true});}
   if(path[0]==='matches'&&req.method==='GET'){
    if(path[1]){const {data,error}=await supabase.rpc('match_profile',{p_match:path[1]});if(error)throw error;return json({profile:data});}
-   const {data,error}=await supabase.from('matches').select('id').order('created_at',{ascending:false});if(error)throw error;
-   const profiles=await Promise.all((data??[]).map(async row=>{const {data:profile,error:profileError}=await supabase.rpc('match_profile',{p_match:row.id});if(profileError)throw profileError;return profile;}));
-   return json({matches:profiles});
+   const {data,error}=await supabase.from('matches').select('id,event_id,created_at');if(error)throw error;return json({matches:data});
   }
   if(path[0]==='reports'&&req.method==='POST'){const body=await req.json();if(typeof body.reason!=='string'||body.reason.length<10||body.reason.length>5000||typeof body.context!=='string'||body.context.length>500)return json({error:'Include event context and a description of 10–5,000 characters.'},400);const {error}=await supabase.from('reports').insert({user_id:user.id,context:body.context,reason:body.reason});if(error)throw error;return json({submitted:true},201);}
   return json({error:'Not found'},404);
