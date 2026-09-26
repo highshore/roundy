@@ -7,7 +7,7 @@ import { LoadingScreen } from '@/components/loading-screen';
 import { useToast } from '@/components/toast';
 import { tr,type Locale } from '@/lib/locale';
 
-type Result={event_slug:string;event_title:string;full_name:string;gender:string;checked_in_at:string;already_checked_in:boolean};
+type Result={event_id:string;event_slug:string;event_title:string;full_name:string;gender:string;checked_in_at:string;already_checked_in:boolean};
 
 export function AdminQrCheckIn({token,locale}:{token:string;locale:Locale}){
  const [result,setResult]=useState<Result|null>(null);
@@ -43,6 +43,6 @@ export function AdminQrCheckIn({token,locale}:{token:string;locale:Locale}){
   <h1>{result.full_name}</h1>
   <p>{result.event_title}</p>
   <span>{result.gender==='female'?tr(locale,'Woman','여성'):result.gender==='male'?tr(locale,'Man','남성'):''}</span>
-  <Link className="button" href={'/admin?event='+encodeURIComponent(result.event_slug)}>{tr(locale,'Back to Meetup Control','밋업 컨트롤로 돌아가기')}</Link>
+  <Link className="button" href={'/admin?event='+encodeURIComponent(result.event_id)}>{tr(locale,'Back to Meetup Control','밋업 컨트롤로 돌아가기')}</Link>
  </section>;
 }
