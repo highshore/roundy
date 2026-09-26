@@ -9,13 +9,13 @@ import { summarizeWork } from '@/lib/profile-summary';
 export const dynamic='force-dynamic';
 const json=(data:unknown,status=200)=>NextResponse.json(data,{status,headers:{'Cache-Control':'private, no-store'}});
 async function isAdmin(supabase:Awaited<ReturnType<typeof createClient>>){const {data,error}=await supabase.rpc('is_admin');if(error)throw error;return data===true;}
-async function eventSlugMap(supabase:Awaited<ReturnType<typeof createClient>>,ids:string[]){if(!ids.length)return new Map<string,string>();const {data,error}=await supabase.from('events').select('id,slug').in('id',ids);if(error)throw error;return new Map((data??[]).map(row=>[String(row.id),String(row.slug)]));}
+async function eventSlugMap(supabase:Awaited<ReturnType<typeof createClient>>,ids:string[]){if(!ids.length)return new Map<string,string>();const {data,error}=await supabase.from('events').select('id,slug').is('deleted_at',null).in('id',ids);if(error)throw error;return new Map((data??[]).map(row=>[String(row.id),String(row.slug)]));}
 async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}){
  if(!process.env.NEXT_PUBLIC_SUPABASE_URL||!process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY)return json({error:'Roundy is being connected. Please try again soon.'},503);
  if(req.method!=='GET'&&req.headers.get('origin')!==req.nextUrl.origin)return json({error:'Invalid request origin'},403);
  const path=(await params).path;const supabase=await createClient();
  try{
-  if(path[0]==='events'&&path.length===1&&req.method==='GET'){const {data,error}=await supabase.from('events').select('*').order('starts_at');if(error)throw error;return json({events:data});}
+  if(path[0]==='events'&&path.length===1&&req.method==='GET'){const {data,error}=await supabase.from('events').select('*').is('deleted_at',null).order('starts_at');if(error)throw error;return json({events:data});}
   const {data:{user},error:authError}=await supabase.auth.getUser();if(authError||!user)return json({error:'Sign in required'},401);
   if(user.app_metadata.provider!=='kakao')return json({error:'Please sign in with Kakao'},403);
   if(path[0]==='events'&&path.length===3&&path[2]==='attendees'&&req.method==='GET'){
@@ -32,9 +32,9 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
     const [members,pending,upcoming,drafts,events]=await Promise.all([
      supabase.from('profiles').select('user_id',{count:'exact',head:true}),
      supabase.from('verifications').select('user_id',{count:'exact',head:true}).eq('status','Reviewing'),
-     supabase.from('events').select('id',{count:'exact',head:true}).eq('status','live').gt('starts_at',now),
-     supabase.from('events').select('id',{count:'exact',head:true}).eq('status','draft'),
-     supabase.from('events').select('*').eq('status','live').gt('starts_at',now).order('starts_at').limit(5)
+     supabase.from('events').select('id',{count:'exact',head:true}).is('deleted_at',null).eq('status','live').gt('starts_at',now),
+     supabase.from('events').select('id',{count:'exact',head:true}).is('deleted_at',null).eq('status','draft'),
+     supabase.from('events').select('*').is('deleted_at',null).eq('status','live').gt('starts_at',now).order('starts_at').limit(5)
     ]);
     for(const result of [members,pending,upcoming,drafts,events])if(result.error)throw result.error;
     return json({members:members.count??0,pending:pending.count??0,upcoming:upcoming.count??0,drafts:drafts.count??0,events:events.data??[]});
@@ -64,15 +64,15 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
    }
    if(path[1]==='events'&&path.length===4&&path[3]==='seating'&&['GET','POST'].includes(req.method)){const {data,error}=await supabase.rpc(req.method==='POST'?'generate_seating':'get_seating',{p_event:path[2]});if(error)throw error;return json(data);}
    if(path[1]==='events'&&path.length===2&&req.method==='GET'){
-    const {data,error}=await supabase.from('events').select('*').order('starts_at',{ascending:false});if(error)throw error;return json({events:data});
+    const {data,error}=await supabase.from('events').select('*').is('deleted_at',null).order('starts_at',{ascending:false});if(error)throw error;return json({events:data});
    }
    if(path[1]==='events'&&path.length===2&&req.method==='POST'){
     const input=eventInput(await req.json());if(input.latitude===null){const place=await resolvePlace(input.venue,input.address);if(!place)return json({error:'Select a location from search results to confirm its coordinates.'},400);Object.assign(input,{address:place.address,latitude:place.latitude,longitude:place.longitude});}const {data,error}=await supabase.from('events').insert(input).select('*').single();if(error)throw error;return json({event:data},201);
    }
    if(path[1]==='events'&&path.length===3){
     const id=path[2];if(!/^[0-9a-f-]{36}$/i.test(id))return json({error:'Invalid event ID'},400);
-    if(req.method==='PUT'){const input=eventInput(await req.json());if(input.latitude===null){const place=await resolvePlace(input.venue,input.address);if(!place)return json({error:'Select a location from search results to confirm its coordinates.'},400);Object.assign(input,{address:place.address,latitude:place.latitude,longitude:place.longitude});}const {data,error}=await supabase.from('events').update(input).eq('id',id).select('*').single();if(error)throw error;return json({event:data});}
-    if(req.method==='DELETE'){const {error}=await supabase.from('events').delete().eq('id',id);if(error)throw error;return json({deleted:true});}
+    if(req.method==='PUT'){const input=eventInput(await req.json());if(input.latitude===null){const place=await resolvePlace(input.venue,input.address);if(!place)return json({error:'Select a location from search results to confirm its coordinates.'},400);Object.assign(input,{address:place.address,latitude:place.latitude,longitude:place.longitude});}const {data,error}=await supabase.from('events').update(input).eq('id',id).is('deleted_at',null).select('*').single();if(error)throw error;return json({event:data});}
+    if(req.method==='DELETE'){const {data,error}=await supabase.rpc('admin_delete_event',{p_event:id});if(error)throw error;return json(data);}
    }
    return json({error:'Not found'},404);
   }

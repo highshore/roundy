@@ -1890,3 +1890,7 @@ body:not(:has(.route-admin)) .global-toast{border-radius:16px;padding:13px 14px 
 .match-contact>a{font-size:20px;font-weight:600;overflow-wrap:anywhere}
 .match-contact-error{font-size:13px;color:#a53333;line-height:1.5}
 @container roundy (max-width:359px){.match-reveal,.matched-profile-hero,.matched-profile-body{padding-left:18px;padding-right:18px}.match-pair .match-photo{width:116px;height:116px}.match-reveal h1{font-size:26px}.matched-profile-hero h1{font-size:32px}.match-contact{padding:14px}.match-contact>a{font-size:18px}}
+
+/* Center each event fact, including wrapped copy. */
+.route-events .detail-facts .event-fact{align-items:center}
+.route-events .event-description{white-space:pre-line;overflow-wrap:anywhere;margin:20px 0 0;font-size:15px;font-weight:400;line-height:1.65;color:var(--muted)}

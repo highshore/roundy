@@ -60,4 +60,32 @@ await as(4,`update marketing_templates set enabled=true,days='{}' where id='${t}
 assert.equal((await as(4,'select enabled from marketing_templates where id=$1',[t])).rows[0].enabled,false,'No selected days pauses schedule');
 await denied(4,"select marketing_scheduler_authorized('guess')",/permission denied/);
 console.log('PASS: marketing admin-only RLS, queue idempotency, snapshots, service-only claims, no duplicate claims, 24-hour interval, paused schedules, private scheduler authentication');
+
+// Editing a duplicate must keep identity and content separate from its source.
+const original=uid(301),duplicate=uid(302);
+await as(4,`insert into events(id,title,description,starts_at,venue,address,capacity,status,age_min,age_max,lockdown_minutes,images)
+ values('${original}','Original','Original description',now()+interval '2 days','Original venue','Address',10,'live',18,100,60,array['/images/yeouido.webp'])`);
+await as(4,`insert into events(id,title,description,starts_at,venue,address,capacity,status,age_min,age_max,lockdown_minutes,images)
+ select '${duplicate}','Edited duplicate','New description',starts_at,'New venue',address,capacity,status,age_min,age_max,lockdown_minutes,array['/images/anam-korea-university.webp'] from events where id='${original}'`);
+const before=(await as(4,'select * from events where id=$1',[duplicate])).rows[0];
+await as(4,"update events set title=$1,description=$2,starts_at=starts_at+interval '1 day' where id=$3",['Saved duplicate','Latest description',duplicate]);
+const after=(await as(1,'select * from events where id=$1',[duplicate])).rows[0];
+assert.equal(after.title,'Saved duplicate');assert.equal(after.description,'Latest description');assert.equal(after.image,'/images/anam-korea-university.webp');assert.ok(after.previous_slugs.includes(before.slug));
+assert.equal((await as(1,'select description from events where id=$1',[original])).rows[0].description,'Original description');
+const creditsBefore=(await as(1,'select remaining from credit_lots where user_id=$1',[uid(1)])).rows[0].remaining;
+await as(1,'select redeem($1,true)',[duplicate]);
+await denied(1,`select admin_delete_event('${duplicate}')`,/Administrator/);
+assert.equal((await as(4,'select admin_delete_event($1) result',[duplicate])).rows[0].result.tickets_returned,1);
+assert.equal((await as(4,'select admin_delete_event($1) result',[duplicate])).rows[0].result.tickets_returned,0,'Repeated delete does not return ticket twice');
+assert.equal((await as(1,'select remaining from credit_lots where user_id=$1',[uid(1)])).rows[0].remaining,creditsBefore);
+assert.equal((await db.query('select count(*)::int n from bookings where event_id=$1',[duplicate])).rows[0].n,1,'Historical booking retained');
+assert.equal((await as(1,'select * from events where id=$1',[duplicate])).rows.length,0,'Removed event hidden from members');
+await denied(1,`select cancel_booking('${duplicate}')`,/unavailable/);
+await denied(2,`select redeem('${duplicate}',true)`,/available|accepting|closed/);
+await db.exec('set role anon');try{assert.equal((await db.query('select * from events where id=$1',[duplicate])).rows.length,0);await assert.rejects(()=>db.query('select admin_delete_event($1)',[original]),/permission denied/);}finally{await db.exec('reset role');}
+await as(1,'select redeem($1,true)',[original]);
+await as(4,"update events set starts_at=now()-interval '3 hours' where id=$1",[original]);
+assert.equal((await as(4,'select admin_delete_event($1) result',[original])).rows[0].result.tickets_returned,0,'Past attendance is not refunded');
+assert.equal((await db.query('select count(*)::int n from bookings where event_id=$1',[original])).rows[0].n,1);
+console.log('PASS duplicate edit identity, description/image persistence, date aliases, deletion with bookings, preserved history, one-time future ticket return, no past refund, anonymous/member denial');
 await db.close();
