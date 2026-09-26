@@ -499,7 +499,7 @@ html:lang(ko) li{
   height:38px;
   flex-basis:38px;
   margin-left:-10px;
-  border:3px solid var(--paper);
+  border:0;
   background:#f2f0e9;
   box-shadow:0 3px 10px rgba(32,33,31,.12);
 }
@@ -861,7 +861,7 @@ html:lang(ko) li{
   height:56px;
   flex-basis:56px;
   margin-left:-14px;
-  border:3px solid var(--paper);
+  border:0;
   background:#f0eee8;
   box-shadow:0 4px 12px rgba(32,33,31,.12);
 }
@@ -1409,4 +1409,10 @@ html:lang(ko) li{
   .final-choice-card{grid-template-columns:auto minmax(0,1fr)}
   .final-choice-card .event-night-choices{grid-column:1/-1}
   .admin-night-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+
+/* No stroke around attendee photos. */
+.event-card .attendee-avatar,
+.attendee-simple-row .attendee-avatar{
+  border:0!important;
 }
