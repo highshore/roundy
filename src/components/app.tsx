@@ -13,6 +13,7 @@ import { VenueMap } from '@/components/venue-map';
 import { MatchesScreen } from '@/components/matches-screen';
 import { PrivacyPolicy, TermsOfUse } from '@/components/legal';
 import { SiteFooter } from '@/components/site-footer';
+import { AboutUs } from '@/components/about-us';
 import { RoundyBrand } from '@/components/roundy-brand';
 import { LocaleToggle } from '@/components/locale-toggle';
 import { LoadingScreen } from '@/components/loading-screen';
@@ -152,6 +153,7 @@ export function App({path}:{path:string}){
  }
  else if(route==='check-in'&&parts[1])content=<AdminQrCheckIn token={parts[1]} locale={locale}/>;
  else if(route==='how-it-works')content=<>{[['01 / JOIN','Find your evening','Create a reusable profile and get verified once. Then reserve an available event directly with a valid ticket or payment.'],['02 / MEET','A table for two','Bring ID and arrive early. Meet through 15-minute English rounds. No alcohol is provided. Entry closes 15 minutes after the start.'],['03 / CONNECT','Only when it is mutual','Choose up to 3 Yes. Both say Yes? You see each other’s profile, name and phone number after the event.']].map(([label,title,body])=><Card key={label} label={label} title={title}>{body}</Card>)}<Card label="PRIVACY" title="No roster. No endless browsing.">Photos, identity, social handles and choices are private. Rich dating profiles and phone numbers are available only to mutual matches. Verification handles are never shared.</Card><Card label="SAFETY" title="Respect is the entry requirement.">Harassment, hate speech, intoxication, recording and sharing identities can lead to immediate removal and permanent exclusion. Reports identify the reporter to staff only. Reported pairs should not be seated together in future events.</Card><Button href="/me/safety">Report a concern</Button><Button secondary href="/discover">Explore events</Button></>;
+ else if(route==='about')content=<AboutUs locale={locale}/>;
  else if(route==='terms')content=<TermsOfUse locale={locale}/>;
  else if(route==='privacy')content=<PrivacyPolicy locale={locale}/>;
  else content=<Empty title={tr(locale,'This page isn’t here.','이 페이지를 찾을 수 없어요.')} body={tr(locale,'Let’s find your next evening instead.','대신 다음 이벤트를 찾아 볼까요?')} href="/discover" label={tr(locale,'Explore events','이벤트 둘러보기')}/>;
