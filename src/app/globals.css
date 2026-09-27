@@ -1938,3 +1938,21 @@ body:not(:has(.route-admin)) .global-toast{border-radius:16px;padding:13px 14px 
 .about-host-copy h3{font-size:28px}
 .about-background{font-size:14px;font-weight:600}
 @media(prefers-reduced-motion:no-preference){.about-page{animation:about-enter .45s ease-out both}.about-portrait img{transition:transform .4s ease}.about-host:hover .about-portrait img{transform:scale(1.025)}@keyframes about-enter{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}}
+
+
+/* About Us origin narrative: personal hook → lesson → proof. */
+.about-origin-contrast{display:flex;flex-direction:column;gap:8px}
+.about-origin-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 12px;border-radius:14px;background:rgb(32 33 31 / 8%)}
+.about-origin-key,.about-origin-value{font-weight:700;line-height:1.3}
+.about-origin-key{font-size:10px;letter-spacing:.01em}
+.about-origin-value{font-size:13px;text-align:right}
+.about-origin{display:flex;flex-direction:column;gap:14px}
+.about-origin .about-section-heading{gap:8px}
+.about-origin-copy{font-size:16px;line-height:1.5;color:var(--muted)}
+.about-page .about-origin-step{background:var(--surface)}
+.about-proof{display:flex;flex-direction:column;gap:10px;padding:26px;border-radius:26px;background:var(--ink);color:var(--paper)}
+.about-proof-number{font-size:68px;line-height:.92;letter-spacing:-.06em;font-weight:700}
+.about-proof .eyebrow,.about-proof-copy,.about-proof a{color:var(--paper)}
+.about-proof-copy{font-size:16px;line-height:1.5}
+.about-proof a{width:fit-content;font-size:14px;text-decoration:underline;text-underline-offset:4px}
+.about-page[lang=ko] .about-origin-key,.about-page[lang=ko] .about-origin-value{line-height:1.2}
