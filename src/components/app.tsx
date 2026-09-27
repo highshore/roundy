@@ -5,7 +5,7 @@ import { Children, cloneElement, createContext, isValidElement, useContext, useE
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowUpRight, ArrowRight, ArrowLeft, CalendarDays, Clock3, MapPin, Compass, Heart, UserRound, UsersRound, Ticket, ShieldCheck, Check, Plus, X, ChevronRight, Search, LockKeyhole, Copy, LogOut, Trash2, Share2 } from 'lucide-react';
+import { ArrowUpRight, ArrowRight, ArrowLeft, CalendarDays, Clock3, MapPin, Compass, Heart, UserRound, UsersRound, Ticket, ShieldCheck, Check, Plus, X, ChevronRight, Search, LockKeyhole, Copy, LogOut, Trash2, Share2, MessageCircle } from 'lucide-react';
 import QRCode from 'qrcode';
 import { createClient } from '@/lib/supabase/client';
 import { SignIn } from '@/components/sign-in';
@@ -57,14 +57,97 @@ function categoryLabel(event:Event,locale:Locale){const category=eventCategory(e
 function eventFilterLabel(category:string,locale:Locale){return category==='1:1 Speed Mingle'?tr(locale,'💞 1:1 Mingle','💞 1:1 밍글'):tr(locale,'🎙️ Business Talk','🎙️ 비즈니스 토크');}
 function AttendeeStack({count,kind,locale,attendees=[]}:{count:number;kind:string;locale:Locale;attendees?:AttendeePreview[]}){const shown=Math.min(5,Math.max(0,count));const visible=attendees.slice(0,shown);return <div className="attendee-stack" aria-label={count+' '+ui(locale,kind)}>{Array.from({length:shown},(_,i)=>{const attendee=visible[i];return <span className={'attendee-avatar avatar-'+i} key={i} aria-hidden="true" style={attendee?.photo?{backgroundImage:`url("${attendee.photo}")`}:undefined}>{!attendee?.photo&&<UserRound size={13}/>}</span>;})}{count>shown&&<span className="attendee-avatar more" aria-hidden="true">+{count-shown}</span>}</div>;}
 export function EventCard({e,locale,href,attendees}:{e:Event;locale:Locale;href?:string;attendees?:EventAttendees}){const item=localizeEvent(e,locale);const attending=Math.max(0,e.capacity-e.seats_remaining);const preview=attendees?[...attendees.women,...attendees.men]:[];return <Link href={href??'/events/'+e.slug} className="event-card"><div className="event-photo"><Image src={e.image||'/images/yeouido.webp'} alt={e.title} fill sizes="(max-width: 640px) 100vw, 500px"/><span className="photo-arrow"><ArrowUpRight size={24}/></span></div><div className="event-copy"><div className="event-tags"><span>{categoryLabel(e,locale)}</span><span>{e.age_min}–{e.age_max}{tr(locale,' years','세')}</span><div className="nationality-chip-group"><NationalityBadges requirements={e.nationality_requirements} locale={locale}/></div></div><h2>{headline(item.title)}</h2><p className="event-time"><CalendarDays size={16}/>{dateLabelForLocale(e.starts_at,locale)} · {timeLabelForLocale(e.starts_at,locale)} KST</p><p className="event-location"><MapPin size={16}/>{item.venue}</p><div className="event-attendance"><div><AttendeeStack count={attending} kind={tr(locale,'Attendees','참가자')} locale={locale} attendees={preview}/><span>{attending} {tr(locale,'attending','참가 예정')}</span></div><span>{e.seats_remaining} {tr(locale,'places left','자리 남음')}</span></div></div></Link>;}
-function LandingPage({events,locale,attendeesByEvent}:{events:Event[];locale:Locale;attendeesByEvent:Record<string,EventAttendees>}){return <div className="landing"><div className="hero-copy"><p className="eyebrow">{tr(locale,'SEOUL. REAL CONNECTIONS.','서울에서 만나는 진짜 인연')}</p><h1>{tr(locale,'Meet in Real Life,','화면 밖 진짜 만남,')}<br/><span>{tr(locale,'See What Happens','그 다음은 직접 경험해 보세요')}</span></h1><p>{tr(locale,'For people who would rather meet than swipe. A few good conversations. A real connection.','온라인 프로필 탐색 대신 진짜 만남을 원하는 분들을 위해. 편안한 대화로 시작되는 인연')}</p><Button href="/events">{tr(locale,'Find an event','이벤트 찾기')}</Button><div className="hero-facts"><span><Clock3 size={18}/>{tr(locale,'One-to-one conversations','1:1 대화')}</span><span><LockKeyhole size={18}/>{tr(locale,'Only mutual matches','둘 다 원할 때만, 진짜 매칭')}</span></div></div><Poster title={tr(locale,'GOOD\nCOMPANY.','좋은\n인연.')}/><section className="landing-events"><div className="section-heading"><div><p className="eyebrow">{tr(locale,'OFFLINE, ON PURPOSE','이유 있는 오프라인 만남')}</p><h2>{tr(locale,'A Fresh Face,','새로운 인연,')}<br/>{tr(locale,'A Fresh Start','기분 좋은 시작')}</h2></div><Link href="/events">{tr(locale,'See all events','모든 이벤트 보기')} <ArrowUpRight size={18}/></Link></div><div className="event-grid">{events.slice(0,2).map(e=><EventCard key={e.id} e={e} locale={locale} attendees={attendeesByEvent[e.id]}/>)}</div></section><div className="how-row">{(locale==='ko'?[['01','이벤트 찾기','프로필 인증은 한 번만. 이후 티켓으로 바로 좌석을 예약하세요.'],['02','직접 만나기','넘길 프로필은 없어요. 두 사람을 위한 테이블만 있어요.'],['03','마음을 따라가기','서로 Yes를 선택했다면 대화를 이어 가세요.']]:[['01','Find an event','Get verified once. Then reserve instantly with a ticket.'],['02','Actually meet','No profiles to scroll. Just a table for two.'],['03','Follow the spark','Both say Yes? Keep the conversation going.']]).map(([n,t,b])=><div key={n}><span>{n}</span><h3>{headline(t)}</h3><p>{b}</p></div>)}</div><Button secondary href="/how-it-works">{tr(locale,'How it works & safety','이용 방법 및 안전')}</Button></div>;}
+function LandingEventPreview({e,locale}:{e:Event;locale:Locale}){
+ const item=localizeEvent(e,locale);
+ const isMingle=eventCategory(e)==='1:1 Speed Mingle';
+ return <Link href={'/events/'+e.slug} className="landing-event-preview">
+  <div className="landing-event-preview-image"><Image src={e.image||'/images/yeouido.webp'} alt={item.title} fill sizes="156px"/></div>
+  <div className="landing-event-preview-copy">
+   <span className={'landing-event-category '+(isMingle?'mingle':'talk')}>{isMingle?tr(locale,'1:1 Mingle','1:1 밍글'):tr(locale,'Business Talk','비즈니스 토크')}</span>
+   <h3>{headline(item.title)}</h3>
+   <p>{dateLabelForLocale(e.starts_at,locale)} · {timeLabelForLocale(e.starts_at,locale)}</p>
+   <p>{item.venue}</p>
+  </div>
+ </Link>;
+}
+function LandingPage({events,locale}:{events:Event[];locale:Locale}){
+ const [activeSlide,setActiveSlide]=useState(0);
+ const slides=[
+  {key:'mingle',title:tr(locale,'1:1 Mingle','1:1 밍글'),body:tr(locale,'Short one-on-one conversations, offline.','짧은 1:1 대화로 직접 알아가세요.'),image:'/images/roundy-mingle-hero.webp'},
+  {key:'talk',title:tr(locale,'Business Talk','비즈니스 토크'),body:tr(locale,'Thoughtful group conversations with new people.','새로운 사람들과 깊이 있는 대화를 나눠보세요.'),image:'/images/roundy-business-hero.webp'}
+ ];
+ useEffect(()=>{
+  if(typeof window==='undefined'||window.matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+  const id=window.setInterval(()=>setActiveSlide(current=>(current+1)%slides.length),4500);
+  return()=>window.clearInterval(id);
+ },[]);
+ const upcoming=events.slice(0,3);
+ return <div className="landing landing-v2">
+  <section className="landing-hero-v2">
+   <div className="landing-hero-copy-v2">
+    <h1>{tr(locale,'Meet in real life.','직접 만나세요.')}</h1>
+    <p>{tr(locale,'Join 1:1 mingles and Business Talks in Seoul.','서울에서 1:1 밍글과 비즈니스 토크를 만나보세요.')}</p>
+   </div>
+   <div className="landing-carousel" aria-roledescription="carousel" aria-label={tr(locale,'Roundy experiences','Roundy 경험')}>
+    <div className="landing-carousel-track" style={{transform:`translate3d(-${activeSlide*100}%,0,0)`}}>
+     {slides.map((slide,index)=><article className="landing-carousel-slide" aria-hidden={index!==activeSlide} key={slide.key}>
+      <Image src={slide.image} alt="" fill sizes="390px" priority={index===0}/>
+      <span className={'landing-carousel-chip '+slide.key}>{slide.title}</span>
+      <div className="landing-carousel-scrim"/>
+      <div className="landing-carousel-caption"><strong>{slide.title}</strong><span>{slide.body}</span></div>
+     </article>)}
+    </div>
+   </div>
+   <div className="landing-carousel-dots" aria-label={tr(locale,'Choose carousel slide','캐러셀 슬라이드 선택')}>
+    {slides.map((slide,index)=><button type="button" key={slide.key} aria-label={slide.title} aria-current={activeSlide===index?'true':undefined} className={'landing-carousel-dot '+(activeSlide===index?'active':'')} onClick={()=>setActiveSlide(index)}/>)}
+   </div>
+  </section>
+
+  <section className="landing-service-list" aria-label={tr(locale,'Roundy experiences','Roundy 경험')}>
+   <Link href="/events?category=1%3A1%20Speed%20Mingle" className="landing-service-card mingle">
+    <span className="landing-service-icon"><Heart size={22}/></span>
+    <span className="landing-service-copy">
+     <strong>{tr(locale,'1:1 Mingle','1:1 밍글')}</strong>
+     <span>{tr(locale,'Short, guided conversations designed to help you connect naturally.','짧은 1:1 대화로 자연스럽게 서로를 알아가세요.')}</span>
+     <b>{tr(locale,'Explore mingles','1:1 밍글 보기')} <ArrowRight size={15}/></b>
+    </span>
+   </Link>
+   <Link href="/events?category=Business%20Talk" className="landing-service-card talk">
+    <span className="landing-service-icon"><MessageCircle size={22}/></span>
+    <span className="landing-service-copy">
+     <strong>{tr(locale,'Business Talk','비즈니스 토크')}</strong>
+     <span>{tr(locale,'A relaxed group setting for thoughtful conversations and networking.','편안한 분위기에서 깊이 있는 대화와 네트워킹을 즐겨보세요.')}</span>
+     <b>{tr(locale,'Explore talks','비즈니스 토크 보기')} <ArrowRight size={15}/></b>
+    </span>
+   </Link>
+  </section>
+
+  <section className="landing-upcoming-v2">
+   <div className="landing-section-heading"><h2>{tr(locale,'Upcoming Events','다가오는 이벤트')}</h2><Link href="/events">{tr(locale,'View all','전체 보기')} →</Link></div>
+   {upcoming.length>0?<div className="landing-event-strip">{upcoming.map(e=><LandingEventPreview key={e.id} e={e} locale={locale}/>)}</div>:<p className="landing-empty-events">{tr(locale,'New events are on their way.','새로운 이벤트를 준비하고 있어요.')}</p>}
+  </section>
+
+  <section className="landing-trust-v2">
+   <h2>{tr(locale,'A safer, kinder way to meet','더 안전하고 편안한 만남')}</h2>
+   <div className="landing-trust-grid">
+    <div><CalendarDays size={22}/><strong>{tr(locale,'Curated events','엄선된 이벤트')}</strong><span>{tr(locale,'Quality over quantity','좋은 경험에 집중해요')}</span></div>
+    <div><UsersRound size={22}/><strong>{tr(locale,'Friendly hosts','친근한 호스트')}</strong><span>{tr(locale,'Welcoming atmosphere','편안한 분위기')}</span></div>
+    <div><ShieldCheck size={22}/><strong>{tr(locale,'Verified community','검증된 커뮤니티')}</strong><span>{tr(locale,'Real people, real connections','실제 사람, 실제 연결')}</span></div>
+   </div>
+  </section>
+ </div>;
+}
 export function App({path}:{path:string}){
  const router=useRouter();const {showToast}=useToast();const searchParams=useSearchParams();const [state,setState]=useState<State>(initial);const [ready,setReady]=useState(false);const [events,setEvents]=useState<Event[]>(demoMode?sampleEvents:[]);const [authed,setAuthed]=useState(demoMode);const [isAdmin,setIsAdmin]=useState(false);const [busy,setBusy]=useState(false);const [routeLoading,setRouteLoading]=useState(false);const [eventsLoading,setEventsLoading]=useState(!demoMode);const [message,setMessage]=useState('');const [error,setError]=useState('');const [filter,setFilter]=useState('1:1 Speed Mingle');const [query,setQuery]=useState('');const [quantity,setQuantity]=useState(1);const [qr,setQr]=useState('');const [locale,setLocale]=useState<Locale>('en');const [consentEvent,setConsentEvent]=useState<Event|null>(null);const [consentCancellation,setConsentCancellation]=useState(false);const [consentTerms,setConsentTerms]=useState(false);const [deleteAccountOpen,setDeleteAccountOpen]=useState(false);const [deleteAccountConfirm,setDeleteAccountConfirm]=useState('');const [myReferralCode,setMyReferralCode]=useState('');const [checkoutReferral,setCheckoutReferral]=useState('');const [referralQuote,setReferralQuote]=useState<ReferralQuote|null>(null);const [checkoutTermsAccepted,setCheckoutTermsAccepted]=useState(false);const [attendeesByEvent,setAttendeesByEvent]=useState<Record<string,EventAttendees>>({});const [ticketBalance,setTicketBalance]=useState(0);
- const p=state.profile;const parts=path.split('/');const route=parts[0]||'home';const referralParam=(searchParams.get('ref')??'').trim().toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6);const requestedSlug=route==='onboarding'?parts[2]:parts[1];const slug=requestedSlug||(route==='events'||route==='discover'||route==='home'||route==='payment'?'':'saturday-social');const event=slug?(events.find(e=>e.slug===slug)??events.find(e=>e.previous_slugs?.includes(slug))):undefined;const appStatus=state.applications[slug];const publicEvents=events.filter(e=>(e.status==='live'||e.status==='published')&&Date.parse(e.starts_at)>Date.now()&&e.seats_remaining>0);
+ const p=state.profile;const parts=path.split('/');const route=parts[0]||'home';const requestedCategory=searchParams.get('category');const referralParam=(searchParams.get('ref')??'').trim().toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6);const requestedSlug=route==='onboarding'?parts[2]:parts[1];const slug=requestedSlug||(route==='events'||route==='discover'||route==='home'||route==='payment'?'':'saturday-social');const event=slug?(events.find(e=>e.slug===slug)??events.find(e=>e.previous_slugs?.includes(slug))):undefined;const appStatus=state.applications[slug];const publicEvents=events.filter(e=>(e.status==='live'||e.status==='published')&&Date.parse(e.starts_at)>Date.now()&&e.seats_remaining>0);
  function patchProfile(values:Partial<Profile>){setState(s=>({...s,profile:{...s.profile,...values}}));}
  function flash(text:string){setMessage(text);setError('');}
  function setLanguage(next:Locale){setLocale(next);try{localStorage.setItem('roundy-locale',next);}catch{/* A blocked storage setting should not block language choice. */}}
  async function work(fn:()=>Promise<void>){setBusy(true);setError('');try{await fn();}catch(e){setError(e instanceof Error?e.message:'Please try again.');}finally{setBusy(false);}}
+ useEffect(()=>{
+  if(route==='events'&&requestedCategory&&eventCategories.some(category=>category===requestedCategory))setFilter(requestedCategory);
+ },[route,requestedCategory]);
+
  useEffect(()=>{if(!authConfigured()){setReady(true);return;}if(demoMode){try{const saved=sessionStorage.getItem('roundy-demo-v1');if(saved)setState({...initial,...JSON.parse(saved)});}catch{/* A corrupt preview does not block browsing. */}setReady(true);}else{Promise.allSettled([api('profile').then(d=>{setState(s=>({...s,profile:{...emptyProfile,...d.profile,phone:formatKoreanPhone(String(d.profile?.phone??''))},verification:d.verification??'Not started'}));setAuthed(true);void api('admin/role').then(result=>setIsAdmin(Boolean(result.isAdmin))).catch(()=>setIsAdmin(false));}).catch(()=>{setAuthed(false);setIsAdmin(false);})]).finally(()=>setReady(true));}},[]);
  useEffect(()=>{if(demoMode||!authConfigured()){setEventsLoading(false);return;}let active=true;let controller:AbortController|null=null;
   async function refresh(){controller?.abort();const request=new AbortController();controller=request;setEventsLoading(true);try{const response=await fetch('/api/events',{cache:'no-store',signal:request.signal});const data=await response.json();if(!response.ok)throw new Error(data.error||'Could not load events.');if(active&&!request.signal.aborted)setEvents(data.events??[]);}catch(e){if(active&&!request.signal.aborted)setError(e instanceof Error?e.message:'Could not load events.');}finally{if(active&&!request.signal.aborted)setEventsLoading(false);}}
@@ -100,7 +183,7 @@ export function App({path}:{path:string}){
 
  let content:ReactNode;
  let wizardHeader:ReactNode=null;
- if(route==='home'||route==='discover')content=<LandingPage events={publicEvents} locale={locale} attendeesByEvent={attendeesByEvent}/>;
+ if(route==='home'||route==='discover')content=<LandingPage events={publicEvents} locale={locale}/>;
  else if(route==='payment')content=<><section className="intro payment-referral-intro"><p className="eyebrow">{tr(locale,'REFERRAL CHECKOUT','추천 결제')}</p><h1>{tr(locale,'Choose an event','이벤트를 선택하세요')}</h1><p>{/^[A-Z0-9]{6}$/.test(referralParam)?tr(locale,`Referral code ${referralParam} is ready and will be filled in automatically at checkout.`,`추천 코드 ${referralParam}가 준비되었습니다. 결제 화면에 자동으로 입력됩니다.`):tr(locale,'Choose an event, then enter your referral code at checkout.','이벤트를 선택한 뒤 결제 화면에서 추천 코드를 입력하세요.')}</p></section><div className="event-grid">{publicEvents.map(e=><EventCard key={e.id} e={e} locale={locale} attendees={attendeesByEvent[e.id]} href={'/events/'+e.slug+(/^[A-Z0-9]{6}$/.test(referralParam)?'?ref='+encodeURIComponent(referralParam):'')}/>)}</div>{publicEvents.length===0&&<Empty title={tr(locale,'New events are on their way.','새로운 이벤트를 준비하고 있어요.')} body={tr(locale,'Check back soon for an event where you can use your referral code.','추천 코드를 사용할 수 있는 이벤트가 열리는지 곧 다시 확인해 주세요.')}/>}</>;
  else if(route==='events'&&!event){const visibleEvents=publicEvents.filter(e=>eventCategory(e)===filter);content=<><div className="chips event-category-filters" aria-label={tr(locale,'Filter by event category','이벤트 카테고리로 필터링')}>{eventCategories.map(x=><button aria-pressed={filter===x} className={filter===x?'chip selected':'chip'} onClick={()=>setFilter(x)} key={x}>{eventFilterLabel(x,locale)}</button>)}</div><div className="event-grid">{visibleEvents.map(e=><EventCard key={e.id} e={e} locale={locale} attendees={attendeesByEvent[e.id]}/>)}</div>{visibleEvents.length===0&&<Empty title={tr(locale,'No events in this category yet.','이 카테고리의 이벤트가 아직 없어요.')} body={tr(locale,'Check back soon for newly published events.','새로운 이벤트가 곧 열릴 예정이에요. 조금만 기다려 주세요!')}/>}</>;}
  else if(route==='events'&&event){const item=localizeEvent(event,locale);const attending=Math.max(0,event.capacity-event.seats_remaining);const duration=event.duration_minutes??Math.round((Date.parse(event.ends_at)-Date.parse(event.starts_at))/60000);const registrationClosed=Date.parse(event.starts_at)<=Date.now()||event.seats_remaining<1;const cancellationLocked=Date.now()>=Date.parse(event.starts_at)-((event.lockdown_minutes??0)*60000);const alreadyBooked=Boolean(state.booked[event.slug]);const attendeeInfo=attendeesByEvent[event.id]??{women:[],men:[],women_count:0,men_count:0,total:attending};const genderCapacity=Math.floor(event.capacity/2);content=<><div className="detail-photo"><Image src={event.image||'/images/yeouido.webp'} alt={event.title} fill sizes="(max-width: 640px) 100vw, 800px" priority/></div>{(event.images?.length??0)>1&&<div className="event-gallery">{event.images?.slice(1).map(src=><Image key={src} src={src} alt={event.title} width={360} height={240} unoptimized/>)}</div>}<section className="event-detail-copy"><EventCategoryBadges category={categoryLabel(event,locale)} requirements={event.nationality_requirements} locale={locale}/><h1>{headline(item.title)}</h1></section><div className="detail-facts"><div className="event-fact"><span className="fact-icon"><UsersRound size={20}/></span><span className="fact-copy"><b>{tr(locale,'Age range','연령')}</b><span>{event.age_min}–{event.age_max}</span></span></div><NationalityFact requirements={event.nationality_requirements} locale={locale}/><div className="event-fact"><span className="fact-icon"><CalendarDays size={20}/></span><span className="fact-copy"><b>{tr(locale,'Time','시간')}</b><span>{dateLabelForLocale(event.starts_at,locale)} · {timeLabelForLocale(event.starts_at,locale)} – {timeLabelForLocale(event.ends_at,locale)} KST</span></span></div><div className="event-fact"><span className="fact-icon"><Clock3 size={20}/></span><span className="fact-copy"><b>{tr(locale,'Duration','진행 시간')}</b><span>{duration}{tr(locale,' minutes','분')}</span></span></div><VenueFact venue={item.venue} address={item.address} description={event.venue_description} locale={locale}/></div><VenueMap venue={item.venue} address={item.address} latitude={event.latitude} longitude={event.longitude} locale={locale}/><Card label={tr(locale,'BEFORE YOU APPLY','지원 전 확인')}><ul className="before-apply"><li className="lockdown-notice">{lockdownNotice(event.lockdown_minutes??0,locale)}</li><li>{tr(locale,'Comfortable with short conversations in Korean or English','한국어 또는 영어로 짧은 대화를 편하게 나눌 수 있어야 해요')}</li><li>{tr(locale,'Bring photo ID and arrive 15 minutes early','사진이 있는 신분증을 지참하고 15분 일찍 도착해 주세요')}</li><li>{tr(locale,'Only mutual choices become a match','서로 선택해야 매칭돼요')}</li></ul></Card>{item.description?.trim()&&<p className="event-description">{item.description}</p>}<section className="attendee-list"><h2>{tr(locale,'Attendees','참가자')} <span>({attending} / {event.capacity})</span></h2>{eventCategory(event)==='1:1 Speed Mingle'?<div className="attendee-simple-panel"><div className="attendee-simple-row"><div className="attendee-simple-head"><b>{tr(locale,'Ladies','여성')}</b><span>{attendeeInfo.women_count} / {genderCapacity}</span></div><AttendeeStack count={attendeeInfo.women_count} kind={tr(locale,'Ladies','여성')} locale={locale} attendees={attendeeInfo.women}/></div><div className="attendee-simple-row"><div className="attendee-simple-head"><b>{tr(locale,'Gents','남성')}</b><span>{attendeeInfo.men_count} / {genderCapacity}</span></div><AttendeeStack count={attendeeInfo.men_count} kind={tr(locale,'Gents','남성')} locale={locale} attendees={attendeeInfo.men}/></div></div>:<div className="attendee-simple-panel"><div className="attendee-simple-row"><div className="attendee-simple-head"><b>{tr(locale,'Attendees','참가자')}</b><span>{attendeeInfo.total} / {event.capacity}</span></div><AttendeeStack count={attendeeInfo.total} kind={tr(locale,'Attendees','참가자')} locale={locale} attendees={[...attendeeInfo.women,...attendeeInfo.men]}/></div></div>}</section><div className="sticky-action">{alreadyBooked?<Button secondary disabled={busy||cancellationLocked} onClick={()=>void cancelBooking(event)}>{cancellationLocked?tr(locale,'Cancellation locked','취소 마감'):tr(locale,'Cancel registration','등록 취소')}</Button>:<Button disabled={registrationClosed} onClick={()=>goApply(event)}>{registrationClosed?tr(locale,'Event closed','신청 마감'):!eligibleToApply?tr(locale,'Complete Profile to Join','프로필을 완성하고 참여하기'):tr(locale,'Apply for this event','이 이벤트 지원하기')}</Button>}</div></>;}
