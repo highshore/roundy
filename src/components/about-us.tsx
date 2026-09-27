@@ -23,8 +23,31 @@ export function AboutUs({ locale }: { locale: Locale }) {
       <p className="eyebrow">{copy.storyLabel}</p>
       <h2 id="our-story">{copy.storyTitle}</h2>
       {copy.storyBody.split('\n\n').map(paragraph => <p key={paragraph}>{paragraph}</p>)}
-      <a href="https://1cupenglish.com" target="_blank" rel="noopener noreferrer">{copy.source} ↗</a>
+      <div className="about-origin-contrast">
+        {copy.storyContrast.map(([label, value]) => <div className="about-origin-row" key={label}>
+          <span className="about-origin-key">{label}</span>
+          <span className="about-origin-value">{value}</span>
+        </div>)}
+      </div>
     </section>
+    <section className="about-origin" aria-labelledby="origin-lesson">
+      <div className="about-section-heading">
+        <p className="eyebrow">{copy.originLabel}</p>
+        <h2 id="origin-lesson">{copy.originTitle}</h2>
+        <p className="about-origin-copy">{copy.originBody}</p>
+      </div>
+      {copy.originSteps.map(([label, title, body]) => <section className="info-card about-origin-step" key={label}>
+        <p className="eyebrow">{label}</p>
+        <h3>{title}</h3>
+        <p className="card-copy">{body}</p>
+      </section>)}
+    </section>
+    <aside className="about-proof" aria-label={copy.proofLabel}>
+      <div className="about-proof-number">{copy.proofValue}</div>
+      <p className="eyebrow">{copy.proofLabel}</p>
+      <p className="about-proof-copy">{copy.proofBody}</p>
+      <a href="https://1cupenglish.com" target="_blank" rel="noopener noreferrer">{copy.source} ↗</a>
+    </aside>
     <section className="about-section" aria-labelledby="our-hosts">
       <div className="about-section-heading"><p className="eyebrow">{copy.teamLabel}</p><h2 id="our-hosts">{copy.teamTitle}</h2></div>
       {(['kyle', 'joey'] as const).map(person => <section className="info-card about-host" key={person}>
