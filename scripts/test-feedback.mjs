@@ -1,0 +1,47 @@
+import { PGlite } from '@electric-sql/pglite';
+import { readFile } from 'node:fs/promises';
+import assert from 'node:assert/strict';
+const db = new PGlite();
+const user = '00000000-0000-0000-0000-000000000001';
+const other = '00000000-0000-0000-0000-000000000002';
+const first = '00000000-0000-0000-0000-000000000010';
+const later = '00000000-0000-0000-0000-000000000011';
+try {
+ await db.exec(`create role anon; create role authenticated; create schema auth; create schema roundy_private;
+ create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
+ grant usage on schema auth,roundy_private to authenticated;
+ create table events(id uuid primary key,title text,theme text,starts_at timestamptz,ends_at timestamptz);
+ create table bookings(id uuid primary key default gen_random_uuid(),user_id uuid,event_id uuid,checked_in_at timestamptz);
+ create table reports(id uuid primary key default gen_random_uuid(),user_id uuid,context text,reason text,kind text,status text default 'new');
+ alter table reports enable row level security;
+ grant select,insert(user_id,context,reason,kind) on reports to authenticated;
+ create policy own_read on reports for select to authenticated using(user_id=auth.uid());
+ create policy own_insert on reports for insert to authenticated with check(user_id=auth.uid());
+ insert into events values('${first}','First','1:1 Speed Mingle',now()-interval '2 days',now()-interval '1 day'),('${later}','Later','Business Talk',now()-interval '2 hours',now()+interval '1 hour');`);
+ await db.exec(await readFile('supabase/migrations/20260927163905_first_meetup_feedback.sql', 'utf8'));
+ async function as(id,sql,args=[]) { await db.exec('set role authenticated'); await db.query("select set_config('request.jwt.claim.sub',$1,false)",[id]); try{return await db.query(sql,args);}finally{await db.exec('reset role');} }
+ const survey={overall:4,connection:5,return:4,recommend:5,difficulty:'',improvement:'More time',locale:'en'};
+ const submit=(id,event,answers=survey)=>as(id,'select public.submit_first_meetup_feedback($1,$2) id',[event,answers]);
+ assert.equal((await as(user,'select public.first_meetup_feedback_context() ctx')).rows[0].ctx.eligible,false);
+ await assert.rejects(()=>submit(user,first),/First completed attendance/);
+ await db.exec(`insert into bookings(user_id,event_id) values('${user}','${first}')`);
+ await assert.rejects(()=>submit(user,first),/First completed attendance/);
+ await db.exec(`update bookings set checked_in_at=now();insert into bookings(user_id,event_id,checked_in_at) values('${other}','${later}',now())`);
+ await assert.rejects(()=>submit(other,later),/First completed attendance/);
+ assert.equal((await as(user,'select public.first_meetup_feedback_context() ctx')).rows[0].ctx.event.id,first);
+ await assert.rejects(()=>submit(user,later),/First completed attendance/);
+ for(const value of [0,6,1.5,'5',null]) await assert.rejects(()=>submit(user,first,{...survey,overall:value}),/Ratings/);
+ await assert.rejects(()=>submit(user,first,{...survey,difficulty:'x'.repeat(1501)}),/1500/);
+ await assert.rejects(()=>submit(user,first,{...survey,locale:null}),/language/);
+ await assert.rejects(()=>as(user,'insert into reports(user_id,context,reason,kind,survey,feedback_event_id) values($1,\'forged\',\'test\',\'feedback\',$2,$3)',[user,survey,first]),/permission denied/);
+ const id=(await submit(user,first)).rows[0].id;
+ assert.equal((await submit(user,first,{...survey,overall:1})).rows[0].id,id);
+ assert.equal((await db.query('select count(*)::int n from reports')).rows[0].n,1);
+ assert.equal((await as(user,'select survey from reports')).rows[0].survey.overall,4);
+ assert.equal((await as(other,'select * from reports')).rows.length,0);
+ assert.equal((await as(user,'select public.first_meetup_feedback_context() ctx')).rows[0].ctx.submitted,true);
+ await db.exec('set role anon');
+ await assert.rejects(()=>db.query('select public.first_meetup_feedback_context()'),/permission denied/);
+ await db.exec('reset role');
+ console.log('PASS: checked-in first completed event only, strict ratings and text validation, one idempotent response, RLS privacy, no anonymous RPC or direct survey writes.');
+} catch(e) { console.error(e.message); process.exitCode=1; } finally { await db.close(); }
