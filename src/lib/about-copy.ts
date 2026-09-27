@@ -1,4 +1,4 @@
-// Founder background adapted from 1cup-web's public community-host profiles.
+// Community-manager introductions and bilingual About Us copy.
 export const aboutCopy = {
   "en": {
     "eyebrow": "ABOUT ROUNDY",
@@ -10,11 +10,11 @@ export const aboutCopy = {
     "teamLabel": "THE PEOPLE BEHIND ROUNDY",
     "teamTitle": "Hi, we’re Kyle & Joey.",
     "kyle": "Kyle",
-    "kyleLabel": "INTERPRETER & COMMUNITY HOST",
-    "kyleBody": "Kyle’s background includes interpreting at CJ CheilJedang, Sendbird and ROK–US Combined Forces Command. At One Cup English, he encourages different opinions and new perspectives, helping people take part in the conversation.",
+    "kyleLabel": "Community Manager",
+    "kyleBody": "Kyle encourages different opinions and new perspectives, helping everyone feel comfortable joining the conversation.",
     "joey": "Joey",
-    "joeyLabel": "PRODUCT MANAGER & COMMUNITY HOST",
-    "joeyBody": "Joey brings product management experience across Korean and global companies, a master’s degree from the UK and MBA studies at Yonsei. At One Cup English, she welcomes different viewpoints and keeps the discussion enjoyable.",
+    "joeyLabel": "Community Manager",
+    "joeyBody": "Joey welcomes different viewpoints and creates a relaxed, enjoyable atmosphere where people can be themselves.",
     "source": "Meet One Cup English",
     "principlesLabel": "OUR PRINCIPLES",
     "principlesTitle": "Designed around real connection",
@@ -60,7 +60,10 @@ export const aboutCopy = {
       ]
     ],
     "safety": "How it works & safety",
-    "events": "Explore events"
+    "events": "Explore events",
+    "kyleBackground": "Software Engineer & Ex-Interpreter",
+    "joeyBackground": "Product Manager",
+    "photoCaption": "Moments from One Cup English"
   },
   "ko": {
     "eyebrow": "라운디 소개",
@@ -72,11 +75,11 @@ export const aboutCopy = {
     "teamLabel": "라운디를 만드는 사람들",
     "teamTitle": "카일과 조이를 소개합니다.",
     "kyle": "카일 Kyle",
-    "kyleLabel": "통역사 출신 커뮤니티 호스트",
-    "kyleBody": "카일은 CJ제일제당, 센드버드, 한미연합사에서 통역 경험을 쌓았습니다. 영어 한잔에서는 서로 다른 의견과 새로운 관점을 나눌 수 있도록 북돋우며, 모두가 대화에 참여할 수 있게 돕습니다.",
+    "kyleLabel": "커뮤니티 매니저",
+    "kyleBody": "카일은 서로 다른 의견과 새로운 관점을 환영하며, 누구나 편안하게 대화에 참여할 수 있도록 돕습니다.",
     "joey": "조이 Joey",
-    "joeyLabel": "프로덕트 매니저이자 커뮤니티 호스트",
-    "joeyBody": "조이는 국내외 기업에서 프로덕트 매니저로 일해 왔으며, 영국 석사 학위를 취득하고 연세대 MBA 과정에 재학 중입니다. 영어 한잔에서는 다양한 시각을 환영하고 즐겁게 이야기할 수 있는 분위기를 만듭니다.",
+    "joeyLabel": "커뮤니티 매니저",
+    "joeyBody": "조이는 다양한 시각을 환영하고, 각자의 모습 그대로 편안하고 즐겁게 이야기할 수 있는 분위기를 만듭니다.",
     "source": "영어 한잔 알아보기",
     "principlesLabel": "우리가 중요하게 생각하는 것",
     "principlesTitle": "대화에 집중할 수 있는 만남",
@@ -122,6 +125,9 @@ export const aboutCopy = {
       ]
     ],
     "safety": "이용 방법 및 안전",
-    "events": "이벤트 둘러보기"
+    "events": "이벤트 둘러보기",
+    "kyleBackground": "소프트웨어 엔지니어 & 전직 통역사",
+    "joeyBackground": "프로덕트 매니저",
+    "photoCaption": "영어 한잔에서 함께한 순간들"
   }
 } as const;

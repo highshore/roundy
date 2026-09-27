@@ -1921,3 +1921,20 @@ body:not(:has(.route-admin)) .global-toast{border-radius:16px;padding:13px 14px 
 .about-page .card-copy{font-size:16px;line-height:1.5}
 .about-page[lang=ko] p,.about-page[lang=ko] h1,.about-page[lang=ko] h2,.about-page[lang=ko] h3{line-height:1.2;word-break:keep-all;overflow-wrap:anywhere}
 @media(max-width:360px){.about-page h1{font-size:40px}.about-story{padding:24px}}
+
+/* Real community moments and the people who host them. */
+.about-moments{margin:0}
+.about-photo-collage{position:relative;padding:0 42px 44px 0}
+.about-conversation{display:block;width:100%;height:270px;object-fit:cover;border-radius:24px;transform:rotate(-3deg);box-shadow:0 12px 26px #20211f16}
+.about-outing{position:absolute;width:43%;height:190px;right:0;bottom:0;object-fit:cover;border:5px solid var(--paper);border-radius:20px;transform:rotate(6deg);box-shadow:0 8px 20px #20211f20}
+.about-moments figcaption{margin-top:18px;color:var(--muted);font-size:13px}
+.about-page .about-host{padding:0;overflow:hidden;gap:0;background:var(--paper);border:1px solid var(--border);box-shadow:0 8px 24px #20211f08}
+.about-portrait{height:270px;overflow:hidden;background:var(--surface)}
+.about-portrait img{display:block;width:100%;height:100%;object-fit:cover}
+.about-portrait-kyle img{object-position:center 32%}
+.about-portrait-joey img{object-position:65% 42%}
+.about-host-copy{padding:22px;display:flex;flex-direction:column;gap:10px}
+.about-host-copy .eyebrow{color:#a3343d}
+.about-host-copy h3{font-size:28px}
+.about-background{font-size:14px;font-weight:600}
+@media(prefers-reduced-motion:no-preference){.about-page{animation:about-enter .45s ease-out both}.about-portrait img{transition:transform .4s ease}.about-host:hover .about-portrait img{transform:scale(1.025)}@keyframes about-enter{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}}
