@@ -5,8 +5,23 @@ export const aboutCopy = {
     "title": "Meet people,\nnot profiles.",
     "intro": "Roundy is a Seoul-based community built for people who would rather meet in real life than spend more time swiping.",
     "storyLabel": "OUR STORY",
-    "storyTitle": "From one cup\nto a new connection.",
-    "storyBody": "We’re Kyle and Joey. At One Cup English, we host English discussions that bring people with different backgrounds and perspectives around the same table.\n\nRoundy brings that same care for conversation to meeting someone new: time to talk, room to be yourself, and a chance to connect in real life.",
+    "storyTitle": "We probably wouldn’t\nhave swiped right.",
+    "storyBody": "That’s something we still say to each other. If we had met through profile cards alone, the story might have ended before it began. Instead, we met at an offline gathering, talked long enough to see the person behind the profile, and that connection grew into a long-term relationship.",
+    "storyContrast": [
+      ["ON A DATING APP", "maybe not"],
+      ["IN REAL LIFE", "we kept talking"]
+    ],
+    "originLabel": "WHAT THAT TAUGHT US",
+    "originTitle": "The format changes\nwhat you notice.",
+    "originBody": "So we started building gatherings where a profile is not the first or last word.",
+    "originSteps": [
+      ["01 / OFFLINE FIRST", "We met in a room, not a feed.", "Without a swipe deciding first, we had time to understand who the other person actually was."],
+      ["02 / ONE CUP ENGLISH", "Start with a better conversation.", "One Cup English moved past introductions into deeper discussions about current affairs and different perspectives."],
+      ["03 / ROUNDY", "Meet the person behind the profile.", "Roundy brings the same idea to meeting someone new: less filtering up front, more room to discover who is across the table."]
+    ],
+    "proofValue": "80+",
+    "proofLabel": "PAID MEMBERS TO DATE",
+    "proofBody": "One Cup English has welcomed 80+ paid members to date — built around conversations deeper than the usual introductions.",
     "teamLabel": "THE PEOPLE BEHIND ROUNDY",
     "teamTitle": "Hi, we’re Kyle & Joey.",
     "kyle": "Kyle",
@@ -70,8 +85,23 @@ export const aboutCopy = {
     "title": "프로필 너머,\n직접 만나는 사이.",
     "intro": "라운디는 화면 속 프로필을 넘겨보기보다 직접 만나 대화하고 싶은 사람들을 위한 서울 기반 커뮤니티입니다.",
     "storyLabel": "우리의 이야기",
-    "storyTitle": "영어 한잔에서,\n새로운 만남으로.",
-    "storyBody": "안녕하세요, 카일과 조이입니다. 저희는 영어 한잔에서 서로 다른 배경과 관점을 가진 사람들이 한 테이블에 둘러앉아 영어로 대화하는 모임을 진행하고 있어요.\n\n라운디에서도 대화를 소중히 여기는 마음은 같습니다. 충분히 이야기하고, 나다운 모습을 보여주고, 직접 만나 서로를 알아갈 수 있는 시간을 만들고 싶어요.",
+    "storyTitle": "아마 앱에서는,\n서로를 고르지 않았을 거예요.",
+    "storyBody": "카일과 조이는 지금도 종종 이렇게 말합니다. 프로필만 보고 만났다면 서로를 선택하지 않았을지도 모른다고요. 하지만 오프라인 모임에서 충분히 대화하면서 프로필로는 보이지 않던 서로의 모습을 알게 되었고, 그 만남은 장기적인 관계로 이어졌습니다.",
+    "storyContrast": [
+      ["데이팅 앱이었다면", "아마 지나쳤을 사이"],
+      ["직접 만났기에", "계속 이야기한 사이"]
+    ],
+    "originLabel": "그 경험에서 배운 것",
+    "originTitle": "만남의 방식이,\n보이는 사람을 바꿉니다.",
+    "originBody": "그래서 프로필이 첫인상의 전부가 되지 않는 모임을 만들기 시작했습니다.",
+    "originSteps": [
+      ["01 / 오프라인에서 시작", "피드가 아니라, 같은 공간에서.", "먼저 걸러내기보다 충분히 이야기할 때 사람을 더 깊게 알 수 있다는 걸 직접 경험했습니다."],
+      ["02 / 영어 한잔", "자기소개보다 깊은 대화.", "시사와 서로 다른 관점을 주제로 이야기하며 자연스럽게 친분이 쌓이는 모임을 만들었습니다."],
+      ["03 / 라운디", "프로필 너머의 사람을 만나도록.", "짧은 판단보다 대화 속에서 서로를 알아갈 수 있는 만남을 설계합니다."]
+    ],
+    "proofValue": "80+",
+    "proofLabel": "누적 유료 회원",
+    "proofBody": "영어 한잔은 단순한 자기소개를 넘어 깊은 대화를 나누는 방식으로, 누적 유료 회원 80명 이상이 참여한 커뮤니티로 성장했습니다.",
     "teamLabel": "라운디를 만드는 사람들",
     "teamTitle": "카일과 조이를 소개합니다.",
     "kyle": "카일 Kyle",
