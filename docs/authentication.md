@@ -1,15 +1,27 @@
 # Authentication
 
-Roundy accepts Kakao, email/password and phone/SMS accounts. Member routes still require a server-verified non-anonymous user; admin routes additionally require `is_admin()`.
+Roundy’s public sign-in screen offers Kakao and phone/SMS authentication.
 
-Email signup can register a unique ID (3-30 lowercase letters, digits, underscores or hyphens). The auth-user insert trigger reserves it atomically. Changing user metadata cannot rename or take over an existing ID. Existing accounts without a registered ID continue to use email or Kakao.
+## Kakao
 
-`roundy-username-login` resolves IDs with server-only access to `account_usernames`, verifies the real password through Supabase Auth, and returns a normal user session. It never returns the resolved email. Its rate-limit budgets are atomic and service-only (10 attempts per ID and 30 per IP per minute). The public edge endpoint uses password authentication, so deploy it with gateway JWT verification disabled.
+Kakao OAuth requests only the scopes used by Roundy: nickname and profile image. Roundy does not request name, gender, birthday, birth year or the Kakao-account phone number during sign-in. Age and other event-profile details are collected later in the profile flow, where the 19+ eligibility rule remains enforced.
 
-Deploy `supabase/migrations/20260928035659_username_signin.sql` before the edge function and frontend. No auth service key belongs in Vercel or browser code.
+## Phone
 
-Phone authentication is displayed as unavailable while `/auth/settings` reports it disabled. To enable it, configure a supported SMS provider and enable phone authentication in the Roundy Supabase project. Real SMS delivery and code verification need to be tested afterward.
+Phone authentication is passwordless and works as sign-in-or-sign-up. The user chooses a country calling code (South Korea +82 by default), enters the local phone number, receives an SMS OTP, and verifies it through Supabase Auth.
 
-Email confirmation and password-reset URLs must allow `https://roundy.team/auth/callback`. Password-reset callbacks return to `/reset-password` through the existing safe redirect allowlist.
+The country-code list mirrors CountryCode.org and includes every code shown in its country table, including territories and countries with multiple calling codes.
 
-PG review screenshots must reflect the actual state. Paid checkout is currently disabled; do not label referral-only checkout as a working payment integration.
+Supabase must have phone auth and a supported SMS provider enabled. A successful client request uses \`signInWithOtp(..., { shouldCreateUser: true })\`, so a first-time phone number can create an Auth user rather than failing with \`otp_disabled\`.
+
+## Legacy email / ID infrastructure
+
+Existing email/password and username-login infrastructure remains in the backend for existing/internal accounts, but it is not offered as a public Roundy sign-in method. The public UI must not advertise ID/email registration.
+
+\`roundy-username-login\` resolves existing IDs with server-only access to \`account_usernames\`, verifies the real password through Supabase Auth, and returns a normal user session. No auth service key belongs in Vercel or browser code.
+
+## Profile and legal consent
+
+Date of birth is not collected as an authentication gate. It is collected in the Roundy event profile and validated there. Required/optional collection conditions are documented in the Privacy Policy.
+
+Terms and Privacy consent is recorded after authentication through the account-consent flow.
