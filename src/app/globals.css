@@ -2077,3 +2077,11 @@ body:not(:has(.route-admin)) .global-toast{border-radius:16px;padding:13px 14px 
  .legacy-talk-copy h2{font-size:20px}
  .legacy-talk-copy .event-time,.legacy-talk-copy .event-location{font-size:13px}
 }
+
+
+/* Tighten mobile spacing between primary public content and footer. */
+@container roundy (max-width:759px){
+ .route-home .content.wide,.route-discover .content.wide{padding-bottom:24px}
+ .route-events .content:has(.event-category-filters){padding-bottom:24px}
+ .route-home .site-footer,.route-discover .site-footer,.route-events .site-footer{margin-top:0}
+}
