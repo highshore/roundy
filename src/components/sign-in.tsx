@@ -2,10 +2,9 @@
 
 import { useEffect, useState, type FormEvent } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, LockKeyhole, MessageCircle } from 'lucide-react';
+import { ArrowLeft, MessageCircle, Smartphone, Eye, EyeOff } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { authConfigured, safeReturnPath } from '@/lib/auth-routing';
-import { RoundyBrand } from './roundy-brand';
 import { tr, type Locale } from '@/lib/locale';
 import styles from './sign-in.module.css';
 
@@ -19,6 +18,8 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
   const [method, setMethod] = useState<Method>('email');
   const [mode, setMode] = useState<Mode>('signin');
   const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [phone, setPhone] = useState('');
@@ -50,11 +51,11 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
     return url.toString();
   }
   function switchView(nextMethod: Method, nextMode: Mode) {
-    setMethod(nextMethod); setMode(nextMode); setError(''); setNotice(''); setPassword(''); setConfirm(''); setCode(''); setSentTo('');
+    setMethod(nextMethod); setMode(nextMode); setError(''); setNotice(''); setPassword(''); setConfirm(''); setCode(''); setSentTo(''); setShowPassword(false);
   }
   function showError(value: unknown) {
     const code = (value as { code?: string })?.code;
-    if (code === 'invalid_credentials') setError(t('Email or password is incorrect.', '이메일 또는 비밀번호를 확인해 주세요.'));
+    if (code === 'invalid_credentials') setError(t('ID, email or password is incorrect.', '아이디, 이메일 또는 비밀번호를 확인해 주세요.'));
     else if (code === 'email_not_confirmed') setError(t('Confirm your email before signing in.', '이메일 인증을 완료한 후 로그인해 주세요.'));
     else if (code === 'over_request_rate_limit' || code === 'over_email_send_rate_limit') setError(t('Too many attempts. Please wait and try again.', '요청이 많아요. 잠시 후 다시 시도해 주세요.'));
     else if (code === 'otp_expired') setError(t('The code is invalid or has expired. Request a new code.', '인증번호가 올바르지 않거나 만료되었어요. 다시 요청해 주세요.'));
@@ -96,13 +97,26 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
         setNotice(t('If an account exists, a password reset link will be sent to your email.', '가입된 계정이 있으면 비밀번호 재설정 링크를 이메일로 보내드려요.'));
       } else if (mode === 'signup') {
         if (password !== confirm) { setError(t('Passwords do not match.', '비밀번호가 일치하지 않아요.')); return; }
-        const { data, error } = await auth.signUp({ email: email.trim(), password, options: { emailRedirectTo: callback() } });
+        const { data, error } = await auth.signUp({ email: email.trim(), password, options: { emailRedirectTo: callback(), data: { username: username.trim().toLowerCase() } } });
         if (error) throw error;
         if (data.session) window.location.assign(nextPath());
         else setNotice(t('Check your email to confirm your account. If you already have an account, sign in.', '이메일에서 계정 인증을 완료해 주세요. 이미 가입했다면 로그인해 주세요.'));
       } else {
-        const { error } = await auth.signInWithPassword({ email: email.trim(), password });
-        if (error) throw error;
+        if (email.includes('@')) {
+          const { error } = await auth.signInWithPassword({ email: email.trim(), password });
+          if (error) throw error;
+        } else {
+          const { data, error } = await createClient().functions.invoke('roundy-username-login', { body: { username: email.trim().toLowerCase(), password } });
+          if (error || !data?.access_token || !data?.refresh_token) {
+            let code = data?.code;
+            if (!code && error && 'context' in error) {
+              try { code = (await error.context.json()).code; } catch { /* Use the generic credential error. */ }
+            }
+            throw { code: code || 'invalid_credentials' };
+          }
+          const { error: sessionError } = await auth.setSession({ access_token: data.access_token, refresh_token: data.refresh_token });
+          if (sessionError) throw sessionError;
+        }
         window.location.assign(nextPath());
       }
     } catch (error) { showError(error); }
@@ -115,38 +129,41 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
   }
   const available = authConfigured() && providers?.[method] === true;
   return <section className={'sign-in-panel ' + styles.panel} aria-busy={busy}>
-    <Link className="signin-back" href={eventSlug ? '/events/' + eventSlug : '/discover'}><ArrowLeft size={18}/> {t('Keep Exploring', '이벤트 더 둘러보기')}</Link>
-    <div className="signin-brand-wrap" aria-hidden="true"><RoundyBrand className="signin-brand-lockup"/></div>
-    <h1 className="sr-only">{mode === 'signup' ? t('Create account', '회원가입') : mode === 'forgot' ? t('Reset password', '비밀번호 재설정') : t('Sign in', '로그인')}</h1>
-    <div className={styles.modes} aria-label={t('Account access', '계정 이용')}>
-      <button type="button" disabled={busy} aria-pressed={mode !== 'signup'} onClick={() => switchView(method, 'signin')}>{t('Sign in', '로그인')}</button>
-      <button type="button" disabled={busy} aria-pressed={mode === 'signup'} onClick={() => switchView(method, 'signup')}>{t('Create account', '회원가입')}</button>
+    <div className={styles.topline}>
+      <Link className={styles.back} href={eventSlug ? '/events/' + eventSlug : '/discover'} aria-label={t('Back to events', '이벤트로 돌아가기')}><ArrowLeft size={21}/></Link>
+      <span>{mode === 'signup' ? t('Create account', '회원가입') : mode === 'forgot' ? t('Reset password', '비밀번호 찾기') : t('Sign in', '로그인')}</span>
     </div>
-    <div className={styles.methods} aria-label={t('Sign-in method', '로그인 방법')}>
-      <button type="button" disabled={busy} aria-pressed={method === 'email'} onClick={() => switchView('email', mode)}>{t('Email', '이메일')}</button>
-      <button type="button" disabled={busy} aria-pressed={method === 'phone'} onClick={() => switchView('phone', mode === 'forgot' ? 'signin' : mode)}>{t('Phone number', '휴대폰 번호')}</button>
+    <div className={styles.heading}>
+      <h1>{mode === 'signup' ? t('Make yourself at home.', '반가워요, 환영해요.') : mode === 'forgot' ? t('Forgot your password?', '비밀번호를 잊으셨나요?') : method === 'phone' ? t('Continue with your phone.', '휴대폰 번호로 로그인') : t('Welcome back.', '다시 만나 반가워요.')}</h1>
+      <p>{mode === 'signup' ? t('Create an account to join Roundy.', '계정을 만들고 Roundy에 함께해요.') : mode === 'forgot' ? t('We’ll email you a link to reset it.', '이메일로 재설정 링크를 보내드릴게요.') : method === 'phone' ? t('We’ll send you a verification code.', '문자로 인증번호를 보내드릴게요.') : t('Sign in to your Roundy account.', 'Roundy 계정으로 로그인해 주세요.')}</p>
     </div>
-    {providers && !available && <p className="signin-notice" role="status">{method === 'phone' ? t('Phone sign-in is not available yet. Please use email or Kakao.', '휴대폰 로그인은 준비 중이에요. 이메일 또는 카카오를 이용해 주세요.') : t('Email sign-in is temporarily unavailable. Please try again later or use Kakao.', '이메일 로그인을 사용할 수 없어요. 잠시 후 다시 시도하거나 카카오를 이용해 주세요.')}</p>}
+    {providers && !available && <p className={styles.notice} role="status">{method === 'phone' ? t('Phone sign-in is not available yet. Please use email or Kakao.', '휴대폰 로그인은 준비 중이에요. 이메일 또는 카카오를 이용해 주세요.') : t('Email sign-in is temporarily unavailable. Please try again later or use Kakao.', '이메일 로그인을 사용할 수 없어요. 잠시 후 다시 시도하거나 카카오를 이용해 주세요.')}</p>}
     <form className={styles.form} onSubmit={submit}>
       <fieldset disabled={busy || !available} className={styles.fields}>
         {method === 'email' ? <>
-          <label>{t('Email (ID)', '이메일 (아이디)')}<input type="email" required autoComplete="username" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" maxLength={254}/></label>
-          {mode !== 'forgot' && <label>{t('Password', '비밀번호')}<input type="password" required minLength={mode === 'signup' ? 8 : undefined} maxLength={128} autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} value={password} onChange={e => setPassword(e.target.value)} placeholder={mode === 'signup' ? t('At least 8 characters', '8자 이상 입력') : t('Enter your password', '비밀번호 입력')}/></label>}
-          {mode === 'signup' && <label>{t('Confirm password', '비밀번호 확인')}<input type="password" required minLength={8} maxLength={128} autoComplete="new-password" value={confirm} onChange={e => setConfirm(e.target.value)} placeholder={t('Re-enter your password', '비밀번호 다시 입력')}/></label>}
+          {mode === 'signup' && <label>{t('ID', '아이디')}<input type="text" required minLength={3} maxLength={30} pattern="[a-zA-Z0-9_][a-zA-Z0-9_-]{2,29}" autoComplete="username" autoCapitalize="none" spellCheck={false} value={username} onChange={e => setUsername(e.target.value)} placeholder={t('Choose your ID', '사용할 아이디 입력')} aria-describedby="id-format"/><small id="id-format">{t('3–30 letters, numbers, underscores or hyphens.', '영문, 숫자, 밑줄, 하이픈 3~30자')}</small></label>}
+          <label>{mode === 'signin' ? t('ID or email', '아이디 또는 이메일') : t('Email', '이메일')}<input type={mode === 'signin' ? 'text' : 'email'} required autoComplete={mode === 'signin' ? 'username' : 'email'} autoCapitalize="none" spellCheck={false} value={email} onChange={e => setEmail(e.target.value)} placeholder={mode === 'signin' ? t('Enter your ID or email', '아이디 또는 이메일 입력') : 'you@example.com'} maxLength={254}/></label>
+          {mode !== 'forgot' && <label>{t('Password', '비밀번호')}<div className={styles.password}><input type={showPassword ? 'text' : 'password'} required minLength={mode === 'signup' ? 8 : undefined} maxLength={128} autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} value={password} onChange={e => setPassword(e.target.value)} placeholder={mode === 'signup' ? t('At least 8 characters', '8자 이상 입력') : t('Enter your password', '비밀번호 입력')}/><button type="button" aria-label={showPassword ? t('Hide password', '비밀번호 숨기기') : t('Show password', '비밀번호 보기')} aria-pressed={showPassword} onClick={() => setShowPassword(v => !v)}>{showPassword ? <EyeOff size={19}/> : <Eye size={19}/>}</button></div></label>}
+          {mode === 'signup' && <label>{t('Confirm password', '비밀번호 확인')}<input type={showPassword ? 'text' : 'password'} required minLength={8} maxLength={128} autoComplete="new-password" value={confirm} onChange={e => setConfirm(e.target.value)} placeholder={t('Re-enter your password', '비밀번호 다시 입력')}/></label>}
+          {mode === 'signin' && <button type="button" className={styles.forgot} onClick={() => { setEmail(''); switchView('email', 'forgot'); }}>{t('Forgot password?', '비밀번호 찾기')}</button>}
         </> : <>
           <label>{t('Phone number', '휴대폰 번호')}<input type="tel" required autoComplete="tel" value={phone} readOnly={!!sentTo} onChange={e => setPhone(e.target.value)} placeholder="+821012345678" aria-describedby="phone-format"/></label>
           <p id="phone-format" className={styles.help}>{t('Include the country code. For Korea, replace the first 0 with +82.', '국가번호를 포함해 주세요. 한국 번호는 맨 앞 0을 +82로 바꿔 입력하세요.')}</p>
           {sentTo && <><label>{t('Verification code', '인증번호')}<input type="text" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} required autoComplete="one-time-code" value={code} onChange={e => setCode(e.target.value.replace(/\D/g, ''))}/></label><div className={styles.links}><button type="button" disabled={cooldown > 0} onClick={resend}>{cooldown ? t(`Resend in ${cooldown}s`, `${cooldown}초 후 재전송`) : t('Resend code', '인증번호 재전송')}</button><button type="button" onClick={() => { setSentTo(''); setCode(''); setNotice(''); }}>{t('Change number', '번호 변경')}</button></div></>}
         </>}
         {mode === 'signup' && <label className={styles.consent}><input type="checkbox" required/><span>{t('I agree to the ', '')}<Link href="/terms" target="_blank">{t('Terms of Use', '이용약관')}</Link>{t(' and ', ' 및 ')}<Link href="/privacy" target="_blank">{t('Privacy Policy', '개인정보처리방침')}</Link>{t('.', '에 동의합니다.')}</span></label>}
-        <button type="submit" className="button">{busy ? t('Please wait…', '처리 중…') : method === 'phone' ? (sentTo ? t('Verify and continue', '인증하고 계속하기') : t('Send verification code', '인증번호 받기')) : mode === 'signup' ? t('Create account', '회원가입') : mode === 'forgot' ? t('Send reset link', '재설정 링크 받기') : t('Sign in', '로그인')}</button>
+        <button type="submit" className={styles.primary}>{busy ? t('Please wait…', '처리 중…') : method === 'phone' ? (sentTo ? t('Verify and continue', '인증하고 계속하기') : t('Send verification code', '인증번호 받기')) : mode === 'signup' ? t('Create account', '회원가입') : mode === 'forgot' ? t('Send reset link', '재설정 링크 받기') : t('Sign in', '로그인')}</button>
       </fieldset>
-      {method === 'email' && <button type="button" className={styles.textButton} disabled={busy} onClick={() => switchView('email', mode === 'forgot' ? 'signin' : 'forgot')}>{mode === 'forgot' ? t('Back to sign in', '로그인으로 돌아가기') : t('Forgot password?', '비밀번호를 잊으셨나요?')}</button>}
     </form>
-    {error && <p role="alert" className="signin-notice">{error}</p>}
-    {notice && <p role="status" className="signin-notice">{notice}</p>}
-    <div className={styles.divider}>{t('or', '또는')}</div>
-    <button type="button" className="button kakao-button" disabled={busy || !authConfigured()} onClick={kakao}><MessageCircle size={21} fill="currentColor"/>{t('Continue with Kakao', '카카오로 계속하기')}</button>
-    <p className="signin-privacy"><LockKeyhole size={17}/> {t('Your profile stays private', '프로필은 비공개로 보호돼요')}</p>
+    {error && <p role="alert" className={styles.notice}>{error}</p>}
+    {notice && <p role="status" className={styles.notice}>{notice}</p>}
+    {mode !== 'forgot' ? <>
+      <div className={styles.divider}>{t('or continue with', '다른 방법으로 계속하기')}</div>
+      <div className={styles.alternatives}>
+        <button type="button" className={styles.kakao} disabled={busy || !authConfigured()} onClick={kakao}><MessageCircle size={19} fill="currentColor"/>{t('Kakao', '카카오')}</button>
+        <button type="button" className={styles.secondary} disabled={busy} onClick={() => { setEmail(''); switchView(method === 'email' ? 'phone' : 'email', mode); }}>{method === 'email' ? <Smartphone size={19}/> : null}{method === 'email' ? t('Phone number', '휴대폰 번호') : t('ID or email', '아이디 또는 이메일')}</button>
+      </div>
+      <p className={styles.switchMode}>{mode === 'signup' ? t('Already have an account?', '이미 계정이 있나요?') : t('New to Roundy?', 'Roundy가 처음인가요?')} <button type="button" disabled={busy} onClick={() => { setEmail(''); switchView(method, mode === 'signup' ? 'signin' : 'signup'); }}>{mode === 'signup' ? t('Sign in', '로그인') : t('Create account', '회원가입')}</button></p>
+    </> : <button type="button" className={styles.textButton} disabled={busy} onClick={() => switchView('email', 'signin')}>{t('Back to sign in', '로그인으로 돌아가기')}</button>}
   </section>;
 }
