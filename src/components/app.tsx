@@ -232,7 +232,22 @@ export function App({path}:{path:string}){
  useEffect(()=>{if(message){showToast(ui(locale,message),'success');setMessage('');}},[message,locale,showToast]);
  useEffect(()=>{if(error){showToast(ui(locale,error),'error');setError('');}},[error,locale,showToast]);
  useEffect(()=>{if(route==='ticket'&&demoMode)QRCode.toDataURL('ROUNDY-DEMO-NOT-A-VALID-TICKET',{width:280,margin:2,color:{dark:'#20211f',light:'#fffefa'}}).then(setQr);},[route]);
- useEffect(()=>{try{const saved=localStorage.getItem('roundy-locale');if(saved==='en'||saved==='ko')setLocale(saved);}catch{/* Default English remains available. */}},[]);
+ useEffect(()=>{
+  const detectBrowserLocale=():Locale=>{
+   const preferred=(navigator.languages?.[0]??navigator.language??'en').toLowerCase();
+   return preferred==='ko'||preferred.startsWith('ko-')?'ko':'en';
+  };
+  const applyPreferredLocale=()=>{
+   try{
+    const saved=localStorage.getItem('roundy-locale');
+    if(saved==='en'||saved==='ko'){setLocale(saved);return;}
+   }catch{/* Browser locale remains available if storage is blocked. */}
+   setLocale(detectBrowserLocale());
+  };
+  applyPreferredLocale();
+  window.addEventListener('languagechange',applyPreferredLocale);
+  return()=>window.removeEventListener('languagechange',applyPreferredLocale);
+ },[]);
  useEffect(()=>{document.documentElement.lang=locale;},[locale]);
  const verified=demoMode||['verified','approved'].includes(state.verification.toLowerCase());
  const eligibleToApply=profileComplete(p)&&verified;
