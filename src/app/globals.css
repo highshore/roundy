@@ -2085,3 +2085,12 @@ body:not(:has(.route-admin)) .global-toast{border-radius:16px;padding:13px 14px 
  .route-events .content:has(.event-category-filters){padding-bottom:24px}
  .route-home .site-footer,.route-discover .site-footer,.route-events .site-footer{margin-top:0}
 }
+
+
+/* Business Talk event pagination. */
+.business-talk-pagination{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:22px;padding-top:20px;border-top:1px solid var(--border)}
+.business-talk-pagination button{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:42px;padding:9px 15px;border:1px solid var(--border);border-radius:999px;background:var(--paper);color:var(--ink);font-size:13px;font-weight:700}
+.business-talk-pagination button:disabled{opacity:.38;cursor:default}
+.business-talk-pagination span{font-size:12px;font-weight:700;color:var(--muted);white-space:nowrap}
+.event-category-filters{scroll-margin-top:88px}
+@container roundy (max-width:759px){.business-talk-pagination{margin-top:18px}.business-talk-pagination button{min-width:84px;padding:9px 12px}.event-category-filters{scroll-margin-top:76px}}
