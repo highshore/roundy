@@ -10,6 +10,7 @@ let role = true;
 let roleError = null;
 let roleCalls = 0;
 const modules = {
+  '@/lib/auth-user': { isMemberUser: u => !!u && !u.is_anonymous && ['kakao','email','phone'].includes(u.app_metadata.provider) },
   'react/jsx-runtime': { jsx: (_component, props) => props },
   'next/navigation': { redirect: url => { throw new Error('redirect:' + url); }, notFound: () => { throw new Error('not-found'); } },
   '@/components/admin-center': { AdminCenter: () => null },
@@ -29,7 +30,12 @@ currentUser = null;
 const previousCalls = roleCalls;
 await assert.rejects(render(['events', 'new']), /redirect:\/signin\?next=%2Fadmin%2Fevents%2Fnew/);
 assert.equal(roleCalls, previousCalls, 'Unauthenticated requests stop before role/data access');
-currentUser = { app_metadata: { provider: 'email' } };
+for (const provider of ['email', 'phone']) {
+ currentUser = { app_metadata: { provider } };
+ role = false; await assert.rejects(render([]), /redirect:\/me/);
+ role = true; assert.deepEqual((await render([])).path, []);
+}
+currentUser = { is_anonymous: true, app_metadata: { provider: 'email' } };
 await assert.rejects(render([]), /redirect:\/signin/);
 currentUser = { app_metadata: { provider: 'kakao' } };
 roleError = new Error('Database unavailable');

@@ -1,3 +1,4 @@
+import { isMemberUser } from '@/lib/auth-user';
 import { notFound, redirect } from 'next/navigation';
 import { AdminCenter } from '@/components/admin-center';
 import { createClient } from '@/lib/supabase/server';
@@ -9,7 +10,7 @@ export default async function AdminPage({ params }: { params: Promise<{ path?: s
   if (!authConfigured()) redirect(signInPath(pathname));
   const supabase = await createClient();
   const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user || user.app_metadata.provider !== 'kakao') redirect(signInPath(pathname));
+  if (error || !isMemberUser(user)) redirect(signInPath(pathname));
   const { data: admin, error: adminError } = await supabase.rpc('is_admin');
   if (adminError || admin !== true) redirect('/me');
   if (path.length > 2 || (path.length && !['events', 'members', 'marketing', 'reports'].includes(path[0]))) notFound();

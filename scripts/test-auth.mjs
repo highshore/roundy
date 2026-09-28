@@ -12,3 +12,11 @@ for(const path of ['/admin','/admin/members','/admin/members/abc-123','/admin/ev
 for(const path of ['https://evil.example','//evil.example','/\\evil.example','/me/../signin','/me/%2e%2e','/me?next=evil','/me#evil','/me\n','/signin','/events/friday',null,undefined])assert.equal(safeReturnPath(path),'/me');
 for(const path of ['/','/discover','/events/friday','/signin','/how-it-works','/membership'])assert.equal(isPrivatePath(path),false);
 console.log('PASS: private route matching and OAuth return-path allowlist');
+
+const userSource=await readFile('src/lib/auth-user.ts','utf8');
+const compiled=ts.transpileModule(userSource,{compilerOptions:{module:ts.ModuleKind.ESNext}}).outputText;
+const {isMemberUser}=await import('data:text/javascript;base64,'+Buffer.from(compiled).toString('base64'));
+for(const provider of ['email','phone','kakao'])assert.equal(isMemberUser({app_metadata:{provider}}),true);
+for(const user of [null,{app_metadata:{}},{app_metadata:{provider:'anonymous'}},{is_anonymous:true,app_metadata:{provider:'email'}}])assert.equal(isMemberUser(user),false);
+assert.equal(safeReturnPath('/reset-password'),'/reset-password');
+console.log('PASS: supported providers, anonymous denial and password-recovery return path');

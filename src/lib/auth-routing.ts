@@ -7,7 +7,7 @@ export function isPrivatePath(path: string) {
 // Only canonical internal product paths, never arbitrary redirect URLs.
 export function safeReturnPath(value: unknown): string {
   if (typeof value !== 'string' || !/^\/[a-z0-9-]+(?:\/[a-z0-9-]+)*$/.test(value)) return '/me';
-  return isPrivatePath(value) ? value : '/me';
+  return isPrivatePath(value) || value === '/reset-password' ? value : '/me';
 }
 
 export function signInPath(next: string) {

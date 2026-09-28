@@ -1,3 +1,4 @@
+import { isMemberUser } from '@/lib/auth-user';
 import { validFeedback } from '@/lib/feedback';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
@@ -18,7 +19,7 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
  try{
   if(path[0]==='events'&&path.length===1&&req.method==='GET'){const {data,error}=await supabase.from('events').select('*').is('deleted_at',null).order('starts_at');if(error)throw error;return json({events:data});}
   const {data:{user},error:authError}=await supabase.auth.getUser();if(authError||!user)return json({error:'Sign in required'},401);
-  if(user.app_metadata.provider!=='kakao')return json({error:'Please sign in with Kakao'},403);
+  if(!isMemberUser(user))return json({error:'Member sign-in required'},403);
   if(path[0]==='events'&&path.length===3&&path[2]==='attendees'&&req.method==='GET'){
    const eventId=path[1];if(!/^[0-9a-f-]{36}$/i.test(eventId))return json({error:'Invalid event ID'},400);
    const {data,error}=await supabase.rpc('event_attendees',{p_event:eventId});if(error)throw error;return json({attendees:data});
