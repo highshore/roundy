@@ -2,7 +2,9 @@
 
 import { useEffect, useState, type FormEvent } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, MessageCircle, Smartphone, Eye, EyeOff, Mail } from 'lucide-react';
+import { ArrowLeft, Smartphone, Eye, EyeOff, Mail } from 'lucide-react';
+import { RoundyBrand } from './roundy-brand';
+import { KakaoLoginSymbol } from './kakao-login-symbol';
 import { createClient } from '@/lib/supabase/client';
 import { authConfigured, safeReturnPath } from '@/lib/auth-routing';
 import { tr, type Locale } from '@/lib/locale';
@@ -142,13 +144,14 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
   const available = authConfigured() && providers?.[method] === true;
   const legal = <div className={styles.legal}><Link href="/terms">{t('Terms of Use', '이용약관')}</Link><span aria-hidden="true">|</span><Link href="/privacy">{t('Privacy Policy', '개인정보처리방침')}</Link></div>;
   if (showMethods) return <section className={'sign-in-panel ' + styles.panel} aria-busy={busy}>
+    <div className={styles.brand}><RoundyBrand/></div>
     <div className={styles.methodHeading}>
       <h1>{t('Meet people in real life.', 'Roundy에서 만나요.')}</h1>
       <p>{t('Sign up or sign in to join your next meetup.', '회원가입하거나 로그인하고 모임에 참여해 보세요.')}</p>
     </div>
     <div className={styles.providerList}>
       <button type="button" disabled={busy} onClick={() => { switchView('email', 'signin'); setShowMethods(false); }}><Mail size={20}/><span>{t('Continue with ID or email', '아이디 또는 이메일로 계속하기')}</span></button>
-      <button type="button" disabled={busy || !authConfigured()} onClick={kakao}><MessageCircle size={20} fill="#fee500" stroke="#191919"/><span>{t('Continue with Kakao', '카카오로 계속하기')}</span></button>
+      <button type="button" disabled={busy || !authConfigured()} onClick={kakao}><span className={styles.kakaoIcon}><KakaoLoginSymbol/></span><span>{t('Continue with Kakao', '카카오로 계속하기')}</span></button>
       <button type="button" disabled={busy} onClick={() => { switchView('phone', 'signin'); setShowMethods(false); }}><Smartphone size={20}/><span>{t('Continue with phone', '휴대폰 번호로 계속하기')}</span></button>
     </div>
     {error && <p role="alert" className={styles.notice}>{error}</p>}
@@ -159,6 +162,7 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
     <div className={styles.topline}>
       <button type="button" className={styles.back} disabled={busy} onClick={() => { setShowMethods(true); setError(''); setNotice(''); setPassword(''); setConfirm(''); }}><ArrowLeft size={18}/>{t('All sign-in options', '로그인 방법 선택')}</button>
     </div>
+    <div className={styles.brand}><RoundyBrand/></div>
     <div className={styles.heading}>
       <h1>{mode === 'signup' ? t('Create your account', '계정 만들기') : mode === 'forgot' ? t('Forgot your password?', '비밀번호를 잊으셨나요?') : method === 'phone' ? t('Continue with your phone.', '휴대폰 번호로 로그인') : t('Welcome back', '다시 만나 반가워요')}</h1>
       <p>{mode === 'signup' ? t('Create an account to join Roundy.', '계정을 만들고 Roundy에 함께해요.') : mode === 'forgot' ? t('We’ll email you a link to reset it.', '이메일로 재설정 링크를 보내드릴게요.') : method === 'phone' ? t('We’ll send you a verification code.', '문자로 인증번호를 보내드릴게요.') : t('Sign in to your Roundy account.', 'Roundy 계정으로 로그인해 주세요.')}</p>
