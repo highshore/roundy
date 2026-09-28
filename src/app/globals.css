@@ -2094,3 +2094,14 @@ body:not(:has(.route-admin)) .global-toast{border-radius:16px;padding:13px 14px 
 .business-talk-pagination span{font-size:12px;font-weight:700;color:var(--muted);white-space:nowrap}
 .event-category-filters{scroll-margin-top:88px}
 @container roundy (max-width:759px){.business-talk-pagination{margin-top:18px}.business-talk-pagination button{min-width:84px;padding:9px 12px}.event-category-filters{scroll-margin-top:76px}}
+
+
+/* Tighten mobile spacing on Matches and Profile pages. */
+@container roundy (max-width:759px){
+ .route-matches .content{min-height:0;padding-bottom:24px}
+ .route-matches .match-reveal{min-height:0}
+ .route-matches .match-reveal-bottom{margin-top:44px;padding-top:0}
+ .route-matches .site-footer{margin-top:0}
+ .route-me .content{min-height:0;padding-bottom:24px}
+ .route-me .site-footer{margin-top:0}
+}
