@@ -1,6 +1,6 @@
 import Image from 'next/image';
 import Link from 'next/link';
-import { ArrowRight, ArrowUpRight, Check, MessageCircle, ShieldCheck, Sparkles, UsersRound } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, MessageCircle, ShieldCheck, Sparkles, UsersRound } from 'lucide-react';
 import { dateLabelForLocale, localizeEvent, timeLabelForLocale, tr, type Locale } from '@/lib/locale';
 import { eventCategory, type Event } from '@/lib/data';
 import styles from './discovery-experience.module.css';
@@ -31,21 +31,21 @@ function EventRow({ event, locale }: { event: Event; locale: Locale }) {
       <h3>{item.title}</h3>
       <p>{dateLabelForLocale(event.starts_at, locale)} · {timeLabelForLocale(event.starts_at, locale)} · {item.venue}</p>
     </span>
-    <span className={styles.eventArrow}><ArrowUpRight size={19}/></span>
+    <span className={styles.eventArrow}><ArrowUpRight size={19} aria-hidden="true"/></span>
   </Link>;
 }
 
 function LegacyRow({ event, locale }: { event: LegacyTalk; locale: Locale }) {
   return <a className={styles.eventRow} href={event.source_url} target="_blank" rel="noreferrer">
     <span className={styles.eventThumb}>
-      {event.image ? <img src={event.image} alt="" loading="lazy"/> : <span aria-hidden="true"><MessageCircle size={22}/></span>}
+      {event.image ? <img src={event.image} alt="" loading="lazy" width={112} height={90}/> : <span aria-hidden="true"><MessageCircle size={22} aria-hidden="true"/></span>}
     </span>
     <span className={styles.eventCopy}>
       <span className={styles.eventMeta}>{tr(locale, 'BUSINESS TALK / 1 CUP ARCHIVE', '비즈니스 토크 / 영어 한잔 기록')}</span>
       <h3>{event.title}</h3>
       <p>{dateLabelForLocale(event.starts_at, locale)} · {event.venue}</p>
     </span>
-    <span className={styles.eventArrow}><ArrowUpRight size={19}/></span>
+    <span className={styles.eventArrow}><ArrowUpRight size={19} aria-hidden="true"/></span>
   </a>;
 }
 
@@ -83,14 +83,14 @@ export function DiscoveryLanding({ events, legacyTalks, locale }: { events: Even
           <div className={styles.experienceImage}><Image src="/images/roundy-mingle-hero.webp" alt={tr(locale, 'People having a one-on-one Roundy conversation', 'Roundy에서 1:1로 대화하는 사람들')} fill sizes="(max-width: 759px) 100vw, 560px"/></div>
           <div className={styles.experienceBody}>
             <div><span className={styles.eventMeta}>{tr(locale, '1:1 / MUTUAL MATCH', '1:1 / 상호 선택')}</span><h3>{tr(locale, '1:1 Mingle', '1:1 밍글')}</h3><p>{tr(locale, 'Meet the person before the profile. Short rotations, a mid-conversation reveal, then private mutual matching.', '프로필보다 사람을 먼저 만나보세요. 짧은 로테이션, 대화 중간의 프로필 공개, 그리고 비공개 상호 매칭으로 이어집니다.')}</p></div>
-            <span className={styles.arrow}><ArrowRight size={20}/></span>
+            <span className={styles.arrow}><ArrowRight size={20} aria-hidden="true"/></span>
           </div>
         </Link>
         <Link href="/business-talk" className={styles.experience}>
           <div className={styles.experienceImage}><Image src="/images/roundy-business-hero.webp" alt={tr(locale, 'A small group having a Roundy Business Talk', 'Roundy 비즈니스 토크에서 소그룹으로 대화하는 사람들')} fill sizes="(max-width: 759px) 100vw, 560px"/></div>
           <div className={styles.experienceBody}>
             <div><span className={styles.eventMeta}>{tr(locale, 'SMALL GROUP / ENGLISH', '소그룹 / 영어')}</span><h3>{tr(locale, 'Business Talk', '비즈니스 토크')}</h3><p>{tr(locale, 'Skip networking small talk. Start with one topic worth discussing and meet people through the way they think.', '네트워킹용 스몰토크 대신 이야기할 가치가 있는 한 가지 주제로 시작합니다. 생각하는 방식을 통해 사람을 만나보세요.')}</p></div>
-            <span className={styles.arrow}><ArrowRight size={20}/></span>
+            <span className={styles.arrow}><ArrowRight size={20} aria-hidden="true"/></span>
           </div>
         </Link>
       </div>
@@ -104,22 +104,22 @@ export function DiscoveryLanding({ events, legacyTalks, locale }: { events: Even
     <section className={styles.section}>
       <SectionHeading eyebrow={tr(locale, 'WHAT STAYS THE SAME', '어떤 모임이든 지키는 것')} title={tr(locale, 'Less browsing. More being there.', '덜 고르고, 더 직접 만나세요.')} />
       <div className={styles.principles}>
-        <article className={styles.principle}><Sparkles size={22}/><strong>{tr(locale, 'Offline first', '오프라인이 먼저')}</strong><p>{tr(locale, 'Roundy is designed around the room, not an endless feed of people.', '끝없이 사람을 넘겨보는 피드가 아니라, 실제 한 공간에서의 경험을 중심으로 만듭니다.')}</p></article>
-        <article className={styles.principle}><ShieldCheck size={22}/><strong>{tr(locale, 'Reviewed before joining', '참여 전 확인')}</strong><p>{tr(locale, 'Profiles and verification are reviewed before members enter events.', '이벤트 참여 전 프로필과 인증 정보를 검토합니다.')}</p></article>
-        <article className={styles.principle}><UsersRound size={22}/><strong>{tr(locale, 'Structured, not scripted', '구조는 있지만 각본은 없어요')}</strong><p>{tr(locale, 'Hosts and prompts remove the awkward start without deciding the conversation for you.', '호스트와 질문이 어색한 시작을 줄여주지만 대화 자체를 대신 정해주지는 않습니다.')}</p></article>
+        <article className={styles.principle}><Sparkles size={22} aria-hidden="true"/><strong>{tr(locale, 'Offline first', '오프라인이 먼저')}</strong><p>{tr(locale, 'Roundy is designed around the room, not an endless feed of people.', '끝없이 사람을 넘겨보는 피드가 아니라, 실제 한 공간에서의 경험을 중심으로 만듭니다.')}</p></article>
+        <article className={styles.principle}><ShieldCheck size={22} aria-hidden="true"/><strong>{tr(locale, 'Reviewed before joining', '참여 전 확인')}</strong><p>{tr(locale, 'Profiles and verification are reviewed before members enter events.', '이벤트 참여 전 프로필과 인증 정보를 검토합니다.')}</p></article>
+        <article className={styles.principle}><UsersRound size={22} aria-hidden="true"/><strong>{tr(locale, 'Structured, not scripted', '구조는 있지만 각본은 없어요')}</strong><p>{tr(locale, 'Hosts and prompts remove the awkward start without deciding the conversation for you.', '호스트와 질문이 어색한 시작을 줄여주지만 대화 자체를 대신 정해주지는 않습니다.')}</p></article>
       </div>
     </section>
 
     <section className={styles.section}>
       <div className={styles.proof}>
         <strong className={styles.proofNumber}>80+</strong>
-        <div className={styles.proofCopy}><strong>{tr(locale, 'Built from a real offline community.', '실제 오프라인 커뮤니티에서 시작했습니다.')}</strong><p>{tr(locale, 'Before Roundy, our earlier conversation community grew to more than 80 cumulative paid members. Roundy keeps the parts that helped strangers actually connect.', 'Roundy 이전에 운영한 대화 커뮤니티는 누적 유료 멤버 80명 이상으로 성장했습니다. 낯선 사람들이 실제로 연결되는 데 도움이 됐던 부분을 Roundy에 남겼습니다.')}</p><Link className={styles.inlineLink} href="/about">{tr(locale, 'Read our story', 'Roundy 이야기 보기')} <ArrowRight size={16}/></Link></div>
+        <div className={styles.proofCopy}><strong>{tr(locale, 'Built from a real offline community.', '실제 오프라인 커뮤니티에서 시작했습니다.')}</strong><p>{tr(locale, 'Before Roundy, our earlier conversation community grew to more than 80 cumulative paid members. Roundy keeps the parts that helped strangers actually connect.', 'Roundy 이전에 운영한 대화 커뮤니티는 누적 유료 멤버 80명 이상으로 성장했습니다. 낯선 사람들이 실제로 연결되는 데 도움이 됐던 부분을 Roundy에 남겼습니다.')}</p><Link className={styles.inlineLink} href="/about">{tr(locale, 'Read our story', 'Roundy 이야기 보기')} <ArrowRight size={16} aria-hidden="true"/></Link></div>
       </div>
     </section>
 
     <section className={styles.finalCta}>
       <div><h2>{tr(locale, 'Start with the room.', '어떤 자리에 들어갈지부터.')}</h2><p>{tr(locale, 'Explore the format first, or go straight to the next available event.', '모임 방식을 먼저 알아보거나, 바로 다음 이벤트를 골라보세요.')}</p></div>
-      <Link className={styles.primaryLink} href="/events">{tr(locale, 'See all events', '모든 이벤트 보기')} <ArrowRight size={18}/></Link>
+      <Link className={styles.primaryLink} href="/events">{tr(locale, 'See all events', '모든 이벤트 보기')} <ArrowRight size={18} aria-hidden="true"/></Link>
     </section>
   </div>;
 }
@@ -196,7 +196,7 @@ function IntroPage({ kind, events, legacyTalks, locale }: { kind: IntroKind; eve
 
     <section className={styles.finalCta}>
       <div><h2>{mingle ? tr(locale, 'Meet first. Decide later.', '먼저 만나고, 판단은 나중에.') : tr(locale, 'Bring one evening. Leave with better conversations.', '한 저녁을 내고, 더 좋은 대화를 가져가세요.')}</h2><p>{tr(locale, 'Browse all published Roundy events and choose the one that fits.', '공개된 Roundy 이벤트를 둘러보고 나에게 맞는 자리를 선택하세요.')}</p></div>
-      <Link className={styles.primaryLink} href={'/events?category=' + encodeURIComponent(mingle ? '1:1 Speed Mingle' : 'Business Talk')}>{tr(locale, 'See events', '이벤트 보기')} <ArrowRight size={18}/></Link>
+      <Link className={styles.primaryLink} href={'/events?category=' + encodeURIComponent(mingle ? '1:1 Speed Mingle' : 'Business Talk')}>{tr(locale, 'See events', '이벤트 보기')} <ArrowRight size={18} aria-hidden="true"/></Link>
     </section>
   </div>;
 }
