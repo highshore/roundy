@@ -26,7 +26,7 @@ import { NationalitySelect, InterestPicker } from '@/components/profile-options'
 import { VerificationFields } from '@/components/verification-fields';
 import { compressProfilePhoto, fileToDataUrl } from '@/lib/uploads';
 import { authConfigured } from '@/lib/auth-routing';
-import { mbtiTypes, demoMode, eventCategories, eventCategory, events as sampleEvents, interests, emptyProfile, sampleProfile, profileComplete, type Event, type Profile, type Choice } from '@/lib/data';
+import { mbtiTypes, demoMode, eventCategories, eventCategory, events as sampleEvents, interests, emptyProfile, sampleProfile, formatKoreanPhone, profileComplete, type Event, type Profile, type Choice } from '@/lib/data';
 import { dateLabelForLocale, localizeEvent, timeLabelForLocale, localizeInterest, tr, ui, type Locale } from '@/lib/locale';
 import { MINIMUM_AGE, isAtLeastAge } from '@/lib/age';
 
