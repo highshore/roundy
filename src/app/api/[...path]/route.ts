@@ -8,6 +8,7 @@ import { marketingApi } from '@/lib/marketing';
 import { eventInput } from '@/lib/event-input';
 import { searchPlaces,resolvePlace } from '@/lib/naver';
 import { summarizeWork } from '@/lib/profile-summary';
+import { isAtLeastAge, MINIMUM_AGE } from '@/lib/age';
 export const dynamic='force-dynamic';
 const json=(data:unknown,status=200)=>NextResponse.json(data,{status,headers:{'Cache-Control':'private, no-store'}});
 async function isAdmin(supabase:Awaited<ReturnType<typeof createClient>>){const {data,error}=await supabase.rpc('is_admin');if(error)throw error;return data===true;}
@@ -116,6 +117,7 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
    if(req.method==='PUT'){
     const body=await req.json();const profile:Record<string,unknown>={};
     for(const key of ['full_name','birth_date','gender','nationality','job_title','workplace','phone']){if(typeof body[key]!=='string'||body[key].length>200)return json({error:'Invalid profile field'},400);profile[key]=body[key].trim();}
+    if(!isAtLeastAge(String(profile.birth_date)))return json({error:`Roundy is available only to people age ${MINIMUM_AGE} or older.`},400);
     profile.phone=formatKoreanPhone(String(profile.phone));if(profile.phone&&!isKoreanPhone(String(profile.phone)))return json({error:'Use a Korean mobile number in the format 010-1234-5678.'},400);
     if(!Number.isInteger(body.height_cm)||body.height_cm<100||body.height_cm>250||typeof body.contact_consent!=='boolean')return json({error:'Invalid height or consent'},400);
     if(!Array.isArray(body.interests)||body.interests.length>10||body.interests.some((x:unknown)=>typeof x!=='string'||!interests.includes(x))||new Set(body.interests).size!==body.interests.length)return json({error:'Choose up to 10 distinct interests'},400);
