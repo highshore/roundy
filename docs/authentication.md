@@ -1,6 +1,6 @@
 # Authentication
 
-Roundy’s public sign-in screen offers Kakao and phone/SMS authentication.
+Roundy’s public sign-in screen offers ID/email, Kakao, and phone/SMS authentication.
 
 ## Kakao
 
