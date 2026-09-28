@@ -2,17 +2,19 @@
 
 import { useEffect, useState, type FormEvent } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, MessageCircle, Smartphone, Eye, EyeOff } from 'lucide-react';
+import { ArrowLeft, MessageCircle, Smartphone, Eye, EyeOff, Mail } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { authConfigured, safeReturnPath } from '@/lib/auth-routing';
 import { tr, type Locale } from '@/lib/locale';
 import styles from './sign-in.module.css';
+import './auth-shell.css';
 
 type Method = 'email' | 'phone';
 type Mode = 'signin' | 'signup' | 'forgot';
 
 export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Locale }) {
   const [busy, setBusy] = useState(false);
+  const [showMethods, setShowMethods] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [method, setMethod] = useState<Method>('email');
@@ -128,13 +130,26 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
     try { await sendCode(); } catch (error) { showError(error); } finally { setBusy(false); }
   }
   const available = authConfigured() && providers?.[method] === true;
+  const legal = <div className={styles.legal}><Link href="/terms">{t('Terms of Use', '이용약관')}</Link><span aria-hidden="true">|</span><Link href="/privacy">{t('Privacy Policy', '개인정보처리방침')}</Link></div>;
+  if (showMethods) return <section className={'sign-in-panel ' + styles.panel} aria-busy={busy}>
+    <div className={styles.methodHeading}>
+      <h1>{t('Meet people in real life.', 'Roundy에서 만나요.')}</h1>
+      <p>{t('Sign up or sign in to join your next meetup.', '회원가입하거나 로그인하고 모임에 참여해 보세요.')}</p>
+    </div>
+    <div className={styles.providerList}>
+      <button type="button" disabled={busy} onClick={() => { switchView('email', 'signin'); setShowMethods(false); }}><Mail size={20}/><span>{t('Continue with ID or email', '아이디 또는 이메일로 계속하기')}</span></button>
+      <button type="button" disabled={busy || !authConfigured()} onClick={kakao}><MessageCircle size={20} fill="#fee500" stroke="#191919"/><span>{t('Continue with Kakao', '카카오로 계속하기')}</span></button>
+      <button type="button" disabled={busy} onClick={() => { switchView('phone', 'signin'); setShowMethods(false); }}><Smartphone size={20}/><span>{t('Continue with phone', '휴대폰 번호로 계속하기')}</span></button>
+    </div>
+    {error && <p role="alert" className={styles.notice}>{error}</p>}
+    {legal}
+  </section>;
   return <section className={'sign-in-panel ' + styles.panel} aria-busy={busy}>
     <div className={styles.topline}>
-      <Link className={styles.back} href={eventSlug ? '/events/' + eventSlug : '/discover'} aria-label={t('Back to events', '이벤트로 돌아가기')}><ArrowLeft size={21}/></Link>
-      <span>{mode === 'signup' ? t('Create account', '회원가입') : mode === 'forgot' ? t('Reset password', '비밀번호 찾기') : t('Sign in', '로그인')}</span>
+      <button type="button" className={styles.back} disabled={busy} onClick={() => { setShowMethods(true); setError(''); setNotice(''); setPassword(''); setConfirm(''); }}><ArrowLeft size={18}/>{t('All sign-in options', '로그인 방법 선택')}</button>
     </div>
     <div className={styles.heading}>
-      <h1>{mode === 'signup' ? t('Make yourself at home.', '반가워요, 환영해요.') : mode === 'forgot' ? t('Forgot your password?', '비밀번호를 잊으셨나요?') : method === 'phone' ? t('Continue with your phone.', '휴대폰 번호로 로그인') : t('Welcome back.', '다시 만나 반가워요.')}</h1>
+      <h1>{mode === 'signup' ? t('Create your account', '계정 만들기') : mode === 'forgot' ? t('Forgot your password?', '비밀번호를 잊으셨나요?') : method === 'phone' ? t('Continue with your phone.', '휴대폰 번호로 로그인') : t('Welcome back', '다시 만나 반가워요')}</h1>
       <p>{mode === 'signup' ? t('Create an account to join Roundy.', '계정을 만들고 Roundy에 함께해요.') : mode === 'forgot' ? t('We’ll email you a link to reset it.', '이메일로 재설정 링크를 보내드릴게요.') : method === 'phone' ? t('We’ll send you a verification code.', '문자로 인증번호를 보내드릴게요.') : t('Sign in to your Roundy account.', 'Roundy 계정으로 로그인해 주세요.')}</p>
     </div>
     {providers && !available && <p className={styles.notice} role="status">{method === 'phone' ? t('Phone sign-in is not available yet. Please use email or Kakao.', '휴대폰 로그인은 준비 중이에요. 이메일 또는 카카오를 이용해 주세요.') : t('Email sign-in is temporarily unavailable. Please try again later or use Kakao.', '이메일 로그인을 사용할 수 없어요. 잠시 후 다시 시도하거나 카카오를 이용해 주세요.')}</p>}
@@ -157,13 +172,7 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
     </form>
     {error && <p role="alert" className={styles.notice}>{error}</p>}
     {notice && <p role="status" className={styles.notice}>{notice}</p>}
-    {mode !== 'forgot' ? <>
-      <div className={styles.divider}>{t('or continue with', '다른 방법으로 계속하기')}</div>
-      <div className={styles.alternatives}>
-        <button type="button" className={styles.kakao} disabled={busy || !authConfigured()} onClick={kakao}><MessageCircle size={19} fill="currentColor"/>{t('Kakao', '카카오')}</button>
-        <button type="button" className={styles.secondary} disabled={busy} onClick={() => { setEmail(''); switchView(method === 'email' ? 'phone' : 'email', mode); }}>{method === 'email' ? <Smartphone size={19}/> : null}{method === 'email' ? t('Phone number', '휴대폰 번호') : t('ID or email', '아이디 또는 이메일')}</button>
-      </div>
-      <p className={styles.switchMode}>{mode === 'signup' ? t('Already have an account?', '이미 계정이 있나요?') : t('New to Roundy?', 'Roundy가 처음인가요?')} <button type="button" disabled={busy} onClick={() => { setEmail(''); switchView(method, mode === 'signup' ? 'signin' : 'signup'); }}>{mode === 'signup' ? t('Sign in', '로그인') : t('Create account', '회원가입')}</button></p>
-    </> : <button type="button" className={styles.textButton} disabled={busy} onClick={() => switchView('email', 'signin')}>{t('Back to sign in', '로그인으로 돌아가기')}</button>}
+    {mode !== 'forgot' ? <p className={styles.switchMode}>{mode === 'signup' ? t('Already have an account?', '이미 계정이 있나요?') : t('Don’t have an account?', '계정이 없으신가요?')} <button type="button" disabled={busy} onClick={() => { setEmail(''); switchView(method, mode === 'signup' ? 'signin' : 'signup'); }}>{mode === 'signup' ? t('Log in', '로그인') : t('Sign up', '회원가입')}</button></p> : <button type="button" className={styles.textButton} disabled={busy} onClick={() => switchView('email', 'signin')}>{t('Back to sign in', '로그인으로 돌아가기')}</button>}
+    {legal}
   </section>;
 }

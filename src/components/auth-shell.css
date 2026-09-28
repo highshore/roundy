@@ -1,0 +1,9 @@
+/* Authentication uses a focused provider-first shell. */
+.route-signin .site-header{height:100px;position:relative;justify-content:center;border-bottom:0;box-shadow:none;padding:0 24px;background:var(--paper)}
+.route-signin .site-header nav,.route-signin .header-signin{display:none!important}
+.route-signin .site-header .wordmark{margin:0}
+.route-signin .site-header .locale-toggle{position:absolute;right:18px;margin:0}
+.route-signin .site-header .roundy-mark{width:28px;height:28px}
+.route-signin .site-header .roundy-name{font-size:23px}
+.route-signin .site-footer{display:none}
+.route-signin .content{padding:28px 28px 40px;min-height:calc(100dvh - 100px);width:100%}
