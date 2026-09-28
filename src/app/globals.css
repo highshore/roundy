@@ -2146,7 +2146,7 @@ html:lang(ko) .eyebrow{
 
 
 /* Discover V1 — Figma node 405:1132. Mobile-first, fixed-width composition. */
-.landing-v1{display:flex;flex-direction:column;width:100%;max-width:390px;margin:0 auto;gap:56px;color:var(--ink)}
+.landing-v1{display:flex;flex-direction:column;width:100%;max-width:342px;margin:0 auto;gap:56px;color:var(--ink)}
 .landing-v1-hero,.landing-v1-section,.landing-v1-final{display:flex;flex-direction:column;gap:18px;width:100%}
 .landing-v1-eyebrow{font-family:'DM Sans',var(--font-noto-sans-kr),"Apple SD Gothic Neo","Malgun Gothic",sans-serif;font-size:10px;line-height:1.2;letter-spacing:.08em;font-weight:700;color:var(--muted)}
 .landing-v1 h1,.landing-v1 h2,.landing-v1 h3{text-wrap:balance}
@@ -2228,11 +2228,11 @@ html:lang(ko) .landing-v1 h3{font-family:var(--font-noto-sans-kr),"Apple SD Goth
 }
 @container roundy (max-width:759px){
  .route-home .content.wide,.route-discover .content.wide{padding-top:28px}
- .landing-v1{max-width:390px}
+ .landing-v1{max-width:342px}
 }
 @container roundy (max-width:359px){
  .landing-v1{gap:48px}
- .landing-v1-hero h1{font-size:34px}
+ .landing-v1-hero h1{font-size:34px}\n .landing-v1-hero-main{width:64%}\n .landing-v1-hero-side{width:32%;height:154px}\n .landing-v1-hero-caption{width:32%}
  .landing-v1-section-heading h2{font-size:25px}
  .landing-v1-event-type h3{font-size:23px}
  .landing-v1-event-card{padding:12px;gap:10px}
