@@ -694,3 +694,61 @@
     transition: none !important;
   }
 }
+
+
+/* Guideline pass: balance display type, make long labels resilient, and expose clear hover feedback. */
+.hero h1,
+.introHero h1,
+.sectionHeader h2,
+.finalCta h2 {
+  text-wrap: balance;
+}
+
+.experienceBody h3,
+.eventCopy h3,
+.archiveRow strong {
+  overflow-wrap: anywhere;
+}
+
+.experience,
+.eventRow,
+.archiveRow,
+.primaryLink,
+.secondaryLink,
+.inlineLink {
+  transition: opacity .15s ease, background-color .15s ease, transform .15s ease;
+}
+
+.experience:hover .arrow {
+  transform: translateX(3px);
+}
+
+.eventRow:hover,
+.archiveRow:hover {
+  background: color-mix(in srgb, var(--roundy-surface) 68%, transparent);
+}
+
+.primaryLink:hover {
+  background: #373930;
+}
+
+.secondaryLink:hover {
+  background: var(--roundy-surface);
+}
+
+.inlineLink:hover {
+  opacity: .75;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .experience,
+  .eventRow,
+  .archiveRow,
+  .primaryLink,
+  .secondaryLink,
+  .inlineLink,
+  .arrow {
+    transition: none !important;
+    transform: none !important;
+  }
+}
