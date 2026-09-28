@@ -119,33 +119,33 @@ function LandingPage({events,legacyTalks,locale,attendeesByEvent}:{events:Event[
  ];
  return <div className="landing landing-v1">
   <section className="landing-v1-hero">
-   <span className="landing-v1-eyebrow">ROUNDY / SEOUL</span>
-   <h1>{tr(locale,'Two Ways to Meet\nBoth Happen Offline','두 가지 만남 방식\n모두 오프라인에서')}</h1>
+   <span className="eyebrow landing-v1-eyebrow">ROUNDY / SEOUL</span>
+   <h1>{tr(locale,'Two Ways to Meet, Both Happen Offline','두 가지 만남 방식, 모두 오프라인에서')}</h1>
    <p>{tr(locale,'Choose a 1:1 Mingle or Business Talk. Less browsing, more real conversation.','1:1 밍글 또는 비즈니스 토크를 선택하세요. 탐색은 줄이고, 실제 대화는 더 많이.')}</p>
    <div className="landing-v1-hero-media" aria-label={tr(locale,'1:1 Mingle and Business Talk','1:1 밍글과 비즈니스 토크')}>
     <div className="landing-v1-hero-main"><Image src="/images/roundy-mingle-hero.webp" alt={tr(locale,'1:1 Mingle Event','1:1 밍글 이벤트')} fill priority sizes="220px"/></div>
     <div className="landing-v1-hero-side"><Image src="/images/roundy-business-hero.webp" alt={tr(locale,'Business Talk Event','비즈니스 토크 이벤트')} fill priority sizes="110px"/></div>
     <span className="landing-v1-hero-caption">{tr(locale,'1:1 Mingle / Business Talk','1:1 밍글 / 비즈니스 토크')}</span>
    </div>
-   <Link className="landing-v1-primary" href="/events">{tr(locale,"See this week's events",'이번 주 이벤트 보기')}</Link>
+   <Link className="button landing-v1-primary" href="/events">{tr(locale,"See this week's events",'이번 주 이벤트 보기')}</Link>
   </section>
 
   <section className="landing-v1-section">
    <div className="landing-v1-section-heading">
-    <span className="landing-v1-eyebrow">{tr(locale,'TWO EVENT TYPES','두 가지 이벤트 타입')}</span>
+    <span className="eyebrow landing-v1-eyebrow">{tr(locale,'TWO EVENT TYPES','두 가지 이벤트 타입')}</span>
     <h2>{tr(locale,'Pick Your Kind of Event','원하는 이벤트를 골라보세요')}</h2>
     <p>{tr(locale,'Both event types are built around real conversations, with a different format for each.','두 이벤트 타입 모두 진짜 대화를 중심으로 하며, 진행 방식은 서로 다릅니다.')}</p>
    </div>
    <div className="landing-v1-event-type">
     <div className="landing-v1-event-type-image"><Image src="/images/roundy-mingle-hero.webp" alt={tr(locale,'1:1 Mingle Event','1:1 밍글 이벤트')} fill sizes="342px"/></div>
-    <span className="landing-v1-event-type-label mingle">1:1 / MUTUAL MATCH</span>
+    <span className="eyebrow landing-v1-event-type-label mingle">1:1 / MUTUAL MATCH</span>
     <h3>{tr(locale,'1:1 Mingle','1:1 밍글')}</h3>
     <p>{tr(locale,'Meet the person before the profile. Short rotations, a later profile reveal, then private mutual matching.','프로필보다 사람을 먼저 만나보세요. 짧은 로테이션, 이후 프로필 공개, 그리고 비공개 상호 매칭으로 이어집니다.')}</p>
     <Link className="landing-v1-text-link" href="/how-it-works">{tr(locale,'How 1:1 Mingle works','1:1 밍글 이용 방법')}<ArrowRight size={18} aria-hidden="true"/></Link>
    </div>
    <div className="landing-v1-event-type">
     <div className="landing-v1-event-type-image"><Image src="/images/roundy-business-hero.webp" alt={tr(locale,'Business Talk Event','비즈니스 토크 이벤트')} fill sizes="342px"/></div>
-    <span className="landing-v1-event-type-label">SMALL GROUP / ENGLISH</span>
+    <span className="eyebrow landing-v1-event-type-label">SMALL GROUP / ENGLISH</span>
     <h3>{tr(locale,'Business Talk','비즈니스 토크')}</h3>
     <p>{tr(locale,'Skip networking small talk. Start with one topic worth discussing and meet people through the way they think.','네트워킹용 스몰토크 대신 이야기할 가치가 있는 한 가지 주제로 시작합니다. 생각하는 방식을 통해 사람을 만나보세요.')}</p>
     <Link className="landing-v1-text-link" href="/how-it-works">{tr(locale,'How Business Talk works','비즈니스 토크 이용 방법')}<ArrowRight size={18} aria-hidden="true"/></Link>
@@ -154,7 +154,7 @@ function LandingPage({events,legacyTalks,locale,attendeesByEvent}:{events:Event[
 
   <section className="landing-v1-section landing-v1-upcoming">
    <div className="landing-v1-section-heading">
-    <span className="landing-v1-eyebrow">{tr(locale,'NEXT UP','다음 이벤트')}</span>
+    <span className="eyebrow landing-v1-eyebrow">{tr(locale,'NEXT UP','다음 이벤트')}</span>
     <h2>{tr(locale,'Upcoming in Seoul','서울에서 곧 열려요')}</h2>
     <p>{tr(locale,'Choose the Event Type first, then the date.','이벤트 타입을 먼저 고른 뒤 날짜를 선택하세요.')}</p>
    </div>
@@ -164,7 +164,7 @@ function LandingPage({events,legacyTalks,locale,attendeesByEvent}:{events:Event[
 
   <section className="landing-v1-section">
    <div className="landing-v1-section-heading">
-    <span className="landing-v1-eyebrow">{tr(locale,'HOW ROUNDY WORKS','ROUNDY 이용 방법')}</span>
+    <span className="eyebrow landing-v1-eyebrow">{tr(locale,'HOW ROUNDY WORKS','ROUNDY 이용 방법')}</span>
     <h2>{tr(locale,'How Roundy Works','Roundy 이용 방법')}</h2>
     <p>{tr(locale,'Enough structure to make meeting strangers easy, without making it feel like an interview.','낯선 사람과도 편하게 만날 수 있을 만큼만 구조를 두되, 면접처럼 느껴지지는 않게 합니다.')}</p>
    </div>
@@ -173,8 +173,8 @@ function LandingPage({events,legacyTalks,locale,attendeesByEvent}:{events:Event[
    </div>
   </section>
 
-  <section className="landing-v1-proof">
-   <span className="landing-v1-eyebrow">{tr(locale,'BUILT FROM REAL COMMUNITY','실제 커뮤니티에서 시작했습니다')}</span>
+  <section className="info-card landing-v1-proof">
+   <span className="eyebrow landing-v1-eyebrow">{tr(locale,'BUILT FROM REAL COMMUNITY','실제 커뮤니티에서 시작했습니다')}</span>
    <strong>80+</strong>
    <p>{tr(locale,'Before Roundy, our earlier offline conversation community grew to 80+ cumulative paid members.','Roundy 이전에 운영한 오프라인 대화 커뮤니티는 누적 유료 멤버 80명 이상으로 성장했습니다.')}</p>
    <div className="landing-v1-proof-divider"/>
@@ -188,7 +188,7 @@ function LandingPage({events,legacyTalks,locale,attendeesByEvent}:{events:Event[
   <section className="landing-v1-final">
    <h2>{tr(locale,'Choose Your Event','이벤트 선택')}</h2>
    <p>{tr(locale,'See the next published Events and choose the Format that fits.','다음 공개 이벤트를 확인하고 나에게 맞는 진행 방식을 선택하세요.')}</p>
-   <Link className="landing-v1-primary" href="/events">{tr(locale,'See all events','모든 이벤트 보기')}</Link>
+   <Link className="button landing-v1-primary" href="/events">{tr(locale,'See all events','모든 이벤트 보기')}</Link>
   </section>
  </div>;
 }
