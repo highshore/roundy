@@ -62,27 +62,37 @@ function eventFilterLabel(category:string,locale:Locale){return category==='1:1 
 function AttendeeStack({count,kind,locale,attendees=[]}:{count:number;kind:string;locale:Locale;attendees?:AttendeePreview[]}){const shown=Math.min(5,Math.max(0,count));const visible=attendees.slice(0,shown);return <div className="attendee-stack" aria-label={count+' '+ui(locale,kind)}>{Array.from({length:shown},(_,i)=>{const attendee=visible[i];return <span className={'attendee-avatar avatar-'+i} key={i} aria-hidden="true" style={attendee?.photo?{backgroundImage:`url("${attendee.photo}")`}:undefined}>{!attendee?.photo&&<UserRound size={13}/>}</span>;})}{count>shown&&<span className="attendee-avatar more" aria-hidden="true">+{count-shown}</span>}</div>;}
 export function EventCard({e,locale,href,attendees,past=false}:{e:Event;locale:Locale;href?:string;attendees?:EventAttendees;past?:boolean}){const item=localizeEvent(e,locale);const attending=Math.max(0,e.capacity-e.seats_remaining);const preview=attendees?[...attendees.women,...attendees.men]:[];return <Link href={href??'/events/'+e.slug} className={'event-card'+(past?' past-event':'')}><div className="event-photo"><Image src={e.image||'/images/yeouido.webp'} alt={e.title} fill sizes="(max-width: 640px) 100vw, 500px"/><span className="photo-arrow"><ArrowUpRight size={24}/></span></div><div className="event-copy"><div className="event-tags"><span>{categoryLabel(e,locale)}</span><span>{e.age_min}–{e.age_max}{tr(locale,' years','세')}</span><div className="nationality-chip-group"><NationalityBadges requirements={e.nationality_requirements} locale={locale}/></div></div><h2>{headline(item.title)}</h2><p className="event-time"><CalendarDays size={16}/>{dateLabelForLocale(e.starts_at,locale)} · {timeLabelForLocale(e.starts_at,locale)} KST</p><p className="event-location"><MapPin size={16}/>{item.venue}</p><div className="event-attendance">{past?<><div><span className="past-event-status">{tr(locale,'Ended','종료')}</span></div><span>{attending}/{e.capacity} {tr(locale,'attended','참여')}</span></>:<><div><AttendeeStack count={attending} kind={tr(locale,'Attendees','참가자')} locale={locale} attendees={preview}/><span>{attending} {tr(locale,'attending','참가 예정')}</span></div><span>{e.seats_remaining} {tr(locale,'places left','자리 남음')}</span></>}</div></div></Link>;}
 
-function LandingEventPreview({e,locale}:{e:Event;locale:Locale}){
+function LandingEventPreview({e,locale,attendees}:{e:Event;locale:Locale;attendees?:EventAttendees}){
  const item=localizeEvent(e,locale);
+ const attending=Math.max(0,e.capacity-e.seats_remaining);
+ const preview=attendees?[...attendees.women,...attendees.men]:[];
  const isMingle=eventCategory(e)==='1:1 Speed Mingle';
- return <Link href={'/events/'+e.slug} className="landing-event-preview">
-  <div className="landing-event-preview-image"><Image src={e.image||'/images/yeouido.webp'} alt={item.title} fill sizes="156px"/></div>
-  <div className="landing-event-preview-copy">
-   <span className={'landing-event-category '+(isMingle?'mingle':'talk')}>{isMingle?tr(locale,'1:1 Mingle','1:1 밍글'):tr(locale,'Business Talk','비즈니스 토크')}</span>
+ return <Link href={'/events/'+e.slug} className="landing-v1-event-card">
+  <div className="landing-v1-event-image"><Image src={e.image||'/images/yeouido.webp'} alt={item.title} fill sizes="80px"/></div>
+  <div className="landing-v1-event-copy">
+   <span className={'landing-v1-event-category '+(isMingle?'mingle':'talk')}>{isMingle?tr(locale,'1:1 Mingle','1:1 밍글'):tr(locale,'Business Talk','비즈니스 토크')}</span>
    <h3>{headline(item.title)}</h3>
-   <p>{dateLabelForLocale(e.starts_at,locale)} · {timeLabelForLocale(e.starts_at,locale)}</p>
-   <p>{item.venue}</p>
+   <p><MapPin size={14} aria-hidden="true"/><span>{item.venue}</span></p>
+   <p><CalendarDays size={14} aria-hidden="true"/><span>{dateLabelForLocale(e.starts_at,locale)} · {timeLabelForLocale(e.starts_at,locale)}</span></p>
+   <div className="landing-v1-event-bottom">
+    <div className="landing-v1-attendees"><AttendeeStack count={attending} kind={tr(locale,'Attendees','참가자')} locale={locale} attendees={preview}/><span>{attending} {tr(locale,'attending','참가 예정')}</span></div>
+    <span className={'landing-v1-event-status '+(isMingle?'mingle':'talk')}>{e.seats_remaining} {tr(locale,'places left','자리 남음')}</span>
+   </div>
   </div>
  </Link>;
 }
 function LandingLegacyBusinessTalkPreview({e,locale}:{e:LegacyBusinessTalk;locale:Locale}){
- return <a href={e.source_url} target="_blank" rel="noreferrer" className="landing-event-preview legacy-talk-preview">
-  <div className="landing-event-preview-image">{e.image?<img src={e.image} alt={e.title} loading="lazy"/>:<div className="legacy-talk-placeholder"><MessageCircle size={24}/></div>}</div>
-  <div className="landing-event-preview-copy">
-   <span className="landing-event-category talk">{tr(locale,'Business Talk','비즈니스 토크')}</span>
+ return <a href={e.source_url} target="_blank" rel="noreferrer" className="landing-v1-event-card legacy-talk-preview">
+  <div className="landing-v1-event-image">{e.image?<img src={e.image} alt={e.title} loading="lazy" width="80" height="80"/>:<div className="legacy-talk-placeholder"><MessageCircle size={24} aria-hidden="true"/></div>}</div>
+  <div className="landing-v1-event-copy">
+   <span className="landing-v1-event-category talk">{tr(locale,'Business Talk','비즈니스 토크')}</span>
    <h3>{headline(e.title)}</h3>
-   <p>{dateLabelForLocale(e.starts_at,locale)} · {timeLabelForLocale(e.starts_at,locale)}</p>
-   <p>{e.venue}</p>
+   <p><MapPin size={14} aria-hidden="true"/><span>{e.venue}</span></p>
+   <p><CalendarDays size={14} aria-hidden="true"/><span>{dateLabelForLocale(e.starts_at,locale)} · {timeLabelForLocale(e.starts_at,locale)}</span></p>
+   <div className="landing-v1-event-bottom">
+    <span className="landing-v1-legacy-count">{e.participant_count} {tr(locale,'attending','참가 예정')}</span>
+    <span className="landing-v1-event-status talk">{Math.max(0,e.capacity-e.participant_count)} {tr(locale,'places left','자리 남음')}</span>
+   </div>
   </div>
  </a>;
 }
@@ -99,112 +109,86 @@ function LegacyBusinessTalkCard({e,locale,past}:{e:LegacyBusinessTalk;locale:Loc
  </a>;
 }
 
-function LandingPage({events,legacyTalks,locale}:{events:Event[];legacyTalks:LegacyBusinessTalk[];locale:Locale}){
- const [activeSlide,setActiveSlide]=useState(0);
- const slides=[
-  {key:'mingle',title:tr(locale,'1:1 Mingle','1:1 밍글'),body:tr(locale,'Short one-on-one conversations, offline.','짧은 1:1 대화로 직접 알아가세요.'),image:'/images/roundy-mingle-hero.webp'},
-  {key:'talk',title:tr(locale,'Business Talk','비즈니스 토크'),body:tr(locale,'Thoughtful group conversations with new people.','새로운 사람들과 깊이 있는 대화를 나눠보세요.'),image:'/images/roundy-business-hero.webp'}
- ];
- useEffect(()=>{
-  if(typeof window==='undefined'||window.matchMedia('(prefers-reduced-motion: reduce)').matches)return;
-  const id=window.setInterval(()=>setActiveSlide(current=>(current+1)%slides.length),4500);
-  return()=>window.clearInterval(id);
- },[]);
+function LandingPage({events,legacyTalks,locale,attendeesByEvent}:{events:Event[];legacyTalks:LegacyBusinessTalk[];locale:Locale;attendeesByEvent:Record<string,EventAttendees>}){
  const legacyUpcoming=legacyTalks.filter(e=>Date.parse(e.starts_at)>=Date.now());
- const upcoming=[...events.map(e=>({kind:'roundy' as const,event:e})),...legacyUpcoming.map(e=>({kind:'legacy' as const,event:e}))].sort((a,b)=>Date.parse(a.event.starts_at)-Date.parse(b.event.starts_at)).slice(0,3);
+ const upcoming=[...events.map(e=>({kind:'roundy' as const,event:e})),...legacyUpcoming.map(e=>({kind:'legacy' as const,event:e}))].sort((a,b)=>Date.parse(a.event.starts_at)-Date.parse(b.event.starts_at)).slice(0,2);
  const howSteps=[
-  {label:tr(locale,'01 / CHOOSE','01 / 선택'),title:tr(locale,'Pick your event','이벤트를 선택하세요'),body:tr(locale,'Choose a 1:1 Mingle or Business Talk and reserve your spot.','1:1 밍글 또는 비즈니스 토크를 선택하고 자리를 예약하세요.')},
-  {label:tr(locale,'02 / MEET','02 / 만남'),title:tr(locale,'Meet in real life','직접 만나세요'),body:tr(locale,'Hosted offline in Seoul. No endless profiles to browse before you arrive.','서울 오프라인에서 진행됩니다. 만나기 전 끝없이 프로필을 넘겨볼 필요가 없어요.')},
-  {label:tr(locale,'03 / CONNECT','03 / 연결'),title:tr(locale,'Keep what clicks','마음이 맞는 인연을 이어가세요'),body:tr(locale,'For 1:1 Mingle, only mutual choices become matches after the event.','1:1 밍글에서는 이벤트 후 서로 선택한 경우에만 매칭됩니다.')}
+  {label:tr(locale,'01 / CHOOSE','01 / 선택'),title:tr(locale,'Choose Your Event','이벤트 선택'),body:tr(locale,'Choose a 1:1 Mingle or Business Talk and reserve your place.','1:1 밍글 또는 비즈니스 토크를 선택하고 자리를 예약하세요.')},
+  {label:tr(locale,'02 / MEET','02 / 만남'),title:tr(locale,'Meet Offline','오프라인에서 만나기'),body:tr(locale,'Join a hosted Event in Seoul. No endless profiles to browse before you arrive.','서울에서 진행되는 호스트형 이벤트에 참여하세요. 만나기 전 끝없이 프로필을 넘겨볼 필요가 없습니다.')},
+  {label:tr(locale,'03 / CONNECT','03 / 연결'),title:tr(locale,'Keep What Clicks','마음이 맞는 인연 이어가기'),body:tr(locale,'For 1:1 Mingle, only mutual choices become Matches after the Event.','1:1 밍글에서는 이벤트 후 서로 선택한 경우에만 매칭됩니다.')}
  ];
- return <div className="landing landing-v2">
-  <section className="landing-hero-v2">
-   <div className="landing-hero-copy-v2">
-    <h1>{tr(locale,'Meet People in Real Life.','사람을 직접 만나보세요.')}</h1>
-    <p>{tr(locale,"Curated Meetup’s for Global-minded people in Seoul. Less swiping. More real conversations.",'서울의 글로벌한 사람들을 위한 엄선된 모임. 스와이프는 줄이고, 진짜 대화는 더 많이.')}</p>
+ return <div className="landing landing-v1">
+  <section className="landing-v1-hero">
+   <span className="landing-v1-eyebrow">ROUNDY / SEOUL</span>
+   <h1>{tr(locale,'Two Ways to Meet\nBoth Happen Offline','두 가지 만남 방식\n모두 오프라인에서')}</h1>
+   <p>{tr(locale,'Choose a 1:1 Mingle or Business Talk. Less browsing, more real conversation.','1:1 밍글 또는 비즈니스 토크를 선택하세요. 탐색은 줄이고, 실제 대화는 더 많이.')}</p>
+   <div className="landing-v1-hero-media" aria-label={tr(locale,'1:1 Mingle and Business Talk','1:1 밍글과 비즈니스 토크')}>
+    <div className="landing-v1-hero-main"><Image src="/images/roundy-mingle-hero.webp" alt={tr(locale,'1:1 Mingle Event','1:1 밍글 이벤트')} fill priority sizes="220px"/></div>
+    <div className="landing-v1-hero-side"><Image src="/images/roundy-business-hero.webp" alt={tr(locale,'Business Talk Event','비즈니스 토크 이벤트')} fill priority sizes="110px"/></div>
+    <span className="landing-v1-hero-caption">{tr(locale,'1:1 Mingle / Business Talk','1:1 밍글 / 비즈니스 토크')}</span>
    </div>
-   <Link className="landing-hero-cta" href="/events">{tr(locale,'Explore events','이벤트 둘러보기')}</Link>
-   <div className="landing-carousel" aria-roledescription="carousel" aria-label={tr(locale,'Roundy experiences','Roundy 경험')}>
-    <div className="landing-carousel-track" style={{transform:`translate3d(-${activeSlide*100}%,0,0)`}}>
-     {slides.map((slide,index)=><article className="landing-carousel-slide" aria-hidden={index!==activeSlide} key={slide.key}>
-      <Image src={slide.image} alt="" fill sizes="342px" priority={index===0}/>
-      <span className={'landing-carousel-chip '+slide.key}>{slide.title}</span>
-      <div className="landing-carousel-scrim"/>
-      <div className="landing-carousel-caption"><strong>{slide.title}</strong><span>{slide.body}</span></div>
-     </article>)}
-    </div>
-   </div>
+   <Link className="landing-v1-primary" href="/events">{tr(locale,"See this week's events",'이번 주 이벤트 보기')}</Link>
   </section>
 
-  <section className="landing-service-section">
-   <div className="landing-section-copy">
+  <section className="landing-v1-section">
+   <div className="landing-v1-section-heading">
+    <span className="landing-v1-eyebrow">{tr(locale,'TWO EVENT TYPES','두 가지 이벤트 타입')}</span>
     <h2>{tr(locale,'Pick Your Kind of Event','원하는 이벤트를 골라보세요')}</h2>
-    <p>{tr(locale,'Two ways to meet, both built around real conversations.','두 가지 방식 모두 진짜 대화를 중심으로 만들어졌어요.')}</p>
+    <p>{tr(locale,'Both event types are built around real conversations, with a different format for each.','두 이벤트 타입 모두 진짜 대화를 중심으로 하며, 진행 방식은 서로 다릅니다.')}</p>
    </div>
-   <div className="landing-service-list" aria-label={tr(locale,'Roundy experiences','Roundy 경험')}>
-    <Link href="/events?category=1%3A1%20Speed%20Mingle" className="landing-service-card mingle">
-     <span className="landing-service-icon"><Heart size={22}/></span>
-     <span className="landing-service-copy">
-      <strong>{tr(locale,'1:1 Mingle','1:1 밍글')}</strong>
-      <span>{tr(locale,'15-minute rounds. Meet first; the basic profile comes later.','15분씩 대화하며 먼저 만나보세요. 기본 프로필은 그다음에 공개됩니다.')}</span>
-      <b>{tr(locale,'Explore','둘러보기')} <ArrowRight size={15}/></b>
-     </span>
-    </Link>
-    <Link href="/events?category=Business%20Talk" className="landing-service-card talk">
-     <span className="landing-service-icon"><MessageCircle size={22}/></span>
-     <span className="landing-service-copy">
-      <strong>{tr(locale,'Business Talk','비즈니스 토크')}</strong>
-      <span>{tr(locale,'English-only small-group conversations around one good topic.','하나의 좋은 주제로 나누는 영어 전용 소그룹 대화입니다.')}</span>
-      <b>{tr(locale,'Explore','둘러보기')} <ArrowRight size={15}/></b>
-     </span>
-    </Link>
+   <div className="landing-v1-event-type">
+    <div className="landing-v1-event-type-image"><Image src="/images/roundy-mingle-hero.webp" alt={tr(locale,'1:1 Mingle Event','1:1 밍글 이벤트')} fill sizes="342px"/></div>
+    <span className="landing-v1-event-type-label mingle">1:1 / MUTUAL MATCH</span>
+    <h3>{tr(locale,'1:1 Mingle','1:1 밍글')}</h3>
+    <p>{tr(locale,'Meet the person before the profile. Short rotations, a later profile reveal, then private mutual matching.','프로필보다 사람을 먼저 만나보세요. 짧은 로테이션, 이후 프로필 공개, 그리고 비공개 상호 매칭으로 이어집니다.')}</p>
+    <Link className="landing-v1-text-link" href="/how-it-works">{tr(locale,'How 1:1 Mingle works','1:1 밍글 이용 방법')}<ArrowRight size={18} aria-hidden="true"/></Link>
+   </div>
+   <div className="landing-v1-event-type">
+    <div className="landing-v1-event-type-image"><Image src="/images/roundy-business-hero.webp" alt={tr(locale,'Business Talk Event','비즈니스 토크 이벤트')} fill sizes="342px"/></div>
+    <span className="landing-v1-event-type-label">SMALL GROUP / ENGLISH</span>
+    <h3>{tr(locale,'Business Talk','비즈니스 토크')}</h3>
+    <p>{tr(locale,'Skip networking small talk. Start with one topic worth discussing and meet people through the way they think.','네트워킹용 스몰토크 대신 이야기할 가치가 있는 한 가지 주제로 시작합니다. 생각하는 방식을 통해 사람을 만나보세요.')}</p>
+    <Link className="landing-v1-text-link" href="/how-it-works">{tr(locale,'How Business Talk works','비즈니스 토크 이용 방법')}<ArrowRight size={18} aria-hidden="true"/></Link>
    </div>
   </section>
 
-  <section className="landing-upcoming-v2">
-   <div className="landing-section-heading"><h2>{tr(locale,'Upcoming in Seoul','서울에서 곧 열려요')}</h2><Link href="/events">{tr(locale,'See all events','모든 이벤트 보기')} →</Link></div>
-   {upcoming.length>0?<div className="landing-event-strip">{upcoming.map(item=>item.kind==='roundy'?<LandingEventPreview key={'roundy-'+item.event.id} e={item.event} locale={locale}/>:<LandingLegacyBusinessTalkPreview key={'legacy-'+item.event.id} e={item.event} locale={locale}/>)}</div>:<p className="landing-empty-events">{tr(locale,'New events are on their way.','새로운 이벤트를 준비하고 있어요.')}</p>}
+  <section className="landing-v1-section landing-v1-upcoming">
+   <div className="landing-v1-section-heading">
+    <span className="landing-v1-eyebrow">{tr(locale,'NEXT UP','다음 이벤트')}</span>
+    <h2>{tr(locale,'Upcoming in Seoul','서울에서 곧 열려요')}</h2>
+    <p>{tr(locale,'Choose the Event Type first, then the date.','이벤트 타입을 먼저 고른 뒤 날짜를 선택하세요.')}</p>
+   </div>
+   {upcoming.length>0?<div className="landing-v1-event-list">{upcoming.map(item=>item.kind==='roundy'?<LandingEventPreview key={'roundy-'+item.event.id} e={item.event} locale={locale} attendees={attendeesByEvent[item.event.id]}/>:<LandingLegacyBusinessTalkPreview key={'legacy-'+item.event.id} e={item.event} locale={locale}/>)}</div>:<p className="landing-v1-empty">{tr(locale,'New events are being prepared.','새로운 이벤트를 준비하고 있어요.')}</p>}
+   <Link className="landing-v1-text-link landing-v1-all-events" href="/events">{tr(locale,'See all events','모든 이벤트 보기')}<ArrowRight size={18} aria-hidden="true"/></Link>
   </section>
 
-  <section className="landing-how-v2">
-   <div className="landing-section-copy">
-    <h2>{tr(locale,'How Roundy works','Roundy 이용 방법')}</h2>
-    <p>{tr(locale,'Enough structure to make meeting strangers easy. Not so much that it feels like an interview.','낯선 사람과도 편하게 만날 수 있을 만큼만 구조를 두었어요. 면접처럼 느껴지지는 않게요.')}</p>
+  <section className="landing-v1-section">
+   <div className="landing-v1-section-heading">
+    <span className="landing-v1-eyebrow">{tr(locale,'HOW ROUNDY WORKS','ROUNDY 이용 방법')}</span>
+    <h2>{tr(locale,'How Roundy Works','Roundy 이용 방법')}</h2>
+    <p>{tr(locale,'Enough structure to make meeting strangers easy, without making it feel like an interview.','낯선 사람과도 편하게 만날 수 있을 만큼만 구조를 두되, 면접처럼 느껴지지는 않게 합니다.')}</p>
    </div>
-   <div className="landing-how-list">
-    {howSteps.map(step=><article className="landing-info-card" key={step.label}><span className="landing-card-eyebrow">{step.label}</span><h3>{step.title}</h3><p>{step.body}</p></article>)}
+   <div className="landing-v1-steps">
+    {howSteps.map(step=><article className="landing-v1-step" key={step.label}><span>{step.label}</span><div><h3>{step.title}</h3><p>{step.body}</p></div></article>)}
    </div>
   </section>
 
-  <section className="landing-trust-v2">
-   <div className="landing-section-copy">
-    <h2>{tr(locale,'Trust is built in','신뢰를 기본으로 만들었어요')}</h2>
-    <p>{tr(locale,'Verification, privacy and clear safety rules are part of every Roundy event.','인증, 개인정보 보호, 명확한 안전 규칙이 모든 Roundy 이벤트에 포함됩니다.')}</p>
-   </div>
-   <article className="landing-info-card landing-trust-card">
-    <span className="landing-card-eyebrow">{tr(locale,'PROFILE','프로필')}</span>
-    <h3>{tr(locale,'Verified before joining','참여 전 인증')}</h3>
-    <p>{tr(locale,'Profiles and verification are reviewed before members can join events.','이벤트에 참여하기 전에 프로필과 인증 정보를 검토합니다.')}</p>
-   </article>
-   <article className="landing-info-card landing-trust-card">
-    <span className="landing-card-eyebrow">{tr(locale,'PRIVACY','개인정보')}</span>
-    <h3>{tr(locale,'Private until it’s mutual','서로 선택하기 전까지는 비공개')}</h3>
-    <p>{tr(locale,'Your profile and choices stay private. Contact details are shared only after a mutual match.','프로필과 선택은 비공개로 유지됩니다. 연락처는 서로 매칭된 뒤에만 공개됩니다.')}</p>
-   </article>
-   <Link className="landing-inline-link" href="/how-it-works">{tr(locale,'How it works & safety','이용 방법 및 안전')} →</Link>
-  </section>
-
-  <section className="landing-community-proof">
-   <span className="landing-proof-eyebrow">{tr(locale,'BUILT FROM REAL COMMUNITY','실제 커뮤니티에서 시작했습니다')}</span>
+  <section className="landing-v1-proof">
+   <span className="landing-v1-eyebrow">{tr(locale,'BUILT FROM REAL COMMUNITY','실제 커뮤니티에서 시작했습니다')}</span>
    <strong>80+</strong>
-   <p>{tr(locale,'Before Roundy, our earlier offline conversation community grew to 80+ paid members. We built Roundy around what actually helps strangers connect.','Roundy 이전에 운영한 오프라인 대화 커뮤니티는 누적 유료 멤버 80명 이상으로 성장했습니다. 낯선 사람들이 실제로 연결되는 데 도움이 되는 경험을 바탕으로 Roundy를 만들었습니다.')}</p>
-   <Link href="/about">{tr(locale,'About Roundy','Roundy 소개')} →</Link>
+   <p>{tr(locale,'Before Roundy, our earlier offline conversation community grew to 80+ cumulative paid members.','Roundy 이전에 운영한 오프라인 대화 커뮤니티는 누적 유료 멤버 80명 이상으로 성장했습니다.')}</p>
+   <div className="landing-v1-proof-divider"/>
+   <h3>{tr(locale,'Profiles Are Reviewed Before Joining','참여 전 프로필 검토')}</h3>
+   <p>{tr(locale,'Verification handles and private details are not shown to other attendees.','인증 계정과 비공개 정보는 다른 참가자에게 공개되지 않습니다.')}</p>
+   <h3>{tr(locale,'Contact Stays Private Until It Is Mutual','서로 선택하기 전까지 연락처는 비공개')}</h3>
+   <p>{tr(locale,'For 1:1 Mingle, contact details are shared only after a mutual Match.','1:1 밍글에서는 서로 매칭된 뒤에만 연락처가 공개됩니다.')}</p>
+   <Link className="landing-v1-text-link" href="/how-it-works">{tr(locale,'How it works & safety','이용 방법 및 안전')}<ArrowRight size={18} aria-hidden="true"/></Link>
   </section>
 
-  <section className="landing-final-cta">
-   <h2>{tr(locale,'Ready to meet offline?','오프라인에서 만나볼 준비가 됐나요?')}</h2>
-   <p>{tr(locale,'Pick an upcoming event and see who you meet.','다가오는 이벤트를 골라 어떤 사람을 만나게 될지 확인해 보세요.')}</p>
-   <Link href="/events">{tr(locale,'Browse all events','모든 이벤트 둘러보기')}</Link>
+  <section className="landing-v1-final">
+   <h2>{tr(locale,'Choose Your Event','이벤트 선택')}</h2>
+   <p>{tr(locale,'See the next published Events and choose the Format that fits.','다음 공개 이벤트를 확인하고 나에게 맞는 진행 방식을 선택하세요.')}</p>
+   <Link className="landing-v1-primary" href="/events">{tr(locale,'See all events','모든 이벤트 보기')}</Link>
   </section>
  </div>;
 }
@@ -272,7 +256,7 @@ export function App({path}:{path:string}){
 
  let content:ReactNode;
  let wizardHeader:ReactNode=null;
- if(route==='home'||route==='discover')content=<LandingPage events={publicEvents} legacyTalks={legacyTalks} locale={locale}/>;
+ if(route==='home'||route==='discover')content=<LandingPage events={publicEvents} legacyTalks={legacyTalks} locale={locale} attendeesByEvent={attendeesByEvent}/>;
  else if(route==='payment')content=<><section className="intro payment-referral-intro"><p className="eyebrow">{tr(locale,'REFERRAL CHECKOUT','추천 결제')}</p><h1>{tr(locale,'Choose an event','이벤트를 선택하세요')}</h1><p>{/^[A-Z0-9]{6}$/.test(referralParam)?tr(locale,`Referral code ${referralParam} is ready and will be filled in automatically at checkout.`,`추천 코드 ${referralParam}가 준비되었습니다. 결제 화면에 자동으로 입력됩니다.`):tr(locale,'Choose an event, then enter your referral code at checkout.','이벤트를 선택한 뒤 결제 화면에서 추천 코드를 입력하세요.')}</p></section><div className="event-grid">{publicEvents.map(e=><EventCard key={e.id} e={e} locale={locale} attendees={attendeesByEvent[e.id]} href={'/events/'+e.slug+(/^[A-Z0-9]{6}$/.test(referralParam)?'?ref='+encodeURIComponent(referralParam):'')}/>)}</div>{publicEvents.length===0&&<Empty title={tr(locale,'New events are on their way.','새로운 이벤트를 준비하고 있어요.')} body={tr(locale,'Check back soon for an event where you can use your referral code.','추천 코드를 사용할 수 있는 이벤트가 열리는지 곧 다시 확인해 주세요.')}/>}</>;
  else if(route==='events'&&!event){
   const now=Date.now();
