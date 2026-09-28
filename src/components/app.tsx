@@ -134,7 +134,7 @@ function LandingPage({events,legacyTalks,locale,attendeesByEvent}:{events:Event[
    <div className="landing-v1-section-heading">
     <span className="landing-v1-eyebrow">{tr(locale,'TWO EVENT TYPES','두 가지 이벤트 타입')}</span>
     <h2>{tr(locale,'Pick Your Kind of Event','원하는 이벤트를 골라보세요')}</h2>
-    <p>{tr(locale,'Both Event Types are built around real conversations, with a different Format for each.','두 이벤트 타입 모두 진짜 대화를 중심으로 하며, 진행 방식은 서로 다릅니다.')}</p>
+    <p>{tr(locale,'Both event types are built around real conversations, with a different format for each.','두 이벤트 타입 모두 진짜 대화를 중심으로 하며, 진행 방식은 서로 다릅니다.')}</p>
    </div>
    <div className="landing-v1-event-type">
     <div className="landing-v1-event-type-image"><Image src="/images/roundy-mingle-hero.webp" alt={tr(locale,'1:1 Mingle Event','1:1 밍글 이벤트')} fill sizes="342px"/></div>
