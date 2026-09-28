@@ -2105,3 +2105,27 @@ body:not(:has(.route-admin)) .global-toast{border-radius:16px;padding:13px 14px 
  .route-me .content{min-height:0;padding-bottom:24px}
  .route-me .site-footer{margin-top:0}
 }
+
+
+/* Compact mobile match reveal cards for up to three mutual matches. */
+@container roundy (max-width:759px){
+ .route-matches .content{padding-top:16px}
+ .route-matches .match-pagination{padding:0 18px 10px}
+ .route-matches .match-reveal{margin:0 18px;padding:16px 20px 20px;border-radius:24px;min-height:0}
+ .route-matches .match-reveal-top{margin-bottom:26px}
+ .route-matches .match-pair{margin-bottom:22px;padding-right:0}
+ .route-matches .match-pair .match-photo{width:104px;height:104px}
+ .route-matches .match-pair .match-photo+.match-photo{margin-left:-12px}
+ .route-matches .match-reveal h1{font-size:24px;line-height:1.12}
+ .route-matches .match-reveal-message{margin-top:10px;font-size:15px;line-height:1.38}
+ .route-matches .match-reveal-bottom{margin-top:28px;padding-top:0;gap:12px}
+ .route-matches .match-reveal-bottom .button{min-height:48px;padding:12px 18px;font-size:14px}
+ .route-matches .match-reveal .match-encounter{font-size:11px;line-height:1.35}
+ .route-matches .match-reveal .match-encounter>svg{width:16px;height:16px}
+}
+@container roundy (max-width:359px){
+ .route-matches .match-reveal{margin:0 14px;padding:15px 18px 18px}
+ .route-matches .match-pair .match-photo{width:92px;height:92px}
+ .route-matches .match-reveal-top{margin-bottom:22px}
+ .route-matches .match-reveal h1{font-size:22px}
+}
