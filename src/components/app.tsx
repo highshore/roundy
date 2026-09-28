@@ -120,11 +120,11 @@ function LandingPage({events,legacyTalks,locale,attendeesByEvent}:{events:Event[
  return <div className="landing landing-v1">
   <section className="landing-v1-hero">
    <span className="landing-v1-eyebrow">ROUNDY / SEOUL</span>
-   <h1>{tr(locale,'Two Ways to Meet\nBoth Happen Offline','두 가지 만남 방식\n모두 오프라인에서')}</h1>
+   <h1>{tr(locale,'Two Ways to Meet, Both Happen Offline','두 가지 만남 방식, 모두 오프라인에서')}</h1>
    <p>{tr(locale,'Choose a 1:1 Mingle or Business Talk. Less browsing, more real conversation.','1:1 밍글 또는 비즈니스 토크를 선택하세요. 탐색은 줄이고, 실제 대화는 더 많이.')}</p>
    <div className="landing-v1-hero-media" aria-label={tr(locale,'1:1 Mingle and Business Talk','1:1 밍글과 비즈니스 토크')}>
-    <div className="landing-v1-hero-main"><Image src="/images/roundy-mingle-hero.webp" alt={tr(locale,'1:1 Mingle Event','1:1 밍글 이벤트')} fill priority sizes="220px"/></div>
-    <div className="landing-v1-hero-side"><Image src="/images/roundy-business-hero.webp" alt={tr(locale,'Business Talk Event','비즈니스 토크 이벤트')} fill priority sizes="110px"/></div>
+    <div className="landing-v1-hero-main"><Image src="/images/roundy-mingle-hero.webp" alt={tr(locale,'1:1 Mingle Event','1:1 밍글 이벤트')} fill priority sizes="165px"/></div>
+    <div className="landing-v1-hero-side"><Image src="/images/roundy-business-hero.webp" alt={tr(locale,'Business Talk Event','비즈니스 토크 이벤트')} fill priority sizes="165px"/></div>
     <span className="landing-v1-hero-caption">{tr(locale,'1:1 Mingle / Business Talk','1:1 밍글 / 비즈니스 토크')}</span>
    </div>
    <Link className="landing-v1-primary" href="/events">{tr(locale,"See this week's events",'이번 주 이벤트 보기')}</Link>
