@@ -5,7 +5,7 @@ const db=new PGlite();
 await db.exec(`create role anon; create role authenticated; create role service_role bypassrls;
 create schema auth; create schema roundy_private;
 create table auth.users(id uuid primary key,raw_user_meta_data jsonb);`);
-await db.exec(await readFile('supabase/migrations/20260928035447_username_signin.sql','utf8'));
+await db.exec(await readFile('supabase/migrations/20260928035659_username_signin.sql','utf8'));
 await db.query(`insert into auth.users values('11111111-1111-4111-8111-111111111111','{"username":"Review_User"}')`);
 assert.equal((await db.query('select username from public.account_usernames')).rows[0].username,'review_user');
 await assert.rejects(db.query(`insert into auth.users values('22222222-2222-4222-8222-222222222222','{"username":"REVIEW_USER"}')`),/unique/);
