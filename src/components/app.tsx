@@ -141,14 +141,14 @@ function LandingPage({events,legacyTalks,locale,attendeesByEvent}:{events:Event[
     <span className="eyebrow landing-v1-event-type-label mingle">1:1 / MUTUAL MATCH</span>
     <h3>{tr(locale,'1:1 Mingle','1:1 밍글')}</h3>
     <p>{tr(locale,'Meet the person before the profile. Short rotations, a later profile reveal, then private mutual matching.','프로필보다 사람을 먼저 만나보세요. 짧은 로테이션, 이후 프로필 공개, 그리고 비공개 상호 매칭으로 이어집니다.')}</p>
-    <Link className="landing-v1-text-link" href="/how-it-works">{tr(locale,'How 1:1 Mingle works','1:1 밍글 이용 방법')}<ArrowRight size={18} aria-hidden="true"/></Link>
+    <Link className="landing-v1-text-link" href="/how-it-works/mingle">{tr(locale,'How 1:1 Mingle works','1:1 밍글 이용 방법')}<ArrowRight size={18} aria-hidden="true"/></Link>
    </div>
    <div className="landing-v1-event-type">
     <div className="landing-v1-event-type-image"><Image src="/images/roundy-business-hero.webp" alt={tr(locale,'Business Talk Event','비즈니스 토크 이벤트')} fill sizes="342px"/></div>
     <span className="eyebrow landing-v1-event-type-label">SMALL GROUP / ENGLISH</span>
     <h3>{tr(locale,'Business Talk','비즈니스 토크')}</h3>
     <p>{tr(locale,'Skip networking small talk. Start with one topic worth discussing and meet people through the way they think.','네트워킹용 스몰토크 대신 이야기할 가치가 있는 한 가지 주제로 시작합니다. 생각하는 방식을 통해 사람을 만나보세요.')}</p>
-    <Link className="landing-v1-text-link" href="/how-it-works">{tr(locale,'How Business Talk works','비즈니스 토크 이용 방법')}<ArrowRight size={18} aria-hidden="true"/></Link>
+    <Link className="landing-v1-text-link" href="/how-it-works/business-talk">{tr(locale,'How Business Talk works','비즈니스 토크 이용 방법')}<ArrowRight size={18} aria-hidden="true"/></Link>
    </div>
   </section>
 
@@ -349,7 +349,77 @@ export function App({path}:{path:string}){
  else content=<><div className="profile-summary"><span className="avatar">{p.photos[0]?<Image className="avatar-image" src={p.photos[0]} alt={tr(locale,'Your profile photo','내 프로필 사진')} fill sizes="76px" unoptimized/>:<UserRound size={40}/>}</span><div className="profile-summary-copy"><h2>{p.full_name||tr(locale,'My Profile','내 프로필')}</h2><div className="profile-status-line"><span className={'verification-tag '+(verified?'verified':'unverified')}>{verified?<Check size={13}/>:<ShieldCheck size={13}/>} {verified?tr(locale,'Verified','인증 완료'):tr(locale,'Unverified','미인증')}</span></div></div></div><Button href={profileComplete(p)?'/onboarding/verification/saturday-social':'/onboarding/basics/saturday-social'}>{eligibleToApply?'Edit profile':'Complete profile'}</Button><Card label={tr(locale,'REFERRAL CODE','추천 코드')} title={tr(locale,'Invite someone to Roundy','Roundy에 친구 초대하기')}>{myReferralCode?<><p className="referral-code-value">{myReferralCode}</p><p>{tr(locale,'Friends can use this code once at checkout for a discount. Your own code cannot be used on your account.','친구는 결제 화면에서 이 코드를 한 번 사용해 할인을 받을 수 있어요. 본인 계정에서는 자신의 코드를 사용할 수 없습니다.')}</p><Button secondary onClick={()=>void shareReferralCode()}><Share2 size={18}/>{tr(locale,'Share referral code','추천 코드 공유')}</Button></>:<><p>{tr(locale,'Generate a personal code to give a friend a Roundy discount.','개인 추천 코드를 만들어 친구에게 Roundy 할인을 공유해 보세요.')}</p><Button secondary disabled={busy} onClick={()=>void generateReferralCode()}>{tr(locale,'Generate referral code','추천 코드 생성')}</Button></>}</Card><div className="menu-list">{[...[['events','My Events',CalendarDays],['tickets','Tickets & credits',Ticket],['verification','Verification',ShieldCheck],['/feedback',tr(locale,'First meetup feedback','첫 모임 피드백'),MessageCircle],['safety','Safety & reporting',Heart],['settings','Settings',UserRound]],...(isAdmin?[['/admin','Admin',ShieldCheck] as [string,string,typeof ShieldCheck]]:[])].map(([url,title,Icon])=>{const I=Icon as typeof Heart;const href=String(url).startsWith('/')?String(url):'/me/'+String(url);const ko=String(title)==='Admin'?'관리자':String(title);return <Link key={String(url)} href={href}><I size={22}/><span>{tr(locale,String(title),ko)}</span><ChevronRight size={18}/></Link>;})}</div></>;
  }
  else if(route==='check-in'&&parts[1])content=<AdminQrCheckIn token={parts[1]} locale={locale}/>;
- else if(route==='how-it-works')content=<>{[['01 / JOIN','Find your evening','Create a reusable profile and get verified once. Then reserve an available event directly with a valid ticket or payment.'],['02 / MEET','A table for two','Bring ID and arrive early. Meet through 15-minute English rounds. No alcohol is provided. Entry closes 15 minutes after the start.'],['03 / CONNECT','Only when it is mutual','Choose up to 3 Yes. Both say Yes? You see each other’s profile, name and phone number after the event.']].map(([label,title,body])=><Card key={label} label={label} title={title}>{body}</Card>)}<Card label="PRIVACY" title="No roster. No endless browsing.">Photos, identity, social handles and choices are private. Rich dating profiles and phone numbers are available only to mutual matches. Verification handles are never shared.</Card><Card label="SAFETY" title="Respect is the entry requirement.">Harassment, hate speech, intoxication, recording and sharing identities can lead to immediate removal and permanent exclusion. Reports identify the reporter to staff only. Reported pairs should not be seated together in future events.</Card><Button href="/me/safety">Report a concern</Button><Button secondary href="/discover">Explore events</Button></>;
+ else if(route==='how-it-works'){
+  const howType=parts[1]??'';
+  const howNav=<nav className="how-format-switch" aria-label={tr(locale,'Choose an event format','이벤트 방식 선택')}>
+   <Link className={howType==='mingle'?'active':''} href="/how-it-works/mingle">{tr(locale,'1:1 Mingle','1:1 밍글')}</Link>
+   <Link className={howType==='business-talk'?'active':''} href="/how-it-works/business-talk">{tr(locale,'Business Talk','비즈니스 토크')}</Link>
+  </nav>;
+  if(howType==='mingle')content=<div className="how-page">
+   <header className="how-hero">
+    <p className="eyebrow">1:1 MINGLE / MUTUAL MATCH</p>
+    <h1>{tr(locale,'Meet first. Match later.','먼저 만나고, 매칭은 나중에')}</h1>
+    <p>{tr(locale,'A structured 1:1 rotation where you meet in person before deciding who you want to know better.','프로필을 먼저 넘겨보는 대신 실제로 1:1로 만나본 뒤, 더 알아가고 싶은 사람을 선택하는 방식입니다.')}</p>
+   </header>
+   {howNav}
+   <div className="how-step-list">
+    {[
+     [tr(locale,'01 / RESERVE','01 / 예약'),tr(locale,'Choose a 1:1 Mingle','1:1 밍글 선택'),tr(locale,'Complete your profile and verification once, then reserve an available Mingle with a valid ticket or payment.','프로필과 인증을 한 번 완료한 뒤, 참여 가능한 1:1 밍글을 티켓 또는 결제로 예약합니다.')],
+     [tr(locale,'02 / ROTATE','02 / 로테이션'),tr(locale,'Meet one person at a time','한 사람씩 직접 만나기'),tr(locale,'Arrive early with photo ID. At the event, you move through short hosted 1:1 conversations instead of browsing profiles beforehand.','사진이 있는 신분증을 지참하고 일찍 도착하세요. 현장에서는 프로필을 미리 보는 대신 짧은 1:1 대화를 순서대로 진행합니다.')],
+     [tr(locale,'03 / CHOOSE','03 / 선택'),tr(locale,'Pick up to 3 Yes choices','최대 3명까지 Yes 선택'),tr(locale,'Your choices stay private. The other person cannot see whether you chose them unless the choice is mutual.','선택 결과는 비공개입니다. 서로 선택하기 전에는 상대방이 내가 누구를 선택했는지 알 수 없습니다.')],
+     [tr(locale,'04 / MATCH','04 / 매칭'),tr(locale,'Only mutual choices unlock','서로 선택했을 때만 공개'),tr(locale,'When both people say Yes, the match appears after the event and you can see the profile and contact details needed to continue the conversation.','서로 Yes를 선택하면 이벤트 종료 후 매칭이 생성되고, 대화를 이어갈 수 있도록 프로필과 연락처가 공개됩니다.')]
+    ].map(([label,title,body])=><Card key={label} label={label} title={title}>{body}</Card>)}
+   </div>
+   <Card label={tr(locale,'PRIVACY','개인정보')} title={tr(locale,'Private until it is mutual','서로 선택하기 전까지 비공개')}>{tr(locale,'Photos, verification handles, choices and contact details are not shown as a public attendee roster. Verification handles are never shared with other attendees.','사진, 인증 계정, 선택 결과, 연락처는 공개 참가자 명단처럼 노출되지 않습니다. 인증에 사용한 계정은 다른 참가자에게 공유되지 않습니다.')}</Card>
+   <Card label={tr(locale,'SAFETY','안전')} title={tr(locale,'Respect is the entry requirement','존중이 참여의 기본 조건입니다')}>{tr(locale,'Harassment, hate speech, intoxication, recording or sharing another person’s identity can lead to removal and exclusion from future events.','괴롭힘, 혐오 표현, 과도한 음주 상태, 무단 촬영 또는 타인의 신원 공유는 현장 퇴장 및 향후 참여 제한 사유가 될 수 있습니다.')}</Card>
+   <Button href="/events?category=1%3A1%20Speed%20Mingle">{tr(locale,'See 1:1 Mingle events','1:1 밍글 이벤트 보기')}</Button>
+   <Button secondary href="/me/safety">{tr(locale,'Report a concern','문제 신고하기')}</Button>
+  </div>;
+  else if(howType==='business-talk')content=<div className="how-page">
+   <header className="how-hero">
+    <p className="eyebrow">BUSINESS TALK / SMALL GROUP ENGLISH</p>
+    <h1>{tr(locale,'Skip small talk. Start with an idea.','스몰토크 대신, 이야기할 주제로 시작하세요')}</h1>
+    <p>{tr(locale,'Business Talk uses the discussion format developed through our earlier 1 Cup English community: a prepared topic, useful material and a hosted small-group conversation.','비즈니스 토크는 기존 영어 한잔에서 운영해 온 토론 방식을 바탕으로 합니다. 준비된 주제와 자료, 질문을 중심으로 소그룹 영어 대화를 진행합니다.')}</p>
+   </header>
+   {howNav}
+   <div className="how-step-list">
+    {[
+     [tr(locale,'01 / CHOOSE','01 / 주제 선택'),tr(locale,'Choose a topic worth discussing','이야기할 가치가 있는 주제 선택'),tr(locale,'Pick a Business Talk around business, technology, careers, society or culture. Each event is built around a specific discussion theme.','비즈니스, 기술, 커리어, 사회, 문화 등 하나의 명확한 토론 주제를 중심으로 이벤트를 선택합니다.')],
+     [tr(locale,'02 / PREVIEW','02 / 미리보기'),tr(locale,'Check the material if you want','원한다면 자료를 미리 확인'),tr(locale,'The topic, short reading and discussion questions are provided in advance when available. Preparation is optional, but a quick look helps you go deeper once the conversation starts.','가능한 경우 주제, 짧은 읽을거리, 토론 질문을 미리 제공합니다. 사전 준비는 필수가 아니지만, 가볍게 확인하면 현장에서 더 깊은 대화를 나누기 좋습니다.')],
+     [tr(locale,'03 / DISCUSS','03 / 토론'),tr(locale,'Join a hosted small group','진행자가 있는 소그룹 토론'),tr(locale,'A facilitator keeps the discussion moving with prepared prompts and follow-up questions. The point is not random icebreakers or “How was your weekend?” small talk, but explaining your view and responding to other people’s ideas in English.','진행자가 준비된 질문과 추가 질문으로 대화를 이어갑니다. 랜덤 아이스브레이킹이나 “주말 어땠어요?”식 스몰토크가 아니라, 자신의 생각을 영어로 설명하고 다른 사람의 관점에 반응하는 데 집중합니다.')],
+     [tr(locale,'04 / CONNECT','04 / 연결'),tr(locale,'Meet people through how they think','생각하는 방식을 통해 사람을 만나기'),tr(locale,'Business Talk has no Yes/No matching step. You meet people naturally through the group conversation and can keep in touch when both sides want to continue.','비즈니스 토크에는 Yes/No 매칭 단계가 없습니다. 그룹 대화 속에서 자연스럽게 서로를 알아가고, 양쪽이 원할 때 관계를 이어갑니다.')]
+    ].map(([label,title,body])=><Card key={label} label={label} title={title}>{body}</Card>)}
+   </div>
+   <Card label={tr(locale,'FROM 1 CUP ENGLISH','영어 한잔 방식')} title={tr(locale,'Discussion before networking','네트워킹보다 대화가 먼저')}>{tr(locale,'The format comes from the recurring 1 Cup English meetups: prepared discussion topics, facilitator-led conversation and a room designed for people who want more than a generic language exchange.','영어 한잔의 반복형 모임에서 사용해 온 방식처럼, 준비된 토론 주제와 진행자 중심의 대화를 사용합니다. 일반적인 언어교환보다 내용 있는 대화를 원하는 사람을 위한 구조입니다.')}</Card>
+   <Card label={tr(locale,'SAFETY','안전')} title={tr(locale,'A respectful room for everyone','누구에게나 존중받는 대화 공간')}>{tr(locale,'Do not record others, share private information without permission, harass participants or dominate the room. Staff can intervene when conduct makes the discussion unsafe or uncomfortable.','다른 참가자를 무단 촬영하거나 개인정보를 허락 없이 공유하지 마세요. 괴롭힘이나 일방적인 대화 독점 등 다른 사람을 불편하게 만드는 행동에는 운영진이 개입할 수 있습니다.')}</Card>
+   <Button href="/events?category=Business%20Talk">{tr(locale,'See Business Talk events','비즈니스 토크 이벤트 보기')}</Button>
+   <Button secondary href="/me/safety">{tr(locale,'Report a concern','문제 신고하기')}</Button>
+  </div>;
+  else content=<div className="how-page">
+   <header className="how-hero">
+    <p className="eyebrow">{tr(locale,'HOW ROUNDY WORKS','ROUNDY 이용 방법')}</p>
+    <h1>{tr(locale,'Two formats. Two different ways to meet.','두 가지 모임, 서로 다른 만남 방식')}</h1>
+    <p>{tr(locale,'1:1 Mingle is built around private mutual matching. Business Talk is a hosted small-group English discussion. Choose the format that matches what you want from the evening.','1:1 밍글은 비공개 상호 매칭을 중심으로 하고, 비즈니스 토크는 진행자가 이끄는 소그룹 영어 토론입니다. 원하는 만남 방식에 맞춰 선택하세요.')}</p>
+   </header>
+   {howNav}
+   <div className="how-format-grid">
+    <Link href="/how-it-works/mingle" className="how-format-card">
+     <span className="eyebrow">1:1 / MUTUAL MATCH</span>
+     <h2>{tr(locale,'1:1 Mingle','1:1 밍글')}</h2>
+     <p>{tr(locale,'Short 1:1 rotations, private Yes choices and contact details only after a mutual match.','짧은 1:1 로테이션 후 비공개 Yes 선택을 하고, 서로 선택했을 때만 연락처가 공개됩니다.')}</p>
+     <span>{tr(locale,'See how it works','이용 방법 보기')} <ArrowRight size={17}/></span>
+    </Link>
+    <Link href="/how-it-works/business-talk" className="how-format-card">
+     <span className="eyebrow">SMALL GROUP / ENGLISH</span>
+     <h2>{tr(locale,'Business Talk','비즈니스 토크')}</h2>
+     <p>{tr(locale,'Prepared topics, optional pre-reading and facilitator-led discussion based on the 1 Cup English format.','영어 한잔 방식처럼 준비된 주제와 선택형 사전 자료, 진행자 중심의 소그룹 토론으로 진행합니다.')}</p>
+     <span>{tr(locale,'See how it works','이용 방법 보기')} <ArrowRight size={17}/></span>
+    </Link>
+   </div>
+   <Card label={tr(locale,'SHARED STANDARD','공통 운영 원칙')} title={tr(locale,'Verification, privacy and respect','인증, 개인정보 보호, 존중')}>{tr(locale,'Both formats use reviewed profiles and clear conduct rules. Private verification information is not exposed to other attendees, and safety reports are reviewed by staff.','두 모임 모두 검토된 프로필과 명확한 운영 규칙을 사용합니다. 인증에 사용한 비공개 정보는 다른 참가자에게 노출되지 않으며, 안전 신고는 운영진이 검토합니다.')}</Card>
+   <Button href="/events">{tr(locale,'Explore all events','모든 이벤트 보기')}</Button>
+  </div>;
+ }
  else if(route==='feedback')content=<FeedbackPage locale={locale}/>;
  else if(route==='about')content=<AboutUs locale={locale}/>;
  else if(route==='terms')content=<TermsOfUse locale={locale}/>;
