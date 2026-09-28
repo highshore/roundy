@@ -158,7 +158,7 @@ function LandingPage({events,legacyTalks,locale,attendeesByEvent}:{events:Event[
     <h2>{tr(locale,'Upcoming in Seoul','서울에서 곧 열려요')}</h2>
     <p>{tr(locale,'Choose the Event Type first, then the date.','이벤트 타입을 먼저 고른 뒤 날짜를 선택하세요.')}</p>
    </div>
-   {upcoming.length>0?<div className="landing-v1-event-list">{upcoming.map(item=>item.kind==='roundy'?<LandingEventPreview key={'roundy-'+item.event.id} e={item.event} locale={locale} attendees={attendeesByEvent[item.event.id]}/>:<LandingLegacyBusinessTalkPreview key={'legacy-'+item.event.id} e={item.event} locale={locale}/>)}</div>:<p className="landing-v1-empty">{tr(locale,'New Events are being prepared.','새로운 이벤트를 준비하고 있어요.')}</p>}
+   {upcoming.length>0?<div className="landing-v1-event-list">{upcoming.map(item=>item.kind==='roundy'?<LandingEventPreview key={'roundy-'+item.event.id} e={item.event} locale={locale} attendees={attendeesByEvent[item.event.id]}/>:<LandingLegacyBusinessTalkPreview key={'legacy-'+item.event.id} e={item.event} locale={locale}/>)}</div>:<p className="landing-v1-empty">{tr(locale,'New events are being prepared.','새로운 이벤트를 준비하고 있어요.')}</p>}
    <Link className="landing-v1-text-link landing-v1-all-events" href="/events">{tr(locale,'See all events','모든 이벤트 보기')}<ArrowRight size={18} aria-hidden="true"/></Link>
   </section>
 
