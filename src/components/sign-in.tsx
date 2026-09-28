@@ -6,6 +6,7 @@ import { ArrowLeft, MessageCircle, Smartphone, Eye, EyeOff, Mail } from 'lucide-
 import { createClient } from '@/lib/supabase/client';
 import { authConfigured, safeReturnPath } from '@/lib/auth-routing';
 import { tr, type Locale } from '@/lib/locale';
+import { LegalConsentDialog, recordLegalConsent } from './legal-consent';
 import styles from './sign-in.module.css';
 import './auth-shell.css';
 
@@ -14,6 +15,8 @@ type Mode = 'signin' | 'signup' | 'forgot';
 
 export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Locale }) {
   const [busy, setBusy] = useState(false);
+  const [consentOpen, setConsentOpen] = useState(false);
+  const [signupAgreed, setSignupAgreed] = useState(false);
   const [showMethods, setShowMethods] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -53,7 +56,7 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
     return url.toString();
   }
   function switchView(nextMethod: Method, nextMode: Mode) {
-    setMethod(nextMethod); setMode(nextMode); setError(''); setNotice(''); setPassword(''); setConfirm(''); setCode(''); setSentTo(''); setShowPassword(false);
+    setSignupAgreed(false); setConsentOpen(false); setMethod(nextMethod); setMode(nextMode); setError(''); setNotice(''); setPassword(''); setConfirm(''); setCode(''); setSentTo(''); setShowPassword(false);
   }
   function showError(value: unknown) {
     const code = (value as { code?: string })?.code;
@@ -83,6 +86,11 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy || !authConfigured() || !providers?.[method]) return;
+    if (mode === 'signup' && method === 'email' && password !== confirm) { setError(t('Passwords do not match.', '비밀번호가 일치하지 않아요.')); return; }
+    if (mode === 'signup' && !signupAgreed) { setConsentOpen(true); return; }
+    await authenticate();
+  }
+  async function authenticate() {
     setBusy(true); setError(''); setNotice('');
     try {
       const auth = createClient().auth;
@@ -91,6 +99,7 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
         else {
           const { error } = await auth.verifyOtp({ phone: sentTo, token: code.trim(), type: 'sms' });
           if (error) throw error;
+          if (mode === 'signup') await recordLegalConsent().catch(() => { /* The account popup retries after navigation. */ });
           window.location.assign(nextPath());
         }
       } else if (mode === 'forgot') {
@@ -101,7 +110,7 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
         if (password !== confirm) { setError(t('Passwords do not match.', '비밀번호가 일치하지 않아요.')); return; }
         const { data, error } = await auth.signUp({ email: email.trim(), password, options: { emailRedirectTo: callback(), data: { username: username.trim().toLowerCase() } } });
         if (error) throw error;
-        if (data.session) window.location.assign(nextPath());
+        if (data.session) { await recordLegalConsent().catch(() => { /* The account popup retries after navigation. */ }); window.location.assign(nextPath()); }
         else setNotice(t('Check your email to confirm your account. If you already have an account, sign in.', '이메일에서 계정 인증을 완료해 주세요. 이미 가입했다면 로그인해 주세요.'));
       } else {
         if (email.includes('@')) {
@@ -121,6 +130,7 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
         }
         window.location.assign(nextPath());
       }
+      setConsentOpen(false);
     } catch (error) { showError(error); }
     finally { setBusy(false); }
   }
@@ -145,6 +155,7 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
     {legal}
   </section>;
   return <section className={'sign-in-panel ' + styles.panel} aria-busy={busy}>
+    {consentOpen && <LegalConsentDialog locale={locale} busy={busy} error={error} onAccept={() => { setSignupAgreed(true); void authenticate(); }} onCancel={() => { setConsentOpen(false); setSignupAgreed(false); }}/> }
     <div className={styles.topline}>
       <button type="button" className={styles.back} disabled={busy} onClick={() => { setShowMethods(true); setError(''); setNotice(''); setPassword(''); setConfirm(''); }}><ArrowLeft size={18}/>{t('All sign-in options', '로그인 방법 선택')}</button>
     </div>
@@ -166,7 +177,6 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
           <p id="phone-format" className={styles.help}>{t('Include the country code. For Korea, replace the first 0 with +82.', '국가번호를 포함해 주세요. 한국 번호는 맨 앞 0을 +82로 바꿔 입력하세요.')}</p>
           {sentTo && <><label>{t('Verification code', '인증번호')}<input type="text" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} required autoComplete="one-time-code" value={code} onChange={e => setCode(e.target.value.replace(/\D/g, ''))}/></label><div className={styles.links}><button type="button" disabled={cooldown > 0} onClick={resend}>{cooldown ? t(`Resend in ${cooldown}s`, `${cooldown}초 후 재전송`) : t('Resend code', '인증번호 재전송')}</button><button type="button" onClick={() => { setSentTo(''); setCode(''); setNotice(''); }}>{t('Change number', '번호 변경')}</button></div></>}
         </>}
-        {mode === 'signup' && <label className={styles.consent}><input type="checkbox" required/><span>{t('I agree to the ', '')}<Link href="/terms" target="_blank">{t('Terms of Use', '이용약관')}</Link>{t(' and ', ' 및 ')}<Link href="/privacy" target="_blank">{t('Privacy Policy', '개인정보처리방침')}</Link>{t('.', '에 동의합니다.')}</span></label>}
         <button type="submit" className={styles.primary}>{busy ? t('Please wait…', '처리 중…') : method === 'phone' ? (sentTo ? t('Verify and continue', '인증하고 계속하기') : t('Send verification code', '인증번호 받기')) : mode === 'signup' ? t('Create account', '회원가입') : mode === 'forgot' ? t('Send reset link', '재설정 링크 받기') : t('Sign in', '로그인')}</button>
       </fieldset>
     </form>
