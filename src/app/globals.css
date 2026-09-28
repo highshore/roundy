@@ -474,7 +474,9 @@ html:lang(ko) button,
 html:lang(ko) input,
 html:lang(ko) select,
 html:lang(ko) textarea{
-  font-family:var(--font-noto-sans-kr),"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  /* Keep Latin text visually identical to the English site while
+     falling back to Noto Sans KR only for Hangul glyphs. */
+  font-family:'DM Sans',var(--font-noto-sans-kr),"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
 }
 html:lang(ko) body,
 html:lang(ko) h1,
@@ -2128,4 +2130,16 @@ body:not(:has(.route-admin)) .global-toast{border-radius:16px;padding:13px 14px 
  .route-matches .match-pair .match-photo{width:92px;height:92px}
  .route-matches .match-reveal-top{margin-bottom:22px}
  .route-matches .match-reveal h1{font-size:22px}
+}
+
+
+/* Keep Roundy/Latin brand text consistent across locales. */
+html:lang(ko) .roundy-name,
+html:lang(ko) .wordmark,
+html:lang(ko) .match-reveal-brand,
+html:lang(ko) .landing-card-eyebrow,
+html:lang(ko) .landing-proof-eyebrow,
+html:lang(ko) .event-tags,
+html:lang(ko) .eyebrow{
+  font-family:'DM Sans',var(--font-noto-sans-kr),"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
 }
