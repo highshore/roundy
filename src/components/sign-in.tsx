@@ -146,7 +146,6 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
   if (showMethods) return <section className={'sign-in-panel ' + styles.panel} aria-busy={busy}>
     <div className={styles.brand}><RoundyBrand/></div>
     <div className={styles.methodHeading}>
-      <h1>{t('Meet people in real life.', 'Roundy에서 만나요.')}</h1>
       <p>{t('Sign up or sign in to join your next meetup.', '회원가입하거나 로그인하고 모임에 참여해 보세요.')}</p>
     </div>
     <div className={styles.providerList}>
