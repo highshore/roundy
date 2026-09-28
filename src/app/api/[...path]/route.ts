@@ -1,3 +1,4 @@
+import { validFeedback } from '@/lib/feedback';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { mbtiTypes, formatKoreanPhone, interests, isKoreanPhone } from '@/lib/data';
@@ -22,6 +23,17 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
    const eventId=path[1];if(!/^[0-9a-f-]{36}$/i.test(eventId))return json({error:'Invalid event ID'},400);
    const {data,error}=await supabase.rpc('event_attendees',{p_event:eventId});if(error)throw error;return json({attendees:data});
   }
+  if(path[0]==='feedback'&&path.length===1){
+   if(req.method==='GET'){const {data,error}=await supabase.rpc('first_meetup_feedback_context');if(error)throw error;return json(data);}
+   if(req.method==='POST'){
+    const body=await req.json().catch(()=>null);
+    if(!body||typeof body.eventId!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(body.eventId)||!validFeedback(body.survey))return json({error:'Invalid feedback'},400);
+    const {data,error}=await supabase.rpc('submit_first_meetup_feedback',{p_event:body.eventId,p_survey:body.survey});
+    if(error){if(error.message.includes('First completed attendance required'))return json({error:'Feedback is available after your first checked-in meetup ends.'},403);throw error;}
+    return json({submitted:true,id:data},201);
+   }
+   return json({error:'Method not allowed'},405);
+  }
   if(path[0]==='admin'){
    const admin=await isAdmin(supabase);
    if(path[1]==='role'&&req.method==='GET')return json({isAdmin:admin});
@@ -29,7 +41,7 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
    if(path[1]==='reports'&&path.length===2&&req.method==='GET'){
     const status=req.nextUrl.searchParams.get('status')||'all';const kind=req.nextUrl.searchParams.get('kind')||'all';const page=Number(req.nextUrl.searchParams.get('page')||0);
     if(!['all','new','reviewing','resolved','dismissed'].includes(status)||!['all','report','feedback'].includes(kind)||!Number.isInteger(page)||page<0||page>100000)return json({error:'Invalid filters'},400);
-    let query=supabase.from('reports').select('id,user_id,context,reason,kind,status,created_at,report_reviews(notes,updated_at)',{count:'exact'}).order('created_at',{ascending:false}).order('id').range(page*30,page*30+29);
+    let query=supabase.from('reports').select('id,user_id,context,reason,kind,status,created_at,survey,feedback_event_id,report_reviews(notes,updated_at)',{count:'exact'}).order('created_at',{ascending:false}).order('id').range(page*30,page*30+29);
     if(status!=='all')query=query.eq('status',status);if(kind!=='all')query=query.eq('kind',kind);
     const {data,error,count}=await query;if(error)throw error;return json({reports:data??[],total:count??0});
    }
