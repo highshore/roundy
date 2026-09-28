@@ -8,6 +8,7 @@ import { KakaoLoginSymbol } from './kakao-login-symbol';
 import { createClient } from '@/lib/supabase/client';
 import { authConfigured, safeReturnPath } from '@/lib/auth-routing';
 import { tr, type Locale } from '@/lib/locale';
+import { MINIMUM_AGE, PENDING_BIRTH_DATE_KEY, isAtLeastAge } from '@/lib/age';
 import { LegalConsentDialog, recordLegalConsent } from './legal-consent';
 import styles from './sign-in.module.css';
 import './auth-shell.css';
@@ -29,6 +30,10 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
   const [showPassword, setShowPassword] = useState(false);
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [birthDate, setBirthDate] = useState('');
+  const [ageGateOpen, setAgeGateOpen] = useState(false);
+  const [ageGateDate, setAgeGateDate] = useState('');
+  const [ageGateError, setAgeGateError] = useState('');
   const [phone, setPhone] = useState('');
   const [sentTo, setSentTo] = useState('');
   const [code, setCode] = useState('');
@@ -58,7 +63,38 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
     return url.toString();
   }
   function switchView(nextMethod: Method, nextMode: Mode) {
-    setSignupAgreed(false); setConsentOpen(false); setMethod(nextMethod); setMode(nextMode); setError(''); setNotice(''); setPassword(''); setConfirm(''); setCode(''); setSentTo(''); setShowPassword(false);
+    setSignupAgreed(false); setConsentOpen(false); setMethod(nextMethod); setMode(nextMode); setError(''); setNotice(''); setPassword(''); setConfirm(''); setBirthDate(''); setCode(''); setSentTo(''); setShowPassword(false);
+  }
+  function savePendingBirthDate(value: string) {
+    try { sessionStorage.setItem(PENDING_BIRTH_DATE_KEY, value); } catch { /* Eligibility still works when storage is blocked. */ }
+  }
+  function checkSignupAge(value = birthDate) {
+    if (!value) {
+      setError(t('Enter your date of birth before creating an account.', '계정을 만들기 전에 생년월일을 입력해 주세요.'));
+      return false;
+    }
+    if (!isAtLeastAge(value)) {
+      setError(t(`Roundy is available only to people age ${MINIMUM_AGE} or older.`, `Roundy는 만 ${MINIMUM_AGE}세 이상만 이용할 수 있습니다.`));
+      return false;
+    }
+    savePendingBirthDate(value);
+    return true;
+  }
+  function startKakao() {
+    setAgeGateDate(''); setAgeGateError(''); setAgeGateOpen(true);
+  }
+  function confirmKakaoAge() {
+    if (!ageGateDate) {
+      setAgeGateError(t('Enter your date of birth to continue.', '계속하려면 생년월일을 입력해 주세요.'));
+      return;
+    }
+    if (!isAtLeastAge(ageGateDate)) {
+      setAgeGateError(t(`Roundy is available only to people age ${MINIMUM_AGE} or older.`, `Roundy는 만 ${MINIMUM_AGE}세 이상만 이용할 수 있습니다.`));
+      return;
+    }
+    savePendingBirthDate(ageGateDate);
+    setAgeGateOpen(false);
+    void kakao();
   }
   function showError(value: unknown) {
     const code = (value as { code?: string })?.code;
@@ -78,6 +114,7 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
     } catch (error) { showError(error); setBusy(false); }
   }
   async function sendCode() {
+    if (mode === 'signup' && !checkSignupAge()) return;
     const normalized = phone.replace(/[\s()-]/g, '');
     if (!/^\+[1-9]\d{7,14}$/.test(normalized)) { setError(t('Include your country code, for example +821012345678.', '국가번호를 포함해 입력해 주세요. 예: +821012345678')); return; }
     const { error } = await createClient().auth.signInWithOtp({ phone: normalized, options: { shouldCreateUser: mode === 'signup' } });
@@ -88,11 +125,13 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy || !authConfigured() || !providers?.[method]) return;
+    if (mode === 'signup' && !checkSignupAge()) return;
     if (mode === 'signup' && method === 'email' && password !== confirm) { setError(t('Passwords do not match.', '비밀번호가 일치하지 않아요.')); return; }
     if (mode === 'signup' && !signupAgreed) { setConsentOpen(true); return; }
     await authenticate();
   }
   async function authenticate() {
+    if (mode === 'signup' && !checkSignupAge()) return;
     setBusy(true); setError(''); setNotice('');
     try {
       const auth = createClient().auth;
@@ -101,7 +140,10 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
         else {
           const { error } = await auth.verifyOtp({ phone: sentTo, token: code.trim(), type: 'sms' });
           if (error) throw error;
-          if (mode === 'signup') await recordLegalConsent().catch(() => { /* The account popup retries after navigation. */ });
+          if (mode === 'signup') {
+            await auth.updateUser({ data: { birth_date: birthDate } });
+            await recordLegalConsent().catch(() => { /* The account popup retries after navigation. */ });
+          }
           window.location.assign(nextPath());
         }
       } else if (mode === 'forgot') {
@@ -110,7 +152,7 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
         setNotice(t('If an account exists, a password reset link will be sent to your email.', '가입된 계정이 있으면 비밀번호 재설정 링크를 이메일로 보내드려요.'));
       } else if (mode === 'signup') {
         if (password !== confirm) { setError(t('Passwords do not match.', '비밀번호가 일치하지 않아요.')); return; }
-        const { data, error } = await auth.signUp({ email: email.trim(), password, options: { emailRedirectTo: callback(), data: { username: username.trim().toLowerCase() } } });
+        const { data, error } = await auth.signUp({ email: email.trim(), password, options: { emailRedirectTo: callback(), data: { username: username.trim().toLowerCase(), birth_date: birthDate } } });
         if (error) throw error;
         if (data.session) { await recordLegalConsent().catch(() => { /* The account popup retries after navigation. */ }); window.location.assign(nextPath()); }
         else setNotice(t('Check your email to confirm your account. If you already have an account, sign in.', '이메일에서 계정 인증을 완료해 주세요. 이미 가입했다면 로그인해 주세요.'));
@@ -144,13 +186,23 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
   const available = authConfigured() && providers?.[method] === true;
   const legal = <div className={styles.legal}><Link href="/terms">{t('Terms of Use', '이용약관')}</Link><span aria-hidden="true">|</span><Link href="/privacy">{t('Privacy Policy', '개인정보처리방침')}</Link></div>;
   if (showMethods) return <section className={'sign-in-panel ' + styles.panel} aria-busy={busy}>
+    {ageGateOpen && <div className={styles.ageBackdrop} role="presentation" onMouseDown={() => { if (!busy) setAgeGateOpen(false); }}>
+      <section className={styles.ageDialog} role="dialog" aria-modal="true" aria-labelledby="age-gate-title" onMouseDown={event => event.stopPropagation()}>
+        <h2 id="age-gate-title">{t('Confirm your date of birth', '생년월일을 확인해 주세요')}</h2>
+        <p>{t('We check age eligibility before creating or connecting an account.', '계정을 만들거나 연결하기 전에 이용 가능 연령인지 확인합니다.')}</p>
+        <label>{t('Date of birth', '생년월일')}<input type="date" required value={ageGateDate} onChange={event => { setAgeGateDate(event.target.value); setAgeGateError(''); }}/></label>
+        {ageGateError && <p role="alert" className={styles.ageError}>{ageGateError}</p>}
+        <button type="button" className={styles.agePrimary} onClick={confirmKakaoAge} disabled={busy}>{t('Continue', '계속')}</button>
+        <button type="button" className={styles.ageCancel} onClick={() => setAgeGateOpen(false)} disabled={busy}>{t('Cancel', '취소')}</button>
+      </section>
+    </div>}
     <div className={styles.brand}><RoundyBrand/></div>
     <div className={styles.methodHeading}>
       <p>{t('Sign up or sign in to join your next meetup.', '회원가입하거나 로그인하고 모임에 참여해 보세요.')}</p>
     </div>
     <div className={styles.providerList}>
       <button type="button" disabled={busy} onClick={() => { switchView('email', 'signin'); setShowMethods(false); }}><Mail size={20}/><span>{t('Continue with ID or email', '아이디 또는 이메일로 계속하기')}</span></button>
-      <button type="button" disabled={busy || !authConfigured()} onClick={kakao}><span className={styles.kakaoIcon}><KakaoLoginSymbol/></span><span>{t('Continue with Kakao', '카카오로 계속하기')}</span></button>
+      <button type="button" disabled={busy || !authConfigured()} onClick={startKakao}><span className={styles.kakaoIcon}><KakaoLoginSymbol/></span><span>{t('Continue with Kakao', '카카오로 계속하기')}</span></button>
       <button type="button" disabled={busy} onClick={() => { switchView('phone', 'signin'); setShowMethods(false); }}><Smartphone size={20}/><span>{t('Continue with phone', '휴대폰 번호로 계속하기')}</span></button>
     </div>
     {error && <p role="alert" className={styles.notice}>{error}</p>}
@@ -169,6 +221,7 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
     {providers && !available && <p className={styles.notice} role="status">{method === 'phone' ? t('Phone sign-in is not available yet. Please use email or Kakao.', '휴대폰 로그인은 준비 중이에요. 이메일 또는 카카오를 이용해 주세요.') : t('Email sign-in is temporarily unavailable. Please try again later or use Kakao.', '이메일 로그인을 사용할 수 없어요. 잠시 후 다시 시도하거나 카카오를 이용해 주세요.')}</p>}
     <form className={styles.form} onSubmit={submit}>
       <fieldset disabled={busy || !available} className={styles.fields}>
+        {mode === 'signup' && <label>{t('Date of birth', '생년월일')}<input type="date" required autoComplete="bday" value={birthDate} onChange={e => setBirthDate(e.target.value)}/><small>{t('Used to check whether you can create a Roundy account.', 'Roundy 계정을 만들 수 있는 연령인지 확인하는 데 사용합니다.')}</small></label>}
         {method === 'email' ? <>
           {mode === 'signup' && <label>{t('ID', '아이디')}<input type="text" required minLength={3} maxLength={30} pattern="[a-zA-Z0-9_][a-zA-Z0-9_-]{2,29}" autoComplete="username" autoCapitalize="none" spellCheck={false} value={username} onChange={e => setUsername(e.target.value)} placeholder={t('Choose your ID', '사용할 아이디 입력')} aria-describedby="id-format"/><small id="id-format">{t('3–30 letters, numbers, underscores or hyphens.', '영문, 숫자, 밑줄, 하이픈 3~30자')}</small></label>}
           <label>{mode === 'signin' ? t('ID or email', '아이디 또는 이메일') : t('Email', '이메일')}<input type={mode === 'signin' ? 'text' : 'email'} required autoComplete={mode === 'signin' ? 'username' : 'email'} autoCapitalize="none" spellCheck={false} value={email} onChange={e => setEmail(e.target.value)} placeholder={mode === 'signin' ? t('Enter your ID or email', '아이디 또는 이메일 입력') : 'you@example.com'} maxLength={254}/></label>

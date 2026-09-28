@@ -1,4 +1,5 @@
 import type { NationalityRequirements } from './event-requirements';
+import { isAtLeastAge } from './age';
 // Missing configuration must never authenticate a visitor or simulate a booking.
 export const demoMode = false;
 export { interestIds as interests } from './profile-options';
@@ -15,6 +16,6 @@ export const sampleProfile:Profile={full_name:'Jamie Kim',birth_date:'1997-05-10
 export type Choice = 'no'|'maybe'|'yes';
 export function formatKoreanPhone(value:string){const digits=value.replace(/\D/g,'').replace(/^82/,'0').slice(0,11);if(digits.length<=3)return digits;if(digits.length<=7)return digits.slice(0,3)+'-'+digits.slice(3);return digits.slice(0,3)+'-'+digits.slice(3,7)+'-'+digits.slice(7);}
 export function isKoreanPhone(value:string){return /^010-\d{4}-\d{4}$/.test(value);}
-export function profileComplete(p:Profile){return !!(p.full_name.trim()&&p.birth_date&&p.gender&&p.nationality.trim()&&p.height_cm>=100&&p.height_cm<=250&&p.job_title.trim()&&p.workplace.trim()&&isKoreanPhone(p.phone)&&p.contact_consent&&p.photos.length>=1&&p.photos.length<=3&&p.interests.length>=3&&p.interests.length<=10);}
+export function profileComplete(p:Profile){return !!(p.full_name.trim()&&isAtLeastAge(p.birth_date)&&p.gender&&p.nationality.trim()&&p.height_cm>=100&&p.height_cm<=250&&p.job_title.trim()&&p.workplace.trim()&&isKoreanPhone(p.phone)&&p.contact_consent&&p.photos.length>=1&&p.photos.length<=3&&p.interests.length>=3&&p.interests.length<=10);}
 
 export const mbtiTypes = ['INTJ','INTP','ENTJ','ENTP','INFJ','INFP','ENFJ','ENFP','ISTJ','ISFJ','ESTJ','ESFJ','ISTP','ISFP','ESTP','ESFP'] as const;
