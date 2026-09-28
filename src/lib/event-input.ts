@@ -1,5 +1,6 @@
 import { validateRequirements } from './event-requirements';
 import { eventCategories } from './data';
+import { MINIMUM_AGE } from './age';
 
 export function eventInput(body:unknown) {
  if(!body||typeof body!=='object')throw new Error('Invalid event.');
@@ -7,7 +8,7 @@ export function eventInput(body:unknown) {
  const text=(k:string,max:number,required=true)=>{const x=v[k];if(typeof x!=='string'||x.length>max||(required&&!x.trim()))throw new Error(`Invalid ${k}.`);return x.trim();};
  const int=(k:string,min:number,max:number)=>{const x=v[k];if(typeof x!=='number'||!Number.isInteger(x)||x<min||x>max)throw new Error(`Invalid ${k}.`);return x;};
  const starts_at=text('starts_at',40);if(!/^\d{4}-\d{2}-\d{2}T/.test(starts_at)||!Number.isFinite(Date.parse(starts_at)))throw new Error('Choose a valid event date and time.');
- const age_min=int('age_min',18,100),age_max=int('age_max',18,100);if(age_max<age_min)throw new Error('Choose a valid age range.');
+ const age_min=int('age_min',MINIMUM_AGE,100),age_max=int('age_max',MINIMUM_AGE,100);if(age_max<age_min)throw new Error('Choose a valid age range.');
  const capacity=int('capacity',2,100);
  const duration_minutes=int('duration_minutes',15,1440),lockdown_minutes=int('lockdown_minutes',0,43200);
  const reminder_minutes=v.reminder_minutes===null?null:int('reminder_minutes',0,43200);
