@@ -8,10 +8,8 @@ alter table public.events
   add column if not exists early_bird_hours integer not null default 240 check(early_bird_hours>=0),
   add column if not exists last_minute_hours integer not null default 72 check(last_minute_hours>=0);
 
--- Referral checkout is no longer a 100% ticket grant. Existing personal codes
--- stay valid but use the new 20% event discount.
-alter table public.referral_codes alter column discount_percent set default 20;
-update public.referral_codes set discount_percent=20 where discount_percent<>20;
+-- Legacy referral-code metadata remains unchanged for historical compatibility.
+-- The new event checkout applies its own fixed 20% referral / promo discount.
 
 create table if not exists public.marketing_promo_codes(
   code text primary key check(code ~ '^[A-Z0-9_-]{4,24}$'),
@@ -29,7 +27,7 @@ create table if not exists public.event_payment_orders(
   order_number text primary key,
   charge_order_number text not null unique,
   event_id uuid not null references public.events(id),
-  user_id uuid not null references auth.users(id),
+  user_id uuid not null references public.members(id),
   status text not null check(status in(
     'pending_auth','charging','completed','failed','refunding',
     'refunded','refunded_pending_reconcile'
@@ -80,7 +78,7 @@ create table if not exists public.checkout_discount_redemptions(
   id uuid primary key default gen_random_uuid(),
   kind text not null check(kind in('referral','marketing')),
   code text not null,
-  user_id uuid not null references auth.users(id),
+  user_id uuid not null references public.members(id),
   event_id uuid not null references public.events(id),
   payment_order_number text not null unique references public.event_payment_orders(order_number),
   discount_amount integer not null check(discount_amount>0),
@@ -540,10 +538,10 @@ begin
   select * into e from public.events where id=o.event_id for share;
 
   if o.status='refunded' then
-    return jsonb_build_object('already_refunded',true,'amount',o.amount,'charge_order_number',o.charge_order_number,'payment_result',o.payment_result);
+    return jsonb_build_object('already_refunded',true,'amount',o.amount,'charge_order_number',o.charge_order_number,'payment_result',o.payment_result,'paid_at',o.paid_at);
   end if;
   if o.status='refunded_pending_reconcile' then
-    return jsonb_build_object('needs_reconcile',true,'amount',o.amount,'charge_order_number',o.charge_order_number,'payment_result',o.payment_result,'refund_response',o.refund_response);
+    return jsonb_build_object('needs_reconcile',true,'amount',o.amount,'charge_order_number',o.charge_order_number,'payment_result',o.payment_result,'refund_response',o.refund_response,'paid_at',o.paid_at);
   end if;
   if o.status<>'completed' then raise exception 'Payment is not refundable'; end if;
   if b.id is null then raise exception 'Booking not found'; end if;
@@ -561,7 +559,8 @@ begin
     'needs_reconcile',false,
     'amount',o.amount,
     'charge_order_number',o.charge_order_number,
-    'payment_result',o.payment_result
+    'payment_result',o.payment_result,
+    'paid_at',o.paid_at
   );
 end;
 $$;
@@ -686,6 +685,65 @@ create or replace function public.fail_event_refund(
 )
 returns boolean language sql security definer set search_path='' as $$
   select roundy_private.fail_event_refund(p_order,p_user,p_error_code,p_error_message,p_refund_response);
+$;
+
+-- Account deletion must never silently discard a paid future seat. A member must
+-- first cancel/refund every paid future booking through the payment path.
+create or replace function roundy_private.anonymize_account()
+returns boolean
+language plpgsql
+security definer
+set search_path=''
+as $
+declare
+  u uuid:=auth.uid();
+begin
+  if u is null then raise exception 'Sign in required'; end if;
+
+  if exists(
+    select 1
+    from public.bookings b
+    join public.events e on e.id=b.event_id
+    join public.event_payment_orders o on o.order_number=b.payment_order_number
+    where b.user_id=u
+      and e.starts_at>now()
+      and o.status in('completed','refunding','refunded_pending_reconcile')
+  ) then
+    raise exception 'Cancel and refund paid future events before deleting your account';
+  end if;
+
+  insert into public.members(id,auth_user_id)
+  values(u,u)
+  on conflict(id) do nothing;
+
+  delete from public.bookings b
+  using public.events e
+  where b.user_id=u
+    and b.event_id=e.id
+    and e.starts_at>now();
+
+  delete from public.applications a
+  using public.events e
+  where a.user_id=u
+    and a.event_id=e.id
+    and e.starts_at>now();
+
+  update public.reminder_deliveries
+  set status='cancelled',updated_at=now()
+  where user_id=u and status in('queued','processing');
+
+  delete from public.verifications where user_id=u;
+  delete from public.profiles where user_id=u;
+  delete from public.user_roles where user_id=u;
+  delete from public.staff where user_id=u;
+
+  update public.members
+  set auth_user_id=null,
+      deleted_at=now()
+  where id=u;
+
+  return true;
+end;
 $;
 
 -- Legacy ticket bookings still restore their credit. Paid-event bookings must
