@@ -6,6 +6,18 @@ export function maskEmail(email: string) {
   return at > 0 ? email.slice(0, 1) + '***' + email.slice(at) : '***';
 }
 
+export function passwordRequirements(locale: Locale) {
+  return tr(locale, 'Choose a stronger password with at least 8 characters, including letters and numbers.', '영문과 숫자를 포함한 8자 이상의 비밀번호를 입력해 주세요.');
+}
+
+export function newPasswordError(password: string, locale: Locale) {
+  return password.length < 8 || !/[a-zA-Z]/.test(password) || !/[0-9]/.test(password) ? passwordRequirements(locale) : '';
+}
+
+export function passwordMismatch(locale: Locale) {
+  return tr(locale, 'Passwords do not match.', '비밀번호가 일치하지 않아요.');
+}
+
 export function authSecurityError(error: unknown, locale: Locale) {
   const code = (error as { code?: string })?.code;
   const t = (en: string, ko: string) => tr(locale, en, ko);
@@ -18,7 +30,9 @@ export function authSecurityError(error: unknown, locale: Locale) {
     case 'same_password':
       return t('Choose a different password.', '현재 비밀번호와 다른 비밀번호를 입력해 주세요.');
     case 'weak_password':
-      return t('Choose a stronger password with letters, numbers and symbols.', '영문, 숫자, 특수문자를 조합한 더 안전한 비밀번호를 입력해 주세요.');
+      return (error as { reasons?: string[] })?.reasons?.includes('pwned')
+        ? t('This password has appeared in a data breach. Choose a different password.', '유출된 적이 있는 비밀번호예요. 다른 비밀번호를 입력해 주세요.')
+        : passwordRequirements(locale);
     case 'reauthentication_not_valid':
     case 'otp_expired':
       return t('The code is invalid or expired. Try again or request a new code.', '인증번호가 올바르지 않거나 만료되었어요. 다시 입력하거나 새로 요청해 주세요.');

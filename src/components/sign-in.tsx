@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Smartphone, Eye, EyeOff, Mail } from 'lucide-react';
 import { RoundyBrand } from './roundy-brand';
@@ -13,7 +13,7 @@ import { tr, type Locale } from '@/lib/locale';
 import { COUNTRY_DIAL_OPTIONS, DEFAULT_COUNTRY_DIAL_ID, toE164 } from '@/lib/country-codes';
 import { LegalConsentDialog, recordLegalConsent } from './legal-consent';
 import styles from './sign-in.module.css';
-import { maskEmail } from '@/lib/auth-security';
+import { maskEmail, authSecurityError, newPasswordError, passwordRequirements, passwordMismatch } from '@/lib/auth-security';
 import { NotoAnimatedEmoji } from './noto-animated-emoji';
 import './auth-shell.css';
 
@@ -34,6 +34,16 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
   const [showPassword, setShowPassword] = useState(false);
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [confirmError, setConfirmError] = useState('');
+  const passwordRef = useRef<HTMLInputElement>(null);
+  const confirmRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (!consentOpen && !busy) {
+      if (passwordError) passwordRef.current?.focus();
+      else if (confirmError) confirmRef.current?.focus();
+    }
+  }, [passwordError, confirmError, consentOpen, busy]);
   const [confirmationEmail, setConfirmationEmail] = useState('');
   const [countryId, setCountryId] = useState(DEFAULT_COUNTRY_DIAL_ID);
   const [phone, setPhone] = useState('');
@@ -99,6 +109,7 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
 
   function switchView(nextMethod: Method, nextMode: Mode) {
     setConfirmationEmail('');
+    setPasswordError(''); setConfirmError('');
     setSignupAgreed(false);
     setConsentOpen(false);
     setMethod(nextMethod);
@@ -124,7 +135,7 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
     } else if (authError.code === 'otp_expired') {
       setError(t('The code is invalid or has expired. Request a new code.', '인증번호가 올바르지 않거나 만료되었어요. 다시 요청해 주세요.'));
     } else if (authError.code === 'weak_password') {
-      setError(t('Choose a stronger password with at least 8 characters, including letters and numbers.', '영문과 숫자를 포함한 8자 이상의 비밀번호를 입력해 주세요.'));
+      setPasswordError(authSecurityError(value, locale));
     } else if (authError.code === 'sms_send_failed' || /sms|twilio/i.test(authError.message ?? '')) {
       setError(t('The verification message could not be sent. Please try again later.', '인증 문자를 보내지 못했어요. 잠시 후 다시 시도해 주세요.'));
     } else {
@@ -173,9 +184,11 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy || !authConfigured() || !providers?.[method]) return;
-    if (mode === 'signup' && method === 'email' && password !== confirm) {
-      setError(t('Passwords do not match.', '비밀번호가 일치하지 않아요.'));
-      return;
+    if (mode === 'signup' && method === 'email') {
+      const invalid = newPasswordError(password, locale);
+      setPasswordError(invalid);
+      setConfirmError(password !== confirm ? passwordMismatch(locale) : '');
+      if (invalid || password !== confirm) return;
     }
     if (mode === 'signup' && !signupAgreed) {
       setConsentOpen(true);
@@ -216,10 +229,6 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
           '가입된 계정이 있으면 비밀번호 재설정 링크를 이메일로 보내드려요.',
         ));
       } else if (mode === 'signup') {
-        if (password !== confirm) {
-          setError(t('Passwords do not match.', '비밀번호가 일치하지 않아요.'));
-          return;
-        }
         const { data, error: authError } = await auth.signUp({
           email: email.trim(),
           password,
@@ -263,6 +272,7 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
       }
       setConsentOpen(false);
     } catch (authError) {
+      setConsentOpen(false);
       showError(authError);
     } finally {
       setBusy(false);
@@ -342,7 +352,6 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
     {consentOpen && <LegalConsentDialog
       locale={locale}
       busy={busy}
-      error={error}
       onAccept={() => { setSignupAgreed(true); void authenticate(); }}
       onCancel={() => { setConsentOpen(false); setSignupAgreed(false); }}
     />}
@@ -426,6 +435,10 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
             {t('Password', '비밀번호')}
             <div className={styles.password}>
               <input
+                ref={passwordRef}
+                aria-invalid={!!passwordError}
+                aria-describedby={mode === 'signup' || passwordError ? 'signup-password-feedback' : undefined}
+                onInvalid={event => { if (mode === 'signup') { event.preventDefault(); setPasswordError(passwordRequirements(locale)); passwordRef.current?.focus(); } }}
                 aria-label={t('Password', '비밀번호')}
                 type={showPassword ? 'text' : 'password'}
                 required
@@ -433,8 +446,8 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
                 maxLength={128}
                 autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
                 value={password}
-                onChange={event => setPassword(event.target.value)}
-                placeholder={mode === 'signup' ? t('At least 8 characters', '8자 이상 입력') : t('Enter your password', '비밀번호 입력')}
+                onChange={event => { setPassword(event.target.value); setPasswordError(''); setConfirmError(''); }}
+                placeholder={mode === 'signup' ? t('8+ characters, letters and numbers', '영문과 숫자 포함 8자 이상') : t('Enter your password', '비밀번호 입력')}
               />
               <button
                 type="button"
@@ -445,19 +458,24 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
                 {showPassword ? <EyeOff size={19}/> : <Eye size={19}/>}
               </button>
             </div>
+            {(mode === 'signup' || passwordError) && <small id="signup-password-feedback" className={passwordError ? styles.fieldError : undefined} role={passwordError ? 'alert' : undefined}>{passwordError || passwordRequirements(locale)}</small>}
           </label>}
           {mode === 'signup' && <label>
             {t('Confirm password', '비밀번호 확인')}
             <input
               type={showPassword ? 'text' : 'password'}
               required
-              minLength={8}
               maxLength={128}
               autoComplete="new-password"
+              ref={confirmRef}
+              aria-invalid={!!confirmError}
+              aria-describedby={confirmError ? 'signup-confirm-feedback' : undefined}
+              onInvalid={event => { event.preventDefault(); setConfirmError(passwordMismatch(locale)); }}
               value={confirm}
-              onChange={event => setConfirm(event.target.value)}
+              onChange={event => { setConfirm(event.target.value); setConfirmError(''); }}
               placeholder={t('Re-enter your password', '비밀번호 다시 입력')}
             />
+            {confirmError && <small id="signup-confirm-feedback" className={styles.fieldError} role="alert">{confirmError}</small>}
           </label>}
           {mode === 'signin' && <button
             type="button"
