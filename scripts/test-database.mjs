@@ -17,6 +17,17 @@ for(let n=1;n<=6;n++)await db.query('insert into profiles(user_id,profile) value
 await db.exec(`insert into verifications(user_id,instagram,status) values('${uid(1)}','initial','Verified');`);
 async function as(n,sql,args=[]){await db.exec('set role authenticated');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[uid(n)]);try{return await db.query(sql,args);}finally{await db.exec('reset role');}}
 async function denied(n,sql,pattern){await assert.rejects(()=>as(n,sql),pattern);}
+// Per-event checkout uses additive discounts against the original gender price.
+const pricingEvent=uid(99);
+await db.exec(`insert into events(id,title,starts_at,duration_minutes,venue,address,capacity,age_min,age_max,status) values('${pricingEvent}','Pricing',now()+interval '20 days',120,'Venue','Address',12,18,100,'live');update profiles set profile=jsonb_set(profile,'{gender}','"male"') where user_id in('${uid(2)}','${uid(3)}');insert into bookings(event_id,user_id) values('${pricingEvent}','${uid(2)}'),('${pricingEvent}','${uid(3)}');insert into event_purchases(event_id,user_id,gender,original_amount,total_discount_amount,final_amount,payment_status,paid_at) values('${pricingEvent}','${uid(1)}','female',29000,0,29000,'paid',now());insert into promo_codes(code,discount_percent) values('PROMO20',20);`);
+const promoQuote=(await as(1,'select event_price_quote($1,$2) q',[pricingEvent,'PROMO20'])).rows[0].q;
+assert.equal(promoQuote.original_amount,29000);
+assert.equal(promoQuote.promo_discount_amount,5800,'Marketing promo is 20% of original price');
+assert.equal(promoQuote.gender_balance_discount_amount,2900,'Gender imbalance is 10% of original price');
+assert.equal(promoQuote.time_discount_amount,1450,'Early bird is 5% of original price');
+assert.equal(promoQuote.boomerang_discount_amount,1450,'Returning payer receives 5% boomerang discount');
+assert.equal(promoQuote.final_amount,17400,'Female maximum marketing stack is exactly 40% off');
+await db.exec(`delete from event_purchases where event_id='${pricingEvent}';delete from bookings where event_id='${pricingEvent}';delete from events where id='${pricingEvent}';delete from promo_codes where code='PROMO20';update profiles set profile=jsonb_set(profile,'{gender}','"female"') where user_id in('${uid(2)}','${uid(3)}');`);
 assert.equal((await as(1,'select * from profiles')).rows.length,1,'RLS hides other profiles');
 await denied(1,`insert into events(slug,title,neighborhood,starts_at,ends_at,venue,address,capacity,seats_remaining) values('unauthorized','No','Seoul',now()+interval '3 days',now()+interval '4 days','No','No',12,12)`,/permission denied|row-level security/);
 await as(6,`insert into events(slug,title,neighborhood,starts_at,ends_at,venue,address,capacity,seats_remaining) values('admin-event','Admin','Seoul',now()+interval '3 days',now()+interval '4 days','Admin','Admin',12,12)`);
