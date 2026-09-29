@@ -143,14 +143,14 @@ function LandingPage({events,legacyTalks,locale,attendeesByEvent}:{events:Event[
    </div>
    <div className="landing-v1-event-type">
     <div className="landing-v1-event-type-image"><Image src="/images/roundy-mingle-hero.webp" alt={tr(locale,'1:1 Mingle Event','1:1 밍글 이벤트')} fill sizes="342px"/></div>
-    <span className="eyebrow landing-v1-event-type-label mingle">1:1 / MUTUAL MATCH</span>
+    <span className="eyebrow landing-v1-event-type-label mingle">{tr(locale,'1:1 / MUTUAL MATCH','1:1 / 상호 매칭')}</span>
     <h3>{tr(locale,'1:1 Mingle','1:1 밍글')}</h3>
     <p>{tr(locale,'Meet the person before the profile. Short rotations, a later profile reveal, then private mutual matching.','프로필보다 사람을 먼저 만나보세요. 짧은 로테이션, 이후 프로필 공개, 그리고 비공개 상호 매칭으로 이어집니다.')}</p>
     <Link className="landing-v1-text-link" href="/how-it-works/mingle">{tr(locale,'How 1:1 Mingle works','1:1 밍글 이용 방법')}<ArrowRight size={18} aria-hidden="true"/></Link>
    </div>
    <div className="landing-v1-event-type">
     <div className="landing-v1-event-type-image"><Image src="/images/roundy-business-hero.webp" alt={tr(locale,'Business Talk Event','비즈니스 토크 이벤트')} fill sizes="342px"/></div>
-    <span className="eyebrow landing-v1-event-type-label">SMALL GROUP / ENGLISH</span>
+    <span className="eyebrow landing-v1-event-type-label">{tr(locale,'SMALL GROUP / ENGLISH','소그룹 / 영어')}</span>
     <h3>{tr(locale,'Business Talk','비즈니스 토크')}</h3>
     <p>{tr(locale,'Skip networking small talk. Start with one topic worth discussing and meet people through the way they think.','네트워킹용 스몰토크 대신 이야기할 가치가 있는 한 가지 주제로 시작합니다. 생각하는 방식을 통해 사람을 만나보세요.')}</p>
     <Link className="landing-v1-text-link" href="/how-it-works/business-talk">{tr(locale,'How Business Talk works','비즈니스 토크 이용 방법')}<ArrowRight size={18} aria-hidden="true"/></Link>
@@ -436,13 +436,13 @@ export function App({path}:{path:string}){
    {howNav}
    <div className="how-format-grid">
     <Link href="/how-it-works/mingle" className="how-format-card">
-     <span className="eyebrow">1:1 / MUTUAL MATCH</span>
+     <span className="eyebrow">{tr(locale,'1:1 / MUTUAL MATCH','1:1 / 상호 매칭')}</span>
      <h2>{tr(locale,'1:1 Mingle','1:1 밍글')}</h2>
      <p>{tr(locale,'Short 1:1 rotations, private Yes choices and contact details only after a mutual match.','짧은 1:1 로테이션 후 비공개 Yes 선택을 하고, 서로 선택했을 때만 연락처가 공개됩니다.')}</p>
      <span>{tr(locale,'See how it works','이용 방법 보기')} <ArrowRight size={17}/></span>
     </Link>
     <Link href="/how-it-works/business-talk" className="how-format-card">
-     <span className="eyebrow">SMALL GROUP / ENGLISH</span>
+     <span className="eyebrow">{tr(locale,'SMALL GROUP / ENGLISH','소그룹 / 영어')}</span>
      <h2>{tr(locale,'Business Talk','비즈니스 토크')}</h2>
      <p>{tr(locale,'Prepared topics, optional pre-reading and facilitator-led discussion based on the 1 Cup English format.','영어 한잔 방식처럼 준비된 주제와 선택형 사전 자료, 진행자 중심의 소그룹 토론으로 진행합니다.')}</p>
      <span>{tr(locale,'See how it works','이용 방법 보기')} <ArrowRight size={17}/></span>
