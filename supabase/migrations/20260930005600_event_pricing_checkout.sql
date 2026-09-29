@@ -313,11 +313,11 @@ create or replace function public.event_price_quote(
 )
 returns jsonb
 language sql
-security invoker
+security definer
 set search_path=''
-as $$
+as $
   select roundy_private.event_price_quote_for_user(p_event,(select auth.uid()),p_code);
-$$;
+$;
 
 -- New per-event purchases do not restore a discount or create a reusable ticket on
 -- cancellation. Legacy credit-backed bookings keep their original credit behavior.
