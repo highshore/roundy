@@ -286,7 +286,7 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
     return <section className={'sign-in-panel ' + styles.panel} aria-busy={busy}>
       <div className={styles.brand}><RoundyBrand/></div>
       <div className={styles.methodHeading}>
-        <p>{t('Sign up or sign in to join your next meetup.', '회원가입하거나 로그인하고 모임에 참여해 보세요.')}</p>
+        <p>{t('Sign up or sign in to join your next meetup.', '가입하거나 로그인하고 Roundy 모임에 참여해보세요.')}</p>
       </div>
       <div className={styles.providerList}>
         <button type="button" disabled={busy} onClick={() => { switchView('email', 'signin'); setShowMethods(false); }}>
@@ -332,7 +332,7 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
     <div className={styles.heading}>
       <h1>
         {mode === 'signup'
-          ? t('Create your account', '계정 만들기')
+          ? t('Create your account', 'Roundy 시작하기')
           : mode === 'forgot'
             ? t('Forgot your password?', '비밀번호를 잊으셨나요?')
             : method === 'phone'
@@ -341,7 +341,7 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
       </h1>
       <p>
         {mode === 'signup'
-          ? t('Create an account to join Roundy.', '계정을 만들고 Roundy에 함께해요.')
+          ? t('Create an account to join Roundy.', '계정을 만들고 Roundy를 시작해보세요.')
           : mode === 'forgot'
             ? t('We’ll email you a link to reset it.', '이메일로 재설정 링크를 보내드릴게요.')
             : method === 'phone'
