@@ -1,0 +1,25 @@
+name: Roundy scope check
+on:
+  push:
+    branches: [codex/remove-business-talk]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Snapshot source for review
+        run: tar --exclude=.git -czf /tmp/roundy-source.tar.gz .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: roundy-source
+          path: /tmp/roundy-source.tar.gz
+          retention-days: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
