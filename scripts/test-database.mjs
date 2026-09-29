@@ -48,6 +48,12 @@ await denied(3,`select match_profile('${match}')`,/Match unavailable/);
 await denied(1,`select choose('${encounter(2)}','no')`,/Choices are closed/);
 await as(1,"update verifications set instagram='old'");await db.exec("update verifications set status='Verified'");await as(1,"update verifications set instagram='new'");assert.equal((await as(1,'select status from verifications')).rows[0].status,'Reviewing');
 await denied(1,"update verifications set status='Verified'",/permission denied/);
+await db.exec(`update verifications set status='Verified' where user_id='${uid(1)}';`);
+await as(1,`update profiles set profile=jsonb_set(profile,'{job_title}','"Changed role"') where user_id=auth.uid()`);
+assert.equal((await as(1,'select status from verifications')).rows[0].status,'Reviewing','Editing a verified profile requires review again');
+await db.exec(`update verifications set status='Verified' where user_id='${uid(1)}';`);
+await as(1,`update profiles set profile=profile where user_id=auth.uid()`);
+assert.equal((await as(1,'select status from verifications')).rows[0].status,'Verified','A no-op profile save does not invalidate approval');
 // Event changes derive URL, end time and capacity from canonical inputs.
 const f=uid(101);
 await as(6,"insert into events(id,title,starts_at,duration_minutes,venue,address,capacity,age_min,age_max,status) values($1,'Derived','2030-09-28T10:00:00Z',90,'Venue','Address',4,18,100,'live')",[f]);
@@ -63,7 +69,7 @@ assert.equal((await db.query('select seats_remaining from events where id=$1',[f
 await denied(6,`update events set capacity=2 where id='${f}'`,/Capacity cannot be smaller/);
 await denied(1,`select generate_seating('${f}')`,/Administrator/);
 await denied(6,`select generate_seating('${f}')`,/verified/);
-await db.exec(`insert into verifications(user_id,instagram) values('${uid(2)}','two'),('${uid(3)}','three'),('${uid(4)}','four');update verifications set status='Verified';update profiles set profile=jsonb_set(profile,'{gender}','"male"') where user_id in('${uid(1)}','${uid(3)}');`);
+await db.exec(`insert into verifications(user_id,instagram) values('${uid(2)}','two'),('${uid(3)}','three'),('${uid(4)}','four');update profiles set profile=jsonb_set(profile,'{gender}','"male"') where user_id in('${uid(1)}','${uid(3)}');update verifications set status='Verified';`);
 const seating=(await as(6,'select generate_seating($1) plan',[f])).rows[0].plan;
 assert.equal(seating.rows.length,4);assert.equal(new Set(seating.rows.map(r=>r.left+r.right)).size,4);
 assert.ok(seating.rows.every(r=>/^M[12]$/.test(r.left)&&/^W[12]$/.test(r.right)));
@@ -107,5 +113,5 @@ await denied(2,'select * from referral_codes',/permission denied/);
 await denied(2,`select redeem_referral('${referralEvent}',1,'${referralCode}',true)`,/already been used/);
 console.log('PASS: reminder authorization, at-start scheduling, deduplicated claims, cancellation and delivery privacy.');
 console.log('PASS: date slugs, duplicate-date suffix, URL aliases, duration, automatic capacity, lockdown, seating authorization, balanced rotation, pair exclusions and private document ownership.');
-console.log('PASS: migration, profile isolation, authorization, application/redeem idempotency, 3-Yes limit, reciprocal matching, closed-event locking, private contact access, verification reset.');
+console.log('PASS: migration, profile isolation, authorization, application/redeem idempotency, 3-Yes limit, reciprocal matching, closed-event locking, private contact access, verification reset on evidence and profile edits.');
 await db.close();
