@@ -40,7 +40,7 @@ export function LegalConsentDialog({ locale, busy, error, onAccept, onCancel }: 
 
   return <dialog
     ref={dialog}
-    className={styles.dialog}
+    className={`${styles.dialog} ${view === 'refused' ? styles.refusedDialog : ''}`}
     aria-labelledby="legal-consent-title"
     onCancel={event => { event.preventDefault(); handleDismiss(); }}
   >
@@ -66,18 +66,18 @@ export function LegalConsentDialog({ locale, busy, error, onAccept, onCancel }: 
           codepoint="1f62d"
           fallback="😭"
           label={t('Loudly crying face', '엉엉 우는 얼굴')}
-          size={112}
+          size={88}
           className={styles.cryingEmoji}
         />
-        <h2 id="legal-consent-title">{t('We’ll be sad to see you go', '동의하지 않으면 너무 아쉬워요')}</h2>
-        <p>{t('The Terms of Use and Privacy Policy are required to create and use a Roundy account. Without agreeing to both, you can’t use the service.', 'Roundy 계정을 만들고 이용하려면 이용약관과 개인정보 처리방침에 모두 동의해야 해요. 동의하지 않으면 서비스를 이용할 수 없습니다.')}</p>
+        <h2 id="legal-consent-title">{t('Agreement required', '동의가 필요해요')}</h2>
+        <p>{t('To use Roundy, please agree to the Terms and Privacy Policy.', 'Roundy를 이용하려면 이용약관과 개인정보 처리방침에 동의해 주세요.')}</p>
       </div>
       {error && <p className={styles.error} role="alert">{error}</p>}
       <button className={styles.primary} type="button" disabled={busy} onClick={() => setView('summary')}>
-        {t('Review and agree', '약관 다시 확인하기')}
+        {t('Review terms', '약관 확인하기')}
       </button>
       <button className={styles.cancel} type="button" disabled={busy} onClick={onCancel}>
-        {t('Leave for now', '지금은 나가기')}
+        {t('Leave', '나가기')}
       </button>
     </> : <>
       <div className={styles.icon}><ShieldCheck size={26}/></div>
