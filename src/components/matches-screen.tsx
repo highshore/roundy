@@ -24,7 +24,7 @@ function Photo({src,alt,dark=false}:{src?:string;alt:string;dark?:boolean}){
  return <span className={'match-photo'+(dark?' dark':'')}>{src&&!failed?<Image src={src} alt={alt} fill sizes="180px" unoptimized onError={()=>setFailed(true)}/>:<UserRound size={32} strokeWidth={1.5} aria-label={alt}/>}</span>;
 }
 function Encounter({match,locale}:{match:MatchCard;locale:Locale}){
- return <div className="match-encounter"><CalendarDays size={20}/><div><strong>{tr(locale,'You met on ','만난 날 · ')}{dateLabelForLocale(match.event_starts_at,locale)}</strong><p>{match.event_title}{match.round_number!=null&&` | ${tr(locale,'Round','라운드')} ${match.round_number}`}{match.table_number!=null&&` | ${tr(locale,'Table','테이블')} ${String(match.table_number).padStart(2,'0')}`}</p></div></div>;
+ return <div className="match-encounter"><CalendarDays size={20}/><div><strong>{tr(locale,'You met on ','만난 날: ')}{dateLabelForLocale(match.event_starts_at,locale)}</strong><p>{match.event_title}{match.round_number!=null&&` | ${tr(locale,'Round','라운드')} ${match.round_number}`}{match.table_number!=null&&` | ${tr(locale,'Table','테이블')} ${String(match.table_number).padStart(2,'0')}`}</p></div></div>;
 }
 export function MatchesScreen({locale,ownPhoto,matchId}:{locale:Locale;ownPhoto?:string;matchId?:string}){
  const [matches,setMatches]=useState<MatchCard[]>([]),[loading,setLoading]=useState(true),[error,setError]=useState(''),[retry,setRetry]=useState(0);
