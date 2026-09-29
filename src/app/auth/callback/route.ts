@@ -19,7 +19,7 @@ export async function GET(req:NextRequest){
    const {data,error}=await supabase.auth.exchangeCodeForSession(code);
    if(!error){
     let destination=next;
-    if(next!=='/reset-password'&&data.user){
+    if(next!=='/reset-password'&&next!=='/me/email'&&data.user){
      const {data:profileRow,error:profileError}=await supabase.from('profiles').select('profile').eq('user_id',data.user.id).maybeSingle();
      let profile=profileRow?.profile??{};
      const isKakao=data.user.app_metadata.provider==='kakao'||data.user.identities?.some(identity=>identity.provider==='kakao')===true;
@@ -72,6 +72,13 @@ export async function GET(req:NextRequest){
     return response;
    }
   } catch { /* Offer a fresh sign-in after an expired code or network failure. */ }
+ }
+ // Secure email change can confirm one address without creating a new session.
+ if(next==='/me/email'&&authConfigured()&&!req.nextUrl.searchParams.has('error')){
+  try {
+   const {data:{user}}=await (await createClient()).auth.getUser();
+   if(user){const response=NextResponse.redirect(new URL(next,req.url));response.headers.set('Cache-Control','private, no-store');return response;}
+  } catch { /* Fall through to a fresh sign-in if session validation fails. */ }
  }
  const response=NextResponse.redirect(new URL(signInPath(next)+'&error=auth',req.url));
  response.headers.set('Cache-Control','private, no-store');

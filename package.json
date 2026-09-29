@@ -26,10 +26,14 @@
     "build": "next build",
     "start": "next start --hostname 0.0.0.0",
     "typecheck": "tsc --noEmit",
-    "test": "node scripts/test-auth.mjs && node scripts/test-admin-routing.mjs && node scripts/test-database.mjs && node scripts/test-event-scope.mjs",
-    "test:event-management": "node scripts/test-event-management.mjs"
+    "test": "node scripts/test-auth.mjs && node scripts/test-auth-security.mjs && node scripts/test-admin-routing.mjs && node scripts/test-database.mjs && node scripts/test-event-scope.mjs",
+    "test:event-management": "node scripts/test-event-management.mjs",
+    "test:auth-security": "node scripts/test-auth-security.mjs"
   },
   "engines": {
     "node": ">=22"
+  },
+  "devDependencies": {
+    "react-test-renderer": "19.3.0"
   }
 }
