@@ -1,9 +1,10 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { ShieldCheck } from 'lucide-react';
+import { ArrowLeft, ShieldCheck } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { LEGAL_VERSION } from '@/lib/legal-consent';
 import { tr, type Locale } from '@/lib/locale';
+import { LegalConsentDocument } from './legal';
 import styles from './legal-consent.module.css';
 
 export async function recordLegalConsent() {
@@ -11,28 +12,87 @@ export async function recordLegalConsent() {
   if (!response.ok) throw new Error('Consent could not be saved');
 }
 
+type ConsentView = 'summary' | 'terms' | 'privacy' | 'refused';
+
 export function LegalConsentDialog({ locale, busy, error, onAccept, onCancel }: { locale: Locale; busy: boolean; error?: string; onAccept: () => void; onCancel: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [terms, setTerms] = useState(false);
   const [privacy, setPrivacy] = useState(false);
+  const [view, setView] = useState<ConsentView>('summary');
   const t = (en: string, ko: string) => tr(locale, en, ko);
+
   useEffect(() => {
     const element = dialog.current;
     const overflow = document.body.style.overflow;
-    element?.showModal(); document.body.style.overflow = 'hidden';
+    element?.showModal();
+    document.body.style.overflow = 'hidden';
     return () => { element?.close(); document.body.style.overflow = overflow; };
   }, []);
-  return <dialog ref={dialog} className={styles.dialog} aria-labelledby="legal-consent-title" aria-describedby="legal-consent-description" onCancel={event => { event.preventDefault(); if (!busy) onCancel(); }}>
-    <div className={styles.icon}><ShieldCheck size={26}/></div>
-    <h2 id="legal-consent-title">{t('Before we get started', '시작하기 전에 확인해 주세요')}</h2>
-    <p id="legal-consent-description">{t('Please review and agree to the following to use your Roundy account.', 'Roundy 계정을 이용하려면 아래 내용을 확인하고 동의해 주세요.')}</p>
-    <div className={styles.agreements}>
-      <div className={styles.row}><label><input type="checkbox" checked={terms} disabled={busy} onChange={e => setTerms(e.target.checked)}/><span>{t('Terms of Use', '이용약관 동의')} <small>{t('(required)', '(필수)')}</small></span></label><a href="/terms" target="_blank" rel="noopener noreferrer">{t('Read', '보기')}</a></div>
-      <div className={styles.row}><label><input type="checkbox" checked={privacy} disabled={busy} onChange={e => setPrivacy(e.target.checked)}/><span>{t('Privacy Policy', '개인정보 처리방침 동의')} <small>{t('(required)', '(필수)')}</small></span></label><a href="/privacy" target="_blank" rel="noopener noreferrer">{t('Read', '보기')}</a></div>
-    </div>
-    {error && <p className={styles.error} role="alert">{error}</p>}
-    <button className={styles.primary} type="button" disabled={busy || !terms || !privacy} onClick={onAccept}>{busy ? t('Please wait…', '잠시만 기다려 주세요…') : t('Agree and continue', '동의하고 계속하기')}</button>
-    <button className={styles.cancel} type="button" disabled={busy} onClick={onCancel}>{t('Not now', '다음에 할게요')}</button>
+
+  function handleDismiss() {
+    if (busy) return;
+    if (view === 'terms' || view === 'privacy' || view === 'refused') setView('summary');
+    else setView('refused');
+  }
+
+  const documentView = view === 'terms' || view === 'privacy';
+
+  return <dialog
+    ref={dialog}
+    className={styles.dialog}
+    aria-labelledby="legal-consent-title"
+    onCancel={event => { event.preventDefault(); handleDismiss(); }}
+  >
+    {documentView ? <>
+      <div className={styles.documentHeader}>
+        <button type="button" className={styles.back} onClick={() => setView('summary')} aria-label={t('Back to agreements', '동의 화면으로 돌아가기')}>
+          <ArrowLeft size={19}/>
+        </button>
+        <div>
+          <p>{t('Required agreement', '필수 동의')}</p>
+          <h2 id="legal-consent-title">{view === 'terms' ? t('Terms of Use', '이용약관') : t('Privacy Policy', '개인정보 처리방침')}</h2>
+        </div>
+      </div>
+      <div className={styles.legalScroll} tabIndex={0} aria-label={view === 'terms' ? t('Scrollable Terms of Use', '스크롤 가능한 이용약관') : t('Scrollable Privacy Policy', '스크롤 가능한 개인정보 처리방침')}>
+        <LegalConsentDocument locale={locale} document={view}/>
+      </div>
+      <button className={styles.primary} type="button" onClick={() => setView('summary')}>
+        {t('Done reviewing', '확인했어요')}
+      </button>
+    </> : view === 'refused' ? <>
+      <div className={styles.refusal}>
+        <picture className={styles.cryingEmoji} aria-hidden="true">
+          <source srcSet="https://fonts.gstatic.com/s/e/notoemoji/latest/1f62d/512.webp" type="image/webp"/>
+          <img src="https://fonts.gstatic.com/s/e/notoemoji/latest/1f62d/512.gif" alt="" width="112" height="112"/>
+        </picture>
+        <h2 id="legal-consent-title">{t('We’ll be sad to see you go', '동의하지 않으면 너무 아쉬워요')}</h2>
+        <p>{t('The Terms of Use and Privacy Policy are required to create and use a Roundy account. Without agreeing to both, you can’t use the service.', 'Roundy 계정을 만들고 이용하려면 이용약관과 개인정보 처리방침에 모두 동의해야 해요. 동의하지 않으면 서비스를 이용할 수 없습니다.')}</p>
+      </div>
+      {error && <p className={styles.error} role="alert">{error}</p>}
+      <button className={styles.primary} type="button" disabled={busy} onClick={() => setView('summary')}>
+        {t('Review and agree', '약관 다시 확인하기')}
+      </button>
+      <button className={styles.cancel} type="button" disabled={busy} onClick={onCancel}>
+        {t('Leave for now', '지금은 나가기')}
+      </button>
+    </> : <>
+      <div className={styles.icon}><ShieldCheck size={26}/></div>
+      <h2 id="legal-consent-title">{t('Before we get started', '시작하기 전에 확인해 주세요')}</h2>
+      <p>{t('Please review and agree to the following to use your Roundy account.', 'Roundy 계정을 이용하려면 아래 내용을 확인하고 동의해 주세요.')}</p>
+      <div className={styles.agreements}>
+        <div className={styles.row}>
+          <label><input type="checkbox" checked={terms} disabled={busy} onChange={e => setTerms(e.target.checked)}/><span>{t('Terms of Use', '이용약관 동의')} <small>{t('(required)', '(필수)')}</small></span></label>
+          <button type="button" className={styles.read} onClick={() => setView('terms')}>{t('Read', '보기')}</button>
+        </div>
+        <div className={styles.row}>
+          <label><input type="checkbox" checked={privacy} disabled={busy} onChange={e => setPrivacy(e.target.checked)}/><span>{t('Privacy Policy', '개인정보 처리방침 동의')} <small>{t('(required)', '(필수)')}</small></span></label>
+          <button type="button" className={styles.read} onClick={() => setView('privacy')}>{t('Read', '보기')}</button>
+        </div>
+      </div>
+      {error && <p className={styles.error} role="alert">{error}</p>}
+      <button className={styles.primary} type="button" disabled={busy || !terms || !privacy} onClick={onAccept}>{busy ? t('Please wait…', '잠시만 기다려 주세요…') : t('Agree and continue', '동의하고 계속하기')}</button>
+      <button className={styles.cancel} type="button" disabled={busy} onClick={() => setView('refused')}>{t('Not now', '다음에 할게요')}</button>
+    </>}
   </dialog>;
 }
 
