@@ -183,12 +183,29 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
    return json({deleted:true});
   }
   if(path[0]==='checkout'){
+   if(path[1]==='quote'){
+    if(req.method!=='POST')return json({error:'Method not allowed'},405);
+    const body=await req.json();
+    const eventId=typeof body.eventId==='string'?body.eventId:'';
+    const code=typeof body.code==='string'?body.code.trim().toUpperCase():'';
+    if(!/^[0-9a-f-]{36}$/i.test(eventId)||(code&&!/^[A-Z0-9_-]{4,24}$/.test(code)))return json({error:'Invalid pricing request'},400);
+    const {data,error}=await supabase.rpc('event_price_quote',{p_event:eventId,p_code:code||null});
+    if(error)throw error;
+    return json({quote:data});
+   }
+   if(path.length!==1)return json({error:'Not found'},404);
    if(req.method!=='POST')return json({error:'Method not allowed'},405);
-   const body=await req.json();const eventId=typeof body.eventId==='string'?body.eventId:'';const quantity=Number(body.quantity);const referralCode=typeof body.referralCode==='string'?body.referralCode.trim().toUpperCase():'';
-   if(!referralCode)return json({error:'Payments are not enabled yet. Enter a valid referral code to use the 100% discount, or use an existing ticket.'},503);
-   if(body.termsAccepted!==true)return json({error:'Confirm the cancellation guidelines and terms before enrolling'},400);
-   if(!/^[0-9a-f-]{36}$/i.test(eventId)||![1,3].includes(quantity)||!/^[A-Z0-9]{6}$/.test(referralCode))return json({error:'Invalid checkout request'},400);
-   const {data,error}=await supabase.rpc('redeem_referral',{p_event:eventId,p_quantity:quantity,p_code:referralCode,p_terms_accepted:true});if(error)throw error;return json({free:true,result:data});
+   const body=await req.json();
+   const eventId=typeof body.eventId==='string'?body.eventId:'';
+   const code=typeof body.code==='string'?body.code.trim().toUpperCase():'';
+   if(body.termsAccepted!==true)return json({error:'Confirm the cancellation guidelines and terms before payment'},400);
+   if(!/^[0-9a-f-]{36}$/i.test(eventId)||(code&&!/^[A-Z0-9_-]{4,24}$/.test(code)))return json({error:'Invalid checkout request'},400);
+   const {data:quote,error:quoteError}=await supabase.rpc('event_price_quote',{p_event:eventId,p_code:code||null});
+   if(quoteError)throw quoteError;
+   return json({
+    error:'Secure payment is not connected yet. Your event price has been calculated, but no charge was made.',
+    quote
+   },503);
   }
   if(path[0]==='event-night'&&path.length===2){
    const eventId=path[1];if(!/^[0-9a-f-]{36}$/i.test(eventId))return json({error:'Invalid event ID'},400);
