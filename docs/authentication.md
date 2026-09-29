@@ -4,7 +4,19 @@ Roundy’s public sign-in screen offers ID/email, Kakao, and phone/SMS authentic
 
 ## Kakao
 
-Kakao OAuth requests only the scopes used by Roundy: nickname and profile image. Roundy does not request name, gender, birthday, birth year or the Kakao-account phone number during sign-in. Age and other event-profile details are collected later in the profile flow, where the 19+ eligibility rule remains enforced.
+Kakao OAuth requests the consent items configured for Roundy: nickname, profile image, email, name, gender, birthday, birth year, and Kakao-account phone number.
+
+After the OAuth code exchange, Roundy uses the short-lived Kakao provider token on the server to fetch the consenting user's Kakao account information and prefill only profile fields that are still empty:
+
+- Kakao name → Roundy full legal name
+- Solar birth year + birthday → Roundy date of birth
+- Kakao gender → Roundy gender
+- Korean Kakao-account phone number → Roundy phone number
+- Non-default Kakao profile image → copied into Roundy's private profile-photo storage as the first photo
+
+Existing Roundy profile values are never overwritten. Lunar birthdays and phone numbers that cannot be normalized to a Korean 010 mobile number are left for the user to enter manually. Email remains on the authentication account rather than being duplicated into the event profile, and Kakao nickname is not copied because Roundy currently has no nickname field.
+
+Kakao prefill is convenience only; the normal profile-completion and age-19 eligibility rules still apply. If Kakao data or the provider API is unavailable, sign-in continues and the user completes the missing fields in Roundy.
 
 ## Phone
 
