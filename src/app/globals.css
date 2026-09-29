@@ -452,6 +452,15 @@
 .referral-message{margin-top:2px;font-size:12px;line-height:18px;font-weight:600}.referral-message.success{color:#27613f}.referral-message.error{color:#8d3029}
 .referral-code-value{font-size:28px!important;font-weight:800;letter-spacing:.16em;color:var(--ink)!important;margin-bottom:8px}
 .price-row.total{border-bottom:0;padding-top:14px}.price-row.total strong{font-size:36px}
+.checkout-price-card{border:1px solid var(--border);border-radius:20px;padding:4px 20px;background:var(--paper)}
+.checkout-price-card .price-row{padding:15px 0;gap:18px}
+.checkout-price-card .price-row strong{font-size:18px;letter-spacing:-.4px;white-space:nowrap}
+.checkout-price-card .price-row.discount{color:#3f674a}
+.checkout-price-card .price-row.discount span{display:flex;align-items:center;gap:7px}
+.checkout-price-card .price-row.discount small{font-size:11px;line-height:1;border-radius:999px;padding:4px 6px;background:#edf5ef;color:#315a3b;font-weight:700}
+.checkout-price-card .price-row.total{margin-top:3px;border-top:1px solid var(--ink)}
+.checkout-price-card .price-row.total strong{font-size:30px;color:var(--ink)}
+
 .checkout-terms{border:1px solid var(--border);border-radius:18px;padding:16px;background:var(--surface);line-height:1.5}.checkout-terms a{text-decoration:underline}
 @container roundy (max-width:400px){.referral-entry{grid-template-columns:minmax(0,1fr) 78px}}
 
