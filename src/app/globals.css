@@ -2202,11 +2202,9 @@ html:lang(ko) .eyebrow{
  color:var(--muted);
 }
 .landing-v1-hero-media{position:relative;width:100%;height:auto;aspect-ratio:342/238}
-.landing-v1-hero-main,.landing-v1-hero-side{position:absolute;overflow:hidden;background:var(--surface)}
-.landing-v1-hero-main{left:0;top:0;width:64.33%;height:100%;border-radius:22px}
-.landing-v1-hero-side{right:0;top:14.29%;width:32.16%;height:68.91%;border-radius:22px}
-.landing-v1-hero-main img,.landing-v1-hero-side img,.landing-v1-event-type-image img,.landing-v1-event-image img{object-fit:cover;object-position:center}
-.landing-v1-hero-caption{position:absolute;right:0;bottom:1.68%;width:32.16%;font-size:11px;line-height:1.35;font-weight:600;color:var(--muted);text-align:center}
+.landing-v1-hero-main{position:absolute;overflow:hidden;background:var(--surface)}
+.landing-v1-hero-main{left:0;top:0;width:100%;height:100%;border-radius:22px}
+.landing-v1-hero-main img,.landing-v1-event-type-image img,.landing-v1-event-image img{object-fit:cover;object-position:center}
 .landing-v1-primary{width:100%;margin:0}
 .landing-v1-primary:active{transform:scale(.98)}
 
@@ -2290,7 +2288,6 @@ html:lang(ko) .landing-v1-final>p{
 html:lang(ko) .landing-v1 .eyebrow,
 html:lang(ko) .landing-v1-event-type-label,
 html:lang(ko) .landing-v1-event-category,
-html:lang(ko) .landing-v1-hero-caption,
 html:lang(ko) .landing-v1-step>span{
  line-height:1.3!important;
 }

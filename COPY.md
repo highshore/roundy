@@ -4,14 +4,14 @@ This file is the source of truth for product terminology and UI copy across Roun
 
 ## 1. Canonical Product Terms
 
+Roundy offers 1:1 Mingle only. Do not reintroduce retired discussion events, external event feeds, or another community’s photos and member counts.
+
 Use these terms consistently.
 
 | Meaning | Use | Avoid |
 | --- | --- | --- |
 | A scheduled Roundy gathering | **Event** | night, room, experience, session |
-| The two Roundy offerings | **Event Type** or **Format** | experience type |
 | Dating-format event | **1:1 Mingle** | speed dating, dating night, dating room |
-| Discussion-format event | **Business Talk** | networking night, networking room |
 | Physical location | **Venue** | room, spot |
 | People attending | **Attendees** or **Participants** | guests, crowd |
 | Available capacity | **Places Left** | spots left, seats left when avoidable |
@@ -34,8 +34,8 @@ All user-facing headings use **Title Case**.
 Do not end headings with punctuation.
 
 Correct:
-- Two Ways to Meet, Both Happen Offline
-- Pick Your Kind of Event
+- Meet People in Real Life
+- A Conversation Before a Profile
 - Upcoming in Seoul
 - How Roundy Works
 - Choose Your Event
@@ -80,7 +80,6 @@ Examples:
 - Explore events
 - See all events
 - How 1:1 Mingle works
-- How Business Talk works
 - Complete profile to join
 
 Do not add terminal punctuation.
@@ -92,7 +91,6 @@ Always write:
 - Discover
 - Events
 - 1:1 Mingle
-- Business Talk
 - My Events
 - Matches
 - Profile
