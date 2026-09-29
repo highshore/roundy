@@ -1,2 +1,2 @@
 /* Keep the standard site header, navigation, and footer on authentication pages. */
-.route-signin .content{width:100%}
+.route-signin .content,.route-reset-password .content{width:100%}

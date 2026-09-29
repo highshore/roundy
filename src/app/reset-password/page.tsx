@@ -1,2 +1,7 @@
-import { ResetPassword } from '@/components/reset-password';
-export default function Page(){return <ResetPassword/>;}
+import { Suspense } from 'react';
+import { App } from '@/components/app';
+import { LoadingScreen } from '@/components/loading-screen';
+
+export default function Page() {
+  return <Suspense fallback={<LoadingScreen/>}><App path="reset-password"/></Suspense>;
+}
