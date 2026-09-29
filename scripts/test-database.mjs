@@ -70,6 +70,9 @@ assert.equal((await as(1,'select redeem($1,true) id',[eid])).rows[0].id,booking)
 assert.equal((await db.query('select remaining from credit_lots')).rows[0].remaining,2,'Duplicate redemption uses one credit');
 await db.exec(`update bookings set checked_in_at=now();insert into bookings(event_id,user_id,checked_in_at) values('${eid}','${uid(2)}',now());insert into staff values('${uid(6)}','${eid}');update events set status='live';`);
 for(let n=2;n<=5;n++)await db.query('insert into encounters(id,event_id,user_a,user_b,round_number,table_number) values($1,$2,$3,$4,$5,1)',[encounter(n),eid,uid(1),uid(n),n]);
+await db.exec(`insert into event_sessions(event_id,state,total_rounds,current_round,round_duration_seconds,prepared_at,started_at,round_started_at)
+ values('${eid}','live',4,1,900,now(),now(),now())
+ on conflict(event_id) do update set state='live',current_round=1,started_at=now(),round_started_at=now(),updated_at=now();`);
 for(let n=2;n<=4;n++)await as(1,'select choose($1,$2)',[encounter(n),'yes']);
 await denied(1,`select choose('${encounter(5)}','yes')`,/At most 3 Yes/);
 await denied(3,`select choose('${encounter(2)}','yes')`,/Encounter unavailable/);
@@ -83,6 +86,7 @@ const match=(await as(1,'select id from matches')).rows[0].id;
 const revealed=(await as(1,'select match_profile($1) p',[match])).rows[0].p;
 assert.equal(revealed.phone,profile.phone);assert.ok(!('birth_date'in revealed)&&!('workplace'in revealed)&&!('job_title'in revealed),'Private fields stay hidden');
 await denied(3,`select match_profile('${match}')`,/Match unavailable/);
+await db.exec(`update event_sessions set state='finished',finished_at=now(),round_started_at=null where event_id='${eid}'`);
 await denied(1,`select choose('${encounter(2)}','no')`,/Choices are closed/);
 await as(1,"update verifications set instagram='old'");await db.exec("update verifications set status='Verified'");await as(1,"update verifications set instagram='new'");assert.equal((await as(1,'select status from verifications')).rows[0].status,'Reviewing');
 await denied(1,"update verifications set status='Verified'",/permission denied/);
