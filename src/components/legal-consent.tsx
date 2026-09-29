@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import { LEGAL_VERSION } from '@/lib/legal-consent';
 import { tr, type Locale } from '@/lib/locale';
 import { LegalConsentDocument } from './legal';
+import { NotoAnimatedEmoji } from './noto-animated-emoji';
 import styles from './legal-consent.module.css';
 
 export async function recordLegalConsent() {
@@ -61,10 +62,13 @@ export function LegalConsentDialog({ locale, busy, error, onAccept, onCancel }: 
       </button>
     </> : view === 'refused' ? <>
       <div className={styles.refusal}>
-        <picture className={styles.cryingEmoji} aria-hidden="true">
-          <source srcSet="https://fonts.gstatic.com/s/e/notoemoji/latest/1f62d/512.webp" type="image/webp"/>
-          <img src="https://fonts.gstatic.com/s/e/notoemoji/latest/1f62d/512.gif" alt="" width="112" height="112"/>
-        </picture>
+        <NotoAnimatedEmoji
+          codepoint="1f62d"
+          fallback="😭"
+          label={t('Loudly crying face', '엉엉 우는 얼굴')}
+          size={112}
+          className={styles.cryingEmoji}
+        />
         <h2 id="legal-consent-title">{t('We’ll be sad to see you go', '동의하지 않으면 너무 아쉬워요')}</h2>
         <p>{t('The Terms of Use and Privacy Policy are required to create and use a Roundy account. Without agreeing to both, you can’t use the service.', 'Roundy 계정을 만들고 이용하려면 이용약관과 개인정보 처리방침에 모두 동의해야 해요. 동의하지 않으면 서비스를 이용할 수 없습니다.')}</p>
       </div>
