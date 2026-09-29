@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { authConfigured, safeReturnPath, signInPath } from '@/lib/auth-routing';
+import { authConfigured, profileSetupPath, safeReturnPath, signInPath } from '@/lib/auth-routing';
+import { emptyProfile, profileComplete } from '@/lib/data';
 export async function GET(req:NextRequest){
  const code=req.nextUrl.searchParams.get('code');
  const next=safeReturnPath(req.nextUrl.searchParams.get('next'));
@@ -9,7 +10,12 @@ export async function GET(req:NextRequest){
    const supabase=await createClient();
    const {error}=await supabase.auth.exchangeCodeForSession(code);
    if(!error){
-    const response=NextResponse.redirect(new URL(next,req.url));
+    let destination=next;
+    if(next!=='/reset-password'){
+     const {data:profileRow,error:profileError}=await supabase.from('profiles').select('profile').maybeSingle();
+     if(!profileError&&!profileComplete({...emptyProfile,...(profileRow?.profile??{})}))destination=profileSetupPath(next);
+    }
+    const response=NextResponse.redirect(new URL(destination,req.url));
     response.headers.set('Cache-Control','private, no-store');
     return response;
    }
