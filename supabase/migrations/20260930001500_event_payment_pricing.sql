@@ -643,6 +643,51 @@ begin
 end;
 $$;
 
+-- Service-only public wrappers let the Edge Function call transactional helpers
+-- through PostgREST without exposing the private schema.
+create or replace function public.claim_event_payment_order(p_order text,p_user uuid)
+returns jsonb language sql security definer set search_path='' as $
+  select roundy_private.claim_event_payment_order(p_order,p_user);
+$;
+
+create or replace function public.complete_event_payment_order(
+  p_order text,p_user uuid,p_billing_key text,p_authorization jsonb,p_payment_result jsonb
+)
+returns uuid language sql security definer set search_path='' as $
+  select roundy_private.complete_event_payment_order(p_order,p_user,p_billing_key,p_authorization,p_payment_result);
+$;
+
+create or replace function public.fail_event_payment_order(
+  p_order text,p_user uuid,p_error_code text,p_error_message text,p_authorization jsonb default null,p_payment_result jsonb default null
+)
+returns boolean language sql security definer set search_path='' as $
+  select roundy_private.fail_event_payment_order(p_order,p_user,p_error_code,p_error_message,p_authorization,p_payment_result);
+$;
+
+create or replace function public.prepare_event_refund(p_order text,p_user uuid)
+returns jsonb language sql security definer set search_path='' as $
+  select roundy_private.prepare_event_refund(p_order,p_user);
+$;
+
+create or replace function public.complete_event_refund(p_order text,p_user uuid,p_refund_response jsonb)
+returns boolean language sql security definer set search_path='' as $
+  select roundy_private.complete_event_refund(p_order,p_user,p_refund_response);
+$;
+
+create or replace function public.mark_event_refund_reconcile(
+  p_order text,p_user uuid,p_refund_response jsonb,p_error_message text
+)
+returns boolean language sql security definer set search_path='' as $
+  select roundy_private.mark_event_refund_reconcile(p_order,p_user,p_refund_response,p_error_message);
+$;
+
+create or replace function public.fail_event_refund(
+  p_order text,p_user uuid,p_error_code text,p_error_message text,p_refund_response jsonb
+)
+returns boolean language sql security definer set search_path='' as $
+  select roundy_private.fail_event_refund(p_order,p_user,p_error_code,p_error_message,p_refund_response);
+$;
+
 -- Legacy ticket bookings still restore their credit. Paid-event bookings must
 -- go through the payment refund path so only the amount actually paid is returned.
 create or replace function roundy_private.cancel_booking(p_event uuid)
@@ -694,6 +739,13 @@ $$;
 revoke all on function roundy_private.sync_event_seats(),
   roundy_private.event_checkout_quote(uuid,text),
   public.event_checkout_quote(uuid,text),
+  public.claim_event_payment_order(text,uuid),
+  public.complete_event_payment_order(text,uuid,text,jsonb,jsonb),
+  public.fail_event_payment_order(text,uuid,text,text,jsonb,jsonb),
+  public.prepare_event_refund(text,uuid),
+  public.complete_event_refund(text,uuid,jsonb),
+  public.mark_event_refund_reconcile(text,uuid,jsonb,text),
+  public.fail_event_refund(text,uuid,text,text,jsonb),
   roundy_private.claim_event_payment_order(text,uuid),
   roundy_private.complete_event_payment_order(text,uuid,text,jsonb,jsonb),
   roundy_private.fail_event_payment_order(text,uuid,text,text,jsonb,jsonb),
@@ -706,7 +758,14 @@ from public,anon,authenticated,service_role;
 grant execute on function roundy_private.sync_event_seats() to service_role;
 grant execute on function roundy_private.event_checkout_quote(uuid,text),public.event_checkout_quote(uuid,text)
 to authenticated,service_role;
-grant execute on function roundy_private.claim_event_payment_order(text,uuid),
+grant execute on function public.claim_event_payment_order(text,uuid),
+  public.complete_event_payment_order(text,uuid,text,jsonb,jsonb),
+  public.fail_event_payment_order(text,uuid,text,text,jsonb,jsonb),
+  public.prepare_event_refund(text,uuid),
+  public.complete_event_refund(text,uuid,jsonb),
+  public.mark_event_refund_reconcile(text,uuid,jsonb,text),
+  public.fail_event_refund(text,uuid,text,text,jsonb),
+  roundy_private.claim_event_payment_order(text,uuid),
   roundy_private.complete_event_payment_order(text,uuid,text,jsonb,jsonb),
   roundy_private.fail_event_payment_order(text,uuid,text,text,jsonb,jsonb),
   roundy_private.prepare_event_refund(text,uuid),
