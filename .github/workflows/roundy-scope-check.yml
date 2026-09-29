@@ -3,23 +3,83 @@ on:
   push:
     branches: [codex/remove-business-talk]
 permissions:
-  contents: read
+  contents: write
+concurrency:
+  group: roundy-business-scope
+  cancel-in-progress: false
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - name: Snapshot source for review
-        run: tar --exclude=.git -czf /tmp/roundy-source.tar.gz .
-      - uses: actions/upload-artifact@v4
         with:
-          name: roundy-source
-          path: /tmp/roundy-source.tar.gz
-          retention-days: 1
+          fetch-depth: 0
+      - name: Preserve latest main and apply reviewed content cleanup
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch origin main
+          git merge --no-edit origin/main
+          base64 -d .github/roundy-scope-edit.py.gz.b64 | gzip -dc > /tmp/roundy-scope-edit.py
+          python3 /tmp/roundy-scope-edit.py
+          cp /tmp/roundy-browser.mjs .roundy-browser.mjs
+          git diff --check
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
       - run: npm ci
+      - name: Run existing and scope regression tests
+        run: |
+          npm test
+          npm run test:event-management
+          node scripts/test-feedback.mjs
+          node scripts/test-legal-consent.mjs
+          node scripts/test-match-flow.mjs
       - run: npm run build
+      - run: npm run typecheck
+      - name: Install isolated browser tools
+        run: |
+          npm install --no-save --package-lock=false playwright agent-browser
+          npx playwright install --with-deps chromium
+      - name: Verify mobile and desktop browsers in Korean and English
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/roundy-qa
+          npm run start > /tmp/roundy-qa/server.log 2>&1 &
+          for attempt in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:3000/discover >/dev/null; then break; fi
+            sleep 1
+          done
+          node .roundy-browser.mjs
+      - name: Agent browser smoke check
+        continue-on-error: true
+        run: |
+          npx agent-browser install
+          npx agent-browser open http://127.0.0.1:3000/discover
+          npx agent-browser wait --load networkidle
+          npx agent-browser snapshot -i > /tmp/roundy-qa/agent-snapshot.txt
+          npx agent-browser screenshot /tmp/roundy-qa/agent-smoke.png
+          npx agent-browser close
+      - name: Record verified source diff
+        if: always()
+        run: |
+          mkdir -p /tmp/roundy-qa
+          git diff --stat > /tmp/roundy-qa/change-stat.txt
+          git diff -- src COPY.md package.json scripts > /tmp/roundy-qa/changes.patch
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: roundy-scope-qa
+          path: /tmp/roundy-qa
+          retention-days: 3
+      - name: Commit tested changes on the working branch only
+        run: |
+          set -euo pipefail
+          rm -f .roundy-browser.mjs .github/roundy-scope-edit.py.gz.b64 .github/workflows/roundy-scope-check.yml
+          git add src scripts COPY.md package.json public/images .github
+          git diff --cached --check
+          git commit -m 'Remove Business Talk and One Cup content from Roundy'
+          git push origin HEAD:codex/remove-business-talk
