@@ -193,6 +193,25 @@ const englishPrivacy: LegalSection[] = [
   {title:'Revision history',children:<><p>This Privacy Policy takes effect on September 29, 2026.</p><div className="legal-version-row"><span>v1.0.0</span><span>2026-09-29</span><span>Updated sign-in methods, common required information, Twilio international processing and PAYPLE payments</span></div></>},
 ];
 
+export function LegalConsentDocument({ locale, document }: { locale: Locale; document: 'terms' | 'privacy' }) {
+  const korean=locale==='ko';
+  const sections=document==='terms'
+    ?(korean?koreanTerms:englishTerms)
+    :(korean?koreanPrivacy:englishPrivacy);
+  return <article className="legal-consent-document">
+    <p className="legal-consent-meta">{korean?'시행일 2026년 9월 29일 · v1.0.0':'Effective September 29, 2026 · v1.0.0'}</p>
+    <div className="legal-sections">
+      {sections.map(section=><div className="legal-section-wrap" key={section.title}>
+        {section.chapter&&<p className="legal-chapter">{section.chapter}</p>}
+        <section>
+          <h2>{section.title}</h2>
+          <div>{section.children}</div>
+        </section>
+      </div>)}
+    </div>
+  </article>;
+}
+
 export function TermsOfUse({ locale }: { locale: Locale }) {
   const korean=locale==='ko';
   return <LegalPage
