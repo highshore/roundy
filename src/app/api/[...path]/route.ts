@@ -128,7 +128,7 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
     const summary=old?.profile?.job_title===profile.job_title&&old?.profile?.workplace===profile.workplace&&old?.profile?.summary_status==='generated'?{public_job:old.profile.public_job,public_workplace:old.profile.public_workplace,summary_status:'generated'}:await summarizeWork(String(profile.job_title),String(profile.workplace));
     Object.assign(profile,summary);
     Object.assign(profile,{height_cm:body.height_cm,contact_consent:body.contact_consent,interests:body.interests,photos:body.photos});
-    const profileRow={user_id:user.id,profile,updated_at:new Date().toISOString()};const write=old?await supabase.from('profiles').update(profileRow).eq('user_id',user.id):await supabase.from('profiles').insert(profileRow);if(write.error)throw write.error;return json({saved:true});
+    const profileRow={user_id:user.id,profile,updated_at:new Date().toISOString()};const write=old?await supabase.from('profiles').update(profileRow).eq('user_id',user.id):await supabase.from('profiles').insert(profileRow);if(write.error)throw write.error;const {data:verification,error:verificationError}=await supabase.from('verifications').select('status').eq('user_id',user.id).maybeSingle();if(verificationError)throw verificationError;return json({saved:true,verification:verification?.status??'Not started'});
    }
   }
   if(path[0]==='credits'&&req.method==='GET'){
