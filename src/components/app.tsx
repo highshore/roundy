@@ -320,7 +320,7 @@ export function App({path}:{path:string}){
     <div className={approved?'done':''}>{approved?<CircleCheck size={18}/>:<ShieldCheck size={18}/>}<span><b>{tr(locale,'Approved','승인')}</b><small>{tr(locale,'Ready to join','참여 가능')}</small></span></div>
    </div>
    {!approved&&<p className="profile-review-note">{tr(locale,'No action is needed right now. Your latest review status will appear in My Profile.','지금은 따로 할 일이 없어요. 최신 검토 상태는 내 프로필에서 확인할 수 있어요.')}</p>}
-   <div className="profile-review-actions"><Button href={event?'/events/'+event.slug:'/events'}>{event?tr(locale,'View event','모임 보기'):tr(locale,'Browse events','모임 둘러보기')}</Button><Button secondary href="/me">{tr(locale,'My Profile','내 프로필')}</Button></div>
+   <div className="profile-review-actions"><Button href="/onboarding/basics">{tr(locale,'Edit profile','프로필 수정하기')}</Button><Button secondary href="/events">{tr(locale,'Browse events','모임 둘러보기')}</Button></div>
   </section>;
  }
  else if(route==='onboarding'){
