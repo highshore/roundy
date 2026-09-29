@@ -419,7 +419,8 @@ async function cancelPaidBooking(user: User, body: Record<string, unknown>) {
   if (!amount || !chargeOrderNumber) throw new ApiError("Refund information is incomplete.", 500, "refund-data-missing");
 
   const paidTime = String(result.PCD_PAY_TIME || "");
-  const paidDate = paidTime.length >= 8 ? paidTime.slice(0, 8) : yyyyMMdd(new Date());
+  const paidAt = refund?.paid_at ? new Date(String(refund.paid_at)) : new Date();
+  const paidDate = paidTime.length >= 8 ? paidTime.slice(0, 8) : yyyyMMdd(paidAt);
   const auth = await paypleAuth(true);
   const response = await fetch(PAYPLE_HOST + "/php/account/api/cPayCAct.php", {
     method: "POST",
