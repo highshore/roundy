@@ -13,6 +13,8 @@ import { tr, type Locale } from '@/lib/locale';
 import { COUNTRY_DIAL_OPTIONS, DEFAULT_COUNTRY_DIAL_ID, toE164 } from '@/lib/country-codes';
 import { LegalConsentDialog, recordLegalConsent } from './legal-consent';
 import styles from './sign-in.module.css';
+import { maskEmail } from '@/lib/auth-security';
+import { NotoAnimatedEmoji } from './noto-animated-emoji';
 import './auth-shell.css';
 
 type Method = 'email' | 'phone';
@@ -32,6 +34,7 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
   const [showPassword, setShowPassword] = useState(false);
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [confirmationEmail, setConfirmationEmail] = useState('');
   const [countryId, setCountryId] = useState(DEFAULT_COUNTRY_DIAL_ID);
   const [phone, setPhone] = useState('');
   const [sentTo, setSentTo] = useState('');
@@ -41,8 +44,10 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
   const t = (en: string, ko: string) => tr(locale, en, ko);
 
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).has('error')) {
-      setError(t('Sign-in wasn’t completed. Please try again.', '로그인이 완료되지 않았어요. 다시 시도해 주세요.'));
+    const query = new URLSearchParams(window.location.search);
+    if (query.get('mode') === 'forgot') { setMode('forgot'); setShowMethods(false); }
+    if (query.has('error')) {
+      setError(t('This sign-in link could not be completed. It may have expired or been opened in another browser. Sign in, or request a new link.', '인증 링크를 사용할 수 없어요. 만료되었거나 다른 브라우저에서 열렸을 수 있어요. 로그인하거나 새 링크를 요청해 주세요.'));
     }
     const controller = new AbortController();
     fetch('/auth/settings', { signal: controller.signal })
@@ -93,6 +98,7 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
   }
 
   function switchView(nextMethod: Method, nextMode: Mode) {
+    setConfirmationEmail('');
     setSignupAgreed(false);
     setConsentOpen(false);
     setMethod(nextMethod);
@@ -111,7 +117,8 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
     if (authError.code === 'invalid_credentials') {
       setError(t('ID, email or password is incorrect.', '아이디, 이메일 또는 비밀번호를 확인해 주세요.'));
     } else if (authError.code === 'email_not_confirmed') {
-      setError(t('Confirm your email before signing in.', '이메일 인증을 완료한 후 로그인해 주세요.'));
+      if (email.includes('@')) { setConfirmationEmail(email.trim()); setPassword(''); setConfirm(''); setError(''); }
+      else setError(t('Confirm your email before signing in. Sign in with your email address to resend the link.', '이메일 인증이 필요해요. 이메일 주소로 로그인하면 인증 링크를 다시 받을 수 있어요.'));
     } else if (authError.code === 'over_request_rate_limit' || authError.code === 'over_email_send_rate_limit') {
       setError(t('Too many attempts. Please wait and try again.', '요청이 많아요. 잠시 후 다시 시도해 주세요.'));
     } else if (authError.code === 'otp_expired') {
@@ -218,7 +225,7 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
           password,
           options: {
             emailRedirectTo: callback(),
-            data: { username: username.trim().toLowerCase() },
+            data: { username: username.trim().toLowerCase(), locale },
           },
         });
         if (authError) throw authError;
@@ -226,10 +233,10 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
           await recordLegalConsent().catch(() => { /* Account consent will retry after navigation. */ });
           await finishAuth();
         } else {
-          setNotice(t(
-            'Check your email to confirm your account. If you already have an account, sign in.',
-            '이메일에서 계정 인증을 완료해 주세요. 이미 가입했다면 로그인해 주세요.',
-          ));
+          setConfirmationEmail(email.trim());
+          setPassword('');
+          setConfirm('');
+          setCooldown(60);
         }
       } else {
         if (email.includes('@')) {
@@ -274,6 +281,30 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
       setBusy(false);
     }
   }
+
+  async function resendEmail() {
+    if (busy || cooldown || !confirmationEmail) return;
+    setBusy(true); setError(''); setNotice('');
+    try {
+      const { error } = await createClient().auth.resend({ type: 'signup', email: confirmationEmail, options: { emailRedirectTo: callback() } });
+      if (error) throw error;
+      setCooldown(60);
+      setNotice(t('Confirmation email requested. Check your inbox and spam folder.', '인증 메일을 요청했어요. 받은편지함과 스팸함을 확인해 주세요.'));
+    } catch (error) { showError(error); } finally { setBusy(false); }
+  }
+
+  if (confirmationEmail) return <section className={styles.security} aria-busy={busy}>
+    <RoundyBrand/>
+    <div className={styles.statusIcon}><NotoAnimatedEmoji codepoint="1f4e8" fallback="📨" size={64}/></div>
+    <h1>{t('Check your email', '이메일을 확인해 주세요')}</h1>
+    <p>{t('Open the link sent to ', '가입을 완료하려면 ')}<strong>{maskEmail(confirmationEmail)}</strong>{t(' to complete signup.', '으로 보낸 인증 링크를 눌러 주세요.')}</p>
+    <p className={styles.help}>{t('Already have an account? Sign in. If no email arrives, check your spam folder.', '이미 가입했다면 로그인해 주세요. 메일이 없다면 스팸함도 확인해 주세요.')}</p>
+    <button className="button" disabled={busy || cooldown > 0} onClick={() => void resendEmail()}>{cooldown ? t(`Resend in ${cooldown}s`, `${cooldown}초 후 다시 보내기`) : t('Resend email', '인증 메일 다시 보내기')}</button>
+    {error && <p role="alert" className={styles.notice}>{error}</p>}
+    {notice && <p role="status" className={styles.notice}>{notice}</p>}
+    <button className={styles.textButton} disabled={busy} onClick={() => { switchView('email', 'signup'); setNotice(t('Correct your email and submit signup again. The previous address will remain unconfirmed.', '이메일을 수정한 뒤 다시 가입해 주세요. 이전 주소는 미인증 상태로 남아요.')); }}>{t('Change email address', '이메일 주소 수정')}</button>
+    <button className={styles.textButton} disabled={busy} onClick={() => switchView('email', 'signin')}>{t('Back to sign in', '로그인으로 돌아가기')}</button>
+  </section>;
 
   const available = authConfigured() && providers?.[method] === true;
   const legal = <div className={styles.legal}>
