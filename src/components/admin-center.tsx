@@ -26,7 +26,7 @@ function AdminOverview({ locale }: { locale: Locale }) {
     }).catch(error => { if (active) setError(error.message); });
     return () => { active = false; };
   }, []);
-  if (error) return <p className="admin-error" role="alert">{error}</p>;
+  if (error) return <p className="admin-error" role="alert">{locale==='ko'?tr(locale,'Could not load overview','개요를 불러오지 못했어요'):error}</p>;
   if (!data) return <LoadingScreen />;
   return <section className="admin-panel">
     <div className="admin-heading"><p className="admin-kicker">Roundy Admin</p><h1>{tr(locale, 'Overview', '개요')}</h1><p>{tr(locale, 'Your members and upcoming events, at a glance.', '회원과 예정된 이벤트를 한눈에 확인하세요.')}</p></div>
@@ -46,7 +46,7 @@ function AdminOverview({ locale }: { locale: Locale }) {
 
 export function AdminCenter({ path }: { path: string[] }) {
   const [locale, setLocale] = useState<Locale>('en');
-  useEffect(() => { try { if (localStorage.getItem('roundy-locale') === 'ko') setLocale('ko'); } catch {} }, []);
+  useEffect(() => { let next:Locale='en';try{const saved=localStorage.getItem('roundy-locale');if(saved==='en'||saved==='ko')next=saved;else{const browser=(navigator.languages?.[0]??navigator.language??'en').toLowerCase();next=browser==='ko'||browser.startsWith('ko-')?'ko':'en';}}catch{const browser=(navigator.languages?.[0]??navigator.language??'en').toLowerCase();next=browser==='ko'||browser.startsWith('ko-')?'ko':'en';}setLocale(next);document.documentElement.lang=next; }, []);
   const links = [
     { href: '/admin', label: tr(locale, 'Overview', '개요'), icon: LayoutDashboard, active: !path.length },
     { href: '/admin/members', label: tr(locale, 'Members', '회원'), icon: UsersRound, active: path[0] === 'members' },

@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { BadgeCheck, ChevronRight, ExternalLink, FileText, ShieldCheck, UserRound, UsersRound, X } from 'lucide-react';
 import { Instagram, Linkedin } from './social-icons';
 import { LoadingScreen } from './loading-screen';
-import { tr, type Locale } from '@/lib/locale';
+import { localizeInterest, tr, type Locale } from '@/lib/locale';
 
 type Verification = { status: string; method: string; instagram: string; linkedin: string; document_path: string; rejection_reason: string; updated_at?: string | null };
 type PaymentSummary = { credit_lots: number; credits_total: number; credits_remaining: number; last_purchased_at?: string | null };
@@ -32,6 +32,26 @@ function value(profile: Record<string, unknown>, key: string) {
   return typeof item === 'string' || typeof item === 'number' ? String(item) : '';
 }
 
+function memberEventStatus(value:string,locale:Locale){
+  const labels:Record<string,[string,string]>={
+    pending:['Pending','대기 중'],reviewing:['Reviewing','검토 중'],approved:['Approved','승인됨'],
+    confirmed:['Confirmed','예약 확정'],cancelled:['Cancelled','취소'],completed:['Completed','완료'],
+    waitlisted:['Waitlisted','대기 명단']
+  };
+  const item=labels[value.toLowerCase()];
+  return item?tr(locale,item[0],item[1]):value;
+}
+function verificationStatusLabel(value:string,locale:Locale){
+  if(value==='Verified'||value==='Approved')return tr(locale,'Approved','승인됨');
+  if(value==='Rejected')return tr(locale,'Rejected','반려됨');
+  if(value==='Reviewing')return tr(locale,'Reviewing','검토 중');
+  if(value==='Not started'||!value)return tr(locale,'Not submitted','미제출');
+  return value;
+}
+function rejectionReasonLabel(value:string,locale:Locale){
+  const item=rejectionReasons.find(([id])=>id===value);
+  return item?tr(locale,item[1],item[2]):value;
+}
 function status(member: Member, locale: Locale) {
   if (member.verification.status === 'Verified') return tr(locale, 'Approved', '승인됨');
   if (member.verification.status === 'Rejected') return tr(locale, 'Rejected', '반려됨');
@@ -58,7 +78,7 @@ function MemberModal({ member, locale, busy, onClose, onReview, inline=false }: 
     [tr(locale, 'Email', '이메일'), member.email || '—'],
     [tr(locale, 'Phone', '전화번호'), value(profile, 'phone') || '—'],
     [tr(locale, 'Date of birth', '생년월일'), value(profile, 'birth_date') || '—'],
-    [tr(locale, 'Gender', '성별'), value(profile, 'gender') || '—'],
+    [tr(locale, 'Gender', '성별'), value(profile, 'gender')==='female'?tr(locale,'Woman','여성'):value(profile, 'gender')==='male'?tr(locale,'Man','남성'):value(profile, 'gender') || '—'],
     [tr(locale, 'Nationality', '국적'), value(profile, 'nationality') || '—'],
     [tr(locale, 'Height', '키'), value(profile, 'height_cm') ? value(profile, 'height_cm') + ' cm' : '—'],
     ['MBTI', value(profile, 'mbti') || '—'],
@@ -70,9 +90,9 @@ function MemberModal({ member, locale, busy, onClose, onReview, inline=false }: 
     <div className="member-status-row"><span className={'member-status '+member.verification.status.toLowerCase()}>{status(member, locale)}</span></div>
     {photos.length > 0 && <div className="member-photo-grid">{photos.map((photo, index) => <img src={photo} key={photo} alt={tr(locale, 'Profile photo ', '프로필 사진 ') + (index + 1)} />)}</div>}
     <dl className="member-profile-details">{detail.map(([label, content]) => <div key={label}><dt>{label}</dt><dd>{content}</dd></div>)}</dl>
-    {interests.length > 0 && <section className="member-section"><h3>{tr(locale, 'Interests', '관심사')}</h3><div className="chips">{interests.map(interest => <span className="chip" key={interest}>{interest}</span>)}</div></section>}
-    <section className="member-section"><h3>{tr(locale, 'Verification', '인증')}</h3><p>{member.verification.status === 'Verified' ? tr(locale, 'Approved', '승인됨') : member.verification.status || tr(locale, 'Not submitted', '미제출')}</p>{member.verification.instagram && <p className="verification-social"><Instagram size={18} aria-label="Instagram"/> @{member.verification.instagram}</p>}{member.verification.linkedin && <p className="verification-social"><Linkedin size={18} aria-label="LinkedIn"/> {member.verification.linkedin}</p>}{documentName && <a className="admin-secondary" href={'/api/verification-documents/' + member.user_id + '/' + documentName} target="_blank" rel="noreferrer"><FileText size={16}/>{tr(locale, 'Open work or student proof', '재직 또는 재학 증빙 열기')}<ExternalLink size={15}/></a>}{member.verification.rejection_reason && <p className="member-rejection">{tr(locale, 'Previous rejection: ', '이전 반려 사유: ')}{member.verification.rejection_reason}</p>}</section>
-    <section className="member-section"><h3>{tr(locale, 'Payments & attendance', '결제 및 참석')}</h3><div className="member-stats"><span><b>{member.payments.credit_lots}</b>{tr(locale, 'payment lots', '결제 건')}</span><span><b>{member.payments.credits_remaining}</b>{tr(locale, 'credits left', '남은 크레딧')}</span><span><b>{member.bookings.length}</b>{tr(locale, 'bookings', '예약')}</span><span><b>{member.applications.length}</b>{tr(locale, 'applications', '신청')}</span></div>{member.applications.length > 0 && <ul className="member-event-list">{member.applications.map(application => <li key={application.id}><span>{application.event_title}</span><b>{application.status}</b></li>)}</ul>}</section>
+    {interests.length > 0 && <section className="member-section"><h3>{tr(locale, 'Interests', '관심사')}</h3><div className="chips">{interests.map(interest => <span className="chip" key={interest}>{localizeInterest(interest,locale)}</span>)}</div></section>}
+    <section className="member-section"><h3>{tr(locale, 'Verification', '인증')}</h3><p>{verificationStatusLabel(member.verification.status,locale)}</p>{member.verification.instagram && <p className="verification-social"><Instagram size={18} aria-label="Instagram"/> @{member.verification.instagram}</p>}{member.verification.linkedin && <p className="verification-social"><Linkedin size={18} aria-label="LinkedIn"/> {member.verification.linkedin}</p>}{documentName && <a className="admin-secondary" href={'/api/verification-documents/' + member.user_id + '/' + documentName} target="_blank" rel="noreferrer"><FileText size={16}/>{tr(locale, 'Open work or student proof', '재직 또는 재학 증빙 열기')}<ExternalLink size={15}/></a>}{member.verification.rejection_reason && <p className="member-rejection">{tr(locale, 'Previous rejection: ', '이전 반려 사유: ')}{rejectionReasonLabel(member.verification.rejection_reason,locale)}</p>}</section>
+    <section className="member-section"><h3>{tr(locale, 'Payments & attendance', '결제 및 참석')}</h3><div className="member-stats"><span><b>{member.payments.credit_lots}</b>{tr(locale, 'payment lots', '결제 건')}</span><span><b>{member.payments.credits_remaining}</b>{tr(locale, 'credits left', '남은 크레딧')}</span><span><b>{member.bookings.length}</b>{tr(locale, 'bookings', '예약')}</span><span><b>{member.applications.length}</b>{tr(locale, 'applications', '신청')}</span></div>{member.applications.length > 0 && <ul className="member-event-list">{member.applications.map(application => <li key={application.id}><span>{application.event_title}</span><b>{memberEventStatus(application.status,locale)}</b></li>)}</ul>}</section>
     <section className="member-review"><h3>{tr(locale, 'Member approval', '회원 승인')}</h3><label><span>{tr(locale, 'Rejection reason', '반려 사유')}</span><select value={reason} onChange={event => setReason(event.target.value)}><option value="">{tr(locale, 'Choose a reason before rejecting', '반려 사유를 선택하세요')}</option>{rejectionReasons.map(([id, en, ko]) => <option key={id} value={id}>{tr(locale, en, ko)}</option>)}</select></label><div><button type="button" className="admin-primary" disabled={busy} onClick={() => onReview('Approved')}>{busy ? tr(locale, 'Saving…', '저장 중…') : <><BadgeCheck size={18}/>{tr(locale, 'Approve member', '회원 승인')}</>}</button><button type="button" className="admin-reject" disabled={busy || !reason} onClick={() => onReview('Rejected', reason)}>{tr(locale, 'Reject member', '회원 반려')}</button></div></section>
   </div></div>;
 }
@@ -85,14 +105,14 @@ export function AdminMembers({ locale, memberId }: { locale: Locale; memberId?: 
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState('');
   async function load() { const result = await request('admin/members'); setMembers(result.members || []); return result.members as Member[]; }
-  useEffect(() => { void load().then(members=>{if(memberId){const member=members.find(member=>member.user_id===memberId);if(!member)throw new Error(tr(locale,'Member not found.','회원을 찾을 수 없어요.'));setSelected(member);}}).catch(error => setError(error instanceof Error ? error.message : 'Request failed')).finally(() => setBusy(false)); }, []);
+  useEffect(() => { void load().then(members=>{if(memberId){const member=members.find(member=>member.user_id===memberId);if(!member)throw new Error(tr(locale,'Member not found.','회원을 찾을 수 없어요.'));setSelected(member);}}).catch(error => setError(locale==='ko'?tr(locale,'Could not load members.','회원 정보를 불러오지 못했어요.'):(error instanceof Error ? error.message : 'Could not load members.'))).finally(() => setBusy(false)); }, []);
   async function review(next: 'Approved' | 'Rejected', reason?: string) {
     if (!selected) return;
     setBusy(true); setError('');
     try {
       const result = await request('admin/members/' + selected.user_id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: next, rejection_reason: reason || '' }) });
       setSelected(result.member); setMembers(current => current.map(member => member.user_id === result.member.user_id ? result.member : member));
-    } catch (error) { setError(error instanceof Error ? error.message : 'Request failed'); }
+    } catch (error) { setError(locale==='ko'?tr(locale,'Could not update member.','회원 정보를 업데이트하지 못했어요.'):(error instanceof Error ? error.message : 'Could not update member.')); }
     finally { setBusy(false); }
   }
   const filtered=members.filter(member=>(filter==='all'||member.verification.status===filter)&&(gender==='all'||value(member.profile,'gender')===gender)&&[value(member.profile,'full_name'),member.email||''].some(text=>text.toLowerCase().includes(query.toLowerCase())));
@@ -102,7 +122,7 @@ export function AdminMembers({ locale, memberId }: { locale: Locale; memberId?: 
     {memberId ? <><Link className="admin-back" href="/admin/members">← {tr(locale,'All members','전체 회원')}</Link>{selected&&<MemberModal inline member={selected} locale={locale} busy={busy} onClose={()=>router.push('/admin/members')} onReview={review}/>}</> : <>
     <div className="admin-heading"><p className="admin-kicker">Roundy Admin</p><h1>{tr(locale, 'Members', '회원')}</h1><p>{tr(locale, 'Review profiles, verification, payments and event eligibility.', '프로필, 인증, 결제 및 이벤트 참여 자격을 검토하세요.')}</p></div>
     <div className="admin-filters"><label><span>{tr(locale,'Search members','회원 검색')}</span><input value={query} onChange={event=>{setQuery(event.target.value);setPage(0);}} placeholder={tr(locale,'Name or email','이름 또는 이메일')}/></label><label><span>{tr(locale,'Status','상태')}</span><select value={filter} onChange={event=>{setFilter(event.target.value);setPage(0);}}>{[['all','All statuses','전체 상태'],['Reviewing','Review needed','검토 필요'],['Verified','Approved','승인됨'],['Rejected','Rejected','반려됨'],['Not started','Not started','미시작']].map(([id,en,ko])=><option value={id} key={id}>{tr(locale,en,ko)}</option>)}</select></label><label><span>{tr(locale,'Gender','성별')}</span><select value={gender} onChange={event=>{setGender(event.target.value);setPage(0);}}>{[['all','All genders','전체 성별'],['male','Male','남성'],['female','Female','여성']].map(([id,en,ko])=><option value={id} key={id}>{tr(locale,en,ko)}</option>)}</select></label></div>
-    <table className="admin-member-table"><thead><tr><th>{tr(locale,'Member','회원')}</th><th>{tr(locale,'Status','상태')}</th><th>{tr(locale,'Gender','성별')}</th><th>{tr(locale,'Credits','크레딧')}</th><th>{tr(locale,'Actions','관리')}</th></tr></thead><tbody>{filtered.slice(currentPage*25,(currentPage+1)*25).map(member=>{const photo=Array.isArray(member.profile.photos)&&typeof member.profile.photos[0]==='string'?member.profile.photos[0]:'';return <tr key={member.user_id}><td><div className="admin-member-identity"><span className="member-avatar">{photo?<img src={photo} alt=""/>:<UserRound size={22}/>}</span><span><b>{value(member.profile,'full_name')||tr(locale,'Incomplete profile','미완성 프로필')}</b><small>{member.email||value(member.profile,'job_title')}</small></span></div></td><td><span className={'member-status '+member.verification.status.toLowerCase()}>{status(member,locale)}</span></td><td>{value(member.profile,'gender')||'—'}</td><td>{member.payments.credits_remaining} {tr(locale,'credits','크레딧')}</td><td><Link className="admin-secondary" href={'/admin/members/'+member.user_id}>{tr(locale,'View profile','프로필 보기')}<ChevronRight size={16}/></Link></td></tr>;})}</tbody></table>
+    <table className="admin-member-table"><thead><tr><th>{tr(locale,'Member','회원')}</th><th>{tr(locale,'Status','상태')}</th><th>{tr(locale,'Gender','성별')}</th><th>{tr(locale,'Credits','크레딧')}</th><th>{tr(locale,'Actions','관리')}</th></tr></thead><tbody>{filtered.slice(currentPage*25,(currentPage+1)*25).map(member=>{const photo=Array.isArray(member.profile.photos)&&typeof member.profile.photos[0]==='string'?member.profile.photos[0]:'';return <tr key={member.user_id}><td><div className="admin-member-identity"><span className="member-avatar">{photo?<img src={photo} alt=""/>:<UserRound size={22}/>}</span><span><b>{value(member.profile,'full_name')||tr(locale,'Incomplete profile','미완성 프로필')}</b><small>{member.email||value(member.profile,'job_title')}</small></span></div></td><td><span className={'member-status '+member.verification.status.toLowerCase()}>{status(member,locale)}</span></td><td>{value(member.profile,'gender')==='female'?tr(locale,'Woman','여성'):value(member.profile,'gender')==='male'?tr(locale,'Man','남성'):value(member.profile,'gender')||'—'}</td><td>{member.payments.credits_remaining} {tr(locale,'credits','크레딧')}</td><td><Link className="admin-secondary" href={'/admin/members/'+member.user_id}>{tr(locale,'View profile','프로필 보기')}<ChevronRight size={16}/></Link></td></tr>;})}</tbody></table>
     {!busy&&!filtered.length&&<div className="admin-empty"><UsersRound size={28}/><p>{tr(locale,'No members match this view.','표시할 회원이 없어요.')}</p></div>}
     <div className="admin-pagination"><span>{filtered.length} {tr(locale,'members','명')} / {currentPage+1} – {pageCount}</span><button className="admin-secondary" disabled={currentPage===0} onClick={()=>setPage(currentPage-1)}>{tr(locale,'Previous','이전')}</button><button className="admin-secondary" disabled={currentPage>=pageCount-1} onClick={()=>setPage(currentPage+1)}>{tr(locale,'Next','다음')}</button></div>
     </>}
