@@ -1014,6 +1014,8 @@ html:lang(ko) textarea{
   white-space:nowrap;
 }
 .verification-tag.verified{background:#e7f4ec;color:#17623e}
+.verification-tag.reviewing{background:#fff3ce;color:#715a08}
+.verification-tag.reviewing .noto-animated-emoji{margin:-3px 0}
 .verification-tag.unverified{background:#f0eee8;color:var(--muted)}
 .verification-tag svg{flex:0 0 auto;stroke-width:2.5}
 
