@@ -90,25 +90,25 @@ export function EventNight({event,locale}:{event:Event;locale:Locale}){
  }
 
  if(loading)return <LoadingScreen/>;
- if(error&&!state)return <section className="event-night-shell"><p role="alert" className="admin-error">{error}</p><Link className="button secondary" href="/me/events">{tr(locale,'Back to My Events','내 이벤트로 돌아가기')}</Link></section>;
+ if(error&&!state)return <section className="event-night-shell"><p role="alert" className="admin-error">{error}</p><Link className="button secondary" href="/me/events">{tr(locale,'Back to My Events','내 모임으로 돌아가기')}</Link></section>;
  if(!state)return null;
 
  const mapUrl='https://map.naver.com/v5/search/'+encodeURIComponent(event.venue||event.address);
 
  if(!state.checked_in_at){
   return <section className="event-night-shell">
-   <div className="event-night-heading"><p className="eyebrow">{tr(locale,'MEETUP MODE','밋업 모드')}</p><h1>{tr(locale,'Check-in pending','체크인 대기 중')}</h1><p>{tr(locale,'Show your photo ID to the host when you arrive. Your meetup screen will unlock after the host checks you in.','도착하면 호스트에게 사진이 있는 신분증을 보여 주세요. 호스트가 체크인을 완료하면 밋업 화면이 열립니다.')}</p></div>
+   <div className="event-night-heading"><p className="eyebrow">{tr(locale,'MEETUP MODE','모임 진행')}</p><h1>{tr(locale,'Check-in pending','체크인 대기 중')}</h1><p>{tr(locale,'Show your photo ID to the host when you arrive. Your meetup screen will unlock after the host checks you in.','도착하면 호스트에게 사진이 있는 신분증을 보여 주세요. 호스트가 체크인을 완료하면 밋업 화면이 열립니다.')}</p></div>
    <div className="event-night-info-card"><UsersRound/><div><b>{event.title}</b><span>{dateLabelForLocale(event.starts_at,locale)} · {timeLabelForLocale(event.starts_at,locale)} KST</span><span>{event.venue}</span></div></div>
    <section className="checkin-qr-card"><div><p className="eyebrow">{tr(locale,'CHECK-IN QR','체크인 QR')}</p><h2>{tr(locale,'Show QR to host','호스트에게 QR을 보여 주세요')}</h2><p>{tr(locale,'The host can scan this code with Roundy or the iPhone Camera. Bring photo ID for identity verification.','호스트가 Roundy 또는 iPhone 카메라로 이 코드를 스캔할 수 있어요. 본인 확인을 위해 사진이 있는 신분증을 지참하세요.')}</p></div>{checkInQr?<Image src={checkInQr} alt={tr(locale,'Roundy check-in QR code','Roundy 체크인 QR 코드')} width={184} height={184} unoptimized/>:<div className="qr-placeholder"/>}</section>
    <a className="button secondary" href={mapUrl} target="_blank" rel="noopener noreferrer"><MapPin size={18}/>{tr(locale,'View venue map','장소 지도 보기')}</a>
-   <Link className="button secondary" href="/me/events">{tr(locale,'Back to My Events','내 이벤트로 돌아가기')}</Link>
+   <Link className="button secondary" href="/me/events">{tr(locale,'Back to My Events','내 모임으로 돌아가기')}</Link>
   </section>;
  }
 
  if(state.state==='waiting'){
   return <section className="event-night-shell">
-   <div className="event-night-heading"><p className="eyebrow">{tr(locale,'CHECKED IN','체크인 완료')}</p><h1>{tr(locale,'You’re checked in.','체크인이 완료됐어요.')}</h1><p>{tr(locale,'The host is preparing the table rotation. Your starting table will appear here shortly.','호스트가 테이블 로테이션을 준비하고 있어요. 시작 테이블이 곧 표시됩니다.')}</p></div>
-   <div className="event-night-wait-card"><Check size={24}/><b>{tr(locale,'Check-in confirmed','체크인 확인')}</b><span>{tr(locale,'Keep this screen open while the room is being prepared.','밋업 준비가 끝날 때까지 이 화면을 열어 두세요.')}</span></div>
+   <div className="event-night-heading"><p className="eyebrow">{tr(locale,'CHECKED IN','체크인 완료')}</p><h1>{tr(locale,'You’re checked in.','체크인이 완료됐어요.')}</h1><p>{tr(locale,'The host is preparing the table rotation. Your starting table will appear here shortly.','호스트가 자리 배치를 준비하고 있어요. 잠시 후 시작 테이블이 표시돼요.')}</p></div>
+   <div className="event-night-wait-card"><Check size={24}/><b>{tr(locale,'Check-in confirmed','체크인 확인')}</b><span>{tr(locale,'Keep this screen open while the room is being prepared.','자리가 준비될 때까지 이 화면을 열어 두세요.')}</span></div>
    <a className="button secondary" href={mapUrl} target="_blank" rel="noopener noreferrer"><MapPin size={18}/>{tr(locale,'View venue map','장소 지도 보기')}</a>
   </section>;
  }
@@ -119,32 +119,32 @@ export function EventNight({event,locale}:{event:Event;locale:Locale}){
    <section className="starting-table-card">
     <p className="eyebrow">{tr(locale,'STARTING TABLE','시작 테이블')}</p>
     <strong>{state.starting_table?String(state.starting_table).padStart(2,'0'):'—'}</strong>
-    <div><b>{tr(locale,'Head to your starting table before the first round.','첫 라운드 전에 시작 테이블로 이동하세요.')}</b><span>{tr(locale,'Event mode unlocks when the host starts the room.','호스트가 밋업을 시작하면 이벤트 모드가 열립니다.')}</span></div>
+    <div><b>{tr(locale,'Head to your starting table before the first round.','첫 라운드가 시작되기 전에 안내된 테이블로 이동해 주세요.')}</b><span>{tr(locale,'Event mode unlocks when the host starts the room.','호스트가 모임을 시작하면 진행 화면이 열려요.')}</span></div>
    </section>
    <a className="button" href={mapUrl} target="_blank" rel="noopener noreferrer"><MapPin size={18}/>{tr(locale,'View venue map','장소 지도 보기')}</a>
-   <button type="button" className="button secondary" disabled>{tr(locale,'Waiting for host to start','호스트 시작 대기 중')}</button>
+   <button type="button" className="button secondary" disabled>{tr(locale,'Waiting for host to start','시작을 기다리고 있어요')}</button>
   </section>;
  }
 
  if(state.state==='live'){
   const current=state.current;
   return <section className="event-night-shell">
-   <div className="event-night-heading"><p className="eyebrow live-kicker">{tr(locale,'LIVE','진행 중')} · {event.title}</p><h1>{tr(locale,'Round','라운드')} {state.current_round} / {state.total_rounds}</h1><p>{current?tr(locale,'Stay at your current table until the timer ends.','타이머가 끝날 때까지 현재 테이블에 머물러 주세요.'):tr(locale,'This is a rest round for you.','이번 라운드는 휴식 라운드예요.')}</p></div>
+   <div className="event-night-heading"><p className="eyebrow live-kicker">{tr(locale,'LIVE','진행 중')} · {event.title}</p><h1>{tr(locale,'Round','라운드')} {state.current_round} / {state.total_rounds}</h1><p>{current?tr(locale,'Stay at your current table until the timer ends.','타이머가 끝날 때까지 지금 테이블에서 대화를 이어가 주세요.'):tr(locale,'This is a rest round for you.','이번 라운드는 잠시 쉬어가요.')}</p></div>
    <section className="live-round-card">
     <div><p>{current?tr(locale,'CURRENT TABLE','현재 테이블'):tr(locale,'REST ROUND','휴식 라운드')}</p><strong>{current?String(current.table).padStart(2,'0'):'—'}</strong></div>
     <div className="live-timer"><strong>{clock(secondsLeft)}</strong><span>{secondsLeft?tr(locale,'remaining','남음'):tr(locale,'waiting for host','호스트 대기')}</span></div>
-    <div className="live-next">{current?.next_table?tr(locale,'Next → Table ','다음 → 테이블 ')+String(current.next_table).padStart(2,'0'):state.current_round<state.total_rounds?tr(locale,'Next → Rest round','다음 → 휴식 라운드'):tr(locale,'Final choices next','다음은 최종 선택')}</div>
+    <div className="live-next">{current?.next_table?tr(locale,'Next → Table ','다음 → 테이블 ')+String(current.next_table).padStart(2,'0'):state.current_round<state.total_rounds?tr(locale,'Next → Rest round','다음 → 휴식 라운드'):tr(locale,'Final choices next','다음 단계: 최종 선택')}</div>
    </section>
-   {current&&<section className="round-choice-section"><p className="eyebrow">{tr(locale,'YOUR CHOICE · EDITABLE UNTIL FINAL SUBMISSION','내 선택 · 최종 제출 전까지 수정 가능')}</p><h2>{tr(locale,'Would you want to see this tablemate again?','이 상대를 다시 만나고 싶나요?')}</h2><p>{tr(locale,'Choose after every round. You can select Yes for up to 3 people.','매 라운드가 끝날 때 선택하세요. Yes는 최대 3명까지 선택할 수 있어요.')}</p><ChoiceButtons value={current.choice} disabled={busy||state.submitted} onChange={choice=>void choose(current.id,choice)} locale={locale}/></section>}
+   {current&&<section className="round-choice-section"><p className="eyebrow">{tr(locale,'YOUR CHOICE · EDITABLE UNTIL FINAL SUBMISSION','내 선택 — 최종 제출 전까지 바꿀 수 있어요')}</p><h2>{tr(locale,'Would you want to see this tablemate again?','이분과 다시 만나고 싶나요?')}</h2><p>{tr(locale,'Choose after every round. You can select Yes for up to 3 people.','각 라운드가 끝날 때 선택해 주세요. Yes는 최대 3명까지 고를 수 있어요.')}</p><ChoiceButtons value={current.choice} disabled={busy||state.submitted} onChange={choice=>void choose(current.id,choice)} locale={locale}/></section>}
    {error&&<p role="alert" className="event-night-error">{error}</p>}
-   <div className="event-night-help"><b>{tr(locale,'Need staff help?','도움이 필요한가요?')}</b><span>{tr(locale,'Show this screen at the host desk.','호스트 데스크에서 이 화면을 보여 주세요.')}</span></div>
+   <div className="event-night-help"><b>{tr(locale,'Need staff help?','호스트의 도움이 필요한가요?')}</b><span>{tr(locale,'Show this screen at the host desk.','호스트에게 이 화면을 보여 주세요.')}</span></div>
   </section>;
  }
 
  if(state.state==='final_choices'){
   return <section className="event-night-shell">
-   <div className="event-night-heading"><p className="eyebrow">{tr(locale,'FINAL CHOICES','최종 선택')}</p><h1>{state.submitted?tr(locale,'Choices submitted.','선택을 제출했어요.'):tr(locale,'Review your choices.','선택을 검토하세요.')}</h1><p>{state.submitted?tr(locale,'Your choices are locked. Results will appear after the host finishes the meetup.','선택이 확정되었습니다. 호스트가 밋업을 종료하면 결과가 표시됩니다.'):tr(locale,'Review every tablemate, then submit. Maximum 3 Yes.','모든 상대에 대한 선택을 검토한 뒤 제출하세요. Yes는 최대 3명입니다.')}</p></div>
-   <div className="final-choice-list">{state.encounters.map((item,index)=><article className="final-choice-card" key={item.id}><span className="final-choice-avatar" style={item.photo?{backgroundImage:`url("${item.photo}")`}:undefined}>{!item.photo&&<UsersRound size={22}/>}</span><div className="final-choice-copy"><b>{tr(locale,'Tablemate ','상대 ')}{index+1}</b><span>{tr(locale,'Round','라운드')} {item.round} · {tr(locale,'Table','테이블')} {String(item.table).padStart(2,'0')}</span></div><ChoiceButtons value={item.choice} disabled={busy||state.submitted} onChange={choice=>void choose(item.id,choice)} locale={locale}/></article>)}</div>
+   <div className="event-night-heading"><p className="eyebrow">{tr(locale,'FINAL CHOICES','최종 선택')}</p><h1>{state.submitted?tr(locale,'Choices submitted.','선택을 제출했어요.'):tr(locale,'Review your choices.','마지막으로 선택을 확인해 주세요.')}</h1><p>{state.submitted?tr(locale,'Your choices are locked. Results will appear after the host finishes the meetup.','선택이 확정됐어요. 모임이 끝나면 결과를 확인할 수 있어요.'):tr(locale,'Review every tablemate, then submit. Maximum 3 Yes.','모든 상대에 대한 선택을 확인한 뒤 제출해 주세요. Yes는 최대 3명까지 선택할 수 있어요.')}</p></div>
+   <div className="final-choice-list">{state.encounters.map((item,index)=><article className="final-choice-card" key={item.id}><span className="final-choice-avatar" style={item.photo?{backgroundImage:`url("${item.photo}")`}:undefined}>{!item.photo&&<UsersRound size={22}/>}</span><div className="final-choice-copy"><b>{tr(locale,'Tablemate ','대화 상대 ')}{index+1}</b><span>{tr(locale,'Round','라운드')} {item.round} · {tr(locale,'Table','테이블')} {String(item.table).padStart(2,'0')}</span></div><ChoiceButtons value={item.choice} disabled={busy||state.submitted} onChange={choice=>void choose(item.id,choice)} locale={locale}/></article>)}</div>
    <p className="choice-summary">{state.yes_count} {tr(locale,'Yes','좋아요')} · {state.maybe_count} {tr(locale,'Maybe','고민 중')} · {state.no_count} {tr(locale,'No','아니요')}</p>
    {error&&<p role="alert" className="event-night-error">{error}</p>}
    {!state.submitted&&<button type="button" className="button" disabled={busy} onClick={()=>void submit()}>{busy?tr(locale,'Submitting…','제출 중…'):tr(locale,'Submit final choices','최종 선택 제출')}</button>}
@@ -152,9 +152,9 @@ export function EventNight({event,locale}:{event:Event;locale:Locale}){
  }
 
  return <section className="event-night-shell">
-  <div className="event-night-heading"><p className="eyebrow">{tr(locale,'MEETUP COMPLETE','밋업 종료')}</p><h1>{tr(locale,'Thanks for showing up.','참여해 주셔서 감사합니다.')}</h1><p>{state.matches>0?tr(locale,`You have ${state.matches} mutual match${state.matches===1?'':'es'}.`,`서로 선택한 매칭이 ${state.matches}개 있어요.`):tr(locale,'No mutual matches yet. Your choices stay private.','아직 서로 선택한 매칭은 없어요. 선택 내용은 비공개로 유지됩니다.')}</p></div>
+  <div className="event-night-heading"><p className="eyebrow">{tr(locale,'MEETUP COMPLETE','모임 종료')}</p><h1>{tr(locale,'Thanks for showing up.','오늘 함께해 주셔서 고마워요.')}</h1><p>{state.matches>0?tr(locale,`You have ${state.matches} mutual match${state.matches===1?'':'es'}.`,`서로 선택한 매칭이 ${state.matches}개 있어요.`):tr(locale,'No mutual matches yet. Your choices stay private.','아직 서로 선택한 매칭은 없어요. 선택 내용은 비공개로 유지됩니다.')}</p></div>
   <div className="event-night-complete-card"><Check size={28}/><strong>{state.matches}</strong><span>{tr(locale,'mutual matches','서로 선택한 매칭')}</span></div>
-  <Link className="button" href="/matches">{tr(locale,'View matches','매칭 보기')}<ArrowRight size={18}/></Link>
-  <Link className="button secondary" href="/events">{tr(locale,'Find the next event','다음 이벤트 찾기')}</Link>
+  <Link className="button" href="/matches">{tr(locale,'View matches','매칭 결과 보기')}<ArrowRight size={18}/></Link>
+  <Link className="button secondary" href="/events">{tr(locale,'Find the next event','다음 모임 찾기')}</Link>
  </section>;
 }

@@ -101,7 +101,7 @@ export const aboutCopy = {
   "ko": {
     "eyebrow": "라운디 소개",
     "title": "프로필 너머,\n직접 만나는 사이.",
-    "intro": "프로필 너머의 사람을 직접 만나는 서울의 커뮤니티.",
+    "intro": "프로필보다 대화가 먼저인, 서울의 오프라인 소셜 모임.",
     "storyLabel": "우리의 이야기",
     "storyTitle": "아마 앱에서는,\n서로를 고르지 않았을 거예요.",
     "storyBody": "오프라인 모임에서 만난 카일과 조이. 대화로 서로를 알아갔고, 지금도 함께하고 있어요.",
@@ -116,8 +116,8 @@ export const aboutCopy = {
       ]
     ],
     "originLabel": "그 경험에서 배운 것",
-    "originTitle": "대화가 깊어지면,\n사이도 달라지니까.",
-    "originBody": "그 경험이 우리가 만드는 모임의 시작이 됐어요.",
+    "originTitle": "대화를 나누면,\n사람을 보는 방식도 달라지니까.",
+    "originBody": "그 경험이 Roundy의 시작이 됐어요.",
     "originSteps": [
       [
         "01 / 오프라인에서 시작",
@@ -132,12 +132,12 @@ export const aboutCopy = {
       [
         "03 / 라운디",
         "프로필 너머의 사람.",
-        "충분히 대화하고, 자연스럽게 가까워지도록."
+        "충분히 대화한 뒤, 더 알아가고 싶은 사람과 이어지도록."
       ]
     ],
     "proofValue": "80+",
     "proofLabel": "누적 유료 회원",
-    "proofBody": "깊은 대화로 이어진 커뮤니티.",
+    "proofBody": "80명이 넘는 유료 멤버와 함께 대화를 이어왔어요.",
     "teamLabel": "라운디를 만드는 사람들",
     "teamTitle": "카일과 조이를 소개합니다.",
     "kyle": "카일 Kyle",
@@ -148,9 +148,9 @@ export const aboutCopy = {
     "joeyBody": "누구나 편안하게 어울릴 수 있도록 도와요.",
     "source": "영어 한잔 알아보기",
     "principlesLabel": "우리가 중요하게 생각하는 것",
-    "principlesTitle": "대화에 집중하는 만남",
+    "principlesTitle": "직접 만나, 제대로 대화하는 시간",
     "trustLabel": "신뢰를 위한 약속",
-    "trustTitle": "편안하게 만나요.",
+    "trustTitle": "처음 만나도 편안하도록.",
     "principles": [
       [
         "01 / 직접 만나는 시간",
@@ -191,7 +191,7 @@ export const aboutCopy = {
       ]
     ],
     "safety": "이용 방법 및 안전",
-    "events": "이벤트 둘러보기",
+    "events": "모임 둘러보기",
     "kyleBackground": "소프트웨어 엔지니어 & 전직 통역사",
     "joeyBackground": "프로덕트 매니저",
     "photoCaption": "영어 한잔에서 함께한 순간들"
