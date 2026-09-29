@@ -145,7 +145,7 @@ function LandingPage({events,legacyTalks,locale,attendeesByEvent}:{events:Event[
     <div className="landing-v1-event-type-image"><Image src="/images/roundy-mingle-hero.webp" alt={tr(locale,'1:1 Mingle Event','1:1 밍글 모임')} fill sizes="342px"/></div>
     <span className="eyebrow landing-v1-event-type-label mingle">{tr(locale,'1:1 / MUTUAL MATCH','1:1 / 상호 매칭')}</span>
     <h3>{tr(locale,'1:1 Mingle','1:1 밍글')}</h3>
-    <p>{tr(locale,'Meet the person before the profile. Short rotations, a later profile reveal, then private mutual matching.','프로필은 나중에. 먼저 직접 만나 대화해보세요. 짧은 1:1 로테이션 후, 서로 선택하면 매칭돼요.')}</p>
+    <p>{tr(locale,'Meet the person before the profile. Short rotations, a later profile reveal, then private mutual matching.','프로필보다 사람을 먼저 만나보세요. 짧은 로테이션, 이후 프로필 공개, 그리고 비공개 상호 매칭으로 이어집니다.')}</p>
     <Link className="landing-v1-text-link" href="/how-it-works/mingle">{tr(locale,'How 1:1 Mingle works','1:1 밍글은 이렇게 진행돼요')}<ArrowRight size={18} aria-hidden="true"/></Link>
    </div>
    <div className="landing-v1-event-type">
