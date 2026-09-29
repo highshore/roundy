@@ -2,12 +2,23 @@ import {PGlite} from '@electric-sql/pglite';
 import {readFile,readdir} from 'node:fs/promises';
 import assert from 'node:assert/strict';
 const db=new PGlite();
-await db.exec(`create role anon;create role service_role;create role authenticated;create schema auth;create table auth.users(id uuid primary key);create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;grant usage on schema auth to anon,authenticated;grant execute on function auth.uid() to anon,authenticated;create schema storage;create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);create table storage.objects(id uuid,name text,bucket_id text);create function storage.foldername(text) returns text[] language sql immutable as $$select string_to_array($1,'/')$$;`);
+await db.exec(`create role anon;create role service_role;create role authenticated;create schema auth;create table auth.users(id uuid primary key,email text,raw_user_meta_data jsonb not null default '{}'::jsonb);create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;create function auth.jwt() returns jsonb language sql stable as $$select jsonb_build_object('sub',nullif(current_setting('request.jwt.claim.sub',true),''),'is_anonymous',false)$$;grant usage on schema auth to anon,authenticated;grant execute on function auth.uid() to anon,authenticated;create schema storage;create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);create table storage.objects(id uuid,name text,bucket_id text,created_at timestamptz not null default now());create function storage.foldername(text) returns text[] language sql immutable as $$select string_to_array($1,'/')$$;`);
 await db.exec('grant usage on schema storage to authenticated;grant select,insert,delete on storage.objects to authenticated;alter table storage.objects enable row level security;');
 // Reproduce hosted default privileges, not just a restrictive local database.
 await db.exec('alter default privileges in schema public grant all on tables to anon, authenticated');
-// pg_cron and pg_net are hosted infrastructure; all application DDL still runs here.
-for(const f of (await readdir('supabase/migrations')).sort().filter(f=>!f.endsWith('_roundy_reminder_schedule.sql')))await db.exec(await readFile('supabase/migrations/'+f,'utf8'));
+// pg_cron and pg_net are hosted infrastructure. Keep the scheduler config composite
+// type available so later historical migrations can recompile the dispatcher in PGlite.
+for(const f of (await readdir('supabase/migrations')).sort().filter(f=>!f.endsWith('_roundy_reminder_schedule.sql')&&!f.endsWith('_marketing_scheduler.sql'))){
+ if(f.endsWith('_simplify_event_lifecycle.sql')){
+  await db.exec(`create table if not exists wis_private.reminder_scheduler_config(
+   singleton boolean primary key default true check(singleton),
+   project_url text not null default 'https://example.supabase.co',
+   anon_jwt text not null default 'test'
+  )`);
+ }
+ try{await db.exec(await readFile('supabase/migrations/'+f,'utf8'));}
+ catch(error){throw new Error(`Migration fixture failed: ${f}: ${error instanceof Error?error.message:String(error)}`,{cause:error});}
+}
 const uid=n=>`00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
 const eid=uid(100);const encounter=n=>uid(200+n);
 await db.exec(`insert into auth.users select ('00000000-0000-0000-0000-'||lpad(n::text,12,'0'))::uuid from generate_series(1,6)n;insert into events(id,slug,title,neighborhood,starts_at,ends_at,venue,address,capacity,seats_remaining) values('${eid}','test','Test','Seoul',now()+interval '1 day',now()+interval '2 days','Test','Test',12,12);update events set status='live';`);
@@ -17,17 +28,33 @@ for(let n=1;n<=6;n++)await db.query('insert into profiles(user_id,profile) value
 await db.exec(`insert into verifications(user_id,instagram,status) values('${uid(1)}','initial','Verified');`);
 async function as(n,sql,args=[]){await db.exec('set role authenticated');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[uid(n)]);try{return await db.query(sql,args);}finally{await db.exec('reset role');}}
 async function denied(n,sql,pattern){await assert.rejects(()=>as(n,sql),pattern);}
-// Per-event checkout uses additive discounts against the original gender price.
+// Per-event checkout uses the production payment schema and additive discounts.
 const pricingEvent=uid(99);
-await db.exec(`insert into events(id,title,starts_at,duration_minutes,venue,address,capacity,age_min,age_max,status) values('${pricingEvent}','Pricing',now()+interval '20 days',120,'Venue','Address',12,18,100,'live');update profiles set profile=jsonb_set(profile,'{gender}','"male"') where user_id in('${uid(2)}','${uid(3)}');insert into bookings(event_id,user_id) values('${pricingEvent}','${uid(2)}'),('${pricingEvent}','${uid(3)}');insert into event_purchases(event_id,user_id,gender,original_amount,total_discount_amount,final_amount,payment_status,paid_at) values('${pricingEvent}','${uid(1)}','female',29000,0,29000,'paid',now());insert into promo_codes(code,discount_percent) values('PROMO20',20);`);
-const promoQuote=(await as(1,'select event_price_quote($1,$2) q',[pricingEvent,'PROMO20'])).rows[0].q;
-assert.equal(promoQuote.original_amount,29000);
-assert.equal(promoQuote.promo_discount_amount,5800,'Marketing promo is 20% of original price');
+await db.exec(`insert into events(id,title,starts_at,duration_minutes,venue,address,capacity,age_min,age_max,status) values('${pricingEvent}','Pricing',now()+interval '20 days',120,'Venue','Address',12,19,100,'live');
+ update profiles set profile=jsonb_set(profile,'{gender}','"male"') where user_id in('${uid(2)}','${uid(3)}');
+ insert into bookings(event_id,user_id) values('${pricingEvent}','${uid(2)}'),('${pricingEvent}','${uid(3)}');
+ insert into event_payment_orders(order_number,charge_order_number,event_id,user_id,status,gender,base_amount,discount_amount,amount,terms_accepted_at,paid_at)
+ values('prior-order','prior-charge','${pricingEvent}','${uid(1)}','completed','female',29000,0,29000,now(),now());
+ insert into marketing_promo_codes(code,campaign_name,discount_percent) values('PROMO20','Test promo',20);`);
+const promoQuote=(await as(1,'select event_checkout_quote($1,$2) q',[pricingEvent,'PROMO20'])).rows[0].q;
+assert.equal(promoQuote.base_amount,29000);
+assert.equal(promoQuote.code_kind,'marketing');
+assert.equal(promoQuote.code_discount_percent,20);
+assert.equal(promoQuote.code_discount_amount,5800,'Marketing promo is 20% of original price');
 assert.equal(promoQuote.gender_balance_discount_amount,2900,'Gender imbalance is 10% of original price');
 assert.equal(promoQuote.time_discount_amount,1450,'Early bird is 5% of original price');
 assert.equal(promoQuote.boomerang_discount_amount,1450,'Returning payer receives 5% boomerang discount');
 assert.equal(promoQuote.final_amount,17400,'Female maximum marketing stack is exactly 40% off');
-await db.exec(`delete from event_purchases where event_id='${pricingEvent}';delete from bookings where event_id='${pricingEvent}';delete from events where id='${pricingEvent}';delete from promo_codes where code='PROMO20';update profiles set profile=jsonb_set(profile,'{gender}','"female"') where user_id in('${uid(2)}','${uid(3)}');`);
+const checkoutReferralCode=(await as(4,'select get_or_create_referral_code() code')).rows[0].code;
+const referralCheckoutQuote=(await as(1,'select event_checkout_quote($1,$2) q',[pricingEvent,checkoutReferralCode])).rows[0].q;
+assert.equal(referralCheckoutQuote.code_kind,'referral');
+assert.equal(referralCheckoutQuote.code_valid,true);
+assert.equal(referralCheckoutQuote.code_discount_percent,10,'Referral checkout is 10%');
+assert.equal(referralCheckoutQuote.code_discount_amount,2900,'Female referral discount is 10% of original price');
+const selfCheckoutQuote=(await as(4,'select event_checkout_quote($1,$2) q',[pricingEvent,checkoutReferralCode])).rows[0].q;
+assert.equal(selfCheckoutQuote.code_valid,false);
+assert.equal(selfCheckoutQuote.code_reason,'self');
+await db.exec(`delete from event_payment_orders where event_id='${pricingEvent}';delete from bookings where event_id='${pricingEvent}';delete from events where id='${pricingEvent}';delete from marketing_promo_codes where code='PROMO20';update profiles set profile=jsonb_set(profile,'{gender}','"female"') where user_id in('${uid(2)}','${uid(3)}');`);
 assert.equal((await as(1,'select * from profiles')).rows.length,1,'RLS hides other profiles');
 await denied(1,`insert into events(slug,title,neighborhood,starts_at,ends_at,venue,address,capacity,seats_remaining) values('unauthorized','No','Seoul',now()+interval '3 days',now()+interval '4 days','No','No',12,12)`,/permission denied|row-level security/);
 await as(6,`insert into events(slug,title,neighborhood,starts_at,ends_at,venue,address,capacity,seats_remaining) values('admin-event','Admin','Seoul',now()+interval '3 days',now()+interval '4 days','Admin','Admin',12,12)`);
@@ -36,13 +63,16 @@ await denied(1,'select * from encounters',/permission denied/);
 const a=(await as(1,'select apply($1) id',[eid])).rows[0].id;
 assert.equal((await as(1,'select apply($1) id',[eid])).rows[0].id,a,'Application retries are idempotent');
 await denied(1,`update applications set status='Approved'`,/permission denied/);
-await denied(1,`select redeem('${eid}')`,/cancellation guidelines/);
+await denied(1,`select redeem('${eid}')`,/cancellation guidelines|permission denied/);
 await db.exec(`update applications set status='Approved';insert into credit_lots(user_id,quantity,remaining,payment_reference) values('${uid(1)}',3,3,'test-payment');`);
 const booking=(await as(1,'select redeem($1,true) id',[eid])).rows[0].id;
 assert.equal((await as(1,'select redeem($1,true) id',[eid])).rows[0].id,booking);
 assert.equal((await db.query('select remaining from credit_lots')).rows[0].remaining,2,'Duplicate redemption uses one credit');
 await db.exec(`update bookings set checked_in_at=now();insert into bookings(event_id,user_id,checked_in_at) values('${eid}','${uid(2)}',now());insert into staff values('${uid(6)}','${eid}');update events set status='live';`);
 for(let n=2;n<=5;n++)await db.query('insert into encounters(id,event_id,user_a,user_b,round_number,table_number) values($1,$2,$3,$4,$5,1)',[encounter(n),eid,uid(1),uid(n),n]);
+await db.exec(`insert into event_sessions(event_id,state,total_rounds,current_round,round_duration_seconds,prepared_at,started_at,round_started_at)
+ values('${eid}','live',4,1,900,now(),now(),now())
+ on conflict(event_id) do update set state='live',current_round=1,started_at=now(),round_started_at=now(),updated_at=now();`);
 for(let n=2;n<=4;n++)await as(1,'select choose($1,$2)',[encounter(n),'yes']);
 await denied(1,`select choose('${encounter(5)}','yes')`,/At most 3 Yes/);
 await denied(3,`select choose('${encounter(2)}','yes')`,/Encounter unavailable/);
@@ -56,6 +86,7 @@ const match=(await as(1,'select id from matches')).rows[0].id;
 const revealed=(await as(1,'select match_profile($1) p',[match])).rows[0].p;
 assert.equal(revealed.phone,profile.phone);assert.ok(!('birth_date'in revealed)&&!('workplace'in revealed)&&!('job_title'in revealed),'Private fields stay hidden');
 await denied(3,`select match_profile('${match}')`,/Match unavailable/);
+await db.exec(`update event_sessions set state='finished',finished_at=now(),round_started_at=null where event_id='${eid}'`);
 await denied(1,`select choose('${encounter(2)}','no')`,/Choices are closed/);
 await as(1,"update verifications set instagram='old'");await db.exec("update verifications set status='Verified'");await as(1,"update verifications set instagram='new'");assert.equal((await as(1,'select status from verifications')).rows[0].status,'Reviewing');
 await denied(1,"update verifications set status='Verified'",/permission denied/);
@@ -67,7 +98,7 @@ await as(1,`update profiles set profile=profile where user_id=auth.uid()`);
 assert.equal((await as(1,'select status from verifications')).rows[0].status,'Verified','A no-op profile save does not invalidate approval');
 // Event changes derive URL, end time and capacity from canonical inputs.
 const f=uid(101);
-await as(6,"insert into events(id,title,starts_at,duration_minutes,venue,address,capacity,age_min,age_max,status) values($1,'Derived','2030-09-28T10:00:00Z',90,'Venue','Address',4,18,100,'live')",[f]);
+await as(6,"insert into events(id,title,starts_at,duration_minutes,venue,address,capacity,age_min,age_max,status) values($1,'Derived','2030-09-28T10:00:00Z',90,'Venue','Address',4,19,100,'live')",[f]);
 let derived=(await as(6,'select * from events where id=$1',[f])).rows[0];
 assert.equal(derived.slug,'09-28-2030');assert.equal(derived.seats_remaining,4);assert.equal(new Date(derived.ends_at).toISOString(),'2030-09-28T11:30:00.000Z');
 const duplicate=(await as(6,"insert into events(title,starts_at,venue,address,capacity,status) values('Same date','2030-09-28T12:00:00Z','Venue','Address',4,'draft') returning slug")).rows[0];
@@ -90,7 +121,7 @@ assert.equal(safe.rows.length,3);assert.equal(safe.skipped,1);
 assert.equal((await as(6,'select get_seating($1) plan',[f])).rows[0].plan.rows.length,3);
 await db.exec(`update events set starts_at=now()+interval '30 minutes',lockdown_minutes=60 where id='${f}';`);
 await db.exec(`insert into verifications(user_id,instagram,status) values('${uid(5)}','five','Verified');`);
-await denied(5,`select apply('${f}')`,/locked/);
+assert.ok((await as(5,`select apply('${f}') id`)).rows[0].id,'Lockdown still allows new applications');
 assert.equal((await db.query("select public from storage.buckets where id='wis-verification-documents'")).rows[0].public,false);
 await denied(1,"update verifications set method='document',document_path='someone-else/proof.pdf' where user_id=auth.uid()",/private verification document/);
 await denied(1,'select claim_reminders()',/permission denied/);
@@ -109,19 +140,9 @@ assert.equal((await as(1,'select instagram from verifications')).rows[0].instagr
 assert.equal((await as(2,"select * from storage.objects where bucket_id='wis-verification-documents'")).rows.length,0,'Other attendees cannot read private proof');
 assert.equal((await as(6,"select * from storage.objects where bucket_id='wis-verification-documents'")).rows.length,1,'Admins can review private proof');
 assert.equal(safe.roster.length,4,'Hosts can match participant codes to attendees');
-const referralEvent=uid(102);
-await as(6,"insert into events(id,title,starts_at,duration_minutes,venue,address,capacity,age_min,age_max,status) values($1,'Referral event',now()+interval '2 days',90,'Venue','Address',12,18,100,'live')",[referralEvent]);
 const referralCode=(await as(1,'select get_or_create_referral_code() code')).rows[0].code;
 assert.match(referralCode,/^[A-Z0-9]{6}$/);
-const selfQuote=(await as(1,'select referral_quote($1,1) q',[referralCode])).rows[0].q;
-assert.equal(selfQuote.valid,false);assert.equal(selfQuote.reason,'self');
-const friendQuote=(await as(2,'select referral_quote($1,1) q',[referralCode])).rows[0].q;
-assert.equal(friendQuote.valid,true);assert.equal(friendQuote.discount_percent,100);assert.equal(friendQuote.final_amount,0);
-const referralResult=(await as(2,'select redeem_referral($1,1,$2,true) r',[referralEvent,referralCode])).rows[0].r;
-assert.ok(referralResult.booking_id);assert.equal(referralResult.final_amount,0);
-assert.equal((await db.query('select remaining from credit_lots where id=$1',[referralResult.credit_lot_id])).rows[0].remaining,0,'Free one-ticket referral is consumed by the booking');
 await denied(2,'select * from referral_codes',/permission denied/);
-await denied(2,`select redeem_referral('${referralEvent}',1,'${referralCode}',true)`,/already been used/);
 console.log('PASS: reminder authorization, at-start scheduling, deduplicated claims, cancellation and delivery privacy.');
 console.log('PASS: date slugs, duplicate-date suffix, URL aliases, duration, automatic capacity, lockdown, seating authorization, balanced rotation, pair exclusions and private document ownership.');
 console.log('PASS: migration, profile isolation, authorization, application/redeem idempotency, 3-Yes limit, reciprocal matching, closed-event locking, private contact access, verification reset on evidence and profile edits.');

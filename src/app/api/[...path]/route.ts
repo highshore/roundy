@@ -14,6 +14,19 @@ export const dynamic='force-dynamic';
 const json=(data:unknown,status=200)=>NextResponse.json(data,{status,headers:{'Cache-Control':'private, no-store'}});
 async function isAdmin(supabase:Awaited<ReturnType<typeof createClient>>){const {data,error}=await supabase.rpc('is_admin');if(error)throw error;return data===true;}
 async function eventSlugMap(supabase:Awaited<ReturnType<typeof createClient>>,ids:string[]){if(!ids.length)return new Map<string,string>();const {data,error}=await supabase.from('events').select('id,slug').is('deleted_at',null).in('id',ids);if(error)throw error;return new Map((data??[]).map(row=>[String(row.id),String(row.slug)]));}
+async function invokeRoundyCheckout(supabase:Awaited<ReturnType<typeof createClient>>,payload:Record<string,unknown>){
+ const {data:{session},error:sessionError}=await supabase.auth.getSession();
+ if(sessionError||!session?.access_token)throw new Error('Sign in required');
+ const response=await fetch(process.env.NEXT_PUBLIC_SUPABASE_URL+'/functions/v1/roundy-checkout',{
+  method:'POST',
+  headers:{Authorization:'Bearer '+session.access_token,apikey:process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,'Content-Type':'application/json'},
+  body:JSON.stringify(payload),
+  signal:AbortSignal.timeout(45000)
+ });
+ const result=await response.json().catch(()=>({}));
+ if(!response.ok)throw new Error(typeof result.error==='string'?result.error:'Payment request failed');
+ return result;
+}
 async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}){
  if(!process.env.NEXT_PUBLIC_SUPABASE_URL||!process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY)return json({error:'Roundy is being connected. Please try again soon.'},503);
  if(req.method!=='GET'&&req.headers.get('origin')!==req.nextUrl.origin)return json({error:'Invalid request origin'},403);
@@ -185,27 +198,60 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
   if(path[0]==='checkout'){
    if(path[1]==='quote'){
     if(req.method!=='POST')return json({error:'Method not allowed'},405);
-    const body=await req.json();
+    const body=await req.json().catch(()=>null);if(!body||typeof body!=='object')return json({error:'Invalid pricing request'},400);
     const eventId=typeof body.eventId==='string'?body.eventId:'';
     const code=typeof body.code==='string'?body.code.trim().toUpperCase():'';
     if(!/^[0-9a-f-]{36}$/i.test(eventId)||(code&&!/^[A-Z0-9_-]{4,24}$/.test(code)))return json({error:'Invalid pricing request'},400);
-    const {data,error}=await supabase.rpc('event_price_quote',{p_event:eventId,p_code:code||null});
-    if(error)throw error;
-    return json({quote:data});
+    const {data,error}=await supabase.rpc('event_checkout_quote',{p_event:eventId,p_code:code||null});if(error)throw error;
+    const raw=(data??{}) as Record<string,unknown>;
+    const codeKind=raw.code_kind==='referral'?'referral':raw.code_kind==='marketing'?'promo':'none';
+    const original=Number(raw.base_amount||0);
+    const codeDiscount=Number(raw.code_discount_amount||0);
+    const totalDiscount=Number(raw.discount_amount||0);
+    const quote={
+     event_id:String(raw.event_id||eventId),
+     gender:raw.gender,
+     original_amount:original,
+     code:raw.code??null,
+     code_kind:codeKind,
+     code_valid:raw.code_valid===true,
+     code_reason:raw.code_reason?String(raw.code_reason):(raw.code?'invalid':'none'),
+     code_discount_percent:Number(raw.code_discount_percent||0),
+     referral_discount_amount:codeKind==='referral'?codeDiscount:0,
+     promo_discount_amount:codeKind==='promo'?codeDiscount:0,
+     gender_balance_discount_amount:Number(raw.gender_balance_discount_amount||0),
+     gender_balance_applied:Number(raw.gender_balance_discount_amount||0)>0,
+     time_discount_amount:Number(raw.time_discount_amount||0),
+     time_discount_kind:raw.time_discount_kind??'none',
+     boomerang_discount_amount:Number(raw.boomerang_discount_amount||0),
+     boomerang_applied:raw.is_boomerang===true,
+     total_discount_amount:totalDiscount,
+     total_discount_percent:original>0?Math.round(totalDiscount*100/original):0,
+     final_amount:Number(raw.final_amount||0),
+     male_count:Number(raw.men_count||0),
+     female_count:Number(raw.women_count||0),
+     hours_to_start:Number(raw.hours_until_event||0)
+    };
+    return json({quote});
    }
    if(path.length!==1)return json({error:'Not found'},404);
    if(req.method!=='POST')return json({error:'Method not allowed'},405);
-   const body=await req.json();
-   const eventId=typeof body.eventId==='string'?body.eventId:'';
-   const code=typeof body.code==='string'?body.code.trim().toUpperCase():'';
-   if(body.termsAccepted!==true)return json({error:'Confirm the cancellation guidelines and terms before payment'},400);
-   if(!/^[0-9a-f-]{36}$/i.test(eventId)||(code&&!/^[A-Z0-9_-]{4,24}$/.test(code)))return json({error:'Invalid checkout request'},400);
-   const {data:quote,error:quoteError}=await supabase.rpc('event_price_quote',{p_event:eventId,p_code:code||null});
-   if(quoteError)throw quoteError;
-   return json({
-    error:'Secure payment is not connected yet. Your event price has been calculated, but no charge was made.',
-    quote
-   },503);
+   const body=await req.json().catch(()=>null);if(!body||typeof body!=='object')return json({error:'Invalid checkout request'},400);
+   const action=String(body.action||'');
+   if(action==='window'){
+    const eventId=typeof body.eventId==='string'?body.eventId:'';
+    const code=typeof body.code==='string'?body.code.trim().toUpperCase():'';
+    if(body.termsAccepted!==true)return json({error:'Confirm the cancellation guidelines and terms before payment'},400);
+    if(!/^[0-9a-f-]{36}$/i.test(eventId)||(code&&!/^[A-Z0-9_-]{4,24}$/.test(code)))return json({error:'Invalid checkout request'},400);
+    return json(await invokeRoundyCheckout(supabase,{action:'window',eventId,code:code||undefined,termsAccepted:true}));
+   }
+   if(action==='verify'){
+    const orderNumber=typeof body.orderNumber==='string'?body.orderNumber:'';
+    const paymentResponse=body.paymentResponse;
+    if(!orderNumber||!paymentResponse||typeof paymentResponse!=='object')return json({error:'Invalid payment verification request'},400);
+    return json(await invokeRoundyCheckout(supabase,{action:'verify',orderNumber,paymentResponse}));
+   }
+   return json({error:'Invalid checkout action'},400);
   }
   if(path[0]==='event-night'&&path.length===2){
    const eventId=path[1];if(!/^[0-9a-f-]{36}$/i.test(eventId))return json({error:'Invalid event ID'},400);
@@ -220,9 +266,14 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
    return json({error:'Method not allowed'},405);
   }
   if(path[0]==='bookings'){
-   if(req.method==='GET'){const {data,error}=await supabase.from('bookings').select('id,event_id');if(error)throw error;const rows=data??[];const slugs=await eventSlugMap(supabase,[...new Set(rows.map(b=>String(b.event_id)))]);return json({bookings:rows.map(b=>({id:b.id,event_slug:slugs.get(String(b.event_id))}))});}
+   if(req.method==='GET'){const {data,error}=await supabase.from('bookings').select('id,event_id,payment_order_number');if(error)throw error;const rows=data??[];const slugs=await eventSlugMap(supabase,[...new Set(rows.map(b=>String(b.event_id)))]);return json({bookings:rows.map(b=>({id:b.id,event_slug:slugs.get(String(b.event_id)),paid:Boolean(b.payment_order_number)}))});}
    if(req.method==='POST'){const body=await req.json();if(body.termsAccepted!==true)return json({error:'Confirm the cancellation guidelines and terms before enrolling'},400);const {data,error}=await supabase.rpc('redeem',{p_event:body.eventId,p_terms_accepted:true});if(error)throw error;return json({id:data});}
-   if(req.method==='DELETE'){const body=await req.json();const eventId=typeof body.eventId==='string'?body.eventId:'';if(!/^[0-9a-f-]{36}$/i.test(eventId))return json({error:'Invalid event ID'},400);const {data,error}=await supabase.rpc('cancel_booking',{p_event:eventId});if(error)throw error;return json({cancelled:data===true});}
+   if(req.method==='DELETE'){
+    const body=await req.json();const eventId=typeof body.eventId==='string'?body.eventId:'';if(!/^[0-9a-f-]{36}$/i.test(eventId))return json({error:'Invalid event ID'},400);
+    const {data:booking,error:bookingError}=await supabase.from('bookings').select('payment_order_number').eq('event_id',eventId).eq('user_id',user.id).maybeSingle();if(bookingError)throw bookingError;
+    if(booking?.payment_order_number){const result=await invokeRoundyCheckout(supabase,{action:'cancel',eventId});return json({cancelled:true,refundAmount:Number(result.refundAmount||0),paid:true});}
+    const {data,error}=await supabase.rpc('cancel_booking',{p_event:eventId});if(error)throw error;return json({cancelled:data===true,paid:false});
+   }
   }
   if(path[0]==='choices'&&req.method==='POST'){const body=await req.json();const {error}=await supabase.rpc('choose',{p_encounter:body.encounterId,p_choice:body.choice});if(error)throw error;return json({saved:true});}
   if(path[0]==='matches'&&req.method==='GET'){
