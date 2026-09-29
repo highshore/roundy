@@ -33,6 +33,7 @@ Configure server-only values through the corresponding project's environment set
 | Venue map display | Vercel `NEXT_PUBLIC_NAVER_MAP_CLIENT_ID`; Naver Cloud Maps Client ID, with Roundy's domain allowed |
 | General work descriptions | Vercel `OPENAI_API_KEY`; optional `PROFILE_SUMMARY_MODEL` (default `gpt-4.1-mini`) |
 | Kakao reminders | Supabase Edge secrets `KAKAO_APPKEY`, `KAKAO_SECRET_KEY`, `KAKAO_SENDER_KEY`, `KAKAO_TEMPLATE_CODE` |
+| PAYPLE event checkout/refunds | Supabase Edge secrets `PAYPLE_CST_ID`, `PAYPLE_CUST_KEY`, `PAYPLE_CLIENT_KEY`, `PAYPLE_REFUND_KEY`; optional `PAYPLE_HOST`, `PAYPLE_AUTH_URL`, `PAYPLE_HOSTNAME`, `PAYPLE_FRONTEND_URL` |
 
 NAVER API HUB Local Search is the default venue-name and address search path. NAVER Cloud Maps Geocoding resolves an entered address when no exact Local Search result is available. Ambiguous results require selection. Work summaries send only occupation/workplace fields, never documents, photos or contact details. If generation is unavailable, a generic description is saved with `summary_status: pending` and retried on a subsequent profile save.
 
@@ -40,7 +41,7 @@ The Kakao adapter follows 1cup-web's NHN Alimtalk integration and requires a **R
 
 ## Boundaries inherited from the existing application
 
-Paid checkout remains disabled until a real provider/webhook and refund adapter exist. Existing-ticket redemption and 100%-off referral checkout are implemented; a valid referral code can issue the selected ticket pack and confirm an event without contacting a payment provider. Staff approval, document review UI, ID/QR check-in, live event round controls and complete match-photo presentation still need their own implementation; the new admin seating controls do not replace those workflows. A database administrator can review uploaded proof using protected storage. Existing profile and match privacy constraints remain in place.
+Roundy uses pay-per-event checkout for new purchases. Default event pricing is ₩49,000 for Gents and ₩29,000 for Ladies, with server-calculated referral/marketing-code, gender-balance, timing and returning-user discounts. Existing ticket balances remain usable as a legacy path. Paid cancellations refund only the amount actually charged; successful referral/promo redemptions are not restored after cancellation. The PAYPLE adapter and refund path require the Roundy Supabase project secrets listed above before real charges can be processed. Staff approval, document review UI, ID/QR check-in, live event round controls and complete match-photo presentation still need their own implementation; the new admin seating controls do not replace those workflows. A database administrator can review uploaded proof using protected storage. Existing profile and match privacy constraints remain in place.
 
 ## Verification
 
