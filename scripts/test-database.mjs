@@ -30,7 +30,7 @@ async function as(n,sql,args=[]){await db.exec('set role authenticated');await d
 async function denied(n,sql,pattern){await assert.rejects(()=>as(n,sql),pattern);}
 // Per-event checkout uses the production payment schema and additive discounts.
 const pricingEvent=uid(99);
-await db.exec(`insert into events(id,title,starts_at,duration_minutes,venue,address,capacity,age_min,age_max,status) values('${pricingEvent}','Pricing',now()+interval '20 days',120,'Venue','Address',12,18,100,'live');
+await db.exec(`insert into events(id,title,starts_at,duration_minutes,venue,address,capacity,age_min,age_max,status) values('${pricingEvent}','Pricing',now()+interval '20 days',120,'Venue','Address',12,19,100,'live');
  update profiles set profile=jsonb_set(profile,'{gender}','"male"') where user_id in('${uid(2)}','${uid(3)}');
  insert into bookings(event_id,user_id) values('${pricingEvent}','${uid(2)}'),('${pricingEvent}','${uid(3)}');
  insert into event_payment_orders(order_number,charge_order_number,event_id,user_id,status,gender,base_amount,discount_amount,amount,terms_accepted_at,paid_at)
@@ -94,7 +94,7 @@ await as(1,`update profiles set profile=profile where user_id=auth.uid()`);
 assert.equal((await as(1,'select status from verifications')).rows[0].status,'Verified','A no-op profile save does not invalidate approval');
 // Event changes derive URL, end time and capacity from canonical inputs.
 const f=uid(101);
-await as(6,"insert into events(id,title,starts_at,duration_minutes,venue,address,capacity,age_min,age_max,status) values($1,'Derived','2030-09-28T10:00:00Z',90,'Venue','Address',4,18,100,'live')",[f]);
+await as(6,"insert into events(id,title,starts_at,duration_minutes,venue,address,capacity,age_min,age_max,status) values($1,'Derived','2030-09-28T10:00:00Z',90,'Venue','Address',4,19,100,'live')",[f]);
 let derived=(await as(6,'select * from events where id=$1',[f])).rows[0];
 assert.equal(derived.slug,'09-28-2030');assert.equal(derived.seats_remaining,4);assert.equal(new Date(derived.ends_at).toISOString(),'2030-09-28T11:30:00.000Z');
 const duplicate=(await as(6,"insert into events(title,starts_at,venue,address,capacity,status) values('Same date','2030-09-28T12:00:00Z','Venue','Address',4,'draft') returning slug")).rows[0];
