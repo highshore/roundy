@@ -6,7 +6,8 @@ import { ArrowLeft, Smartphone, Eye, EyeOff, Mail } from 'lucide-react';
 import { RoundyBrand } from './roundy-brand';
 import { KakaoLoginSymbol } from './kakao-login-symbol';
 import { createClient } from '@/lib/supabase/client';
-import { authConfigured, safeReturnPath } from '@/lib/auth-routing';
+import { authConfigured, profileSetupPath, safeReturnPath } from '@/lib/auth-routing';
+import { emptyProfile, profileComplete } from '@/lib/data';
 import { tr, type Locale } from '@/lib/locale';
 import { COUNTRY_DIAL_OPTIONS, DEFAULT_COUNTRY_DIAL_ID, toE164 } from '@/lib/country-codes';
 import { LegalConsentDialog, recordLegalConsent } from './legal-consent';
@@ -70,6 +71,24 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
     const url = new URL('/auth/callback', window.location.origin);
     url.searchParams.set('next', next);
     return url.toString();
+  }
+
+  async function destinationAfterAuth(next = nextPath()) {
+    try {
+      const response = await fetch('/api/profile', { cache: 'no-store' });
+      if (response.ok) {
+        const data = await response.json();
+        const profile = { ...emptyProfile, ...(data.profile ?? {}) };
+        if (!profileComplete(profile)) return profileSetupPath(next);
+      }
+    } catch {
+      // A profile lookup failure should not turn a successful sign-in into a dead end.
+    }
+    return next;
+  }
+
+  async function finishAuth(next = nextPath()) {
+    window.location.assign(await destinationAfterAuth(next));
   }
 
   function switchView(nextMethod: Method, nextMode: Mode) {
@@ -177,7 +196,7 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
           if (mode === 'signup') {
             await recordLegalConsent().catch(() => { /* Account consent will retry after navigation. */ });
           }
-          window.location.assign(nextPath());
+          await finishAuth();
         }
       } else if (mode === 'forgot') {
         const { error: authError } = await auth.resetPasswordForEmail(email.trim(), {
@@ -204,7 +223,7 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
         if (authError) throw authError;
         if (data.session) {
           await recordLegalConsent().catch(() => { /* Account consent will retry after navigation. */ });
-          window.location.assign(nextPath());
+          await finishAuth();
         } else {
           setNotice(t(
             'Check your email to confirm your account. If you already have an account, sign in.',
@@ -232,7 +251,7 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
           });
           if (sessionError) throw sessionError;
         }
-        window.location.assign(nextPath());
+        await finishAuth();
       }
       setConsentOpen(false);
     } catch (authError) {

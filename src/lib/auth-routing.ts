@@ -14,6 +14,15 @@ export function signInPath(next: string) {
   return '/signin?next=' + encodeURIComponent(safeReturnPath(next));
 }
 
+const eventScopedProfileRoots = new Set(['applications', 'checkout', 'ticket', 'event-night']);
+
+export function profileSetupPath(next: string) {
+  const safe = safeReturnPath(next);
+  if (safe === '/reset-password' || safe.startsWith('/onboarding/')) return safe;
+  const [root, slug] = safe.replace(/^\//, '').split('/');
+  return eventScopedProfileRoots.has(root) && slug ? '/onboarding/basics/' + slug : '/onboarding/basics';
+}
+
 export function authConfigured() {
   return !!(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY);
 }
