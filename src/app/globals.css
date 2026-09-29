@@ -507,6 +507,10 @@ html:lang(ko) textarea{
 .event-card .attendee-avatar{
   width:38px;
   height:38px;
+  min-width:38px;
+  max-width:38px;
+  min-height:38px;
+  max-height:38px;
   flex-basis:38px;
   margin-left:-10px;
   border:0;
@@ -889,8 +893,9 @@ html:lang(ko) textarea{
 .admin-checkin-avatar,
 .match-photo{
   position:relative;
-  aspect-ratio:1 / 1;
-  flex-shrink:0;
+  aspect-ratio:1 / 1!important;
+  flex:0 0 auto;
+  box-sizing:border-box;
   overflow:hidden;
   border-radius:50%;
 }
@@ -940,6 +945,10 @@ html:lang(ko) textarea{
   .attendee-simple-row .attendee-avatar{
     width:52px;
     height:52px;
+    min-width:52px;
+    max-width:52px;
+    min-height:52px;
+    max-height:52px;
     flex-basis:52px;
     margin-left:-13px;
   }
@@ -2226,7 +2235,7 @@ html:lang(ko) .eyebrow{
 .landing-v1-event-bottom{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:auto;padding-top:7px}
 .landing-v1-attendees{display:flex;align-items:center;min-width:0;gap:6px}
 .landing-v1-attendees>.attendee-stack{padding-left:3px}
-.landing-v1-attendees .attendee-avatar{width:24px;height:24px;margin-left:-6px;border-width:2px}
+.landing-v1-attendees .attendee-avatar{width:24px;height:24px;min-width:24px;max-width:24px;min-height:24px;max-height:24px;flex-basis:24px;margin-left:-6px;border-width:2px}
 .landing-v1-attendees>span,.landing-v1-legacy-count{display:inline-flex;align-items:center;gap:5px;font-size:10px;line-height:1.3;color:var(--muted);white-space:nowrap}
 .landing-v1-legacy-count svg{flex:0 0 auto;width:15px;height:15px}
 .landing-v1-event-status{display:inline-flex;align-items:center;justify-content:center;min-height:32px;padding:6px 11px;border-radius:999px;background:var(--ink);color:var(--paper);font-size:11px;line-height:1.2;font-weight:700;white-space:nowrap}
