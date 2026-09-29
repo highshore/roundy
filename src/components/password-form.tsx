@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
-import { authSecurityError } from '@/lib/auth-security';
+import { authSecurityError, newPasswordError, passwordRequirements, passwordMismatch } from '@/lib/auth-security';
 import { tr, type Locale } from '@/lib/locale';
 import { NotoAnimatedEmoji } from './noto-animated-emoji';
 import styles from './sign-in.module.css';
@@ -20,6 +20,16 @@ export function PasswordForm({ locale, recovery = false }: { locale: Locale; rec
   const [done, setDone] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [confirmError, setConfirmError] = useState('');
+  const passwordRef = useRef<HTMLInputElement>(null);
+  const confirmRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (!busy && !verifying) {
+      if (passwordError) passwordRef.current?.focus();
+      else if (confirmError) confirmRef.current?.focus();
+    }
+  }, [passwordError, confirmError, busy, verifying]);
 
   useEffect(() => {
     if (!cooldown) return;
@@ -44,7 +54,10 @@ export function PasswordForm({ locale, recovery = false }: { locale: Locale; rec
     event.preventDefault();
     if (busy) return;
     setError(''); setNotice('');
-    if (password !== confirm) { setError(t('Passwords do not match.', '비밀번호가 일치하지 않아요.')); return; }
+    const invalid = newPasswordError(password, locale);
+    setPasswordError(invalid);
+    setConfirmError(password !== confirm ? passwordMismatch(locale) : '');
+    if (invalid || password !== confirm) return;
     setBusy(true);
     try {
       // Supabase decides whether the session needs reauthentication. Token refresh
@@ -57,7 +70,13 @@ export function PasswordForm({ locale, recovery = false }: { locale: Locale; rec
       if (error?.code === 'reauthentication_needed') { await sendNonce(); return; }
       if (error) throw error;
       setCurrent(''); setPassword(''); setConfirm(''); setNonce(''); setDone(true);
-    } catch (error) { setError(authSecurityError(error, locale)); } finally { setBusy(false); }
+    } catch (error) {
+      const code = (error as { code?: string })?.code;
+      if (code === 'weak_password' || code === 'same_password') {
+        setVerifying(false); setNonce(''); setNotice('');
+        setPasswordError(authSecurityError(error, locale));
+      } else setError(authSecurityError(error, locale));
+    } finally { setBusy(false); }
   }
 
   if (done) return <section className={styles.security}>
@@ -69,13 +88,16 @@ export function PasswordForm({ locale, recovery = false }: { locale: Locale; rec
 
   return <section className={styles.security} aria-busy={busy}>
     <h1>{verifying ? t('Verify it’s you', '본인 확인이 필요해요') : recovery ? t('Reset password', '비밀번호 재설정') : t('Change password', '비밀번호 변경')}</h1>
-    {!verifying && <p>{t('Choose a password with at least 8 characters.', '8자 이상의 새 비밀번호를 입력해 주세요.')}</p>}
     <form className={styles.form} onSubmit={submit}>
       <fieldset className={styles.fields} disabled={busy}>
         {verifying ? <label>{t('Verification code', '인증번호')}<input autoFocus required inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} value={nonce} onChange={e => setNonce(e.target.value.replace(/\D/g, ''))}/></label> : <>
           {!recovery && <label>{t('Current password', '현재 비밀번호')}<input type="password" autoComplete="current-password" required maxLength={128} value={current} onChange={e => setCurrent(e.target.value)}/></label>}
-          <label>{t('New password', '새 비밀번호')}<input type="password" autoComplete="new-password" required minLength={8} maxLength={128} value={password} onChange={e => setPassword(e.target.value)}/></label>
-          <label>{t('Confirm new password', '새 비밀번호 확인')}<input type="password" autoComplete="new-password" required minLength={8} maxLength={128} value={confirm} onChange={e => setConfirm(e.target.value)}/></label>
+          <label>{t('New password', '새 비밀번호')}<input ref={passwordRef} aria-invalid={!!passwordError} aria-describedby="new-password-feedback" type="password" autoComplete="new-password" required minLength={8} maxLength={128} onInvalid={e => { e.preventDefault(); setPasswordError(passwordRequirements(locale)); passwordRef.current?.focus(); }} value={password} onChange={e => { setPassword(e.target.value); setPasswordError(''); setConfirmError(''); }}/>
+            <small id="new-password-feedback" className={passwordError ? styles.fieldError : undefined} role={passwordError ? 'alert' : undefined}>{passwordError || passwordRequirements(locale)}</small>
+          </label>
+          <label>{t('Confirm new password', '새 비밀번호 확인')}<input ref={confirmRef} aria-invalid={!!confirmError} aria-describedby={confirmError ? 'new-confirm-feedback' : undefined} type="password" autoComplete="new-password" required maxLength={128} onInvalid={e => { e.preventDefault(); setConfirmError(passwordMismatch(locale)); }} value={confirm} onChange={e => { setConfirm(e.target.value); setConfirmError(''); }}/>
+            {confirmError && <small id="new-confirm-feedback" className={styles.fieldError} role="alert">{confirmError}</small>}
+          </label>
         </>}
         <button className="button" type="submit">{busy ? t('Please wait…', '처리 중…') : verifying ? t('Verify & change password', '확인하고 비밀번호 변경') : t('Save password', '비밀번호 저장')}</button>
       </fieldset>
