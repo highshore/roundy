@@ -56,7 +56,7 @@ export function AdminEventNight({event,locale}:{event:Event;locale:Locale}){
    setScannerOpen(false);
    const name=String(d.checkIn?.full_name||tr(locale,'Attendee','참가자'));
    showToast(d.checkIn?.already_checked_in?tr(locale,`${name} is already checked in.`,`${name}님은 이미 체크인했습니다.`):tr(locale,`${name} checked in.`,`${name}님 체크인이 완료되었습니다.`),'success');
-  }catch(e){setError(e instanceof Error?e.message:'QR check-in failed.');throw e;}
+  }catch(e){setError(locale==='ko'?tr(locale,'QR check-in failed.','QR 체크인에 실패했어요.'):(e instanceof Error?e.message:'QR check-in failed.'));throw e;}
   finally{setBusy(false);}
  },[event.id,locale,showToast]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -67,7 +67,7 @@ export function AdminEventNight({event,locale}:{event:Event;locale:Locale}){
    await request(event.id,{action,...extra});
    await load();
    showToast(action==='check-in'?tr(locale,'Check-in updated.','체크인이 업데이트되었습니다.'):tr(locale,'Meetup state updated.','밋업 상태가 업데이트되었습니다.'),'success');
-  }catch(e){setError(e instanceof Error?e.message:'Meetup control failed.');}
+  }catch(e){setError(locale==='ko'?tr(locale,'Meetup control failed.','밋업 상태를 변경하지 못했어요.'):(e instanceof Error?e.message:'Meetup control failed.'));}
   finally{setBusy(false);}
  }
 
@@ -75,10 +75,11 @@ export function AdminEventNight({event,locale}:{event:Event;locale:Locale}){
  if(!state)return <p className="note">{error||tr(locale,'Loading meetup control…','밋업 컨트롤을 불러오는 중…')}</p>;
 
  const checkedTotal=state.checked_men+state.checked_women;
+ const stateLabel={waiting:tr(locale,'Waiting','대기 중'),ready:tr(locale,'Ready','준비 완료'),live:tr(locale,'Live','진행 중'),final_choices:tr(locale,'Final choices','최종 선택'),finished:tr(locale,'Finished','종료')}[state.state];
  return <div className="admin-night">
   <section className="admin-night-summary">
    <div><p className="admin-kicker">{tr(locale,'MEETUP CONTROL','밋업 컨트롤')}</p><h3>{event.title}</h3></div>
-   <span className={'admin-night-state '+state.state}>{state.state.replace('_',' ')}</span>
+   <span className={'admin-night-state '+state.state}>{stateLabel}</span>
   </section>
 
   <div className="admin-night-stats">
