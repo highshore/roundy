@@ -8,6 +8,7 @@ import { KakaoLoginSymbol } from './kakao-login-symbol';
 import { createClient } from '@/lib/supabase/client';
 import { authConfigured, profileSetupPath, safeReturnPath } from '@/lib/auth-routing';
 import { emptyProfile, profileComplete } from '@/lib/data';
+import { KAKAO_PROFILE_SCOPES } from '@/lib/kakao-profile';
 import { tr, type Locale } from '@/lib/locale';
 import { COUNTRY_DIAL_OPTIONS, DEFAULT_COUNTRY_DIAL_ID, toE164 } from '@/lib/country-codes';
 import { LegalConsentDialog, recordLegalConsent } from './legal-consent';
@@ -134,7 +135,7 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
         provider: 'kakao',
         options: {
           redirectTo: callback(),
-          scopes: 'profile_nickname profile_image',
+          scopes: KAKAO_PROFILE_SCOPES,
         },
       });
       if (authError) throw authError;
