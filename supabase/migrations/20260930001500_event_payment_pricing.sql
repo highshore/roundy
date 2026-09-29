@@ -647,45 +647,45 @@ $$;
 create or replace function public.claim_event_payment_order(p_order text,p_user uuid)
 returns jsonb language sql security definer set search_path='' as $$
   select roundy_private.claim_event_payment_order(p_order,p_user);
-$;
+$$;
 
 create or replace function public.complete_event_payment_order(
   p_order text,p_user uuid,p_billing_key text,p_authorization jsonb,p_payment_result jsonb
 )
 returns uuid language sql security definer set search_path='' as $$
   select roundy_private.complete_event_payment_order(p_order,p_user,p_billing_key,p_authorization,p_payment_result);
-$;
+$$;
 
 create or replace function public.fail_event_payment_order(
   p_order text,p_user uuid,p_error_code text,p_error_message text,p_authorization jsonb default null,p_payment_result jsonb default null
 )
 returns boolean language sql security definer set search_path='' as $$
   select roundy_private.fail_event_payment_order(p_order,p_user,p_error_code,p_error_message,p_authorization,p_payment_result);
-$;
+$$;
 
 create or replace function public.prepare_event_refund(p_order text,p_user uuid)
 returns jsonb language sql security definer set search_path='' as $$
   select roundy_private.prepare_event_refund(p_order,p_user);
-$;
+$$;
 
 create or replace function public.complete_event_refund(p_order text,p_user uuid,p_refund_response jsonb)
 returns boolean language sql security definer set search_path='' as $$
   select roundy_private.complete_event_refund(p_order,p_user,p_refund_response);
-$;
+$$;
 
 create or replace function public.mark_event_refund_reconcile(
   p_order text,p_user uuid,p_refund_response jsonb,p_error_message text
 )
 returns boolean language sql security definer set search_path='' as $$
   select roundy_private.mark_event_refund_reconcile(p_order,p_user,p_refund_response,p_error_message);
-$;
+$$;
 
 create or replace function public.fail_event_refund(
   p_order text,p_user uuid,p_error_code text,p_error_message text,p_refund_response jsonb
 )
 returns boolean language sql security definer set search_path='' as $$
   select roundy_private.fail_event_refund(p_order,p_user,p_error_code,p_error_message,p_refund_response);
-$;
+$$;
 
 -- Account deletion must never silently discard a paid future seat. A member must
 -- first cancel/refund every paid future booking through the payment path.
@@ -694,7 +694,7 @@ returns boolean
 language plpgsql
 security definer
 set search_path=''
-as $
+as $$
 declare
   u uuid:=auth.uid();
 begin
@@ -744,7 +744,7 @@ begin
 
   return true;
 end;
-$;
+$$;
 
 -- Legacy ticket bookings still restore their credit. Paid-event bookings must
 -- go through the payment refund path so only the amount actually paid is returned.
