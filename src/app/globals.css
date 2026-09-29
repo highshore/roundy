@@ -2570,16 +2570,6 @@ html:lang(ko) .legal-intro h1{word-break:keep-all}
   color:var(--muted);
 }
 .profile-review-progress>div:last-child{border-bottom:0}
-.profile-review-progress>div:not(:last-child)::after{
-  content:'';
-  position:absolute;
-  left:29px;
-  bottom:-12px;
-  width:2px;
-  height:24px;
-  background:var(--border);
-  z-index:1;
-}
 .profile-review-progress>div.current{
   background:color-mix(in srgb,var(--brand) 8%,var(--paper));
   color:var(--ink);
