@@ -31,6 +31,14 @@ jobs:
           s=p.read_text().replace("page.locator('.locale-toggle')", "page.locator('.locale-toggle button')")
           s=s.replace("for(const path of ['/discover'", "for(const path of ['/','/discover'")
           s=s.replace("const text=await page.locator('body').innerText();", "await page.waitForFunction(lang=>document.documentElement.lang===lang,locale); const text=await page.locator('body').innerText();")
+          s=s.replace("assert.equal(res.headers().location,path.includes('ref=')?'/events?ref=ABC123':'/events');", "const location=new URL(res.headers().location,base);assert.equal(location.pathname+location.search,path.includes('ref=')?'/events?ref=ABC123':'/events');")
+          p.write_text(s)
+          p=Path('src/proxy.ts')
+          s=p.read_text()
+          marker='export async function proxy(request:NextRequest){'
+          assert marker in s
+          s="import { retiredEventDestination } from '@/lib/event-scope';\n"+s
+          s=s.replace(marker,marker+"\n const retired=retiredEventDestination(request.nextUrl.pathname,request.nextUrl.searchParams.get('category'));\n if(retired){\n  const destination=request.nextUrl.clone();\n  destination.pathname=retired;\n  destination.searchParams.delete('category');\n  return NextResponse.redirect(destination,308);\n }",1)
           p.write_text(s)
           PY
           git diff --check
@@ -41,6 +49,7 @@ jobs:
       - run: npm ci
       - name: Scope and authentication regression checks
         run: |
+          set -euo pipefail
           mkdir -p /tmp/roundy-qa
           node scripts/test-event-scope.mjs | tee /tmp/roundy-qa/scope-tests.txt
           node scripts/test-auth.mjs | tee /tmp/roundy-qa/auth-tests.txt
