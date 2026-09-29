@@ -1014,6 +1014,8 @@ html:lang(ko) textarea{
   white-space:nowrap;
 }
 .verification-tag.verified{background:#e7f4ec;color:#17623e}
+.verification-tag.reviewing{background:#fff3ce;color:#715a08}
+.verification-tag.reviewing .noto-animated-emoji{margin:-3px 0}
 .verification-tag.unverified{background:#f0eee8;color:var(--muted)}
 .verification-tag svg{flex:0 0 auto;stroke-width:2.5}
 
@@ -2460,4 +2462,174 @@ html:lang(ko) .legal-intro h1{word-break:keep-all}
  .how-format-switch a{min-height:42px;padding:8px 10px;font-size:12px}
  .how-format-grid{grid-template-columns:1fr}
  .how-format-card{padding:20px}
+}
+
+
+/* Noto animated emoji moments */
+.noto-animated-emoji{
+  display:inline-grid;
+  place-items:center;
+  flex:0 0 auto;
+  overflow:hidden;
+  line-height:1;
+  vertical-align:middle;
+}
+.noto-animated-emoji picture{
+  display:block;
+  width:100%;
+  height:100%;
+}
+.noto-animated-emoji img{
+  display:block;
+  width:100%;
+  height:100%;
+  object-fit:contain;
+}
+.noto-animated-emoji-fallback{
+  display:grid;
+  width:100%;
+  height:100%;
+  place-items:center;
+  font-size:1em;
+  line-height:1;
+}
+.empty>.noto-animated-emoji{margin-bottom:-4px}
+
+.onboarding-emoji-intro{
+  display:flex;
+  align-items:center;
+  gap:18px;
+  padding:8px 0 24px;
+  border-bottom:1px solid var(--border);
+}
+.onboarding-emoji-intro>div{
+  min-width:0;
+  display:grid;
+  gap:5px;
+}
+.onboarding-emoji-intro .eyebrow{margin:0}
+.onboarding-emoji-intro h1{
+  margin:0;
+  font-size:26px;
+  line-height:1.12;
+  letter-spacing:-.035em;
+}
+.onboarding-emoji-intro p:last-child{
+  max-width:46ch;
+  color:var(--muted);
+  font-size:14px;
+  line-height:1.5!important;
+}
+
+.profile-review-screen{
+  min-height:calc(100dvh - 190px);
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:12px;
+  padding:48px 0 80px;
+  text-align:center;
+}
+.profile-review-screen>.eyebrow{
+  margin:4px 0 0;
+  color:var(--brand);
+}
+.profile-review-screen h1{
+  max-width:11ch;
+  margin:0;
+  font-size:clamp(34px,8vw,48px);
+  line-height:1.02;
+  letter-spacing:-.055em;
+}
+.profile-review-lead{
+  max-width:42ch;
+  margin:4px auto 0;
+  color:var(--muted);
+  font-size:15px;
+  line-height:1.6!important;
+}
+.profile-review-progress{
+  width:min(100%,430px);
+  margin-top:16px;
+  border:1px solid var(--border);
+  border-radius:22px;
+  overflow:hidden;
+  background:var(--paper);
+  text-align:left;
+}
+.profile-review-progress>div{
+  position:relative;
+  display:grid;
+  grid-template-columns:24px minmax(0,1fr);
+  align-items:center;
+  gap:12px;
+  min-height:68px;
+  padding:14px 18px;
+  border-bottom:1px solid var(--border);
+  color:var(--muted);
+}
+.profile-review-progress>div:last-child{border-bottom:0}
+.profile-review-progress>div:not(:last-child)::after{
+  content:'';
+  position:absolute;
+  left:29px;
+  bottom:-12px;
+  width:2px;
+  height:24px;
+  background:var(--border);
+  z-index:1;
+}
+.profile-review-progress>div.current{
+  background:color-mix(in srgb,var(--brand) 8%,var(--paper));
+  color:var(--ink);
+}
+.profile-review-progress>div.done{color:var(--ink)}
+.profile-review-progress>div.done>svg{color:var(--brand)}
+.profile-review-progress>div.current>svg{color:var(--brand)}
+.profile-review-progress>div>svg{position:relative;z-index:2}
+.profile-review-progress span{display:grid;gap:2px}
+.profile-review-progress b{font-size:14px}
+.profile-review-progress small{color:var(--muted);font-size:11px}
+.profile-review-note{
+  max-width:42ch;
+  margin:6px auto 0;
+  color:var(--muted);
+  font-size:12px;
+  line-height:1.5!important;
+}
+.profile-review-actions{
+  width:min(100%,430px);
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+  margin-top:10px;
+}
+.profile-review-actions .button{
+  width:100%;
+  min-width:0;
+  justify-content:center;
+}
+
+@container roundy (max-width:480px){
+  .onboarding-emoji-intro{
+    align-items:flex-start;
+    gap:14px;
+  }
+  .onboarding-emoji-intro>.noto-animated-emoji{
+    width:62px!important;
+    height:62px!important;
+    font-size:45px!important;
+  }
+  .onboarding-emoji-intro h1{font-size:23px}
+  .profile-review-screen{
+    min-height:calc(100dvh - 140px);
+    padding:34px 0 64px;
+  }
+  .profile-review-screen>.noto-animated-emoji{
+    width:96px!important;
+    height:96px!important;
+    font-size:69px!important;
+  }
+  .profile-review-actions{grid-template-columns:1fr}
 }
