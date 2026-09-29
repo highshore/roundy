@@ -12,13 +12,6 @@ export function AboutUs({ locale }: { locale: Locale }) {
       <h1>{copy.title}</h1>
       <p className="description">{copy.intro}</p>
     </header>
-    <figure className="about-moments">
-      <div className="about-photo-collage">
-        <Image className="about-conversation" src="/images/about/conversation.webp" alt={locale === 'ko' ? '테이블에 둘러앉아 대화하는 영어 한잔 참가자들' : 'One Cup English participants talking around a table'} width={900} height={902} sizes="(max-width: 430px) 75vw, 290px" priority/>
-        <Image className="about-outing" src="/images/about/moments.webp" alt={locale === 'ko' ? '벚꽃 아래에서 함께한 디저트' : 'Desserts shared under cherry blossoms'} width={768} height={1024} sizes="160px"/>
-      </div>
-      <figcaption>{copy.photoCaption}</figcaption>
-    </figure>
     <section className="about-story" aria-labelledby="our-story">
       <p className="eyebrow">{copy.storyLabel}</p>
       <h2 id="our-story">{copy.storyTitle}</h2>
@@ -42,12 +35,6 @@ export function AboutUs({ locale }: { locale: Locale }) {
         <p className="card-copy">{body}</p>
       </section>)}
     </section>
-    <aside className="about-proof" aria-label={copy.proofLabel}>
-      <div className="about-proof-number">{copy.proofValue}</div>
-      <p className="eyebrow">{copy.proofLabel}</p>
-      <p className="about-proof-copy">{copy.proofBody}</p>
-      <a href="https://1cupenglish.com" target="_blank" rel="noopener noreferrer">{copy.source} ↗</a>
-    </aside>
     <section className="about-section" aria-labelledby="our-hosts">
       <div className="about-section-heading"><p className="eyebrow">{copy.teamLabel}</p><h2 id="our-hosts">{copy.teamTitle}</h2></div>
       {(['kyle', 'joey'] as const).map(person => <section className="info-card about-host" key={person}>

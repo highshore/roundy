@@ -1,3 +1,4 @@
+import { isRoundyEvent } from '@/lib/event-scope';
 import { isMemberUser } from '@/lib/auth-user';
 import { validFeedback } from '@/lib/feedback';
 import { NextRequest, NextResponse } from 'next/server';
@@ -18,7 +19,7 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
  if(req.method!=='GET'&&req.headers.get('origin')!==req.nextUrl.origin)return json({error:'Invalid request origin'},403);
  const path=(await params).path;const supabase=await createClient();
  try{
-  if(path[0]==='events'&&path.length===1&&req.method==='GET'){const {data,error}=await supabase.from('events').select('*').is('deleted_at',null).order('starts_at');if(error)throw error;return json({events:data});}
+  if(path[0]==='events'&&path.length===1&&req.method==='GET'){const {data,error}=await supabase.from('events').select('*').is('deleted_at',null).order('starts_at');if(error)throw error;return json({events:(data??[]).filter(isRoundyEvent)});}
   const {data:{user},error:authError}=await supabase.auth.getUser();if(authError||!user)return json({error:'Sign in required'},401);
   if(!isMemberUser(user))return json({error:'Member sign-in required'},403);
   if(path[0]==='events'&&path.length===3&&path[2]==='attendees'&&req.method==='GET'){
@@ -26,7 +27,7 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
    const {data,error}=await supabase.rpc('event_attendees',{p_event:eventId});if(error)throw error;return json({attendees:data});
   }
   if(path[0]==='feedback'&&path.length===1){
-   if(req.method==='GET'){const {data,error}=await supabase.rpc('first_meetup_feedback_context');if(error)throw error;return json(data);}
+   if(req.method==='GET'){const {data,error}=await supabase.rpc('first_meetup_feedback_context');if(error)throw error;return json(data?.event&&!isRoundyEvent(data.event)?{...data,event:null,eligible:false}:data);}
    if(req.method==='POST'){
     const body=await req.json().catch(()=>null);
     if(!body||typeof body.eventId!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(body.eventId)||!validFeedback(body.survey))return json({error:'Invalid feedback'},400);

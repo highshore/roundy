@@ -1,5 +1,6 @@
 'use client';
 import { EventCategoryBadges, NationalityBadges, NationalityFact, VenueFact } from './event-detail-meta';
+import { isRoundyEvent } from '@/lib/event-scope';
 import { lockdownNotice } from '@/lib/event-requirements';
 import { Children, cloneElement, createContext, isValidElement, useContext, useEffect, useState, type ReactNode, type FormEvent } from 'react';
 import Link from 'next/link';
@@ -27,7 +28,7 @@ import { VerificationFields } from '@/components/verification-fields';
 import { NotoAnimatedEmoji } from '@/components/noto-animated-emoji';
 import { compressProfilePhoto, fileToDataUrl } from '@/lib/uploads';
 import { authConfigured } from '@/lib/auth-routing';
-import { mbtiTypes, demoMode, eventCategories, eventCategory, events as sampleEvents, interests, emptyProfile, sampleProfile, formatKoreanPhone, profileComplete, type Event, type Profile, type Choice } from '@/lib/data';
+import { mbtiTypes, demoMode, eventCategory, events as sampleEvents, interests, emptyProfile, sampleProfile, formatKoreanPhone, profileComplete, type Event, type Profile, type Choice } from '@/lib/data';
 import { dateLabelForLocale, localizeEvent, timeLabelForLocale, localizeInterest, tr, ui, type Locale } from '@/lib/locale';
 import { MINIMUM_AGE, isAtLeastAge } from '@/lib/age';
 
@@ -35,7 +36,6 @@ type State={profile:Profile;applications:Record<string,string>;booked:Record<str
 type ReferralQuote={valid:boolean;reason:string;code:string;discount_percent:number;subtotal_amount:number;discount_amount:number;final_amount:number};
 type AttendeePreview={photo:string|null};
 type EventAttendees={women:AttendeePreview[];men:AttendeePreview[];women_count:number;men_count:number;total:number};
-type LegacyBusinessTalk={id:string;title:string;starts_at:string;ends_at:string;description:string;venue:string;address:string;capacity:number;participant_count:number;image:string;source_url:string};
 const initial:State={profile:emptyProfile,applications:{},booked:{},checked:{},choices:{},finished:false,verification:'Not started'};
 const RoundyLocaleContext=createContext<Locale>('en');
 function localizeNode(node:ReactNode,locale:Locale):ReactNode{
@@ -58,8 +58,7 @@ function Note({children}:{children:ReactNode}){return <p className="note"><Local
 function Field({label,children}:{label:string;children:ReactNode}){const locale=useContext(RoundyLocaleContext);return <label className="field"><span>{ui(locale,label)}</span>{children}</label>;}
 function Empty({title,body,href,label='Explore events'}:{title:string;body:string;href?:string;label?:string}){const locale=useContext(RoundyLocaleContext);return <div className="empty"><NotoAnimatedEmoji codepoint="1f440" fallback="👀" size={58}/><h2>{headline(ui(locale,title))}</h2><p>{ui(locale,body)}</p>{href&&<Button href={href}>{ui(locale,label)}</Button>}</div>;}
 
-function categoryLabel(event:Event,locale:Locale){const category=eventCategory(event);return tr(locale,category,category==='1:1 Speed Mingle'?'1:1 스피드 밍글':'비즈니스 토크');}
-function eventFilterLabel(category:string,locale:Locale){return category==='1:1 Speed Mingle'?tr(locale,'💞 1:1 Mingle','💞 1:1 밍글'):tr(locale,'🎙️ Business Talk','🎙️ 비즈니스 토크');}
+function categoryLabel(event:Event,locale:Locale){return isRoundyEvent(event)?tr(locale,'1:1 Mingle','1:1 밍글'):tr(locale,'Archived event','보관된 모임');}
 function occupancyLabel(attending:number,capacity:number,locale:Locale){
  const rate=capacity>0?attending/capacity:0;
  const status=rate<=0.5?tr(locale,'Early bird','얼리버드'):rate<=0.7?tr(locale,'Available','참가 가능'):tr(locale,'Almost full','마감 임박');
@@ -72,74 +71,43 @@ function LandingEventPreview({e,locale,attendees}:{e:Event;locale:Locale;attende
  const item=localizeEvent(e,locale);
  const attending=Math.max(0,e.capacity-e.seats_remaining);
  const preview=attendees?[...attendees.women,...attendees.men]:[];
- const isMingle=eventCategory(e)==='1:1 Speed Mingle';
  return <Link href={'/events/'+e.slug} className="landing-v1-event-card">
   <div className="landing-v1-event-image"><Image src={e.image||'/images/yeouido.webp'} alt={item.title} fill sizes="92px"/></div>
   <div className="landing-v1-event-copy">
-   <span className={'landing-v1-event-category '+(isMingle?'mingle':'talk')}>{isMingle?tr(locale,'1:1 Mingle','1:1 밍글'):tr(locale,'Business Talk','비즈니스 토크')}</span>
+   <span className="landing-v1-event-category mingle">{tr(locale,'1:1 Mingle','1:1 밍글')}</span>
    <h3>{headline(item.title)}</h3>
    <p><MapPin size={14} aria-hidden="true"/><span>{item.venue}</span></p>
    <p><CalendarDays size={14} aria-hidden="true"/><span>{dateLabelForLocale(e.starts_at,locale)} · {timeLabelForLocale(e.starts_at,locale)}</span></p>
    <div className="landing-v1-event-bottom">
     <div className="landing-v1-attendees"><AttendeeStack count={attending} kind={tr(locale,'Attendees','참가자')} locale={locale} attendees={preview}/></div>
-    <span className={'landing-v1-event-status '+(isMingle?'mingle':'talk')}>{occupancyLabel(attending,e.capacity,locale)}</span>
+    <span className="landing-v1-event-status mingle">{occupancyLabel(attending,e.capacity,locale)}</span>
    </div>
   </div>
  </Link>;
 }
-function LandingLegacyBusinessTalkPreview({e,locale}:{e:LegacyBusinessTalk;locale:Locale}){
- return <a href={e.source_url} target="_blank" rel="noreferrer" className="landing-v1-event-card legacy-talk-preview">
-  <div className="landing-v1-event-image">{e.image?<img src={e.image} alt={e.title} loading="lazy" width="92" height="92"/>:<div className="legacy-talk-placeholder"><MessageCircle size={24} aria-hidden="true"/></div>}</div>
-  <div className="landing-v1-event-copy">
-   <span className="landing-v1-event-category talk">{tr(locale,'Business Talk','비즈니스 토크')}</span>
-   <h3>{headline(e.title)}</h3>
-   <p><MapPin size={14} aria-hidden="true"/><span>{e.venue}</span></p>
-   <p><CalendarDays size={14} aria-hidden="true"/><span>{dateLabelForLocale(e.starts_at,locale)} · {timeLabelForLocale(e.starts_at,locale)}</span></p>
-   <div className="landing-v1-event-bottom">
-    <span className="landing-v1-event-status talk">{occupancyLabel(e.participant_count,e.capacity,locale)}</span>
-   </div>
-  </div>
- </a>;
-}
-function LegacyBusinessTalkCard({e,locale,past}:{e:LegacyBusinessTalk;locale:Locale;past:boolean}){
- return <a href={e.source_url} target="_blank" rel="noreferrer" className={'legacy-talk-card'+(past?' past-event':'')}>
-  <div className="legacy-talk-image">{e.image?<img src={e.image} alt={e.title} loading="lazy"/>:<div className="legacy-talk-placeholder"><MessageCircle size={32}/></div>}</div>
-  <div className="legacy-talk-copy">
-   <div className="event-tags"><span>{tr(locale,'Business Talk','비즈니스 토크')}</span><span>{tr(locale,'1 Cup archive','영어 한잔 기록')}</span></div>
-   <h2>{headline(e.title)}</h2>
-   <p className="event-time"><CalendarDays size={16}/>{dateLabelForLocale(e.starts_at,locale)} · {timeLabelForLocale(e.starts_at,locale)} KST</p>
-   <p className="event-location"><MapPin size={16}/>{e.venue}</p>
-   <div className="legacy-talk-meta"><span>{past?tr(locale,'Ended','종료'):tr(locale,'View on 1 Cup English','영어 한잔에서 보기')}</span><span>{e.participant_count}/{e.capacity}</span></div>
-  </div>
- </a>;
-}
-
-function LandingPage({events,legacyTalks,locale,attendeesByEvent}:{events:Event[];legacyTalks:LegacyBusinessTalk[];locale:Locale;attendeesByEvent:Record<string,EventAttendees>}){
- const legacyUpcoming=legacyTalks.filter(e=>Date.parse(e.starts_at)>=Date.now());
- const upcoming=[...events.map(e=>({kind:'roundy' as const,event:e})),...legacyUpcoming.map(e=>({kind:'legacy' as const,event:e}))].sort((a,b)=>Date.parse(a.event.starts_at)-Date.parse(b.event.starts_at)).slice(0,2);
+function LandingPage({events,locale,attendeesByEvent}:{events:Event[];locale:Locale;attendeesByEvent:Record<string,EventAttendees>}){
+ const upcoming=[...events].sort((a,b)=>Date.parse(a.starts_at)-Date.parse(b.starts_at)).slice(0,2);
  const howSteps=[
-  {label:tr(locale,'01 / CHOOSE','01 / 고르기'),title:tr(locale,'Choose Your Event','모임 고르기'),body:tr(locale,'Choose a 1:1 Mingle or Business Talk and reserve your place.','1:1 밍글과 비즈니스 토크 중 원하는 모임을 골라 자리를 예약하세요.')},
+  {label:tr(locale,'01 / CHOOSE','01 / 고르기'),title:tr(locale,'Choose Your Event','모임 고르기'),body:tr(locale,'Choose a 1:1 Mingle and reserve your place.','원하는 날짜의 1:1 밍글을 고르고 자리를 예약하세요.')},
   {label:tr(locale,'02 / MEET','02 / 만남'),title:tr(locale,'Meet Offline','직접 만나기'),body:tr(locale,'Join a hosted Event in Seoul. No endless profiles to browse before you arrive.','서울에서 열리는 라운디 모임에서 직접 만나요. 만나기 전부터 프로필을 끝없이 넘겨볼 필요는 없어요.')},
   {label:tr(locale,'03 / CONNECT','03 / 이어가기'),title:tr(locale,'Keep What Clicks','잘 통했다면 이어가기'),body:tr(locale,'For 1:1 Mingle, only mutual choices become Matches after the Event.','1:1 밍글에서는 모임이 끝난 뒤 서로 선택한 경우에만 매칭돼요.')}
  ];
  return <div className="landing landing-v1">
   <section className="landing-v1-hero">
    <span className="eyebrow landing-v1-eyebrow">ROUNDY / SEOUL</span>
-   <h1>{tr(locale,'Two Ways to Meet, Both Happen Offline','두 가지 방식으로, 직접 만나보세요')}</h1>
-   <p>{tr(locale,'Choose a 1:1 Mingle or Business Talk. Less browsing, more real conversation.','1:1 밍글 또는 비즈니스 토크. 원하는 방식으로 만나고, 대화에 집중해보세요.')}</p>
-   <div className="landing-v1-hero-media" aria-label={tr(locale,'1:1 Mingle and Business Talk','1:1 밍글과 비즈니스 토크')}>
-    <div className="landing-v1-hero-main"><Image src="/images/roundy-mingle-hero-photo.webp" alt={tr(locale,'1:1 Mingle Event','1:1 밍글 모임')} fill priority sizes="220px"/></div>
-    <div className="landing-v1-hero-side"><Image src="/images/roundy-business-hero-daytime-v2.webp" alt={tr(locale,'Business Talk Event','비즈니스 토크 모임')} fill priority sizes="110px"/></div>
-    <span className="landing-v1-hero-caption">{tr(locale,'1:1 Mingle / Business Talk','1:1 밍글 / 비즈니스 토크')}</span>
+   <h1>{tr(locale,'Meet People in Real Life','직접 만나야, 알 수 있는 사이')}</h1>
+   <p>{tr(locale,'Meet one on one, get to know each other, and reconnect when the feeling is mutual.','한 사람씩 마주 앉아 대화하고, 서로 마음이 맞으면 다시 만나요.')}</p>
+   <div className="landing-v1-hero-media" aria-label={tr(locale,'1:1 Mingle','1:1 밍글')}>
+    <div className="landing-v1-hero-main"><Image src="/images/roundy-mingle-hero-photo.webp" alt={tr(locale,'1:1 Mingle Event','1:1 밍글 모임')} fill priority sizes="(max-width: 430px) calc(100vw - 48px), 342px"/></div>
    </div>
    <Link className="button landing-v1-primary" href="/events">{tr(locale,"See this week's events",'이번 주 모임 보기')}</Link>
   </section>
 
   <section className="landing-v1-section">
    <div className="landing-v1-section-heading">
-    <span className="eyebrow landing-v1-eyebrow">{tr(locale,'TWO EVENT TYPES','두 가지 만남 방식')}</span>
-    <h2>{tr(locale,'Pick Your Kind of Event','어떤 방식으로 만나고 싶나요?')}</h2>
-    <p>{tr(locale,'Both event types are built around real conversations, with a different format for each.','1:1로 깊게, 여럿이 함께. 방식은 달라도 대화가 중심이에요.')}</p>
+    <span className="eyebrow landing-v1-eyebrow">{tr(locale,'1:1 MINGLE','라운디의 만남')}</span>
+    <h2>{tr(locale,'A Conversation Before a Profile','프로필보다 대화가 먼저')}</h2>
+    <p>{tr(locale,'Take time to talk, then decide who you would like to meet again.','먼저 충분히 이야기하고, 다시 만나고 싶은 사람을 골라요.')}</p>
    </div>
    <div className="landing-v1-event-type">
     <div className="landing-v1-event-type-image"><Image src="/images/roundy-mingle-hero.webp" alt={tr(locale,'1:1 Mingle Event','1:1 밍글 모임')} fill sizes="342px"/></div>
@@ -148,22 +116,15 @@ function LandingPage({events,legacyTalks,locale,attendeesByEvent}:{events:Event[
     <p>{tr(locale,'Meet the person before the profile. Short rotations, a later profile reveal, then private mutual matching.','프로필보다 사람을 먼저 만나보세요. 짧은 로테이션, 이후 프로필 공개, 그리고 비공개 상호 매칭으로 이어집니다.')}</p>
     <Link className="landing-v1-text-link" href="/how-it-works/mingle">{tr(locale,'How 1:1 Mingle works','1:1 밍글은 이렇게 진행돼요')}<ArrowRight size={18} aria-hidden="true"/></Link>
    </div>
-   <div className="landing-v1-event-type">
-    <div className="landing-v1-event-type-image"><Image src="/images/roundy-business-hero.webp" alt={tr(locale,'Business Talk Event','비즈니스 토크 모임')} fill sizes="342px"/></div>
-    <span className="eyebrow landing-v1-event-type-label">{tr(locale,'SMALL GROUP / ENGLISH','소그룹 / 영어')}</span>
-    <h3>{tr(locale,'Business Talk','비즈니스 토크')}</h3>
-    <p>{tr(locale,'Skip networking small talk. Start with one topic worth discussing and meet people through the way they think.','형식적인 스몰토크 대신, 한 가지 주제로 제대로 이야기해요. 대화를 통해 서로의 생각과 관점을 알아가보세요.')}</p>
-    <Link className="landing-v1-text-link" href="/how-it-works/business-talk">{tr(locale,'How Business Talk works','비즈니스 토크는 이렇게 진행돼요')}<ArrowRight size={18} aria-hidden="true"/></Link>
-   </div>
   </section>
 
   <section className="landing-v1-section landing-v1-upcoming">
    <div className="landing-v1-section-heading">
     <span className="eyebrow landing-v1-eyebrow">{tr(locale,'NEXT UP','다음 모임')}</span>
     <h2>{tr(locale,'Upcoming in Seoul','서울에서 곧 만나요')}</h2>
-    <p>{tr(locale,'Choose the Event Type first, then the date.','마음에 드는 모임 방식을 고르고, 날짜를 확인해보세요.')}</p>
+    <p>{tr(locale,'Find a date that works for you.','함께하고 싶은 날짜를 확인해보세요.')}</p>
    </div>
-   {upcoming.length>0?<div className="landing-v1-event-list">{upcoming.map(item=>item.kind==='roundy'?<LandingEventPreview key={'roundy-'+item.event.id} e={item.event} locale={locale} attendees={attendeesByEvent[item.event.id]}/>:<LandingLegacyBusinessTalkPreview key={'legacy-'+item.event.id} e={item.event} locale={locale}/>)}</div>:<p className="landing-v1-empty">{tr(locale,'New events are being prepared.','다음 모임을 준비하고 있어요.')}</p>}
+   {upcoming.length>0?<div className="landing-v1-event-list">{upcoming.map(item=><LandingEventPreview key={item.id} e={item} locale={locale} attendees={attendeesByEvent[item.id]}/>)}</div>:<p className="landing-v1-empty">{tr(locale,'New events are being prepared.','다음 모임을 준비하고 있어요.')}</p>}
    <Link className="landing-v1-text-link landing-v1-all-events" href="/events">{tr(locale,'See all events','모든 모임 보기')}<ArrowRight size={18} aria-hidden="true"/></Link>
   </section>
 
@@ -179,10 +140,7 @@ function LandingPage({events,legacyTalks,locale,attendeesByEvent}:{events:Event[
   </section>
 
   <section className="info-card landing-v1-proof">
-   <span className="eyebrow landing-v1-eyebrow">{tr(locale,'BUILT FROM REAL COMMUNITY','오프라인 커뮤니티에서 시작했어요')}</span>
-   <strong>80+</strong>
-   <p>{tr(locale,'Before Roundy, our earlier offline conversation community grew to 80+ cumulative paid members.','Roundy 전에 운영한 오프라인 대화 커뮤니티에는 누적 80명 이상의 유료 멤버가 함께했어요.')}</p>
-   <div className="landing-v1-proof-divider"/>
+   <span className="eyebrow landing-v1-eyebrow">{tr(locale,'MEET WITH CONFIDENCE','편안한 만남을 위한 약속')}</span>
    <h3>{tr(locale,'Profiles Are Reviewed Before Joining','참여 전 프로필 검토')}</h3>
    <p>{tr(locale,'Verification handles and private details are not shown to other attendees.','인증 계정과 비공개 정보는 다른 참가자에게 공개되지 않습니다.')}</p>
    <h3>{tr(locale,'Contact Stays Private Until It Is Mutual','서로 선택하기 전까지 연락처는 비공개')}</h3>
@@ -192,28 +150,21 @@ function LandingPage({events,legacyTalks,locale,attendeesByEvent}:{events:Event[
 
   <section className="landing-v1-final">
    <h2>{tr(locale,'Choose Your Event','모임 고르기')}</h2>
-   <p>{tr(locale,'See the next published Events and choose the Format that fits.','예정된 모임을 확인하고, 나에게 맞는 방식을 골라보세요.')}</p>
+   <p>{tr(locale,'Find your next 1:1 Mingle and join us.','예정된 1:1 밍글을 확인하고 함께해요.')}</p>
    <Link className="button landing-v1-primary" href="/events">{tr(locale,'See all events','모든 모임 보기')}</Link>
   </section>
  </div>;
 }
 export function App({path}:{path:string}){
- const router=useRouter();const {showToast}=useToast();const searchParams=useSearchParams();const [state,setState]=useState<State>(initial);const [ready,setReady]=useState(false);const [events,setEvents]=useState<Event[]>(demoMode?sampleEvents:[]);const [authed,setAuthed]=useState(demoMode);const [isAdmin,setIsAdmin]=useState(false);const [busy,setBusy]=useState(false);const [routeLoading,setRouteLoading]=useState(false);const [eventsLoading,setEventsLoading]=useState(!demoMode);const [message,setMessage]=useState('');const [error,setError]=useState('');const [filter,setFilter]=useState('1:1 Speed Mingle');const [businessTalkPage,setBusinessTalkPage]=useState(1);const [query,setQuery]=useState('');const [quantity,setQuantity]=useState(1);const [qr,setQr]=useState('');const [locale,setLocale]=useState<Locale>('en');const [consentEvent,setConsentEvent]=useState<Event|null>(null);const [consentCancellation,setConsentCancellation]=useState(false);const [consentTerms,setConsentTerms]=useState(false);const [deleteAccountOpen,setDeleteAccountOpen]=useState(false);const [deleteAccountConfirm,setDeleteAccountConfirm]=useState('');const [myReferralCode,setMyReferralCode]=useState('');const [checkoutReferral,setCheckoutReferral]=useState('');const [referralQuote,setReferralQuote]=useState<ReferralQuote|null>(null);const [checkoutTermsAccepted,setCheckoutTermsAccepted]=useState(false);const [attendeesByEvent,setAttendeesByEvent]=useState<Record<string,EventAttendees>>({});const [legacyTalks,setLegacyTalks]=useState<LegacyBusinessTalk[]>([]);const [ticketBalance,setTicketBalance]=useState(0);
- const p=state.profile;const parts=path.split('/');const route=parts[0]||'home';const requestedCategory=searchParams.get('category');const referralParam=(searchParams.get('ref')??'').trim().toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6);const requestedSlug=route==='onboarding'?parts[2]:route==='profile'&&parts[1]==='review-submitted'?parts[2]:parts[1];const slug=requestedSlug||(route==='onboarding'||route==='profile'||route==='events'||route==='discover'||route==='home'||route==='payment'?'':'saturday-social');const event=slug?(events.find(e=>e.slug===slug)??events.find(e=>e.previous_slugs?.includes(slug))):undefined;const appStatus=state.applications[slug];const publishedEvents=events.filter(e=>e.status==='live'||e.status==='published');const publicEvents=publishedEvents.filter(e=>Date.parse(e.starts_at)>Date.now()&&e.seats_remaining>0);
+ const router=useRouter();const {showToast}=useToast();const searchParams=useSearchParams();const [state,setState]=useState<State>(initial);const [ready,setReady]=useState(false);const [events,setEvents]=useState<Event[]>(demoMode?sampleEvents:[]);const [authed,setAuthed]=useState(demoMode);const [isAdmin,setIsAdmin]=useState(false);const [busy,setBusy]=useState(false);const [routeLoading,setRouteLoading]=useState(false);const [eventsLoading,setEventsLoading]=useState(!demoMode);const [message,setMessage]=useState('');const [error,setError]=useState('');const [query,setQuery]=useState('');const [quantity,setQuantity]=useState(1);const [qr,setQr]=useState('');const [locale,setLocale]=useState<Locale>('en');const [consentEvent,setConsentEvent]=useState<Event|null>(null);const [consentCancellation,setConsentCancellation]=useState(false);const [consentTerms,setConsentTerms]=useState(false);const [deleteAccountOpen,setDeleteAccountOpen]=useState(false);const [deleteAccountConfirm,setDeleteAccountConfirm]=useState('');const [myReferralCode,setMyReferralCode]=useState('');const [checkoutReferral,setCheckoutReferral]=useState('');const [referralQuote,setReferralQuote]=useState<ReferralQuote|null>(null);const [checkoutTermsAccepted,setCheckoutTermsAccepted]=useState(false);const [attendeesByEvent,setAttendeesByEvent]=useState<Record<string,EventAttendees>>({});const [ticketBalance,setTicketBalance]=useState(0);
+ const p=state.profile;const parts=path.split('/');const route=parts[0]||'home';const referralParam=(searchParams.get('ref')??'').trim().toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6);const requestedSlug=route==='onboarding'?parts[2]:route==='profile'&&parts[1]==='review-submitted'?parts[2]:parts[1];const slug=requestedSlug||(route==='onboarding'||route==='profile'||route==='events'||route==='discover'||route==='home'||route==='payment'?'':'saturday-social');const event=slug?(events.find(e=>e.slug===slug)??events.find(e=>e.previous_slugs?.includes(slug))):undefined;const appStatus=state.applications[slug];const publishedEvents=events.filter(e=>isRoundyEvent(e)&&(e.status==='live'||e.status==='published'));const publicEvents=publishedEvents.filter(e=>Date.parse(e.starts_at)>Date.now()&&e.seats_remaining>0);
  function patchProfile(values:Partial<Profile>){setState(s=>({...s,profile:{...s.profile,...values}}));}
  function flash(text:string){setMessage(text);setError('');}
  function setLanguage(next:Locale){setLocale(next);try{localStorage.setItem('roundy-locale',next);}catch{/* A blocked storage setting should not block language choice. */}}
  async function work(fn:()=>Promise<void>){setBusy(true);setError('');try{await fn();}catch(e){setError(e instanceof Error?e.message:'Please try again.');}finally{setBusy(false);}}
- useEffect(()=>{
-  if(route==='events'&&requestedCategory&&eventCategories.some(category=>category===requestedCategory))setFilter(requestedCategory);
- },[route,requestedCategory]);
- useEffect(()=>{setBusinessTalkPage(1);},[filter,route]);
-
- useEffect(()=>{if(!['home','discover','events'].includes(route))return;let active=true;const controller=new AbortController();void fetch('/api/legacy-business-talks',{cache:'no-store',signal:controller.signal}).then(async response=>{if(!response.ok)throw new Error('Legacy Business Talks unavailable');return response.json();}).then(data=>{if(active)setLegacyTalks(Array.isArray(data.events)?data.events:[]);}).catch(()=>{if(active)setLegacyTalks([]);});return()=>{active=false;controller.abort();};},[route]);
-
  useEffect(()=>{if(!authConfigured()){setReady(true);return;}if(demoMode){try{const saved=sessionStorage.getItem('roundy-demo-v1');if(saved)setState({...initial,...JSON.parse(saved)});}catch{/* A corrupt preview does not block browsing. */}setReady(true);}else{Promise.allSettled([api('profile').then(d=>{const loaded={...emptyProfile,...d.profile};setState(s=>({...s,profile:loaded,verification:d.verification??'Not started'}));setAuthed(true);void api('admin/role').then(result=>setIsAdmin(Boolean(result.isAdmin))).catch(()=>setIsAdmin(false));}).catch(()=>{setAuthed(false);setIsAdmin(false);})]).finally(()=>setReady(true));}},[]);
  useEffect(()=>{if(demoMode||!authConfigured()){setEventsLoading(false);return;}let active=true;let controller:AbortController|null=null;
-  async function refresh(){controller?.abort();const request=new AbortController();controller=request;setEventsLoading(true);try{const response=await fetch('/api/events',{cache:'no-store',signal:request.signal});const data=await response.json();if(!response.ok)throw new Error(data.error||'Could not load events.');if(active&&!request.signal.aborted)setEvents(data.events??[]);}catch(e){if(active&&!request.signal.aborted)setError(e instanceof Error?e.message:'Could not load events.');}finally{if(active&&!request.signal.aborted)setEventsLoading(false);}}
+  async function refresh(){controller?.abort();const request=new AbortController();controller=request;setEventsLoading(true);try{const response=await fetch('/api/events',{cache:'no-store',signal:request.signal});const data=await response.json();if(!response.ok)throw new Error(data.error||'Could not load events.');if(active&&!request.signal.aborted)setEvents(Array.isArray(data.events)?data.events.filter(isRoundyEvent):[]);}catch(e){if(active&&!request.signal.aborted)setError(e instanceof Error?e.message:'Could not load events.');}finally{if(active&&!request.signal.aborted)setEventsLoading(false);}}
   const onVisible=()=>{if(document.visibilityState==='visible')void refresh();};void refresh();window.addEventListener('focus',refresh);document.addEventListener('visibilitychange',onVisible);return()=>{active=false;controller?.abort();window.removeEventListener('focus',refresh);document.removeEventListener('visibilitychange',onVisible);};
  },[path,authed]);
  useEffect(()=>{if(!demoMode&&authed){void api('referral').then(d=>setMyReferralCode(String(d.referralCode??''))).catch(()=>setMyReferralCode(''));}},[authed]);
@@ -248,7 +199,7 @@ export function App({path}:{path:string}){
  function goApply(e:Event){if(!authed){router.push('/signin/'+e.slug);return;}if(!profileComplete(p)){router.push('/onboarding/basics/'+e.slug);return;}if(!verified){router.push('/onboarding/verification/'+e.slug);return;}setConsentCancellation(false);setConsentTerms(false);setConsentEvent(e);}
  async function confirmRegistration(){const e=consentEvent;if(!e||!consentCancellation||!consentTerms)return;await work(async()=>{if(demoMode){setState(s=>({...s,booked:{...s.booked,[e.slug]:true}}));setConsentEvent(null);router.push('/me/events');return;}try{await api('bookings',{eventId:e.id,termsAccepted:true});setState(s=>({...s,booked:{...s.booked,[e.slug]:true}}));setConsentEvent(null);await Promise.all([refreshEvents(),refreshCredits()]);router.push('/me/events');}catch(err){if(err instanceof Error&&err.message==='No valid ticket available'){setConsentEvent(null);router.push('/checkout/'+e.slug);return;}throw err;}});}
  async function deleteAccount(){if(deleteAccountConfirm!=='delete account')return;await work(async()=>{if(demoMode){setDeleteAccountOpen(false);setDeleteAccountConfirm('');setState(initial);router.push('/');return;}await api('account',{confirmation:deleteAccountConfirm},'DELETE');try{await createClient().auth.signOut({scope:'local'});}catch{/* The Auth user has already been removed server-side. */}setDeleteAccountOpen(false);setDeleteAccountConfirm('');setState(initial);setAuthed(false);setIsAdmin(false);router.push('/');router.refresh();});}
- async function refreshEvents(){if(!demoMode){const d=await api('events');setEvents(d.events??[]);}}
+ async function refreshEvents(){if(!demoMode){const d=await api('events');setEvents(Array.isArray(d.events)?d.events.filter(isRoundyEvent):[]);}}
  async function refreshCredits(){if(demoMode){setTicketBalance(0);return;}const d=await api('credits');setTicketBalance(Math.max(0,Number(d.balance)||0));}
  async function refreshEventAttendees(e:Event){if(demoMode)return;try{const d=await api('events/'+e.id+'/attendees');setAttendeesByEvent(prev=>({...prev,[e.id]:d.attendees as EventAttendees}));}catch{/* Event counts remain available even if attendee previews cannot load. */}}
  async function cancelBooking(e:Event){if(!window.confirm(tr(locale,'Cancel your registration for this event? Your ticket will be returned to your balance.','이 이벤트 등록을 취소할까요? 사용한 티켓은 잔액으로 돌아갑니다.')))return;await work(async()=>{if(demoMode){setState(prev=>{const booked={...prev.booked};delete booked[e.slug];return {...prev,booked};});flash(tr(locale,'Registration cancelled.','등록이 취소되었습니다.'));return;}await api('bookings',{eventId:e.id},'DELETE');setState(prev=>{const booked={...prev.booked};delete booked[e.slug];return {...prev,booked};});await Promise.all([refreshEvents(),refreshEventAttendees(e),refreshCredits()]);flash(tr(locale,'Registration cancelled.','등록이 취소되었습니다.'));});}
@@ -262,48 +213,21 @@ export function App({path}:{path:string}){
 
  let content:ReactNode;
  let wizardHeader:ReactNode=null;
- if(route==='home'||route==='discover')content=<LandingPage events={publicEvents} legacyTalks={legacyTalks} locale={locale} attendeesByEvent={attendeesByEvent}/>;
+ if(route==='home'||route==='discover')content=<LandingPage events={publicEvents} locale={locale} attendeesByEvent={attendeesByEvent}/>;
  else if(route==='payment')content=<><section className="intro payment-referral-intro"><p className="eyebrow">{tr(locale,'REFERRAL CHECKOUT','추천 결제')}</p><h1>{tr(locale,'Choose an event','모임을 선택하세요')}</h1><p>{/^[A-Z0-9]{6}$/.test(referralParam)?tr(locale,`Referral code ${referralParam} is ready and will be filled in automatically at checkout.`,`추천 코드 ${referralParam}가 준비되었습니다. 결제 화면에 자동으로 입력됩니다.`):tr(locale,'Choose an event, then enter your referral code at checkout.','모임을 고른 뒤 결제 화면에서 추천 코드를 입력하세요.')}</p></section><div className="event-grid">{publicEvents.map(e=><EventCard key={e.id} e={e} locale={locale} attendees={attendeesByEvent[e.id]} href={'/events/'+e.slug+(/^[A-Z0-9]{6}$/.test(referralParam)?'?ref='+encodeURIComponent(referralParam):'')}/>)}</div>{publicEvents.length===0&&<Empty title={tr(locale,'New events are on their way.','다음 모임을 준비하고 있어요.')} body={tr(locale,'Check back soon for an event where you can use your referral code.','추천 코드를 사용할 수 있는 모임이 열리면 여기에서 확인할 수 있어요.')}/>}</>;
  else if(route==='events'&&!event){
   const now=Date.now();
-  const nativeCategoryEvents=publishedEvents.filter(e=>eventCategory(e)===filter);
+  const nativeCategoryEvents=publishedEvents;
   const nativeUpcoming=nativeCategoryEvents.filter(e=>Date.parse(e.starts_at)>=now&&e.seats_remaining>0).sort((a,b)=>Date.parse(a.starts_at)-Date.parse(b.starts_at));
   const nativePast=nativeCategoryEvents.filter(e=>Date.parse(e.starts_at)<now).sort((a,b)=>Date.parse(b.starts_at)-Date.parse(a.starts_at));
-  const nativeKeys=new Set(nativeCategoryEvents.map(e=>e.title.trim().toLowerCase()+'|'+e.starts_at.slice(0,10)));
-  const legacyVisible=filter==='Business Talk'?legacyTalks.filter(e=>!nativeKeys.has(e.title.trim().toLowerCase()+'|'+e.starts_at.slice(0,10))):[];
-  const legacyUpcoming=legacyVisible.filter(e=>Date.parse(e.starts_at)>=now).sort((a,b)=>Date.parse(a.starts_at)-Date.parse(b.starts_at));
-  const legacyPast=legacyVisible.filter(e=>Date.parse(e.starts_at)<now).sort((a,b)=>Date.parse(b.starts_at)-Date.parse(a.starts_at));
-  const businessTalkItems=filter==='Business Talk'?[
-   ...nativeUpcoming.map(e=>({source:'native' as const,phase:'upcoming' as const,event:e})),
-   ...legacyUpcoming.map(e=>({source:'legacy' as const,phase:'upcoming' as const,event:e})),
-   ...nativePast.map(e=>({source:'native' as const,phase:'past' as const,event:e})),
-   ...legacyPast.map(e=>({source:'legacy' as const,phase:'past' as const,event:e}))
-  ]:[];
-  const businessTalkPageCount=Math.max(1,Math.ceil(businessTalkItems.length/5));
-  const activeBusinessTalkPage=Math.min(businessTalkPage,businessTalkPageCount);
-  const visibleBusinessTalkItems=businessTalkItems.slice((activeBusinessTalkPage-1)*5,activeBusinessTalkPage*5);
-  const upcomingCards=filter==='Business Talk'
-   ?visibleBusinessTalkItems.filter(item=>item.phase==='upcoming').map(item=>item.source==='native'
-    ?<EventCard key={'native-'+item.event.id} e={item.event} locale={locale} attendees={attendeesByEvent[item.event.id]}/>
-    :<LegacyBusinessTalkCard key={'legacy-'+item.event.id} e={item.event} locale={locale} past={false}/>)
-   :nativeUpcoming.map(e=><EventCard key={e.id} e={e} locale={locale} attendees={attendeesByEvent[e.id]}/>);
-  const pastCards=filter==='Business Talk'
-   ?visibleBusinessTalkItems.filter(item=>item.phase==='past').map(item=>item.source==='native'
-    ?<EventCard key={'native-'+item.event.id} e={item.event} locale={locale} attendees={attendeesByEvent[item.event.id]} past/>
-    :<LegacyBusinessTalkCard key={'legacy-'+item.event.id} e={item.event} locale={locale} past/>)
-   :nativePast.map(e=><EventCard key={e.id} e={e} locale={locale} attendees={attendeesByEvent[e.id]} past/>);
+  const upcomingCards=nativeUpcoming.map(e=><EventCard key={e.id} e={e} locale={locale} attendees={attendeesByEvent[e.id]}/>);
+  const pastCards=nativePast.map(e=><EventCard key={e.id} e={e} locale={locale} attendees={attendeesByEvent[e.id]} past/>);
   const hasUpcoming=upcomingCards.length>0;
   const hasPast=pastCards.length>0;
   content=<>
-   <div className="chips event-category-filters" aria-label={tr(locale,'Filter by event category','모임 유형으로 필터링')}>{eventCategories.map(x=><button aria-pressed={filter===x} className={filter===x?'chip selected':'chip'} onClick={()=>setFilter(x)} key={x}>{eventFilterLabel(x,locale)}</button>)}</div>
    {hasUpcoming&&<section className="event-history-section"><h2 className="event-history-title">{tr(locale,'Upcoming events','예정된 모임')}</h2><div className="event-grid">{upcomingCards}</div></section>}
    {hasPast&&<section className="event-history-section past-events-section"><h2 className="event-history-title">{tr(locale,'Past events','지난 모임')}</h2><p className="event-history-caption">{tr(locale,'A look back at rooms we have already hosted.','지금까지 라운디에서 열렸던 모임들을 둘러보세요.')}</p><div className="event-grid">{pastCards}</div></section>}
-   {!hasUpcoming&&!hasPast&&<Empty title={tr(locale,'No events in this category yet.','아직 이 유형의 모임이 없어요.')} body={tr(locale,'Check back soon for newly published events.','새로운 모임을 준비하고 있어요. 곧 다시 확인해 주세요.')}/>}
-   {filter==='Business Talk'&&businessTalkPageCount>1&&<nav className="business-talk-pagination" aria-label={tr(locale,'Business Talk event pages','비즈니스 토크 모임')}>
-    <button type="button" disabled={activeBusinessTalkPage<=1} onClick={()=>{setBusinessTalkPage(page=>Math.max(1,page-1));document.querySelector('.event-category-filters')?.scrollIntoView({behavior:'smooth',block:'start'});}}><ArrowLeft size={16}/>{tr(locale,'Previous','이전')}</button>
-    <span>{tr(locale,`Page ${activeBusinessTalkPage} of ${businessTalkPageCount}`,`${activeBusinessTalkPage} / ${businessTalkPageCount} 페이지`)}</span>
-    <button type="button" disabled={activeBusinessTalkPage>=businessTalkPageCount} onClick={()=>{setBusinessTalkPage(page=>Math.min(businessTalkPageCount,page+1));document.querySelector('.event-category-filters')?.scrollIntoView({behavior:'smooth',block:'start'});}}>{tr(locale,'Next','다음')}<ArrowRight size={16}/></button>
-   </nav>}
+   {!hasUpcoming&&!hasPast&&<Empty title={tr(locale,'New events are on their way.','다음 모임을 준비하고 있어요.')} body={tr(locale,'Check back soon for newly published events.','새로운 모임을 준비하고 있어요. 곧 다시 확인해 주세요.')}/>}
   </>;
  } else if(route==='events'&&event){const item=localizeEvent(event,locale);const attending=Math.max(0,event.capacity-event.seats_remaining);const duration=event.duration_minutes??Math.round((Date.parse(event.ends_at)-Date.parse(event.starts_at))/60000);const registrationClosed=Date.parse(event.starts_at)<=Date.now()||event.seats_remaining<1;const cancellationLocked=Date.now()>=Date.parse(event.starts_at)-((event.lockdown_minutes??0)*60000);const alreadyBooked=Boolean(state.booked[event.slug]);const attendeeInfo=attendeesByEvent[event.id]??{women:[],men:[],women_count:0,men_count:0,total:attending};const genderCapacity=Math.floor(event.capacity/2);content=<><div className="detail-photo"><Image src={event.image||'/images/yeouido.webp'} alt={event.title} fill sizes="(max-width: 640px) 100vw, 800px" priority/></div>{(event.images?.length??0)>1&&<div className="event-gallery">{event.images?.slice(1).map(src=><Image key={src} src={src} alt={event.title} width={360} height={240} unoptimized/>)}</div>}<section className="event-detail-copy"><EventCategoryBadges category={categoryLabel(event,locale)} requirements={event.nationality_requirements} locale={locale}/><h1>{headline(item.title)}</h1></section><div className="detail-facts"><div className="event-fact"><span className="fact-icon"><UsersRound size={20}/></span><span className="fact-copy"><b>{tr(locale,'Age range','연령')}</b><span>{event.age_min}–{event.age_max}</span></span></div><NationalityFact requirements={event.nationality_requirements} locale={locale}/><div className="event-fact"><span className="fact-icon"><CalendarDays size={20}/></span><span className="fact-copy"><b>{tr(locale,'Time','시간')}</b><span>{dateLabelForLocale(event.starts_at,locale)} · {timeLabelForLocale(event.starts_at,locale)} – {timeLabelForLocale(event.ends_at,locale)} KST</span></span></div><div className="event-fact"><span className="fact-icon"><Clock3 size={20}/></span><span className="fact-copy"><b>{tr(locale,'Duration','진행 시간')}</b><span>{duration}{tr(locale,' minutes','분')}</span></span></div><VenueFact venue={item.venue} address={item.address} description={event.venue_description} locale={locale}/></div><VenueMap venue={item.venue} address={item.address} latitude={event.latitude} longitude={event.longitude} locale={locale}/><Card label={tr(locale,'BEFORE YOU APPLY','참여 전 확인')}><ul className="before-apply"><li className="lockdown-notice">{lockdownNotice(event.lockdown_minutes??0,locale)}</li><li>{tr(locale,'Comfortable with short conversations in Korean or English','한국어 또는 영어로 짧은 대화를 편하게 나눌 수 있어야 해요')}</li><li>{tr(locale,'Bring photo ID and arrive 15 minutes early','사진이 있는 신분증을 지참하고 15분 일찍 도착해 주세요')}</li><li>{tr(locale,'Only mutual choices become a match','서로 선택해야 매칭돼요')}</li></ul></Card>{item.description?.trim()&&<p className="event-description">{item.description}</p>}<section className="attendee-list"><h2>{tr(locale,'Attendees','참가자')} <span>({attending} / {event.capacity})</span></h2>{eventCategory(event)==='1:1 Speed Mingle'?<div className="attendee-simple-panel"><div className="attendee-simple-row"><div className="attendee-simple-head"><b>{tr(locale,'Ladies','여성')}</b><span>{attendeeInfo.women_count} / {genderCapacity}</span></div><AttendeeStack count={attendeeInfo.women_count} kind={tr(locale,'Ladies','여성')} locale={locale} attendees={attendeeInfo.women}/></div><div className="attendee-simple-row"><div className="attendee-simple-head"><b>{tr(locale,'Gents','남성')}</b><span>{attendeeInfo.men_count} / {genderCapacity}</span></div><AttendeeStack count={attendeeInfo.men_count} kind={tr(locale,'Gents','남성')} locale={locale} attendees={attendeeInfo.men}/></div></div>:<div className="attendee-simple-panel"><div className="attendee-simple-row"><div className="attendee-simple-head"><b>{tr(locale,'Attendees','참가자')}</b><span>{attendeeInfo.total} / {event.capacity}</span></div><AttendeeStack count={attendeeInfo.total} kind={tr(locale,'Attendees','참가자')} locale={locale} attendees={[...attendeeInfo.women,...attendeeInfo.men]}/></div></div>}</section><div className="sticky-action">{alreadyBooked?<Button secondary disabled={busy||cancellationLocked} onClick={()=>void cancelBooking(event)}>{cancellationLocked?tr(locale,'Cancellation locked','취소 마감'):tr(locale,'Cancel registration','등록 취소')}</Button>:<Button disabled={registrationClosed} onClick={()=>goApply(event)}>{registrationClosed?tr(locale,'Event closed','신청 마감'):!eligibleToApply?tr(locale,'Complete Profile to Join','프로필을 완성하고 참여하기'):tr(locale,'Apply for this event','이 모임 신청하기')}</Button>}</div></>;}
  else if(route==='signin')content=<SignIn eventSlug={parts[1]} locale={locale}/>;
@@ -384,18 +308,12 @@ export function App({path}:{path:string}){
  }
  else if(route==='check-in'&&parts[1])content=<AdminQrCheckIn token={parts[1]} locale={locale}/>;
  else if(route==='how-it-works'){
-  const howType=parts[1]??'';
-  const howNav=<nav className="how-format-switch" aria-label={tr(locale,'Choose an event format','만남 방식 고르기')}>
-   <Link className={howType==='mingle'?'active':''} href="/how-it-works/mingle">{tr(locale,'1:1 Mingle','1:1 밍글')}</Link>
-   <Link className={howType==='business-talk'?'active':''} href="/how-it-works/business-talk">{tr(locale,'Business Talk','비즈니스 토크')}</Link>
-  </nav>;
-  if(howType==='mingle')content=<div className="how-page">
+  content=<div className="how-page">
    <header className="how-hero">
     <p className="eyebrow">{tr(locale,'1:1 MINGLE / MUTUAL MATCH','1:1 밍글 / 상호 매칭')}</p>
     <h1>{tr(locale,'Meet first. Match later.','먼저 만나고, 매칭은 나중에')}</h1>
     <p>{tr(locale,'A structured 1:1 rotation where you meet in person before deciding who you want to know better.','프로필보다 대화가 먼저예요. 짧게 1:1로 만나본 뒤, 더 이야기해보고 싶은 사람을 선택해요.')}</p>
    </header>
-   {howNav}
    <div className="how-step-list">
     {[
      [tr(locale,'01 / RESERVE','01 / 예약'),tr(locale,'Choose a 1:1 Mingle','참여할 1:1 밍글 고르기'),tr(locale,'Complete your profile and verification once, then reserve an available Mingle with a valid ticket or payment.','프로필과 인증을 한 번 완료한 뒤, 참여 가능한 1:1 밍글을 티켓 또는 결제로 예약합니다.')],
@@ -406,52 +324,8 @@ export function App({path}:{path:string}){
    </div>
    <Card label={tr(locale,'PRIVACY','개인정보')} title={tr(locale,'Private until it is mutual','서로 선택하기 전까지 비공개')}>{tr(locale,'Photos, verification handles, choices and contact details are not shown as a public attendee roster. Verification handles are never shared with other attendees.','사진, 인증 계정, 선택 결과, 연락처는 공개 참가자 명단처럼 노출되지 않습니다. 인증에 사용한 계정은 다른 참가자에게 공유되지 않습니다.')}</Card>
    <Card label={tr(locale,'SAFETY','안전')} title={tr(locale,'Respect is the entry requirement','존중이 참여의 기본 조건입니다')}>{tr(locale,'Harassment, hate speech, intoxication, recording or sharing another person’s identity can lead to removal and exclusion from future events.','괴롭힘, 혐오 표현, 과도한 음주 상태, 무단 촬영 또는 타인의 신원 공유는 현장 퇴장 및 향후 참여 제한 사유가 될 수 있습니다.')}</Card>
-   <Button href="/events?category=1%3A1%20Speed%20Mingle">{tr(locale,'See 1:1 Mingle events','1:1 밍글 모임 보기')}</Button>
+   <Button href="/events">{tr(locale,'See 1:1 Mingle events','1:1 밍글 모임 보기')}</Button>
    <Button secondary href="/me/safety">{tr(locale,'Report a concern','문제 신고하기')}</Button>
-  </div>;
-  else if(howType==='business-talk')content=<div className="how-page">
-   <header className="how-hero">
-    <p className="eyebrow">{tr(locale,'BUSINESS TALK / SMALL GROUP ENGLISH','비즈니스 토크 / 소그룹 영어')}</p>
-    <h1>{tr(locale,'Skip small talk. Start with an idea.','스몰토크 대신, 이야기할 거리가 있는 대화')}</h1>
-    <p>{tr(locale,'Business Talk uses the discussion format developed through our earlier 1 Cup English community: a prepared topic, useful material and a hosted small-group conversation.','비즈니스 토크는 영어 한잔에서 쌓아온 토론 방식을 바탕으로 해요. 한 가지 주제와 가벼운 자료를 중심으로, 소규모로 깊이 있게 대화합니다.')}</p>
-   </header>
-   {howNav}
-   <div className="how-step-list">
-    {[
-     [tr(locale,'01 / CHOOSE','01 / 모임 고르기'),tr(locale,'Choose a topic worth discussing','이야기해보고 싶은 주제 고르기'),tr(locale,'Pick a Business Talk around business, technology, careers, society or culture. Each event is built around a specific discussion theme.','비즈니스, 기술, 커리어, 사회, 문화 등 관심 가는 주제의 비즈니스 토크를 골라보세요.')],
-     [tr(locale,'02 / PREVIEW','02 / 미리 보기'),tr(locale,'Check the material if you want','원하면 자료를 가볍게 읽어보기'),tr(locale,'The topic, short reading and discussion questions are provided in advance when available. Preparation is optional, but a quick look helps you go deeper once the conversation starts.','준비된 모임이라면 주제와 짧은 읽을거리, 질문을 미리 볼 수 있어요. 꼭 준비할 필요는 없지만, 잠깐 읽어두면 대화가 더 깊어져요.')],
-     [tr(locale,'03 / DISCUSS','03 / 대화'),tr(locale,'Join a hosted small group','소그룹에서 함께 이야기하기'),tr(locale,'A facilitator keeps the discussion moving with prepared prompts and follow-up questions. The point is not random icebreakers or “How was your weekend?” small talk, but explaining your view and responding to other people’s ideas in English.','진행자가 질문을 던지고 흐름을 이어가요. 뻔한 아이스브레이킹보다, 내 생각을 영어로 설명하고 다른 사람의 관점을 듣는 데 집중합니다.')],
-     [tr(locale,'04 / CONNECT','04 / 이어가기'),tr(locale,'Meet people through how they think','대화를 통해 사람을 알아가기'),tr(locale,'Business Talk has no Yes/No matching step. You meet people naturally through the group conversation and can keep in touch when both sides want to continue.','비즈니스 토크에는 별도의 Yes/No 매칭 단계가 없어요. 그룹 대화 속에서 자연스럽게 서로를 알아가고, 서로 원한다면 모임 뒤에도 대화를 이어갈 수 있어요.')]
-    ].map(([label,title,body])=><Card key={label} label={label} title={title}>{body}</Card>)}
-   </div>
-   <Card label={tr(locale,'FROM 1 CUP ENGLISH','영어 한잔에서 이어온 방식')} title={tr(locale,'Discussion before networking','네트워킹보다 대화가 먼저')}>{tr(locale,'The format comes from the recurring 1 Cup English meetups: prepared discussion topics, facilitator-led conversation and a room designed for people who want more than a generic language exchange.','영어 한잔에서 꾸준히 운영해온 방식이에요. 준비된 주제와 진행자의 질문으로, 단순한 언어교환보다 내용 있는 대화를 만들어요.')}</Card>
-   <Card label={tr(locale,'SAFETY','안전')} title={tr(locale,'A respectful room for everyone','누구에게나 존중받는 대화 공간')}>{tr(locale,'Do not record others, share private information without permission, harass participants or dominate the room. Staff can intervene when conduct makes the discussion unsafe or uncomfortable.','다른 참가자를 무단 촬영하거나 개인정보를 허락 없이 공유하지 마세요. 괴롭힘이나 일방적인 대화 독점 등 다른 사람을 불편하게 만드는 행동에는 운영진이 개입할 수 있습니다.')}</Card>
-   <Button href="/events?category=Business%20Talk">{tr(locale,'See Business Talk events','비즈니스 토크 모임 보기')}</Button>
-   <Button secondary href="/me/safety">{tr(locale,'Report a concern','문제 신고하기')}</Button>
-  </div>;
-  else content=<div className="how-page">
-   <header className="how-hero">
-    <p className="eyebrow">{tr(locale,'HOW ROUNDY WORKS','ROUNDY는 이렇게 만나요')}</p>
-    <h1>{tr(locale,'Two formats. Two different ways to meet.','두 가지 방식, 서로 다른 만남')}</h1>
-    <p>{tr(locale,'1:1 Mingle is built around private mutual matching. Business Talk is a hosted small-group English discussion. Choose the format that matches what you want from the evening.','1:1 밍글은 비공개 상호 매칭을 중심으로 하고, 비즈니스 토크는 진행자가 이끄는 소그룹 영어 토론입니다. 원하는 만남 방식에 맞춰 선택하세요.')}</p>
-   </header>
-   {howNav}
-   <div className="how-format-grid">
-    <Link href="/how-it-works/mingle" className="how-format-card">
-     <span className="eyebrow">{tr(locale,'1:1 / MUTUAL MATCH','1:1 / 상호 매칭')}</span>
-     <h2>{tr(locale,'1:1 Mingle','1:1 밍글')}</h2>
-     <p>{tr(locale,'Short 1:1 rotations, private Yes choices and contact details only after a mutual match.','짧은 1:1 로테이션 후 비공개 Yes 선택을 하고, 서로 선택했을 때만 연락처가 공개됩니다.')}</p>
-     <span>{tr(locale,'See how it works','이용 방법 보기')} <ArrowRight size={17}/></span>
-    </Link>
-    <Link href="/how-it-works/business-talk" className="how-format-card">
-     <span className="eyebrow">{tr(locale,'SMALL GROUP / ENGLISH','소그룹 / 영어')}</span>
-     <h2>{tr(locale,'Business Talk','비즈니스 토크')}</h2>
-     <p>{tr(locale,'Prepared topics, optional pre-reading and facilitator-led discussion based on the 1 Cup English format.','영어 한잔에서 이어온 방식처럼 준비된 주제와 선택형 사전 자료, 진행자 중심의 소그룹 토론으로 진행합니다.')}</p>
-     <span>{tr(locale,'See how it works','이용 방법 보기')} <ArrowRight size={17}/></span>
-    </Link>
-   </div>
-   <Card label={tr(locale,'SHARED STANDARD','공통 운영 원칙')} title={tr(locale,'Verification, privacy and respect','인증, 개인정보 보호, 존중')}>{tr(locale,'Both formats use reviewed profiles and clear conduct rules. Private verification information is not exposed to other attendees, and safety reports are reviewed by staff.','두 모임 모두 검토된 프로필과 명확한 운영 규칙을 사용합니다. 인증에 사용한 비공개 정보는 다른 참가자에게 노출되지 않으며, 안전 신고는 운영진이 검토합니다.')}</Card>
-   <Button href="/events">{tr(locale,'Explore all events','모든 모임 보기')}</Button>
   </div>;
  }
  else if(route==='feedback')content=<FeedbackPage locale={locale}/>;

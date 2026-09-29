@@ -19,7 +19,7 @@ export const aboutCopy = {
     ],
     "originLabel": "WHAT THAT TAUGHT US",
     "originTitle": "Better conversations.\nDeeper connections.",
-    "originBody": "That experience became the idea behind our communities.",
+    "originBody": "That experience became the idea behind Roundy.",
     "originSteps": [
       [
         "01 / OFFLINE FIRST",
@@ -27,19 +27,11 @@ export const aboutCopy = {
         "Time together changed our first impressions."
       ],
       [
-        "02 / ONE CUP ENGLISH",
-        "Beyond introductions.",
-        "Current affairs sparked deeper conversations and friendships."
-      ],
-      [
-        "03 / ROUNDY",
+        "02 / ROUNDY",
         "The person behind the profile.",
         "More time to talk. More room to connect."
       ]
     ],
-    "proofValue": "80+",
-    "proofLabel": "PAID MEMBERS TO DATE",
-    "proofBody": "A community built through deeper conversations.",
     "teamLabel": "THE PEOPLE BEHIND ROUNDY",
     "teamTitle": "Hi, we’re Kyle & Joey.",
     "kyle": "Kyle",
@@ -48,7 +40,6 @@ export const aboutCopy = {
     "joey": "Joey",
     "joeyLabel": "Community Manager",
     "joeyBody": "Helping everyone feel at home.",
-    "source": "Meet One Cup English",
     "principlesLabel": "OUR PRINCIPLES",
     "principlesTitle": "Made for real connection",
     "trustLabel": "HOW WE EARN TRUST",
@@ -95,8 +86,7 @@ export const aboutCopy = {
     "safety": "How it works & safety",
     "events": "Explore events",
     "kyleBackground": "Software Engineer & Ex-Interpreter",
-    "joeyBackground": "Product Manager",
-    "photoCaption": "Moments from One Cup English"
+    "joeyBackground": "Product Manager"
   },
   "ko": {
     "eyebrow": "라운디 소개",
@@ -125,19 +115,11 @@ export const aboutCopy = {
         "함께한 시간이 첫인상을 바꿨어요."
       ],
       [
-        "02 / 영어 한잔",
-        "자기소개 너머의 대화.",
-        "시사를 이야기하며 서로의 생각을 알아갔어요."
-      ],
-      [
-        "03 / 라운디",
+        "02 / 라운디",
         "프로필 너머의 사람.",
         "충분히 대화한 뒤, 더 알아가고 싶은 사람과 이어지도록."
       ]
     ],
-    "proofValue": "80+",
-    "proofLabel": "누적 유료 회원",
-    "proofBody": "80명이 넘는 유료 멤버와 함께 대화를 이어왔어요.",
     "teamLabel": "라운디를 만드는 사람들",
     "teamTitle": "카일과 조이를 소개합니다.",
     "kyle": "카일 Kyle",
@@ -146,7 +128,6 @@ export const aboutCopy = {
     "joey": "조이 Joey",
     "joeyLabel": "커뮤니티 매니저",
     "joeyBody": "누구나 편안하게 어울릴 수 있도록 도와요.",
-    "source": "영어 한잔 알아보기",
     "principlesLabel": "우리가 중요하게 생각하는 것",
     "principlesTitle": "직접 만나, 제대로 대화하는 시간",
     "trustLabel": "신뢰를 위한 약속",
@@ -193,7 +174,6 @@ export const aboutCopy = {
     "safety": "이용 방법 및 안전",
     "events": "모임 둘러보기",
     "kyleBackground": "소프트웨어 엔지니어 & 전직 통역사",
-    "joeyBackground": "프로덕트 매니저",
-    "photoCaption": "영어 한잔에서 함께한 순간들"
+    "joeyBackground": "프로덕트 매니저"
   }
 } as const;

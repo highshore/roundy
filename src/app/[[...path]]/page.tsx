@@ -1,12 +1,24 @@
+import { retiredEventDestination } from '@/lib/event-scope';
 import { isMemberUser } from '@/lib/auth-user';
 import { App } from '@/components/app';
-import { redirect } from 'next/navigation';
+import { redirect, permanentRedirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { authConfigured, isPrivatePath, signInPath } from '@/lib/auth-routing';
 
-export default async function Page({params}:{params:Promise<{path?:string[]}>}) {
+export default async function Page({params,searchParams}:{params:Promise<{path?:string[]}>;searchParams:Promise<Record<string,string|string[]|undefined>>}) {
  const {path=[]}=await params;
  const pathname='/' + path.join('/');
+ const query=await searchParams;
+ const category=typeof query.category==='string'?query.category:null;
+ const retired=retiredEventDestination(pathname,category);
+ if(retired){
+  const remaining=new URLSearchParams();
+  for(const [key,value] of Object.entries(query)){
+   if(key==='category'||value===undefined)continue;
+   for(const item of Array.isArray(value)?value:[value])remaining.append(key,item);
+  }
+  permanentRedirect(retired+(remaining.size?'?'+remaining.toString():''));
+ }
  if (isPrivatePath(pathname)) {
   if (!authConfigured()) redirect(signInPath(pathname));
   const supabase=await createClient();
