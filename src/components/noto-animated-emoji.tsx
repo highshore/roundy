@@ -42,14 +42,20 @@ export function NotoAnimatedEmoji({
       {failed || reducedMotion ? (
         <span className="noto-animated-emoji-fallback" aria-hidden="true">{fallback}</span>
       ) : (
-        <img
-          src={`https://fonts.gstatic.com/s/e/notoemoji/latest/${codepoint.toLowerCase()}/512.gif`}
-          alt=""
-          aria-hidden="true"
-          loading="lazy"
-          decoding="async"
-          onError={() => setFailed(true)}
-        />
+        <picture>
+          <source
+            srcSet={`https://fonts.gstatic.com/s/e/notoemoji/latest/${codepoint.toLowerCase()}/512.webp`}
+            type="image/webp"
+          />
+          <img
+            src={`https://fonts.gstatic.com/s/e/notoemoji/latest/${codepoint.toLowerCase()}/512.gif`}
+            alt=""
+            aria-hidden="true"
+            loading="lazy"
+            decoding="async"
+            onError={() => setFailed(true)}
+          />
+        </picture>
       )}
     </span>
   );
