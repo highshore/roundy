@@ -59,8 +59,13 @@ function Empty({title,body,href,label='Explore events'}:{title:string;body:strin
 
 function categoryLabel(event:Event,locale:Locale){const category=eventCategory(event);return tr(locale,category,category==='1:1 Speed Mingle'?'1:1 스피드 밍글':'비즈니스 토크');}
 function eventFilterLabel(category:string,locale:Locale){return category==='1:1 Speed Mingle'?tr(locale,'💞 1:1 Mingle','💞 1:1 밍글'):tr(locale,'🎙️ Business Talk','🎙️ 비즈니스 토크');}
+function occupancyLabel(attending:number,capacity:number,locale:Locale){
+ const rate=capacity>0?attending/capacity:0;
+ const status=rate<=0.5?tr(locale,'Early bird','얼리버드'):rate<=0.7?tr(locale,'Available','참가 가능'):tr(locale,'Almost full','마감 임박');
+ return `${status} (${attending} / ${capacity})`;
+}
 function AttendeeStack({count,kind,locale,attendees=[]}:{count:number;kind:string;locale:Locale;attendees?:AttendeePreview[]}){const shown=Math.min(5,Math.max(0,count));const visible=attendees.slice(0,shown);return <div className="attendee-stack" aria-label={count+' '+ui(locale,kind)}>{Array.from({length:shown},(_,i)=>{const attendee=visible[i];return <span className={'attendee-avatar avatar-'+i} key={i} aria-hidden="true" style={attendee?.photo?{backgroundImage:`url("${attendee.photo}")`}:undefined}>{!attendee?.photo&&<UserRound size={13}/>}</span>;})}{count>shown&&<span className="attendee-avatar more" aria-hidden="true">+{count-shown}</span>}</div>;}
-export function EventCard({e,locale,href,attendees,past=false}:{e:Event;locale:Locale;href?:string;attendees?:EventAttendees;past?:boolean}){const item=localizeEvent(e,locale);const attending=Math.max(0,e.capacity-e.seats_remaining);const preview=attendees?[...attendees.women,...attendees.men]:[];return <Link href={href??'/events/'+e.slug} className={'event-card'+(past?' past-event':'')}><div className="event-photo"><Image src={e.image||'/images/yeouido.webp'} alt={e.title} fill sizes="(max-width: 640px) 100vw, 500px"/><span className="photo-arrow"><ArrowUpRight size={24}/></span></div><div className="event-copy"><div className="event-tags"><span>{categoryLabel(e,locale)}</span><span>{e.age_min}–{e.age_max}{tr(locale,' years','세')}</span><div className="nationality-chip-group"><NationalityBadges requirements={e.nationality_requirements} locale={locale}/></div></div><h2>{headline(item.title)}</h2><p className="event-time"><CalendarDays size={16}/>{dateLabelForLocale(e.starts_at,locale)} · {timeLabelForLocale(e.starts_at,locale)} KST</p><p className="event-location"><MapPin size={16}/>{item.venue}</p><div className="event-attendance">{past?<><div><span className="past-event-status">{tr(locale,'Ended','종료')}</span></div><span>{attending}/{e.capacity} {tr(locale,'attended','참여')}</span></>:<><div><AttendeeStack count={attending} kind={tr(locale,'Attendees','참가자')} locale={locale} attendees={preview}/></div><span aria-label={attending+' / '+e.capacity+' '+tr(locale,'seats filled','좌석 예약')}>{attending}/{e.capacity}</span></>}</div></div></Link>;}
+export function EventCard({e,locale,href,attendees,past=false}:{e:Event;locale:Locale;href?:string;attendees?:EventAttendees;past?:boolean}){const item=localizeEvent(e,locale);const attending=Math.max(0,e.capacity-e.seats_remaining);const preview=attendees?[...attendees.women,...attendees.men]:[];return <Link href={href??'/events/'+e.slug} className={'event-card'+(past?' past-event':'')}><div className="event-photo"><Image src={e.image||'/images/yeouido.webp'} alt={e.title} fill sizes="(max-width: 640px) 100vw, 500px"/><span className="photo-arrow"><ArrowUpRight size={24}/></span></div><div className="event-copy"><div className="event-tags"><span>{categoryLabel(e,locale)}</span><span>{e.age_min}–{e.age_max}{tr(locale,' years','세')}</span><div className="nationality-chip-group"><NationalityBadges requirements={e.nationality_requirements} locale={locale}/></div></div><h2>{headline(item.title)}</h2><p className="event-time"><CalendarDays size={16}/>{dateLabelForLocale(e.starts_at,locale)} · {timeLabelForLocale(e.starts_at,locale)} KST</p><p className="event-location"><MapPin size={16}/>{item.venue}</p><div className="event-attendance">{past?<><div><span className="past-event-status">{tr(locale,'Ended','종료')}</span></div><span>{attending}/{e.capacity} {tr(locale,'attended','참여')}</span></>:<><div><AttendeeStack count={attending} kind={tr(locale,'Attendees','참가자')} locale={locale} attendees={preview}/></div><span>{occupancyLabel(attending,e.capacity,locale)}</span></>}</div></div></Link>;}
 
 function LandingEventPreview({e,locale,attendees}:{e:Event;locale:Locale;attendees?:EventAttendees}){
  const item=localizeEvent(e,locale);
@@ -76,7 +81,7 @@ function LandingEventPreview({e,locale,attendees}:{e:Event;locale:Locale;attende
    <p><CalendarDays size={14} aria-hidden="true"/><span>{dateLabelForLocale(e.starts_at,locale)} · {timeLabelForLocale(e.starts_at,locale)}</span></p>
    <div className="landing-v1-event-bottom">
     <div className="landing-v1-attendees"><AttendeeStack count={attending} kind={tr(locale,'Attendees','참가자')} locale={locale} attendees={preview}/></div>
-    <span className={'landing-v1-event-status '+(isMingle?'mingle':'talk')} aria-label={attending+' / '+e.capacity+' '+tr(locale,'seats filled','좌석 예약')}>{attending}/{e.capacity}</span>
+    <span className={'landing-v1-event-status '+(isMingle?'mingle':'talk')}>{occupancyLabel(attending,e.capacity,locale)}</span>
    </div>
   </div>
  </Link>;
@@ -90,7 +95,7 @@ function LandingLegacyBusinessTalkPreview({e,locale}:{e:LegacyBusinessTalk;local
    <p><MapPin size={14} aria-hidden="true"/><span>{e.venue}</span></p>
    <p><CalendarDays size={14} aria-hidden="true"/><span>{dateLabelForLocale(e.starts_at,locale)} · {timeLabelForLocale(e.starts_at,locale)}</span></p>
    <div className="landing-v1-event-bottom">
-    <span className="landing-v1-event-status talk" aria-label={e.participant_count+' / '+e.capacity+' '+tr(locale,'seats filled','좌석 예약')}>{e.participant_count}/{e.capacity}</span>
+    <span className="landing-v1-event-status talk">{occupancyLabel(e.participant_count,e.capacity,locale)}</span>
    </div>
   </div>
  </a>;
