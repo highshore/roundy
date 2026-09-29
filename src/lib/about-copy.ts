@@ -116,7 +116,7 @@ export const aboutCopy = {
       ]
     ],
     "originLabel": "그 경험에서 배운 것",
-    "originTitle": "대화가 깊어지면,\n사이도 달라지니까.",
+    "originTitle": "대화를 나누면,\n사람을 보는 방식도 달라지니까.",
     "originBody": "그 경험이 Roundy의 시작이 됐어요.",
     "originSteps": [
       [
@@ -191,7 +191,7 @@ export const aboutCopy = {
       ]
     ],
     "safety": "이용 방법 및 안전",
-    "events": "이벤트 둘러보기",
+    "events": "모임 둘러보기",
     "kyleBackground": "소프트웨어 엔지니어 & 전직 통역사",
     "joeyBackground": "프로덕트 매니저",
     "photoCaption": "영어 한잔에서 함께한 순간들"
