@@ -8,7 +8,7 @@ await db.exec('grant usage on schema storage to authenticated;grant select,inser
 await db.exec('alter default privileges in schema public grant all on tables to anon, authenticated');
 // pg_cron and pg_net are hosted infrastructure. Keep the scheduler config composite
 // type available so later historical migrations can recompile the dispatcher in PGlite.
-for(const f of (await readdir('supabase/migrations')).sort().filter(f=>!f.endsWith('_roundy_reminder_schedule.sql'))){
+for(const f of (await readdir('supabase/migrations')).sort().filter(f=>!f.endsWith('_roundy_reminder_schedule.sql')&&!f.endsWith('_marketing_scheduler.sql'))){
  if(f.endsWith('_simplify_event_lifecycle.sql')){
   await db.exec(`create table if not exists wis_private.reminder_scheduler_config(
    singleton boolean primary key default true check(singleton),
