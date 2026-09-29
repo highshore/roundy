@@ -41,6 +41,17 @@ function memberEventStatus(value:string,locale:Locale){
   const item=labels[value.toLowerCase()];
   return item?tr(locale,item[0],item[1]):value;
 }
+function verificationStatusLabel(value:string,locale:Locale){
+  if(value==='Verified'||value==='Approved')return tr(locale,'Approved','승인됨');
+  if(value==='Rejected')return tr(locale,'Rejected','반려됨');
+  if(value==='Reviewing')return tr(locale,'Reviewing','검토 중');
+  if(value==='Not started'||!value)return tr(locale,'Not submitted','미제출');
+  return value;
+}
+function rejectionReasonLabel(value:string,locale:Locale){
+  const item=rejectionReasons.find(([id])=>id===value);
+  return item?tr(locale,item[1],item[2]):value;
+}
 function status(member: Member, locale: Locale) {
   if (member.verification.status === 'Verified') return tr(locale, 'Approved', '승인됨');
   if (member.verification.status === 'Rejected') return tr(locale, 'Rejected', '반려됨');
@@ -67,7 +78,7 @@ function MemberModal({ member, locale, busy, onClose, onReview, inline=false }: 
     [tr(locale, 'Email', '이메일'), member.email || '—'],
     [tr(locale, 'Phone', '전화번호'), value(profile, 'phone') || '—'],
     [tr(locale, 'Date of birth', '생년월일'), value(profile, 'birth_date') || '—'],
-    [tr(locale, 'Gender', '성별'), value(profile, 'gender') || '—'],
+    [tr(locale, 'Gender', '성별'), value(profile, 'gender')==='female'?tr(locale,'Woman','여성'):value(profile, 'gender')==='male'?tr(locale,'Man','남성'):value(profile, 'gender') || '—'],
     [tr(locale, 'Nationality', '국적'), value(profile, 'nationality') || '—'],
     [tr(locale, 'Height', '키'), value(profile, 'height_cm') ? value(profile, 'height_cm') + ' cm' : '—'],
     ['MBTI', value(profile, 'mbti') || '—'],
@@ -80,7 +91,7 @@ function MemberModal({ member, locale, busy, onClose, onReview, inline=false }: 
     {photos.length > 0 && <div className="member-photo-grid">{photos.map((photo, index) => <img src={photo} key={photo} alt={tr(locale, 'Profile photo ', '프로필 사진 ') + (index + 1)} />)}</div>}
     <dl className="member-profile-details">{detail.map(([label, content]) => <div key={label}><dt>{label}</dt><dd>{content}</dd></div>)}</dl>
     {interests.length > 0 && <section className="member-section"><h3>{tr(locale, 'Interests', '관심사')}</h3><div className="chips">{interests.map(interest => <span className="chip" key={interest}>{interest}</span>)}</div></section>}
-    <section className="member-section"><h3>{tr(locale, 'Verification', '인증')}</h3><p>{member.verification.status === 'Verified' ? tr(locale, 'Approved', '승인됨') : member.verification.status || tr(locale, 'Not submitted', '미제출')}</p>{member.verification.instagram && <p className="verification-social"><Instagram size={18} aria-label="Instagram"/> @{member.verification.instagram}</p>}{member.verification.linkedin && <p className="verification-social"><Linkedin size={18} aria-label="LinkedIn"/> {member.verification.linkedin}</p>}{documentName && <a className="admin-secondary" href={'/api/verification-documents/' + member.user_id + '/' + documentName} target="_blank" rel="noreferrer"><FileText size={16}/>{tr(locale, 'Open work or student proof', '재직 또는 재학 증빙 열기')}<ExternalLink size={15}/></a>}{member.verification.rejection_reason && <p className="member-rejection">{tr(locale, 'Previous rejection: ', '이전 반려 사유: ')}{member.verification.rejection_reason}</p>}</section>
+    <section className="member-section"><h3>{tr(locale, 'Verification', '인증')}</h3><p>{verificationStatusLabel(member.verification.status,locale)}</p>{member.verification.instagram && <p className="verification-social"><Instagram size={18} aria-label="Instagram"/> @{member.verification.instagram}</p>}{member.verification.linkedin && <p className="verification-social"><Linkedin size={18} aria-label="LinkedIn"/> {member.verification.linkedin}</p>}{documentName && <a className="admin-secondary" href={'/api/verification-documents/' + member.user_id + '/' + documentName} target="_blank" rel="noreferrer"><FileText size={16}/>{tr(locale, 'Open work or student proof', '재직 또는 재학 증빙 열기')}<ExternalLink size={15}/></a>}{member.verification.rejection_reason && <p className="member-rejection">{tr(locale, 'Previous rejection: ', '이전 반려 사유: ')}{rejectionReasonLabel(member.verification.rejection_reason,locale)}</p>}</section>
     <section className="member-section"><h3>{tr(locale, 'Payments & attendance', '결제 및 참석')}</h3><div className="member-stats"><span><b>{member.payments.credit_lots}</b>{tr(locale, 'payment lots', '결제 건')}</span><span><b>{member.payments.credits_remaining}</b>{tr(locale, 'credits left', '남은 크레딧')}</span><span><b>{member.bookings.length}</b>{tr(locale, 'bookings', '예약')}</span><span><b>{member.applications.length}</b>{tr(locale, 'applications', '신청')}</span></div>{member.applications.length > 0 && <ul className="member-event-list">{member.applications.map(application => <li key={application.id}><span>{application.event_title}</span><b>{memberEventStatus(application.status,locale)}</b></li>)}</ul>}</section>
     <section className="member-review"><h3>{tr(locale, 'Member approval', '회원 승인')}</h3><label><span>{tr(locale, 'Rejection reason', '반려 사유')}</span><select value={reason} onChange={event => setReason(event.target.value)}><option value="">{tr(locale, 'Choose a reason before rejecting', '반려 사유를 선택하세요')}</option>{rejectionReasons.map(([id, en, ko]) => <option key={id} value={id}>{tr(locale, en, ko)}</option>)}</select></label><div><button type="button" className="admin-primary" disabled={busy} onClick={() => onReview('Approved')}>{busy ? tr(locale, 'Saving…', '저장 중…') : <><BadgeCheck size={18}/>{tr(locale, 'Approve member', '회원 승인')}</>}</button><button type="button" className="admin-reject" disabled={busy || !reason} onClick={() => onReview('Rejected', reason)}>{tr(locale, 'Reject member', '회원 반려')}</button></div></section>
   </div></div>;
@@ -94,14 +105,14 @@ export function AdminMembers({ locale, memberId }: { locale: Locale; memberId?: 
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState('');
   async function load() { const result = await request('admin/members'); setMembers(result.members || []); return result.members as Member[]; }
-  useEffect(() => { void load().then(members=>{if(memberId){const member=members.find(member=>member.user_id===memberId);if(!member)throw new Error(tr(locale,'Member not found.','회원을 찾을 수 없어요.'));setSelected(member);}}).catch(error => setError(error instanceof Error ? error.message : 'Request failed')).finally(() => setBusy(false)); }, []);
+  useEffect(() => { void load().then(members=>{if(memberId){const member=members.find(member=>member.user_id===memberId);if(!member)throw new Error(tr(locale,'Member not found.','회원을 찾을 수 없어요.'));setSelected(member);}}).catch(error => setError(locale==='ko'?tr(locale,'Could not load members.','회원 정보를 불러오지 못했어요.'):(error instanceof Error ? error.message : 'Could not load members.'))).finally(() => setBusy(false)); }, []);
   async function review(next: 'Approved' | 'Rejected', reason?: string) {
     if (!selected) return;
     setBusy(true); setError('');
     try {
       const result = await request('admin/members/' + selected.user_id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: next, rejection_reason: reason || '' }) });
       setSelected(result.member); setMembers(current => current.map(member => member.user_id === result.member.user_id ? result.member : member));
-    } catch (error) { setError(error instanceof Error ? error.message : 'Request failed'); }
+    } catch (error) { setError(locale==='ko'?tr(locale,'Could not update member.','회원 정보를 업데이트하지 못했어요.'):(error instanceof Error ? error.message : 'Could not update member.')); }
     finally { setBusy(false); }
   }
   const filtered=members.filter(member=>(filter==='all'||member.verification.status===filter)&&(gender==='all'||value(member.profile,'gender')===gender)&&[value(member.profile,'full_name'),member.email||''].some(text=>text.toLowerCase().includes(query.toLowerCase())));
