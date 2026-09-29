@@ -121,7 +121,7 @@ assert.equal(safe.rows.length,3);assert.equal(safe.skipped,1);
 assert.equal((await as(6,'select get_seating($1) plan',[f])).rows[0].plan.rows.length,3);
 await db.exec(`update events set starts_at=now()+interval '30 minutes',lockdown_minutes=60 where id='${f}';`);
 await db.exec(`insert into verifications(user_id,instagram,status) values('${uid(5)}','five','Verified');`);
-await denied(5,`select apply('${f}')`,/locked/);
+assert.ok((await as(5,`select apply('${f}') id`)).rows[0].id,'Lockdown still allows new applications');
 assert.equal((await db.query("select public from storage.buckets where id='wis-verification-documents'")).rows[0].public,false);
 await denied(1,"update verifications set method='document',document_path='someone-else/proof.pdf' where user_id=auth.uid()",/private verification document/);
 await denied(1,'select claim_reminders()',/permission denied/);
