@@ -27,3 +27,25 @@ for(const provider of ['email','phone','kakao'])assert.equal(isMemberUser({app_m
 for(const user of [null,{app_metadata:{}},{app_metadata:{provider:'anonymous'}},{is_anonymous:true,app_metadata:{provider:'email'}}])assert.equal(isMemberUser(user),false);
 assert.equal(safeReturnPath('/reset-password'),'/reset-password');
 console.log('PASS: supported providers, anonymous denial and password-recovery return path');
+
+const kakaoSource=await readFile('src/lib/kakao-profile.ts','utf8');
+const kakaoCompiled=ts.transpileModule(kakaoSource,{compilerOptions:{module:ts.ModuleKind.ESNext}}).outputText;
+const {KAKAO_PROFILE_SCOPES,kakaoBirthDate,kakaoKoreanPhone,kakaoProfilePrefill}=await import('data:text/javascript;base64,'+Buffer.from(kakaoCompiled).toString('base64'));
+for(const scope of ['profile_nickname','profile_image','account_email','name','gender','birthday','birthyear','phone_number'])assert.equal(KAKAO_PROFILE_SCOPES.split(' ').includes(scope),true);
+assert.equal(kakaoBirthDate({birthyear:'2002',birthday:'1130',birthday_type:'SOLAR'}),'2002-11-30');
+assert.equal(kakaoBirthDate({birthyear:'2002',birthday:'1130',birthday_type:'LUNAR'}),'');
+assert.equal(kakaoBirthDate({birthyear:'2002',birthday:'0231',birthday_type:'SOLAR'}),'');
+assert.equal(kakaoKoreanPhone('+82 10-1234-5678'),'010-1234-5678');
+assert.equal(kakaoKoreanPhone('+82 010-1234-5678'),'010-1234-5678');
+assert.equal(kakaoKoreanPhone('+1 415-555-1212'),'');
+assert.deepEqual(kakaoProfilePrefill({kakao_account:{name:' Kim Roundy ',birthyear:'2000',birthday:'0102',birthday_type:'SOLAR',gender:'female',phone_number:'+82 10-9876-5432',email:'roundy@example.com',profile:{nickname:'Roundy',profile_image_url:'https://example.com/me.jpg',is_default_image:false}}}),{
+ full_name:'Kim Roundy',
+ birth_date:'2000-01-02',
+ gender:'female',
+ phone:'010-9876-5432',
+ profile_image_url:'https://example.com/me.jpg',
+ nickname:'Roundy',
+ email:'roundy@example.com'
+});
+assert.equal(kakaoProfilePrefill({kakao_account:{profile:{profile_image_url:'https://example.com/default.jpg',is_default_image:true}}}).profile_image_url,'');
+console.log('PASS: Kakao scopes and safe profile prefill normalization');
