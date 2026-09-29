@@ -114,3 +114,27 @@ assert.match(text(view.toJSON()), /o\*\*\*@example.com/); assert.match(text(view
 user = { email: 'new@example.com', identities: [{ provider: 'email' }] }; await click('Refresh status'); assert.doesNotMatch(text(view.toJSON()), /Pending email/); await unmount();
 user = { email: 'social@example.com', identities: [{ provider: 'kakao' }] }; await mount(AccountSecurity, { locale: 'en', mode: 'password' }); assert.equal(view.root.findAllByType('input').length, 0); assert.match(text(view.toJSON()), /set or reset a password/); await unmount();
 console.log('PASS pending email retains old address, refresh reflects confirmation, social account fallback');
+
+const { ResetPassword } = load('src/components/reset-password.tsx');
+auth = { getUser: async () => ({ data: { user: null }, error: null }) };
+await mount(ResetPassword, { locale: 'en' });
+assert.match(text(view.toJSON()), /Open the password reset link/);
+assert.equal(view.root.findAllByType('main').length, 0); // The shared App owns the main landmark.
+await act(async () => view.update(React.createElement(ResetPassword, { locale: 'ko' })));
+assert.match(text(view.toJSON()), /이메일의 비밀번호 재설정 링크/);
+await unmount();
+auth = { getUser: async () => ({ data: { user: {} }, error: null }) };
+await mount(ResetPassword, { locale: 'en' });
+assert.equal(view.root.findAllByType('input').length, 2);
+assert.match(text(view.toJSON()), /Reset password/);
+await unmount();
+auth = { signUp: async () => ({ data: { user: { identities: [] }, session: null }, error: null }) };
+await mount(SignIn, { locale: 'en' }); await click('Continue with ID or email'); await click('Sign up');
+await fill(0, 'test-id'); await fill(1, 'test@example.com'); await fill(2, 'test-password1'); await fill(3, 'test-password1'); await submit(); await click('Accept test consent');
+assert.match(text(view.toJSON()), /If this email needs confirmation/);
+assert.doesNotMatch(text(view.toJSON()), /Open the link sent to/);
+await click('Reset password');
+assert.match(text(view.toJSON()), /Forgot your password/);
+assert.equal(view.root.findByType('input').props.value, 'test@example.com');
+await unmount();
+console.log('PASS recovery locale, shared main landmark, recovery fields and duplicate-safe signup guidance');

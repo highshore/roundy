@@ -127,6 +127,8 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
     const authError = value as { code?: string; message?: string };
     if (authError.code === 'invalid_credentials') {
       setError(t('ID, email or password is incorrect.', '아이디, 이메일 또는 비밀번호를 확인해 주세요.'));
+    } else if (authError.code === 'user_already_exists' || authError.code === 'email_exists') {
+      setError(t('This email is already registered. Sign in or reset your password.', '이미 가입된 이메일이에요. 로그인하거나 비밀번호를 재설정해 주세요.'));
     } else if (authError.code === 'email_not_confirmed') {
       if (email.includes('@')) { setConfirmationEmail(email.trim()); setPassword(''); setConfirm(''); setError(''); }
       else setError(t('Confirm your email before signing in. Sign in with your email address to resend the link.', '이메일 인증이 필요해요. 이메일 주소로 로그인하면 인증 링크를 다시 받을 수 있어요.'));
@@ -299,7 +301,7 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
       const { error } = await createClient().auth.resend({ type: 'signup', email: confirmationEmail, options: { emailRedirectTo: callback() } });
       if (error) throw error;
       setCooldown(60);
-      setNotice(t('Confirmation email requested. Check your inbox and spam folder.', '인증 메일을 요청했어요. 받은편지함과 스팸함을 확인해 주세요.'));
+      setNotice(t('If this email still needs confirmation, a new link will be sent. Check your inbox and spam folder.', '아직 인증이 필요한 이메일이면 새 링크를 보내드려요. 받은편지함과 스팸함을 확인해 주세요.'));
     } catch (error) { showError(error); } finally { setBusy(false); }
   }
 
@@ -307,13 +309,15 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
     <RoundyBrand/>
     <div className={styles.statusIcon}><NotoAnimatedEmoji codepoint="1f4e8" fallback="📨" size={64}/></div>
     <h1>{t('Check your email', '이메일을 확인해 주세요')}</h1>
-    <p>{t('Open the link sent to ', '가입을 완료하려면 ')}<strong>{maskEmail(confirmationEmail)}</strong>{t(' to complete signup.', '으로 보낸 인증 링크를 눌러 주세요.')}</p>
-    <p className={styles.help}>{t('Already have an account? Sign in. If no email arrives, check your spam folder.', '이미 가입했다면 로그인해 주세요. 메일이 없다면 스팸함도 확인해 주세요.')}</p>
+    <p><strong>{maskEmail(confirmationEmail)}</strong></p>
+    <p>{t('If this email needs confirmation, you’ll receive a link to complete signup.', '인증이 필요한 이메일이면 가입을 완료할 수 있는 링크를 보내드려요.')}</p>
+    <p className={styles.help}>{t('Already registered? Sign in or reset your password. A confirmed account won’t receive another signup email.', '이미 가입했다면 로그인하거나 비밀번호를 재설정해 주세요. 인증이 완료된 계정에는 가입 메일이 다시 발송되지 않아요.')}</p>
     <button className="button" disabled={busy || cooldown > 0} onClick={() => void resendEmail()}>{cooldown ? t(`Resend in ${cooldown}s`, `${cooldown}초 후 다시 보내기`) : t('Resend email', '인증 메일 다시 보내기')}</button>
     {error && <p role="alert" className={styles.notice}>{error}</p>}
     {notice && <p role="status" className={styles.notice}>{notice}</p>}
     <button className={styles.textButton} disabled={busy} onClick={() => { switchView('email', 'signup'); setNotice(t('Correct your email and submit signup again. The previous address will remain unconfirmed.', '이메일을 수정한 뒤 다시 가입해 주세요. 이전 주소는 미인증 상태로 남아요.')); }}>{t('Change email address', '이메일 주소 수정')}</button>
     <button className={styles.textButton} disabled={busy} onClick={() => switchView('email', 'signin')}>{t('Back to sign in', '로그인으로 돌아가기')}</button>
+    <button className={styles.textButton} disabled={busy} onClick={() => switchView('email', 'forgot')}>{t('Reset password', '비밀번호 재설정')}</button>
   </section>;
 
   const available = authConfigured() && providers?.[method] === true;
