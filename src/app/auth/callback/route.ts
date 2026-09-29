@@ -8,11 +8,11 @@ export async function GET(req:NextRequest){
  if(code && authConfigured()){
   try {
    const supabase=await createClient();
-   const {error}=await supabase.auth.exchangeCodeForSession(code);
+   const {data,error}=await supabase.auth.exchangeCodeForSession(code);
    if(!error){
     let destination=next;
-    if(next!=='/reset-password'){
-     const {data:profileRow,error:profileError}=await supabase.from('profiles').select('profile').maybeSingle();
+    if(next!=='/reset-password'&&data.user){
+     const {data:profileRow,error:profileError}=await supabase.from('profiles').select('profile').eq('user_id',data.user.id).maybeSingle();
      if(!profileError&&!profileComplete({...emptyProfile,...(profileRow?.profile??{})}))destination=profileSetupPath(next);
     }
     const response=NextResponse.redirect(new URL(destination,req.url));
