@@ -884,17 +884,26 @@ html:lang(ko) textarea{
 .attendee-avatar,
 .nav-avatar,
 .profile-summary .avatar,
-.member-avatar{
+.member-avatar,
+.final-choice-avatar,
+.admin-checkin-avatar,
+.match-photo{
   position:relative;
   aspect-ratio:1 / 1;
   flex-shrink:0;
   overflow:hidden;
   border-radius:50%;
 }
+.attendee-avatar{
+  background-size:cover;
+  background-position:50% 50%;
+  background-repeat:no-repeat;
+}
 .attendee-avatar img,
 .nav-avatar img,
 .profile-summary .avatar img,
-.member-avatar img{
+.member-avatar img,
+.match-photo img{
   position:absolute;
   inset:0;
   display:block!important;
@@ -2221,6 +2230,7 @@ html:lang(ko) .eyebrow{
 .landing-v1-attendees>span,.landing-v1-legacy-count{display:inline-flex;align-items:center;gap:5px;font-size:10px;line-height:1.3;color:var(--muted);white-space:nowrap}
 .landing-v1-legacy-count svg{flex:0 0 auto;width:15px;height:15px}
 .landing-v1-event-status{display:inline-flex;align-items:center;justify-content:center;min-height:32px;padding:6px 11px;border-radius:999px;background:var(--ink);color:var(--paper);font-size:11px;line-height:1.2;font-weight:700;white-space:nowrap}
+.landing-v1-event-bottom>.landing-v1-event-status:only-child{margin-left:auto}
 .landing-v1-event-status.mingle{background:var(--brand)}
 .landing-v1-event-card.legacy-talk-preview .landing-v1-event-image>img{width:100%;height:100%;object-fit:cover}
 .landing-v1-event-card.legacy-talk-preview .legacy-talk-placeholder{min-height:92px}
