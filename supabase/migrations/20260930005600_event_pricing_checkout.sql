@@ -6,6 +6,14 @@ alter table public.events
   add column if not exists male_price_krw integer not null default 49000 check (male_price_krw between 1000 and 1000000),
   add column if not exists female_price_krw integer not null default 29000 check (female_price_krw between 1000 and 1000000);
 
+-- Terms changed with the payment model. Preserve historical consent rows while allowing
+-- the new version that the application now requires.
+alter table public.account_legal_consents
+  drop constraint if exists account_legal_consents_version_check;
+alter table public.account_legal_consents
+  add constraint account_legal_consents_version_check
+  check(version in('2026-09-28','2026-09-30'));
+
 -- Referral codes are now a 10% event discount. Historical redemption rows keep their
 -- original snapshot, so this does not rewrite prior 100% referral transactions.
 alter table public.referral_codes alter column discount_percent set default 10;
