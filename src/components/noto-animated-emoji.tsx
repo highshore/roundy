@@ -29,7 +29,7 @@ export function NotoAnimatedEmoji({
   }, []);
 
   const classes = ['noto-animated-emoji', className].filter(Boolean).join(' ');
-  const style = { width: size, height: size };
+  const style = { width: size, height: size, fontSize: Math.round(size * 0.72) };
 
   return (
     <span
