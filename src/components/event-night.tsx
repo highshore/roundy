@@ -52,7 +52,7 @@ export function EventNight({event,locale}:{event:Event;locale:Locale}){
  async function load(silent=false){
   if(!silent)setLoading(true);
   try{const d=await request(event.id);setState(d.state as NightState);setError('');}
-  catch(e){setError(e instanceof Error?e.message:'Could not load meetup mode.');}
+  catch(e){setError(locale==='ko'?tr(locale,'Could not load meetup mode.','밋업 화면을 불러오지 못했어요.'):(e instanceof Error?e.message:'Could not load meetup mode.'));}
   finally{if(!silent)setLoading(false);}
  }
 
@@ -78,14 +78,14 @@ export function EventNight({event,locale}:{event:Event;locale:Locale}){
     maybe_count:prev.encounters.filter(item=>(item.id===encounterId?choice:item.choice)==='maybe').length,
     no_count:prev.encounters.filter(item=>(item.id===encounterId?choice:item.choice)==='no').length
    }:prev);
-  }catch(e){setError(e instanceof Error?e.message:'Could not save your choice.');}
+  }catch(e){setError(locale==='ko'?tr(locale,'Could not save your choice.','선택을 저장하지 못했어요.'):(e instanceof Error?e.message:'Could not save your choice.'));}
   finally{setBusy(false);}
  }
 
  async function submit(){
   setBusy(true);setError('');
   try{await request(event.id,{action:'submit'});await load(true);}
-  catch(e){setError(e instanceof Error?e.message:'Could not submit your choices.');}
+  catch(e){setError(locale==='ko'?tr(locale,'Could not submit your choices.','선택을 제출하지 못했어요.'):(e instanceof Error?e.message:'Could not submit your choices.'));}
   finally{setBusy(false);}
  }
 
@@ -145,7 +145,7 @@ export function EventNight({event,locale}:{event:Event;locale:Locale}){
   return <section className="event-night-shell">
    <div className="event-night-heading"><p className="eyebrow">{tr(locale,'FINAL CHOICES','최종 선택')}</p><h1>{state.submitted?tr(locale,'Choices submitted.','선택을 제출했어요.'):tr(locale,'Review your choices.','선택을 검토하세요.')}</h1><p>{state.submitted?tr(locale,'Your choices are locked. Results will appear after the host finishes the meetup.','선택이 확정되었습니다. 호스트가 밋업을 종료하면 결과가 표시됩니다.'):tr(locale,'Review every tablemate, then submit. Maximum 3 Yes.','모든 상대에 대한 선택을 검토한 뒤 제출하세요. Yes는 최대 3명입니다.')}</p></div>
    <div className="final-choice-list">{state.encounters.map((item,index)=><article className="final-choice-card" key={item.id}><span className="final-choice-avatar" style={item.photo?{backgroundImage:`url("${item.photo}")`}:undefined}>{!item.photo&&<UsersRound size={22}/>}</span><div className="final-choice-copy"><b>{tr(locale,'Tablemate ','상대 ')}{index+1}</b><span>{tr(locale,'Round','라운드')} {item.round} · {tr(locale,'Table','테이블')} {String(item.table).padStart(2,'0')}</span></div><ChoiceButtons value={item.choice} disabled={busy||state.submitted} onChange={choice=>void choose(item.id,choice)} locale={locale}/></article>)}</div>
-   <p className="choice-summary">{state.yes_count} Yes · {state.maybe_count} Maybe · {state.no_count} No</p>
+   <p className="choice-summary">{state.yes_count} {tr(locale,'Yes','좋아요')} · {state.maybe_count} {tr(locale,'Maybe','고민 중')} · {state.no_count} {tr(locale,'No','아니요')}</p>
    {error&&<p role="alert" className="event-night-error">{error}</p>}
    {!state.submitted&&<button type="button" className="button" disabled={busy} onClick={()=>void submit()}>{busy?tr(locale,'Submitting…','제출 중…'):tr(locale,'Submit final choices','최종 선택 제출')}</button>}
   </section>;
