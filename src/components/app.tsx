@@ -68,7 +68,7 @@ function LandingEventPreview({e,locale,attendees}:{e:Event;locale:Locale;attende
  const preview=attendees?[...attendees.women,...attendees.men]:[];
  const isMingle=eventCategory(e)==='1:1 Speed Mingle';
  return <Link href={'/events/'+e.slug} className="landing-v1-event-card">
-  <div className="landing-v1-event-image"><Image src={e.image||'/images/yeouido.webp'} alt={item.title} fill sizes="80px"/></div>
+  <div className="landing-v1-event-image"><Image src={e.image||'/images/yeouido.webp'} alt={item.title} fill sizes="92px"/></div>
   <div className="landing-v1-event-copy">
    <span className={'landing-v1-event-category '+(isMingle?'mingle':'talk')}>{isMingle?tr(locale,'1:1 Mingle','1:1 밍글'):tr(locale,'Business Talk','비즈니스 토크')}</span>
    <h3>{headline(item.title)}</h3>
@@ -83,14 +83,14 @@ function LandingEventPreview({e,locale,attendees}:{e:Event;locale:Locale;attende
 }
 function LandingLegacyBusinessTalkPreview({e,locale}:{e:LegacyBusinessTalk;locale:Locale}){
  return <a href={e.source_url} target="_blank" rel="noreferrer" className="landing-v1-event-card legacy-talk-preview">
-  <div className="landing-v1-event-image">{e.image?<img src={e.image} alt={e.title} loading="lazy" width="80" height="80"/>:<div className="legacy-talk-placeholder"><MessageCircle size={24} aria-hidden="true"/></div>}</div>
+  <div className="landing-v1-event-image">{e.image?<img src={e.image} alt={e.title} loading="lazy" width="92" height="92"/>:<div className="legacy-talk-placeholder"><MessageCircle size={24} aria-hidden="true"/></div>}</div>
   <div className="landing-v1-event-copy">
    <span className="landing-v1-event-category talk">{tr(locale,'Business Talk','비즈니스 토크')}</span>
    <h3>{headline(e.title)}</h3>
    <p><MapPin size={14} aria-hidden="true"/><span>{e.venue}</span></p>
    <p><CalendarDays size={14} aria-hidden="true"/><span>{dateLabelForLocale(e.starts_at,locale)} · {timeLabelForLocale(e.starts_at,locale)}</span></p>
    <div className="landing-v1-event-bottom">
-    <span className="landing-v1-legacy-count">{e.participant_count} {tr(locale,'attending','참가 예정')}</span>
+    <span className="landing-v1-legacy-count"><UsersRound size={15} aria-hidden="true"/>{e.participant_count} {tr(locale,'attending','참가 예정')}</span>
     <span className="landing-v1-event-status talk">{Math.max(0,e.capacity-e.participant_count)} {tr(locale,'places left','자리 남음')}</span>
    </div>
   </div>
