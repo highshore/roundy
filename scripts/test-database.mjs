@@ -6,8 +6,19 @@ await db.exec(`create role anon;create role service_role;create role authenticat
 await db.exec('grant usage on schema storage to authenticated;grant select,insert,delete on storage.objects to authenticated;alter table storage.objects enable row level security;');
 // Reproduce hosted default privileges, not just a restrictive local database.
 await db.exec('alter default privileges in schema public grant all on tables to anon, authenticated');
-// pg_cron and pg_net are hosted infrastructure; all application DDL still runs here.
-for(const f of (await readdir('supabase/migrations')).sort().filter(f=>!f.endsWith('_roundy_reminder_schedule.sql')))await db.exec(await readFile('supabase/migrations/'+f,'utf8'));
+// pg_cron and pg_net are hosted infrastructure. Keep the scheduler config composite
+// type available so later historical migrations can recompile the dispatcher in PGlite.
+for(const f of (await readdir('supabase/migrations')).sort().filter(f=>!f.endsWith('_roundy_reminder_schedule.sql'))){
+ if(f.endsWith('_simplify_event_lifecycle.sql')){
+  await db.exec(`create table if not exists wis_private.reminder_scheduler_config(
+   singleton boolean primary key default true check(singleton),
+   project_url text not null default 'https://example.supabase.co',
+   anon_jwt text not null default 'test'
+  )`);
+ }
+ try{await db.exec(await readFile('supabase/migrations/'+f,'utf8'));}
+ catch(error){throw new Error(`Migration fixture failed: ${f}: ${error instanceof Error?error.message:String(error)}`,{cause:error});}
+}
 const uid=n=>`00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
 const eid=uid(100);const encounter=n=>uid(200+n);
 await db.exec(`insert into auth.users select ('00000000-0000-0000-0000-'||lpad(n::text,12,'0'))::uuid from generate_series(1,6)n;insert into events(id,slug,title,neighborhood,starts_at,ends_at,venue,address,capacity,seats_remaining) values('${eid}','test','Test','Seoul',now()+interval '1 day',now()+interval '2 days','Test','Test',12,12);update events set status='live';`);
@@ -17,17 +28,33 @@ for(let n=1;n<=6;n++)await db.query('insert into profiles(user_id,profile) value
 await db.exec(`insert into verifications(user_id,instagram,status) values('${uid(1)}','initial','Verified');`);
 async function as(n,sql,args=[]){await db.exec('set role authenticated');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[uid(n)]);try{return await db.query(sql,args);}finally{await db.exec('reset role');}}
 async function denied(n,sql,pattern){await assert.rejects(()=>as(n,sql),pattern);}
-// Per-event checkout uses additive discounts against the original gender price.
+// Per-event checkout uses the production payment schema and additive discounts.
 const pricingEvent=uid(99);
-await db.exec(`insert into events(id,title,starts_at,duration_minutes,venue,address,capacity,age_min,age_max,status) values('${pricingEvent}','Pricing',now()+interval '20 days',120,'Venue','Address',12,18,100,'live');update profiles set profile=jsonb_set(profile,'{gender}','"male"') where user_id in('${uid(2)}','${uid(3)}');insert into bookings(event_id,user_id) values('${pricingEvent}','${uid(2)}'),('${pricingEvent}','${uid(3)}');insert into event_purchases(event_id,user_id,gender,original_amount,total_discount_amount,final_amount,payment_status,paid_at) values('${pricingEvent}','${uid(1)}','female',29000,0,29000,'paid',now());insert into promo_codes(code,discount_percent) values('PROMO20',20);`);
-const promoQuote=(await as(1,'select event_price_quote($1,$2) q',[pricingEvent,'PROMO20'])).rows[0].q;
-assert.equal(promoQuote.original_amount,29000);
-assert.equal(promoQuote.promo_discount_amount,5800,'Marketing promo is 20% of original price');
+await db.exec(`insert into events(id,title,starts_at,duration_minutes,venue,address,capacity,age_min,age_max,status) values('${pricingEvent}','Pricing',now()+interval '20 days',120,'Venue','Address',12,18,100,'live');
+ update profiles set profile=jsonb_set(profile,'{gender}','"male"') where user_id in('${uid(2)}','${uid(3)}');
+ insert into bookings(event_id,user_id) values('${pricingEvent}','${uid(2)}'),('${pricingEvent}','${uid(3)}');
+ insert into event_payment_orders(order_number,charge_order_number,event_id,user_id,status,gender,base_amount,discount_amount,amount,terms_accepted_at,paid_at)
+ values('prior-order','prior-charge','${pricingEvent}','${uid(1)}','completed','female',29000,0,29000,now(),now());
+ insert into marketing_promo_codes(code,campaign_name,discount_percent) values('PROMO20','Test promo',20);`);
+const promoQuote=(await as(1,'select event_checkout_quote($1,$2) q',[pricingEvent,'PROMO20'])).rows[0].q;
+assert.equal(promoQuote.base_amount,29000);
+assert.equal(promoQuote.code_kind,'marketing');
+assert.equal(promoQuote.code_discount_percent,20);
+assert.equal(promoQuote.code_discount_amount,5800,'Marketing promo is 20% of original price');
 assert.equal(promoQuote.gender_balance_discount_amount,2900,'Gender imbalance is 10% of original price');
 assert.equal(promoQuote.time_discount_amount,1450,'Early bird is 5% of original price');
 assert.equal(promoQuote.boomerang_discount_amount,1450,'Returning payer receives 5% boomerang discount');
 assert.equal(promoQuote.final_amount,17400,'Female maximum marketing stack is exactly 40% off');
-await db.exec(`delete from event_purchases where event_id='${pricingEvent}';delete from bookings where event_id='${pricingEvent}';delete from events where id='${pricingEvent}';delete from promo_codes where code='PROMO20';update profiles set profile=jsonb_set(profile,'{gender}','"female"') where user_id in('${uid(2)}','${uid(3)}');`);
+const checkoutReferralCode=(await as(4,'select get_or_create_referral_code() code')).rows[0].code;
+const referralCheckoutQuote=(await as(1,'select event_checkout_quote($1,$2) q',[pricingEvent,checkoutReferralCode])).rows[0].q;
+assert.equal(referralCheckoutQuote.code_kind,'referral');
+assert.equal(referralCheckoutQuote.code_valid,true);
+assert.equal(referralCheckoutQuote.code_discount_percent,10,'Referral checkout is 10%');
+assert.equal(referralCheckoutQuote.code_discount_amount,2900,'Female referral discount is 10% of original price');
+const selfCheckoutQuote=(await as(4,'select event_checkout_quote($1,$2) q',[pricingEvent,checkoutReferralCode])).rows[0].q;
+assert.equal(selfCheckoutQuote.code_valid,false);
+assert.equal(selfCheckoutQuote.code_reason,'self');
+await db.exec(`delete from event_payment_orders where event_id='${pricingEvent}';delete from bookings where event_id='${pricingEvent}';delete from events where id='${pricingEvent}';delete from marketing_promo_codes where code='PROMO20';update profiles set profile=jsonb_set(profile,'{gender}','"female"') where user_id in('${uid(2)}','${uid(3)}');`);
 assert.equal((await as(1,'select * from profiles')).rows.length,1,'RLS hides other profiles');
 await denied(1,`insert into events(slug,title,neighborhood,starts_at,ends_at,venue,address,capacity,seats_remaining) values('unauthorized','No','Seoul',now()+interval '3 days',now()+interval '4 days','No','No',12,12)`,/permission denied|row-level security/);
 await as(6,`insert into events(slug,title,neighborhood,starts_at,ends_at,venue,address,capacity,seats_remaining) values('admin-event','Admin','Seoul',now()+interval '3 days',now()+interval '4 days','Admin','Admin',12,12)`);
@@ -109,19 +136,9 @@ assert.equal((await as(1,'select instagram from verifications')).rows[0].instagr
 assert.equal((await as(2,"select * from storage.objects where bucket_id='wis-verification-documents'")).rows.length,0,'Other attendees cannot read private proof');
 assert.equal((await as(6,"select * from storage.objects where bucket_id='wis-verification-documents'")).rows.length,1,'Admins can review private proof');
 assert.equal(safe.roster.length,4,'Hosts can match participant codes to attendees');
-const referralEvent=uid(102);
-await as(6,"insert into events(id,title,starts_at,duration_minutes,venue,address,capacity,age_min,age_max,status) values($1,'Referral event',now()+interval '2 days',90,'Venue','Address',12,18,100,'live')",[referralEvent]);
 const referralCode=(await as(1,'select get_or_create_referral_code() code')).rows[0].code;
 assert.match(referralCode,/^[A-Z0-9]{6}$/);
-const selfQuote=(await as(1,'select referral_quote($1,1) q',[referralCode])).rows[0].q;
-assert.equal(selfQuote.valid,false);assert.equal(selfQuote.reason,'self');
-const friendQuote=(await as(2,'select referral_quote($1,1) q',[referralCode])).rows[0].q;
-assert.equal(friendQuote.valid,true);assert.equal(friendQuote.discount_percent,100);assert.equal(friendQuote.final_amount,0);
-const referralResult=(await as(2,'select redeem_referral($1,1,$2,true) r',[referralEvent,referralCode])).rows[0].r;
-assert.ok(referralResult.booking_id);assert.equal(referralResult.final_amount,0);
-assert.equal((await db.query('select remaining from credit_lots where id=$1',[referralResult.credit_lot_id])).rows[0].remaining,0,'Free one-ticket referral is consumed by the booking');
 await denied(2,'select * from referral_codes',/permission denied/);
-await denied(2,`select redeem_referral('${referralEvent}',1,'${referralCode}',true)`,/already been used/);
 console.log('PASS: reminder authorization, at-start scheduling, deduplicated claims, cancellation and delivery privacy.');
 console.log('PASS: date slugs, duplicate-date suffix, URL aliases, duration, automatic capacity, lockdown, seating authorization, balanced rotation, pair exclusions and private document ownership.');
 console.log('PASS: migration, profile isolation, authorization, application/redeem idempotency, 3-Yes limit, reciprocal matching, closed-event locking, private contact access, verification reset on evidence and profile edits.');
