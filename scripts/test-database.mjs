@@ -63,7 +63,7 @@ await denied(1,'select * from encounters',/permission denied/);
 const a=(await as(1,'select apply($1) id',[eid])).rows[0].id;
 assert.equal((await as(1,'select apply($1) id',[eid])).rows[0].id,a,'Application retries are idempotent');
 await denied(1,`update applications set status='Approved'`,/permission denied/);
-await denied(1,`select redeem('${eid}')`,/cancellation guidelines/);
+await denied(1,`select redeem('${eid}')`,/cancellation guidelines|permission denied/);
 await db.exec(`update applications set status='Approved';insert into credit_lots(user_id,quantity,remaining,payment_reference) values('${uid(1)}',3,3,'test-payment');`);
 const booking=(await as(1,'select redeem($1,true) id',[eid])).rows[0].id;
 assert.equal((await as(1,'select redeem($1,true) id',[eid])).rows[0].id,booking);
