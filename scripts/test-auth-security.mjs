@@ -11,6 +11,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://test.invalid';
 process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = 'mock-test-key';
 let auth, navigated;
+let idAvailable = true;
 globalThis.window = { location: { search: '', origin: 'https://roundy.team', assign: path => { navigated = path; } }, setTimeout: () => 1, clearTimeout() {}, addEventListener() {}, removeEventListener() {} };
 globalThis.fetch = async path => ({ ok: true, json: async () => path === '/auth/settings' ? { email: true, phone: true } : { profile: {} } });
 const cache = new Map();
@@ -21,7 +22,7 @@ function load(file) {
   const compiled = ts.transpileModule(readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true } }).outputText;
   const localRequire = id => {
     if (id.endsWith('.css')) return {};
-    if (id === '@/lib/supabase/client') return { createClient: () => ({ auth }) };
+    if (id === '@/lib/supabase/client') return { createClient: () => ({ auth, functions: { invoke: async () => ({ data: { available: idAvailable }, error: null }) } }) };
     if (id === '@/lib/locale') return { tr: (locale, en, ko) => locale === 'ko' ? ko : en };
     if (id === '@/lib/data') return { emptyProfile: {}, profileComplete: () => false };
     if (id.includes('roundy-brand') || id.includes('kakao-login-symbol') || id.includes('noto-animated-emoji')) return new Proxy({}, { get: () => () => null });
@@ -138,3 +139,16 @@ assert.match(text(view.toJSON()), /Forgot your password/);
 assert.equal(view.root.findByType('input').props.value, 'test@example.com');
 await unmount();
 console.log('PASS recovery locale, shared main landmark, recovery fields and duplicate-safe signup guidance');
+
+// A taken ID blocks signup both before and after the consent dialog.
+signups = 0;
+auth = { signUp: async () => { signups++; return { data: { session: null }, error: null }; } };
+await mount(SignIn, { locale: 'en' }); await click('Continue with ID or email'); await click('Sign up');
+await fill(0, 'taken-id'); await fill(1, 'test@example.com'); await fill(2, 'test-password1'); await fill(3, 'test-password1');
+idAvailable = false; await submit();
+assert.equal(signups, 0); assert.match(text(view.toJSON()), /Already taken/); assert.equal(button('Accept test consent'), undefined);
+idAvailable = true; await submit(); assert.ok(button('Accept test consent'));
+idAvailable = false; await click('Accept test consent'); assert.equal(signups, 0); assert.match(text(view.toJSON()), /Already taken/);
+idAvailable = true; await submit(); assert.equal(signups, 1);
+await unmount();
+console.log('PASS taken IDs block signup, consent-time conflicts are caught, retry succeeds');
