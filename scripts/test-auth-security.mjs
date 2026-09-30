@@ -11,8 +11,8 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://test.invalid';
 process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = 'mock-test-key';
 let auth, navigated;
-let idAvailable = true;
-globalThis.window = { location: { search: '', origin: 'https://roundy.team', assign: path => { navigated = path; } }, setTimeout: (fn, delay) => { if (delay === 450) queueMicrotask(fn); return 1; }, clearTimeout() {}, addEventListener() {}, removeEventListener() {} };
+let idAvailable = true, emailAvailable = true, availabilityCalls = 0;
+globalThis.window = { location: { search: '', origin: 'https://roundy.team', assign: path => { navigated = path; } }, setTimeout: (fn, delay) => { return 1; }, clearTimeout() {}, addEventListener() {}, removeEventListener() {} };
 globalThis.fetch = async path => ({ ok: true, json: async () => path === '/auth/settings' ? { email: true, phone: true } : { profile: {} } });
 const cache = new Map();
 function load(file) {
@@ -22,7 +22,7 @@ function load(file) {
   const compiled = ts.transpileModule(readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true } }).outputText;
   const localRequire = id => {
     if (id.endsWith('.css')) return {};
-    if (id === '@/lib/supabase/client') return { createClient: () => ({ auth, functions: { invoke: async () => ({ data: { available: idAvailable }, error: null }) } }) };
+    if (id === '@/lib/supabase/client') return { createClient: () => ({ auth, functions: { invoke: async () => { availabilityCalls++; return { data: { username_available: idAvailable, email_available: emailAvailable }, error: null }; } } }) };
     if (id === '@/lib/locale') return { tr: (locale, en, ko) => locale === 'ko' ? ko : en };
     if (id === '@/lib/data') return { emptyProfile: {}, profileComplete: () => false };
     if (id.includes('roundy-brand') || id.includes('kakao-login-symbol') || id.includes('noto-animated-emoji')) return new Proxy({}, { get: () => () => null });
@@ -145,6 +145,7 @@ auth = { signUp: async () => { signups++; return { data: { session: null }, erro
 await mount(SignIn, { locale: 'en' }); await click('Continue with ID or email'); await click('Sign up');
 idAvailable = false;
 await fill(0, 'taken-id'); await fill(1, 'test@example.com'); await fill(2, 'test-password1'); await fill(3, 'test-password1');
+await act(async () => { await view.root.findAllByType('input')[0].props.onBlur(); });
 assert.equal(button('Create account').props.disabled, true); assert.match(text(view.toJSON()), /Already taken/);
 await submit(); assert.equal(signups, 0); assert.equal(button('Accept test consent'), undefined);
 idAvailable = true; await fill(0, 'free-id'); await submit(); assert.ok(button('Accept test consent'));
@@ -152,3 +153,24 @@ idAvailable = false; await click('Accept test consent'); assert.equal(signups, 0
 idAvailable = true; await fill(0, 'another-free-id'); await submit(); assert.equal(signups, 1);
 await unmount();
 console.log('PASS taken IDs disable signup and consent-time conflicts are caught');
+
+
+// Typing never calls the server; blur checks once and unchanged blur reuses the result.
+await mount(SignIn, { locale: 'en' }); await click('Continue with ID or email'); await click('Sign up');
+const beforeTyping = availabilityCalls;
+await fill(0, 'a'); await fill(0, 'abc'); await fill(0, 'abcd'); await fill(1, 'existing@example.com');
+assert.equal(availabilityCalls, beforeTyping);
+emailAvailable = false;
+await act(async () => { await view.root.findAllByType('input')[1].props.onBlur(); });
+assert.equal(availabilityCalls, beforeTyping + 1);
+assert.match(text(view.toJSON()), /Already registered/);
+assert.equal(button('Create account').props.disabled, true);
+await act(async () => { await view.root.findAllByType('input')[1].props.onBlur(); });
+assert.equal(availabilityCalls, beforeTyping + 1);
+await fill(2, 'test-password1'); await fill(3, 'test-password1');
+const beforeSubmit = signups; await submit(); assert.equal(signups, beforeSubmit);
+emailAvailable = true; await fill(1, 'new@example.com'); await submit();
+assert.ok(button('Accept test consent'));
+emailAvailable = false; await click('Accept test consent'); assert.equal(signups, beforeSubmit);
+await unmount(); emailAvailable = true;
+console.log('PASS no checks while typing, blur deduplication, duplicate-email blocking and consent-time email race');
