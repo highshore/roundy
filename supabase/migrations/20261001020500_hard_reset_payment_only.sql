@@ -611,8 +611,5 @@ drop table if exists public.referral_redemptions cascade;
 alter table public.bookings drop column if exists credit_lot_id;
 drop table if exists public.credit_lots cascade;
 
-alter table public.bookings
-  alter column payment_order_number set not null,
-  alter column terms_accepted_at set not null;
 
 commit;
