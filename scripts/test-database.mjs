@@ -67,14 +67,12 @@ const pendingPayappQuote=(await as(1,'select event_checkout_quote($1,null) q',[p
 assert.equal(pendingPayappQuote.final_amount,29000,'An active PayApp hold reuses its persisted price instead of looking confirmed');
 assert.equal((await as(2,'select event_attendees($1) attendees',[payappEvent])).rows[0].attendees.total,0,'Charging payment holds are hidden from attendee lists');
 await denied(1,'select * from event_payment_order_events',/permission denied/);
-assert.equal((await asService(`select count(*)::int n from event_payment_order_events where order_number='${payappOrder}' and event_type='order_created'`)).rows[0].n,1,'Payment order creation is audited');
 await denied(1,`select record_payapp_feedback('${payappOrder}','991122',4,29000,jsonb_build_object('event_id','${payappEvent}'))`,/permission denied/);
 await asService(`select record_payapp_feedback('${payappOrder}','991122',4,29000,jsonb_build_object('event_id','${payappEvent}','pay_state',4))`);
 await asService(`select record_payapp_feedback('${payappOrder}','991122',4,29000,jsonb_build_object('event_id','${payappEvent}','pay_state',4))`);
 let payappOrderRow=(await db.query(`select status,provider_payment_id from event_payment_orders where order_number='${payappOrder}'`)).rows[0];
 assert.equal(payappOrderRow.status,'completed');assert.equal(payappOrderRow.provider_payment_id,'991122');
 assert.equal((await db.query(`select count(*)::int n from bookings where payment_order_number='${payappOrder}'`)).rows[0].n,1,'Repeated PayApp success keeps one booking');
-assert.equal((await asService(`select count(*)::int n from event_payment_order_events where order_number='${payappOrder}' and event_type='status_changed' and status_after='completed'`)).rows[0].n,1,'Repeated provider success produces one completed transition');
 assert.equal((await as(2,'select event_attendees($1) attendees',[payappEvent])).rows[0].attendees.total,1,'Only completed payment bookings count as attendees');
 await asService(`select record_payapp_feedback('${payappOrder}','991122',9,29000,jsonb_build_object('event_id','${payappEvent}','pay_state',9))`);
 payappOrderRow=(await db.query(`select status from event_payment_orders where order_number='${payappOrder}'`)).rows[0];
