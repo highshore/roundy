@@ -267,6 +267,11 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
     if(!/^RNDY-A-\d{14}-[A-F0-9]{10}$/.test(orderNumber))return json({error:'Invalid payment status request'},400);
     return json(await invokeRoundyCheckout(supabase,{action:'status',orderNumber}));
    }
+   if(action==='abandon'){
+    const eventId=typeof body.eventId==='string'?body.eventId:'';
+    if(!/^[0-9a-f-]{36}$/i.test(eventId))return json({error:'Invalid payment cancellation request'},400);
+    return json(await invokeRoundyCheckout(supabase,{action:'abandon',eventId}));
+   }
    return json({error:'Invalid checkout action'},400);
   }
   if(path[0]==='event-night'&&path.length===2){
