@@ -125,7 +125,7 @@ $$;
 create or replace function public.event_public_roster(p_event uuid)
 returns jsonb
 language sql
-security invoker
+security definer
 set search_path=''
 as $$
   select roundy_private.event_public_roster(p_event);
@@ -137,8 +137,6 @@ revoke all on function roundy_private.public_age_band(jsonb),
   public.event_public_roster(uuid)
 from public,anon,authenticated,service_role;
 
-grant execute on function roundy_private.event_public_roster(uuid)
-to anon,authenticated,service_role;
 grant execute on function public.event_public_roster(uuid)
 to anon,authenticated,service_role;
 
