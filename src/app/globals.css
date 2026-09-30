@@ -438,7 +438,7 @@
 }
 
 /* Checkout */
-.route-checkout .content{padding-top:22px;padding-bottom:122px}
+.route-checkout .content{padding-top:22px;padding-bottom:96px}
 .checkout-page{display:grid;gap:22px}
 
 .checkout-event-card,
@@ -523,6 +523,8 @@
 .checkout-sticky-submit .button:disabled{opacity:.52;background:#111;color:white;cursor:not-allowed}
 .checkout-sticky-submit .button>strong{font-size:18px;letter-spacing:-.3px}
 .checkout-sticky-submit .checkout-discount-badge{min-height:25px;padding:4px 7px;font-size:11px}
+.checkout-cta-korean{display:inline-flex;align-items:baseline;gap:0;white-space:nowrap}
+.checkout-cta-korean strong{font-size:18px;letter-spacing:-.3px}
 
 @container roundy (max-width:400px){
  .checkout-event-main{grid-template-columns:88px minmax(0,1fr);gap:14px}
@@ -534,7 +536,7 @@
 }
 
 /* Privacy-safe public participant roster */
-.public-roster{display:grid;gap:20px;padding:4px 0 132px}
+.public-roster{display:grid;gap:20px;padding:4px 0 16px}
 .public-roster-heading{display:block}
 .public-roster-heading h2{margin:0;font-size:28px;letter-spacing:-.045em}
 .public-roster-groups{display:grid;gap:26px}
@@ -557,6 +559,7 @@
 @container roundy (max-width:360px){
  .public-roster-grid{grid-template-columns:1fr}
 }
+@container roundy (max-width:759px){.route-events:has(.public-roster) .content{padding-bottom:154px}}
 
 /* Attendee previews, cancellation and map stacking */
 .site-header{z-index:900}
