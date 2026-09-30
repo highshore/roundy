@@ -437,23 +437,93 @@
  .account-delete-actions{grid-template-columns:1fr}
 }
 
-/* Referral codes */
-.referral-box{padding:4px 0 8px;display:grid;gap:8px}
+/* Checkout */
+.checkout-page{display:grid;gap:20px}
+.checkout-ticket{
+ position:relative;
+ overflow:visible;
+ display:grid;
+ gap:14px;
+ padding:26px 30px;
+ border:1px solid #c49335;
+ border-radius:24px;
+ background:linear-gradient(135deg,#f1cf73 0%,#ffe8a8 48%,#e3b953 100%);
+ box-shadow:0 14px 34px rgba(143,101,25,.16);
+ color:#382b13;
+}
+.checkout-ticket::before,.checkout-ticket::after{
+ content:'';
+ position:absolute;
+ top:50%;
+ width:22px;
+ height:22px;
+ border:1px solid #c49335;
+ border-radius:50%;
+ background:var(--paper);
+ transform:translateY(-50%);
+}
+.checkout-ticket::before{left:-12px}
+.checkout-ticket::after{right:-12px}
+.checkout-ticket .eyebrow{color:#79591f}
+.checkout-ticket h2{font-size:28px;max-width:15ch}
+.checkout-ticket-meta{display:grid;gap:4px;padding-top:14px;border-top:1px dashed rgba(56,43,19,.34);font-size:14px;font-weight:600}
+.checkout-ticket-meta p:last-child{color:#6d5425}
+
+.referral-box{padding:20px;border-radius:24px;background:var(--surface);display:grid;gap:10px}
 .referral-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .referral-head h3{margin:0;font-size:15px;letter-spacing:-.01em}
 .referral-head span{font-size:12px;font-weight:500;color:var(--muted)}
-.referral-help{font-size:12px;line-height:18px;color:var(--muted)}
-.referral-entry{display:grid;grid-template-columns:minmax(0,1fr) 92px;gap:8px;margin-top:2px}
-.referral-entry input{height:48px;min-width:0;border:1.5px solid var(--ink);border-radius:12px;background:var(--paper);padding:0 16px;text-transform:uppercase;letter-spacing:.08em;font-size:14px;font-weight:600;outline:none}
+.referral-entry{display:grid;grid-template-columns:minmax(0,1fr) 96px;gap:8px}
+.referral-entry input{height:50px;min-width:0;border:1.5px solid var(--ink);border-radius:13px;background:var(--paper);padding:0 16px;text-transform:uppercase;letter-spacing:.08em;font-size:14px;font-weight:600;outline:none}
 .referral-entry input::placeholder{text-transform:none;letter-spacing:0;font-weight:400;color:#91958a}
 .referral-entry input:focus{box-shadow:0 0 0 2px rgba(255,102,102,.16)}
-.referral-apply{height:48px;border:1px solid var(--ink);border-radius:12px;background:var(--brand);color:white;font-size:14px;font-weight:700}
+.referral-apply{height:50px;border:1px solid var(--ink);border-radius:13px;background:var(--brand);color:white;font-size:14px;font-weight:700}
 .referral-apply:disabled{cursor:not-allowed;opacity:.45}
-.referral-message{margin-top:2px;font-size:12px;line-height:18px;font-weight:600}.referral-message.success{color:#27613f}.referral-message.error{color:#8d3029}
+.referral-message{margin-top:2px;font-size:12px;line-height:18px;font-weight:600}
+.referral-message.success{color:#27613f}
+.referral-message.error{color:#8d3029}
 .referral-code-value{font-size:28px!important;font-weight:800;letter-spacing:.16em;color:var(--ink)!important;margin-bottom:8px}
-.price-row.total{border-bottom:0;padding-top:14px}.price-row.total strong{font-size:36px}
-.checkout-terms{border:1px solid var(--border);border-radius:18px;padding:16px;background:var(--surface);line-height:1.5}.checkout-terms a{text-decoration:underline}
-@container roundy (max-width:400px){.referral-entry{grid-template-columns:minmax(0,1fr) 78px}}
+
+.checkout-price-card{
+ overflow:hidden;
+ border-radius:24px;
+ background:var(--surface);
+ padding:0 20px;
+}
+.checkout-price-card.loading{display:grid;gap:8px;padding:22px 20px}
+.checkout-price-card.loading h3{font-size:18px}
+.checkout-price-card .price-row{padding:20px 0}
+.checkout-price-card .price-row.original strong{font-size:26px;letter-spacing:-1.2px}
+.checkout-price-card .price-row.discount{padding:15px 0;color:var(--muted)}
+.checkout-price-card .price-row.discount span{font-size:14px}
+.checkout-price-card .price-row.discount strong{font-size:18px;letter-spacing:-.5px;font-weight:650}
+.checkout-total-row{display:grid;gap:8px;padding:20px 0 22px}
+.checkout-total-row>span{font-size:12px;font-weight:700;color:var(--muted)}
+.checkout-total-prices{display:flex;align-items:baseline;justify-content:flex-end;gap:9px;white-space:nowrap}
+.checkout-total-prices s{font-size:14px;color:var(--muted);font-weight:600}
+.checkout-total-prices>span{font-size:13px;color:var(--muted)}
+.checkout-total-prices strong{font-size:34px;line-height:1;letter-spacing:-1.8px}
+
+.checkout-check-card{display:grid;gap:16px;padding:20px;border-radius:24px;background:var(--surface)}
+.checkout-check-list{display:grid;gap:14px}
+.checkout-check-list p{display:grid;grid-template-columns:18px minmax(0,1fr);gap:10px;color:var(--muted);font-size:13px;line-height:1.55}
+.checkout-check-list svg{margin-top:1px;color:var(--ink)}
+.checkout-check-list strong{color:var(--ink);font-weight:700}
+.checkout-terms{margin-top:2px;padding:16px;border:1px solid var(--border);border-radius:16px;background:var(--paper);line-height:1.5}
+.checkout-terms a{text-decoration:underline;text-underline-offset:2px}
+.route-checkout .checkout-page>.button{min-height:62px;font-size:17px}
+.checkout-button-prices{display:inline-flex;align-items:baseline;gap:7px}
+.checkout-button-prices s{font-size:12px;font-weight:600;opacity:.68}
+.checkout-button-prices>span{font-size:12px;opacity:.72}
+.checkout-button-prices strong{font-size:18px;letter-spacing:-.4px}
+
+@container roundy (max-width:400px){
+ .checkout-ticket{padding:24px 25px}
+ .checkout-ticket h2{font-size:25px}
+ .referral-entry{grid-template-columns:minmax(0,1fr) 82px}
+ .checkout-total-prices{gap:7px}
+ .checkout-total-prices strong{font-size:31px}
+}
 
 
 /* Attendee previews, cancellation and map stacking */
