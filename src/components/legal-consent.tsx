@@ -105,7 +105,7 @@ export function AccountConsent({ locale, path }: { locale: Locale; path: string 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [retry, setRetry] = useState(0);
-  const legalPage = ['terms', 'privacy'].includes(path.split('/')[0]);
+  const legalPage = ['terms', 'privacy', 'refund-policy', 'copyright'].includes(path.split('/')[0]);
   useEffect(() => {
     if (legalPage) return;
     let active = true;
