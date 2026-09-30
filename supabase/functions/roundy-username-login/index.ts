@@ -24,10 +24,22 @@ Deno.serve(async (req: Request) => {
     const body = JSON.parse(raw);
     const username = typeof body.username === 'string' ? body.username.trim().toLowerCase() : '';
     const password = typeof body.password === 'string' ? body.password : '';
-    if (!/^[a-z0-9_][a-z0-9_-]{2,29}$/.test(username) || !password || password.length > 128) return json({ code: 'invalid_credentials' }, 401);
+    const availability = body.action === 'availability';
+    if (!/^[a-z0-9_][a-z0-9_-]{2,29}$/.test(username)) return json({ code: availability ? 'invalid_username' : 'invalid_credentials' }, 400);
+    if (!availability && (!password || password.length > 128)) return json({ code: 'invalid_credentials' }, 401);
     const url = Deno.env.get('SUPABASE_URL')!;
     const admin = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false, autoRefreshToken: false } });
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+    if (availability) {
+      // Separate budget: checking an ID must never consume its login attempts.
+      const budget = await admin.rpc('consume_username_login_attempt', { p_key: await hash('availability:ip:' + ip), p_limit: 30 });
+      if (budget.error) return json({ code: 'temporarily_unavailable' }, 503);
+      if (!budget.data) return json({ code: 'over_request_rate_limit' }, 429);
+      const { data, error } = await admin.from('account_usernames').select('username').eq('username', username).maybeSingle();
+      if (error) return json({ code: 'temporarily_unavailable' }, 503);
+      // Deliberately reveal only ID availability, never emails, user IDs or sessions.
+      return json({ available: data === null });
+    }
     const [idBudget, ipBudget] = await Promise.all([
       admin.rpc('consume_username_login_attempt', { p_key: await hash('id:' + username), p_limit: 10 }),
       admin.rpc('consume_username_login_attempt', { p_key: await hash('ip:' + ip), p_limit: 30 }),
