@@ -301,10 +301,8 @@ export function App({path}:{path:string}){
    {item.description?.trim()&&<p className="event-description">{item.description}</p>}
    <section className="public-roster">
     <header className="public-roster-heading">
-     <h2>{tr(locale,'Public participant list','공개 참가자 명단')}</h2>
-     <p>{tr(locale,'See the broad age range and work category of confirmed participants without exposing identifying details.','확정 참가자의 연령대와 직업군만 공개하며 개인을 식별할 수 있는 정보는 제공하지 않아요.')}</p>
+     <h2>{tr(locale,'Participants','참가자')}</h2>
     </header>
-    <div className="public-roster-schedule"><span>{tr(locale,'Selected schedule','선택한 일정')}</span><strong>{dateLabelForLocale(event.starts_at,locale)} · {timeLabelForLocale(event.starts_at,locale)} KST</strong></div>
     <div className="public-roster-groups">
      {rosterGroups.map(group=><section className={'public-roster-group '+group.tone} key={group.key}>
       <h3>{group.label} <strong>{group.count}{tr(locale,' people','명')}</strong></h3>
