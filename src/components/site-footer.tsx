@@ -11,6 +11,7 @@ export function SiteFooter({ locale }: { locale: Locale }) {
         <Link href="/how-it-works">{tr(locale, 'How It Works & Safety', '이용 방법 및 안전')}</Link>
         <Link href="/privacy">{tr(locale, 'Privacy Policy', '개인정보 처리방침')}</Link>
         <Link href="/terms">{tr(locale, 'Terms of Use', '이용약관')}</Link>
+        <Link href="/refund-policy">{tr(locale, 'Refund Policy', '환불 규정')}</Link>
         <Link href="/copyright">{tr(locale, 'Copyright & Takedown', '저작권 및 삭제 요청')}</Link>
       </div>
       <Link className="footer-wordmark" href="/"><RoundyBrand /></Link>

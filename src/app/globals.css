@@ -2316,6 +2316,7 @@ html:lang(ko) .landing-v1-primary{line-height:1.3!important}
 }
 
 /* LEGAL DOCUMENT SHELL — 2026-09-29 */
+.route-refund-policy .content.narrow,
 .route-terms .content.narrow,
 .route-privacy .content.narrow,
 .route-copyright .content.narrow{max-width:980px;width:100%;padding-top:40px}
@@ -2380,6 +2381,7 @@ html:lang(ko) .legal-sections h2,
 html:lang(ko) .legal-intro h1{word-break:keep-all}
 
 @container roundy (max-width:759px){
+ .route-refund-policy .content.narrow,
  .route-terms .content.narrow,
  .route-privacy .content.narrow,
  .route-copyright .content.narrow{max-width:100%;padding:22px 20px 72px}
@@ -2424,6 +2426,7 @@ html:lang(ko) .legal-intro h1{word-break:keep-all}
 }
 
 @container roundy (max-width:420px){
+ .route-refund-policy .content.narrow,
  .route-terms .content.narrow,
  .route-privacy .content.narrow,
  .route-copyright .content.narrow{padding-left:18px;padding-right:18px}
