@@ -234,13 +234,13 @@ async function failPaymentOrder(orderNumber: string, userId: string, code: strin
 
 async function createPaymentRequest(req: Request, user: User, body: Record<string, unknown>) {
   const eventId = typeof body.eventId === "string" ? body.eventId : "";
-  const code = normalizeCode(body.code);
+  let code = normalizeCode(body.code);
   if (!UUID.test(eventId)) throw new ApiError("Invalid event ID.");
 
   const a = admin();
   const { data: activeOrder, error: activeOrderError } = await a
     .from("event_payment_orders")
-    .select("order_number,status,provider,provider_payment_url,event_id,amount")
+    .select("order_number,status,provider,provider_payment_url,event_id,amount,pricing_snapshot,terms_accepted_at")
     .eq("event_id", eventId)
     .eq("user_id", user.id)
     .in("status", ["pending_auth", "charging", "refunding"])
@@ -257,21 +257,33 @@ async function createPaymentRequest(req: Request, user: User, body: Record<strin
       paymentUrl: trustedPayAppUrl(String(activeOrder.provider_payment_url)),
     };
   }
+  let resumedPendingQuote: Record<string, unknown> | null = null;
+  let acceptedAt: string | null = null;
   if (activeOrder?.status === "pending_auth") {
-    await failPaymentOrder(String(activeOrder.order_number), user.id, "abandoned-before-request", "A newer checkout attempt replaced this unfinished request.");
+    resumedPendingQuote = activeOrder.pricing_snapshot && typeof activeOrder.pricing_snapshot === "object"
+      ? activeOrder.pricing_snapshot as Record<string, unknown>
+      : null;
+    acceptedAt = safeText(activeOrder.terms_accepted_at, 64) || null;
+    if (resumedPendingQuote) code = normalizeCode(resumedPendingQuote.code);
+    await failPaymentOrder(String(activeOrder.order_number), user.id, "restarted-before-provider-request", "The unfinished checkout was safely restarted before a PayApp request existed.");
   } else if (activeOrder) {
     throw new ApiError("A payment or refund is already being processed for this event.", 409, "payment-in-progress");
   }
 
-  if (body.termsAccepted !== true) throw new ApiError("Confirm the cancellation and refund rules before paying.");
+  if (body.termsAccepted !== true && !acceptedAt) throw new ApiError("Confirm the cancellation and refund rules before paying.");
 
-  const client = userClient(req);
-  const { data: quoteData, error: quoteError } = await client.rpc("event_checkout_quote", {
-    p_event: eventId,
-    p_code: code || null,
-  });
-  if (quoteError) throw new ApiError(quoteError.message);
-  const quote = (quoteData ?? {}) as Record<string, unknown>;
+  let quote: Record<string, unknown>;
+  if (resumedPendingQuote) {
+    quote = resumedPendingQuote;
+  } else {
+    const client = userClient(req);
+    const { data: quoteData, error: quoteError } = await client.rpc("event_checkout_quote", {
+      p_event: eventId,
+      p_code: code || null,
+    });
+    if (quoteError) throw new ApiError(quoteError.message);
+    quote = (quoteData ?? {}) as Record<string, unknown>;
+  }
   if (code && quote.code_valid !== true) throw new ApiError(friendlyCodeError(quote));
 
   const baseAmount = Number(quote.base_amount || 0);
@@ -316,7 +328,7 @@ async function createPaymentRequest(req: Request, user: User, body: Record<strin
     discount_amount: discountAmount,
     amount: finalAmount,
     pricing_snapshot: quote,
-    terms_accepted_at: new Date().toISOString(),
+    terms_accepted_at: acceptedAt || new Date().toISOString(),
   });
   if (insertError) throw new ApiError("Could not create this payment order.", 409, "order-create-failed");
 
