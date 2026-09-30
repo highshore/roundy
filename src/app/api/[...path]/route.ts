@@ -154,16 +154,10 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
     const profileRow={user_id:user.id,profile,updated_at:new Date().toISOString()};const write=old?await supabase.from('profiles').update(profileRow).eq('user_id',user.id):await supabase.from('profiles').insert(profileRow);if(write.error)throw write.error;const {data:verification,error:verificationError}=await supabase.from('verifications').select('status').eq('user_id',user.id).maybeSingle();if(verificationError)throw verificationError;return json({saved:true,verification:verification?.status??'Not started'});
    }
   }
-  if(path[0]==='credits'&&req.method==='GET'){
-   const now=new Date().toISOString();
-   const {data,error}=await supabase.from('credit_lots').select('remaining,expires_at').gt('remaining',0).gt('expires_at',now);if(error)throw error;
-   const balance=(data??[]).reduce((sum,row)=>sum+Number(row.remaining||0),0);
-   const nextExpiry=(data??[]).map(row=>String(row.expires_at||'')).filter(Boolean).sort()[0]??null;
-   return json({balance,nextExpiry});
-  }
+  if(path[0]==='credits'&&req.method==='GET')return json({balance:0,nextExpiry:null});
   if(path[0]==='applications'){
-   if(req.method==='GET'){const {data,error}=await supabase.from('applications').select('id,status,event_id');if(error)throw error;const rows=data??[];const slugs=await eventSlugMap(supabase,[...new Set(rows.map(a=>String(a.event_id)))]);return json({applications:rows.map(a=>({id:a.id,status:a.status,event_slug:slugs.get(String(a.event_id))}))});}
-   if(req.method==='POST'){const body=await req.json();const {data,error}=await supabase.rpc('apply',{p_event:body.eventId});if(error)throw error;return json({id:data,status:'Reviewing'},201);}
+   if(req.method==='GET')return json({applications:[]});
+   return json({error:'Applications are retired. Continue to event checkout instead.'},410);
   }
   if(path[0]==='verification-documents'&&req.method==='GET'&&path.length===3){
    if(path[1]!==user.id&&!await isAdmin(supabase))return json({error:'Document unavailable'},404);const {data,error}=await supabase.storage.from('wis-verification-documents').download(path.slice(1).join('/'));if(error)throw error;return new NextResponse(data,{headers:{'Content-Type':data.type,'Cache-Control':'private, no-store','Content-Disposition':'attachment','X-Content-Type-Options':'nosniff'}});
@@ -181,7 +175,6 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
   if(path[0]==='referral'){
    if(path.length===1&&req.method==='GET'){const {data,error}=await supabase.rpc('get_my_referral_code');if(error)throw error;return json({referralCode:data??''});}
    if(path.length===1&&req.method==='POST'){const {data,error}=await supabase.rpc('get_or_create_referral_code');if(error)throw error;return json({referralCode:data});}
-   if(path[1]==='quote'&&req.method==='POST'){const body=await req.json();const code=typeof body.code==='string'?body.code.trim().toUpperCase():'';const quantity=Number(body.quantity);if(!/^[A-Z0-9]{6}$/.test(code)||![1,3].includes(quantity))return json({error:'Enter a valid 6-character referral code.'},400);const {data,error}=await supabase.rpc('referral_quote',{p_code:code,p_quantity:quantity});if(error)throw error;return json({quote:data});}
    return json({error:'Not found'},404);
   }
   if(path[0]==='account'&&req.method==='DELETE'){
@@ -291,14 +284,14 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
    return json({error:'Method not allowed'},405);
   }
   if(path[0]==='bookings'){
-   if(req.method==='GET'){const [{data,error},{data:pending,error:pendingError}]=await Promise.all([supabase.from('bookings').select('id,event_id,payment_order_number,event_payment_orders(status)'),supabase.from('event_payment_orders').select('order_number,event_id,status,amount').in('status',['pending_auth','charging']).order('created_at',{ascending:false})]);if(error||pendingError)throw error||pendingError;const rows=(data??[]).filter(row=>{const payment=Array.isArray(row.event_payment_orders)?row.event_payment_orders[0]:row.event_payment_orders;return !row.payment_order_number||payment?.status==='completed';});const eventIds=[...new Set([...rows.map(b=>String(b.event_id)),...(pending??[]).map(o=>String(o.event_id))])];const slugs=await eventSlugMap(supabase,eventIds);return json({bookings:rows.map(b=>({id:b.id,event_slug:slugs.get(String(b.event_id)),paid:Boolean(b.payment_order_number)})),pending_payments:(pending??[]).map(o=>({event_slug:slugs.get(String(o.event_id)),order_number:String(o.order_number),status:String(o.status),amount:Number(o.amount||0)})).filter(o=>o.event_slug)});}
-   if(req.method==='POST'){const body=await req.json();if(body.termsAccepted!==true)return json({error:'Confirm the cancellation guidelines and terms before enrolling'},400);const {data,error}=await supabase.rpc('redeem',{p_event:body.eventId,p_terms_accepted:true});if(error)throw error;return json({id:data});}
+   if(req.method==='GET'){const [{data,error},{data:pending,error:pendingError}]=await Promise.all([supabase.from('bookings').select('id,event_id,payment_order_number,event_payment_orders(status)'),supabase.from('event_payment_orders').select('order_number,event_id,status,amount').in('status',['pending_auth','charging']).order('created_at',{ascending:false})]);if(error||pendingError)throw error||pendingError;const rows=(data??[]).filter(row=>{const payment=Array.isArray(row.event_payment_orders)?row.event_payment_orders[0]:row.event_payment_orders;return payment?.status==='completed';});const eventIds=[...new Set([...rows.map(b=>String(b.event_id)),...(pending??[]).map(o=>String(o.event_id))])];const slugs=await eventSlugMap(supabase,eventIds);return json({bookings:rows.map(b=>({id:b.id,event_slug:slugs.get(String(b.event_id)),paid:true})),pending_payments:(pending??[]).map(o=>({event_slug:slugs.get(String(o.event_id)),order_number:String(o.order_number),status:String(o.status),amount:Number(o.amount||0)})).filter(o=>o.event_slug)});}
    if(req.method==='DELETE'){
     const body=await req.json();const eventId=typeof body.eventId==='string'?body.eventId:'';if(!/^[0-9a-f-]{36}$/i.test(eventId))return json({error:'Invalid event ID'},400);
     const {data:booking,error:bookingError}=await supabase.from('bookings').select('payment_order_number').eq('event_id',eventId).eq('user_id',user.id).maybeSingle();if(bookingError)throw bookingError;
-    if(booking?.payment_order_number){const result=await invokeRoundyCheckout(supabase,{action:'cancel',eventId});return json({cancelled:true,refundAmount:Number(result.refundAmount||0),paid:true});}
-    const {data,error}=await supabase.rpc('cancel_booking',{p_event:eventId});if(error)throw error;return json({cancelled:data===true,paid:false});
+    if(!booking?.payment_order_number)return json({error:'Paid booking not found'},404);
+    const result=await invokeRoundyCheckout(supabase,{action:'cancel',eventId});return json({cancelled:true,refundAmount:Number(result.refundAmount||0),paid:true});
    }
+   return json({error:'Method not allowed'},405);
   }
   if(path[0]==='choices'&&req.method==='POST'){const body=await req.json();const {error}=await supabase.rpc('choose',{p_encounter:body.encounterId,p_choice:body.choice});if(error)throw error;return json({saved:true});}
   if(path[0]==='matches'&&req.method==='GET'){
