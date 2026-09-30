@@ -209,7 +209,7 @@ export function App({path}:{path:string}){
  useEffect(()=>{let active=true;if(demoMode||!authed||events.length===0)return;void Promise.all(events.filter(e=>e.status==='live').map(async e=>{try{const d=await api('events/'+e.id+'/attendees');return [e.id,d.attendees as EventAttendees] as const;}catch{return [e.id,{women:[],men:[],women_count:0,men_count:0,total:0} as EventAttendees] as const;}})).then(rows=>{if(active)setAttendeesByEvent(Object.fromEntries(rows));});return()=>{active=false;};},[authed,events]);
  useEffect(()=>{if(route!=='events'||!event||event.status!=='live')return;let active=true;void fetch('/api/events/'+event.id+'/roster',{cache:'no-store'}).then(async response=>{const data=await response.json();if(!response.ok)throw new Error(data.error||'Could not load participant list.');if(active&&data.roster)setPublicRosters(prev=>({...prev,[event.id]:data.roster as PublicRoster}));}).catch(()=>{/* The event page remains usable if the public roster is unavailable. */});return()=>{active=false;};},[route,event?.id,event?.status]); // eslint-disable-line react-hooks/exhaustive-deps
  useEffect(()=>{try{const valid=/^[A-Z0-9_-]{4,24}$/;if(valid.test(referralParam)){sessionStorage.setItem('roundy-referral-prefill',referralParam);if(route==='checkout'){setCheckoutCode(referralParam);setPriceQuote(null);setCheckoutTermsAccepted(false);}}else if(route==='checkout'&&!checkoutCode){const stored=sessionStorage.getItem('roundy-referral-prefill')??'';if(valid.test(stored))setCheckoutCode(stored);}}catch{/* Discount-code prefill remains optional if storage is unavailable. */}},[referralParam,route]); // eslint-disable-line react-hooks/exhaustive-deps
- useEffect(()=>{if(route!=='checkout'||!event||!authed||!['male','female'].includes(p.gender))return;let active=true;let code=checkoutCode.trim().toUpperCase();try{if(!code){const stored=sessionStorage.getItem('roundy-referral-prefill')??'';if(/^[A-Z0-9]{6}$/.test(stored)){code=stored;setCheckoutCode(stored);}}}catch{/* Discount prefill is optional. */}void (async()=>{try{const quote:PriceQuote=demoMode?demoPriceQuote(event!,code):(await api('checkout/quote',{eventId:event!.id,code})).quote;if(active){setPriceQuote(quote);if(quote.locked)setCheckoutCode(String(quote.code??''));}}catch(e){if(active)setError(e instanceof Error?e.message:'Could not calculate this event price.');}})();return()=>{active=false;};},[route,event?.id,event?.seats_remaining,authed,p.gender]); // eslint-disable-line react-hooks/exhaustive-deps
+ useEffect(()=>{if(route!=='checkout'||!event||!authed||!['male','female'].includes(p.gender))return;let active=true;let code=checkoutCode.trim().toUpperCase();try{if(!code){const stored=sessionStorage.getItem('roundy-referral-prefill')??'';if(/^[A-Z0-9_-]{4,24}$/.test(stored)){code=stored;setCheckoutCode(stored);}}}catch{/* Discount prefill is optional. */}void (async()=>{try{const quote:PriceQuote=demoMode?demoPriceQuote(event!,code):(await api('checkout/quote',{eventId:event!.id,code})).quote;if(active){setPriceQuote(quote);if(quote.locked)setCheckoutCode(String(quote.code??''));}}catch(e){if(active)setError(e instanceof Error?e.message:'Could not calculate this event price.');}})();return()=>{active=false;};},[route,event?.id,event?.seats_remaining,authed,p.gender]); // eslint-disable-line react-hooks/exhaustive-deps
  useEffect(()=>{if(route!=='payment'||parts[1]!=='result'||!authed||demoMode)return;const orderNumber=(searchParams.get('order')??'').trim();if(!/^RNDY-A-\d{14}-[A-F0-9]{10}$/.test(orderNumber)){setError(tr(locale,'Payment confirmation information is missing. Please contact Roundy support if you were charged.','결제 확인 정보가 없습니다. 결제되었다면 Roundy 고객지원에 문의해 주세요.'));return;}let active=true;let timer:number|undefined;let attempts=0;const check=async()=>{try{const result=await api('checkout',{action:'status',orderNumber});if(!active)return;if(result.completed){const paidEvent=events.find(item=>item.id===result.eventId);if(paidEvent)setState(s=>({...s,booked:{...s.booked,[paidEvent.slug]:true}}));await Promise.all([refreshEvents(),refreshCredits()]);if(active)router.replace('/me/events');return;}if(result.failed||['refunded','refunded_pending_reconcile'].includes(String(result.status))){setError(String(result.error||tr(locale,'The payment was cancelled or could not be completed. Do not pay again until you review the result.','결제가 취소되었거나 완료되지 않았습니다. 결과를 확인하기 전까지 다시 결제하지 마세요.')));return;}attempts+=1;if(attempts>=30){setError(tr(locale,'We are still waiting for PayApp confirmation. Do not pay again; check My Events shortly or contact Roundy support.','PayApp 결제 확인을 기다리고 있어요. 다시 결제하지 말고 잠시 후 내 모임을 확인하거나 Roundy 고객지원에 문의해 주세요.'));return;}timer=window.setTimeout(()=>void check(),1500);}catch(e){if(active)setError(e instanceof Error?e.message:tr(locale,'Could not confirm your payment yet. Please try again shortly.','아직 결제를 확인하지 못했어요. 잠시 후 다시 확인해 주세요.'));}};void check();return()=>{active=false;if(timer!==undefined)window.clearTimeout(timer);};},[route,authed,searchParams,events,locale]); // eslint-disable-line react-hooks/exhaustive-deps
  useEffect(()=>{if(ready&&demoMode){try{sessionStorage.setItem('roundy-demo-v1',JSON.stringify(state));}catch{setError('Photo is too large for this preview. Please choose a smaller photo.');}}},[state,ready]);
  useEffect(()=>{let active=true;setError('');setMessage('');setQuery('');if(!demoMode&&authed){setRouteLoading(true);const tasks=[api('applications').then(d=>{if(active)setState(s=>({...s,applications:Object.fromEntries(d.applications.map((a:{event_slug:string;status:string})=>[a.event_slug,a.status]))}));}),api('bookings').then(d=>{if(active){setState(s=>({...s,booked:Object.fromEntries((d.bookings??[]).filter((b:{event_slug?:string})=>b.event_slug).map((b:{event_slug:string})=>[b.event_slug,true]))}));setPendingPayments(Object.fromEntries((d.pending_payments??[]).filter((o:{event_slug?:string})=>o.event_slug).map((o:{event_slug:string;order_number:string;status:string;amount:number})=>[o.event_slug,{order_number:o.order_number,status:o.status,amount:Number(o.amount||0)}])));}})];void Promise.all(tasks).catch(e=>{if(active)setError(e.message);}).finally(()=>{if(active)setRouteLoading(false);});}return()=>{active=false;};},[path,authed]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -280,7 +280,6 @@ export function App({path}:{path:string}){
   const registrationClosed=Date.parse(event.starts_at)<=Date.now()||event.seats_remaining<1;
   const cancellationLocked=Date.now()>=Date.parse(event.starts_at)-((event.lockdown_minutes??0)*60000);
   const alreadyBooked=Boolean(state.booked[event.slug]);
-  const paymentPending=Boolean(pendingPayments[event.slug]);
   const rosterInfo=publicRosters[event.id]??{women:[],men:[],women_count:0,men_count:0,total:0,updated_at:null};
   const rosterGroups=[
    {key:'men',label:tr(locale,'Gents','남성'),entries:rosterInfo.men,count:rosterInfo.men_count,tone:'men'},
@@ -315,7 +314,7 @@ export function App({path}:{path:string}){
     <div className="public-roster-privacy"><ShieldCheck size={18}/><span>{tr(locale,'Names, exact ages, workplaces, photos and contact information are never included in this public list.','이 공개 명단에는 이름, 정확한 나이, 직장명, 사진, 연락처를 표시하지 않습니다.')}</span></div>
     {rosterInfo.updated_at&&<p className="public-roster-updated">{tr(locale,'Last updated','최근 업데이트')} · {rosterUpdatedLabel(rosterInfo.updated_at,locale)}</p>}
    </section>
-   <div className="sticky-action">{alreadyBooked?<Button secondary disabled={busy||cancellationLocked} onClick={()=>void cancelBooking(event)}>{cancellationLocked?tr(locale,'Cancellation locked','취소 마감'):tr(locale,'Cancel registration','등록 취소')}</Button>:<Button disabled={registrationClosed} onClick={()=>goApply(event)}>{registrationClosed?tr(locale,'Event closed','신청 마감'):!eligibleToApply?tr(locale,'Complete Profile to Join','프로필을 완성하고 참여하기'):paymentPending?tr(locale,'Resume payment','결제 이어하기'):tr(locale,'Apply for this event','이 모임 신청하기')}</Button>}</div>
+   <div className="sticky-action">{alreadyBooked?<Button secondary disabled={busy||cancellationLocked} onClick={()=>void cancelBooking(event)}>{cancellationLocked?tr(locale,'Cancellation locked','취소 마감'):tr(locale,'Cancel registration','등록 취소')}</Button>:<Button disabled={registrationClosed} onClick={()=>goApply(event)}>{registrationClosed?tr(locale,'Event closed','신청 마감'):!eligibleToApply?tr(locale,'Complete Profile to Join','프로필을 완성하고 참여하기'):tr(locale,'Apply for this event','이 모임 신청하기')}</Button>}</div>
   </>;
  } else if(route==='reset-password')content=<ResetPassword locale={locale}/>;
  else if(route==='signin')content=<SignIn eventSlug={parts[1]} locale={locale}/>;
@@ -367,65 +366,68 @@ export function App({path}:{path:string}){
   const item=localizeEvent(event,locale);
   const codeMessage=enteredCode&&quote?(quote.code_valid?quote.code_kind==='promo'?tr(locale,'Promo code · '+quote.code_discount_percent+'% off','프로모션 코드 · '+quote.code_discount_percent+'% 할인'):tr(locale,'Referral code · 10% off','추천 코드 · 10% 할인'):discountCodeMessage(quote.code_reason)):'';
   const discounted=Boolean(quote&&quote.final_amount<quote.original_amount);
-  const submitDisabled=busy||(!checkoutTermsAccepted&&!quote?.locked)||Boolean(enteredCode&&quote&&!quote.code_valid&&!quote.locked);
+  const discountPercent=quote?Math.max(0,quote.total_discount_percent||Math.round((quote.original_amount-quote.final_amount)*100/Math.max(1,quote.original_amount))):0;
+  const submitDisabled=busy||!checkoutTermsAccepted||Boolean(enteredCode&&quote&&!quote.code_valid&&!quote.locked);
   const amountRow=(label:string,amount:number)=><div className="checkout-amount-row discount"><span>{label}</span><strong>-₩{amount.toLocaleString()}</strong></div>;
   content=state.booked[slug]?<Empty title={tr(locale,'Your seat is already confirmed.','이미 자리가 확정됐어요.')} body={tr(locale,'This event is already saved in My Events.','이미 예약한 모임이에요.')} href="/me/events" label={tr(locale,'View My Events','내 모임 보기')}/>:!eligibleToApply?<><Card label={tr(locale,'PROFILE REQUIRED','프로필 필요')} title={tr(locale,'Complete your profile first.','먼저 프로필을 완성해 주세요.')}>{tr(locale,'Your profile and verification must be approved before you can reserve a seat.','좌석을 예약하려면 프로필과 본인 인증 승인이 필요해요.')}</Card><Button href={!profileComplete(p)?'/onboarding/basics/'+slug:'/onboarding/verification/'+slug}>{tr(locale,'Complete Profile','프로필 완성하기')}</Button></>:<div className="checkout-page">
-   <header className="checkout-page-heading"><h1>{tr(locale,'Apply','신청하기')}</h1></header>
-
    <section className="checkout-event-card">
     <div className="checkout-event-main">
      <div className="checkout-event-image"><Image src={event.image||'/images/yeouido.webp'} alt={item.title} fill sizes="104px"/></div>
      <div className="checkout-event-title"><span>{tr(locale,'EVENT','모임')}</span><h2>{headline(item.title)}</h2></div>
     </div>
-    <div className="checkout-selected-schedule">
-     <div><span>{tr(locale,'Selected schedule','선택한 일정')}</span><strong>{dateLabelForLocale(event.starts_at,locale)} · {timeLabelForLocale(event.starts_at,locale)} KST</strong><small>{item.venue}</small></div>
-     <Link href="/events">{tr(locale,'Change','변경')}</Link>
+    <div className="checkout-time-place">
+     <h3>{tr(locale,'Time & Place Reminder','시간 및 장소 안내')}</h3>
+     <div className="checkout-reminder-row"><span>{tr(locale,'Time','시간')}</span><strong>{dateLabelForLocale(event.starts_at,locale)} · {timeLabelForLocale(event.starts_at,locale)} KST</strong></div>
+     <div className="checkout-reminder-row"><span>{tr(locale,'Location','장소')}</span><strong>{item.venue}</strong></div>
     </div>
    </section>
 
-   <section className="checkout-section-card checkout-amount-card">
-    <h2>{tr(locale,'Payment amount','결제 금액')}</h2>
-    {!quote?<div className="checkout-amount-loading">{tr(locale,'Calculating your event price…','모임 가격을 계산하고 있어요…')}</div>:<>
-     <div className="checkout-amount-row"><span>{tr(locale,'Regular price','상품 금액')}</span><strong>₩{quote.original_amount.toLocaleString()}</strong></div>
-     {quote.referral_discount_amount>0&&amountRow(tr(locale,'Referral discount (10%)','추천 할인 (10%)'),quote.referral_discount_amount)}
-     {quote.promo_discount_amount>0&&amountRow(tr(locale,'Promo discount ('+quote.code_discount_percent+'%)','프로모션 할인 ('+quote.code_discount_percent+'%)'),quote.promo_discount_amount)}
-     {quote.gender_balance_discount_amount>0&&amountRow(tr(locale,'Gender balance discount (10%)','성비 균형 할인 (10%)'),quote.gender_balance_discount_amount)}
-     {quote.time_discount_amount>0&&amountRow(quote.time_discount_kind==='early_bird'?tr(locale,'Early bird (5%)','얼리버드 (5%)'):tr(locale,'Last-minute deal (5%)','마감 임박 할인 (5%)'),quote.time_discount_amount)}
-     {quote.boomerang_discount_amount>0&&amountRow(tr(locale,'Boomerang discount (5%)','재참여 할인 (5%)'),quote.boomerang_discount_amount)}
-     <div className="checkout-amount-row total"><span>{tr(locale,'Total payment','총 결제 금액')}</span><div>{discounted&&<s>₩{quote.original_amount.toLocaleString()}</s>}<strong>₩{quote.final_amount.toLocaleString()}</strong></div></div>
-    </>}
-   </section>
-
    <section className="checkout-section-card checkout-coupon-card">
-    <div className="checkout-section-title"><h2>{tr(locale,'Coupon · discount code','쿠폰 · 할인코드')}</h2><span>{tr(locale,'Optional','선택')}</span></div>
-    <div className="referral-entry"><input value={checkoutCode} maxLength={24} autoCapitalize="characters" autoCorrect="off" spellCheck={false} disabled={Boolean(quote?.locked)} placeholder={tr(locale,'Referral or promo code','지인 추천 또는 프로모션 코드')} onChange={e=>{setCheckoutCode(e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g,'').slice(0,24));setPriceQuote(null);setCheckoutTermsAccepted(false);}}/><button className="referral-apply" type="button" disabled={busy||Boolean(quote?.locked)} onClick={()=>void applyDiscountCode()}>{tr(locale,'Refresh','새로고침')}</button></div>
+    <h2>{tr(locale,'Referral Code (Optional)','추천 코드 (선택)')}</h2>
+    <p className="checkout-referral-note">{tr(locale,'Each referral code can be used once and is not restored after a cancelled participation.','추천 코드는 1회만 사용할 수 있으며 참가 취소 후 다시 사용할 수 없습니다.')}</p>
+    <div className="referral-entry"><input value={checkoutCode} maxLength={24} autoCapitalize="characters" autoCorrect="off" spellCheck={false} disabled={Boolean(quote?.locked)} placeholder={tr(locale,'Referral code','추천 코드')} onChange={e=>{setCheckoutCode(e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g,'').slice(0,24));setPriceQuote(null);setCheckoutTermsAccepted(false);}}/><button className="referral-apply" type="button" disabled={busy||Boolean(quote?.locked)} onClick={()=>void applyDiscountCode()}>{tr(locale,'Refresh','새로고침')}</button></div>
     {codeMessage&&<p className={'referral-message '+(quote?.code_valid?'success':'error')}>{codeMessage}</p>}
    </section>
 
+   <section className="checkout-section-card checkout-amount-card">
+    <h2>{tr(locale,'Payment Amount','결제 금액')}</h2>
+    {!quote?<div className="checkout-amount-loading">{tr(locale,'Calculating your event price…','모임 가격을 계산하고 있어요…')}</div>:<>
+     <div className="checkout-amount-row"><span>{tr(locale,'Regular Price','정상가')}</span><strong>₩{quote.original_amount.toLocaleString()}</strong></div>
+     <div className="checkout-discount-rows">
+      {quote.referral_discount_amount>0&&amountRow(tr(locale,'Referral Discount (10%)','추천 할인 (10%)'),quote.referral_discount_amount)}
+      {quote.promo_discount_amount>0&&amountRow(tr(locale,'Promo Discount ('+quote.code_discount_percent+'%)','프로모션 할인 ('+quote.code_discount_percent+'%)'),quote.promo_discount_amount)}
+      {quote.gender_balance_discount_amount>0&&amountRow(tr(locale,'Gender Balance Discount (10%)','성비 균형 할인 (10%)'),quote.gender_balance_discount_amount)}
+      {quote.time_discount_amount>0&&amountRow(quote.time_discount_kind==='early_bird'?tr(locale,'Early Bird (5%)','얼리버드 (5%)'):tr(locale,'Last-Minute Deal (5%)','마감 임박 할인 (5%)'),quote.time_discount_amount)}
+      {quote.boomerang_discount_amount>0&&amountRow(tr(locale,'Boomerang Discount (5%)','재참여 할인 (5%)'),quote.boomerang_discount_amount)}
+     </div>
+     <div className="checkout-amount-row total"><span>{tr(locale,'Total','합계')}</span><div>{discounted&&discountPercent>0&&<span className="checkout-discount-badge">-{discountPercent}%</span>}<strong>₩{quote.final_amount.toLocaleString()}</strong></div></div>
+    </>}
+   </section>
+
    <section className="checkout-section-card checkout-method-card">
-    <h2>{tr(locale,'Payment method','결제 수단')}</h2>
-    <div className="checkout-method-pill"><LockKeyhole size={17}/><span>{tr(locale,'PayApp secure payment','PayApp 안전결제')}</span></div>
+    <h2>{tr(locale,'Payment Method','결제 수단')}</h2>
+    <div className="checkout-method-pill"><LockKeyhole size={17}/><span>{tr(locale,'PayApp Secure Payment','PayApp 안전결제')}</span></div>
     <p>{tr(locale,'Choose your supported card or payment method securely on PayApp in the next step.','다음 단계의 PayApp 화면에서 지원되는 카드 또는 결제수단을 선택합니다.')}</p>
    </section>
 
    <section className="checkout-consent-card">
-    {quote?.locked?<div className="checkout-locked-notice"><LockKeyhole size={19}/><div><strong>{tr(locale,'Payment already in progress','진행 중인 결제가 있어요')}</strong><p>{tr(locale,'The existing price, discounts and payment request are preserved. Continue to resume the same PayApp payment instead of creating another charge.','기존 가격, 할인, 결제 요청을 그대로 유지합니다. 새 결제를 만들지 않고 같은 PayApp 결제를 이어갑니다.')}</p></div></div>:<label className="checkout-consent-title"><input type="checkbox" checked={checkoutTermsAccepted} onChange={e=>setCheckoutTermsAccepted(e.target.checked)}/><span>{tr(locale,'[Required] I agree to the attendance, cancellation/refund and service terms.','[필수] 참석 약속 및 취소·환불 규정에 동의합니다.')}</span></label>}
+    <h2>{tr(locale,'Please Check','꼭 확인해 주세요')}</h2>
     <div className="checkout-consent-body">
      <p>{tr(locale,'Please notify us as early as possible if you cannot attend.','참석이 어려워진 경우 가능한 한 빨리 알려주세요.')}</p>
-     <h3>{tr(locale,'Cancellation & refund','취소·환불')}</h3>
+     <h3>{tr(locale,'Cancellation & Refund','취소 및 환불')}</h3>
      <ul>
       <li>{lockdownNotice(event.lockdown_minutes??0,locale)}</li>
       <li>{tr(locale,'Cancel before lockdown and before check-in for a 100% refund of the amount actually paid. Refunds are unavailable after lockdown.','락다운 전에 참가를 취소하고 체크인 전이라면 실제 결제금액의 100%를 환불합니다. 락다운 이후에는 환불이 불가능합니다.')}</li>
-      <li>{tr(locale,'Discounts and promo/referral benefits are not reissued after cancellation.','취소 후에는 할인이나 프로모션/추천 혜택이 다시 지급되지 않습니다.')}</li>
+      <li>{tr(locale,'Discounts and referral benefits are not restored after cancellation.','취소 후에는 할인이나 추천 혜택이 다시 지급되지 않습니다.')}</li>
      </ul>
      <p className="checkout-policy-links"><Link href="/refund-policy" target="_blank">{tr(locale,'Refund Policy','환불 규정')}</Link><Link href="/terms" target="_blank">{tr(locale,'Terms of Use','이용약관')}</Link><Link href="/privacy" target="_blank">{tr(locale,'Privacy Policy','개인정보 처리방침')}</Link></p>
     </div>
+    <label className="checkout-consent-title"><input type="checkbox" checked={checkoutTermsAccepted} onChange={e=>setCheckoutTermsAccepted(e.target.checked)}/><span>{tr(locale,'I have fully read and acknowledge these terms.','위 내용을 모두 읽고 확인했으며 이에 동의합니다.')}</span></label>
    </section>
 
-   {quote?.locked&&<Button secondary disabled={busy} onClick={()=>void abandonPayment(event)}>{tr(locale,'Cancel this payment attempt','이 결제 시도 취소하기')}</Button>}
    {ticketBalance>0&&!quote?.locked&&<Button secondary disabled={busy||!checkoutTermsAccepted} onClick={()=>work(async()=>{await api('bookings',{eventId:event.id,termsAccepted:true});setState(s=>({...s,booked:{...s.booked,[slug]:true}}));await Promise.all([refreshEvents(),refreshCredits()]);router.push('/me/events');})}>{tr(locale,'Use legacy ticket credit ('+ticketBalance+')','기존 티켓 크레딧 사용 ('+ticketBalance+')')}</Button>}
 
-   <div className="checkout-sticky-submit"><Button disabled={submitDisabled} onClick={()=>void payForEvent(event)}>{demoMode?tr(locale,'Preview event payment','모임 결제 미리보기'):quote?.locked?<>{tr(locale,'Resume payment','결제 이어하기')} <strong>₩{quote.final_amount.toLocaleString()}</strong></>:!checkoutTermsAccepted?tr(locale,'Check the required agreement','필수 동의사항에 체크해주세요.'):quote?<>{tr(locale,'Pay','결제하기')} <span className="checkout-button-prices">{discounted&&<s>₩{quote.original_amount.toLocaleString()}</s>}<strong>₩{quote.final_amount.toLocaleString()}</strong></span></>:tr(locale,'Continue to PayApp','PayApp으로 계속하기')}</Button></div>
+   <div className="checkout-sticky-submit"><Button disabled={submitDisabled} onClick={()=>void payForEvent(event)}>{demoMode?tr(locale,'Preview event payment','모임 결제 미리보기'):quote?<><span>{tr(locale,'Pay','결제하기')}</span><strong>₩{quote.final_amount.toLocaleString()}</strong>{discounted&&discountPercent>0&&<small className="checkout-cta-discount">(-{discountPercent}%)</small>}</>:tr(locale,'Continue to PayApp','PayApp으로 계속하기')}</Button></div>
   </div>;
  }
  else if(route==='ticket'&&event)content=!state.booked[slug]?<Empty title={tr(locale,'No confirmed booking yet.','아직 확정된 예약이 없어요.')} body={tr(locale,'Return to the event page to complete this event’s payment and confirm your seat.','이벤트 페이지에서 해당 모임 결제를 완료하고 좌석을 확정해 주세요.')} href={'/events/'+slug} label={tr(locale,'View event','모임 보기')}/>:<>{demoMode&&<div className="qr-card">{qr&&<Image src={qr} alt="Demo QR code, not a valid admission ticket" width={230} height={230}/>}<b>PREVIEW TICKET — NOT VALID FOR ENTRY</b></div>}<Card label={tr(locale,'BOOKING CONFIRMED','예약 확정')} title={dateLabelForLocale(event.starts_at,locale)+' · '+timeLabelForLocale(event.starts_at,locale)}>{localizeEvent(event,locale).venue}<br/>{tr(locale,'Arrive 15 minutes early and bring photo ID.','15분 일찍 도착하고 사진이 있는 신분증을 지참해 주세요.')}</Card><Note>{tr(locale,'Your booking is attached to your account. The host will verify your identity at check-in.','예약은 계정에 연결되어 있습니다. 체크인 시 호스트가 신원을 확인합니다.')}</Note>{demoMode&&<div className="demo-controls"><p>Event-night preview</p><Button onClick={()=>{setState(s=>({...s,checked:{...s.checked,[slug]:true}}));router.push('/event-night/'+slug);}}>Preview staff check-in</Button></div>}</>;
