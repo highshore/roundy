@@ -20,12 +20,14 @@ import './auth-shell.css';
 type UsernameStatus = 'idle' | 'checking' | 'available' | 'taken' | 'error';
 const validUsername = (value: string) => /^[a-z0-9_][a-z0-9_-]{2,29}$/.test(value);
 
-async function checkUsername(value: string): Promise<boolean> {
+const validEmail = (value: string) => value.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+async function checkSignup(values: { username?: string; email?: string }) {
   const { data, error } = await createClient().functions.invoke('roundy-username-login', {
-    body: { action: 'check_availability', username: value },
+    body: { action: 'check_signup', ...values }, timeout: 5000,
   });
-  if (error || typeof data?.available !== 'boolean') throw new Error('Availability unavailable');
-  return data.available;
+  if (error || (values.username !== undefined && typeof data?.username_available !== 'boolean')
+    || (values.email !== undefined && typeof data?.email_available !== 'boolean')) throw new Error('Availability unavailable');
+  return data as { username_available?: boolean; email_available?: boolean };
 }
 
 type Method = 'email' | 'phone';
@@ -43,7 +45,9 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [usernameStatus, setUsernameStatus] = useState<UsernameStatus>('idle');
-  const [usernameRetry, setUsernameRetry] = useState(0);
+  const [emailStatus, setEmailStatus] = useState<UsernameStatus>('idle');
+  const fieldRequests = useRef({ username: 0, email: 0 });
+  const checkedValues = useRef({ username: '', email: '' });
   const usernameRef = useRef<HTMLInputElement>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [password, setPassword] = useState('');
@@ -92,33 +96,42 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
     return () => window.clearTimeout(timer);
   }, [cooldown]);
 
-  useEffect(() => {
-    const value = username.trim().toLowerCase();
-    if (showMethods || confirmationEmail || method !== 'email' || mode !== 'signup' || !validUsername(value)) {
-      setUsernameStatus('idle');
-      return;
-    }
-    let active = true;
-    setUsernameStatus('checking');
-    const timer = window.setTimeout(() => {
-      void checkUsername(value).then(available => {
-        if (active) setUsernameStatus(available ? 'available' : 'taken');
-      }).catch(() => { if (active) setUsernameStatus('error'); });
-    }, 450);
-    return () => { active = false; window.clearTimeout(timer); };
-  }, [username, usernameRetry, method, mode, showMethods, confirmationEmail]);
-
-  async function validateUsername() {
-    const value = username.trim().toLowerCase();
-    if (!validUsername(value)) { usernameRef.current?.focus(); return false; }
-    setUsernameStatus('checking');
+  async function checkField(field: 'username' | 'email', force = false) {
+    if (mode !== 'signup' || method !== 'email') return;
+    const value = (field === 'username' ? username : email).trim().toLowerCase();
+    const setStatus = field === 'username' ? setUsernameStatus : setEmailStatus;
+    if (!(field === 'username' ? validUsername(value) : validEmail(value))) { setStatus('idle'); return; }
+    if (!force && checkedValues.current[field] === value) return;
+    checkedValues.current[field] = value;
+    const request = ++fieldRequests.current[field];
+    setStatus('checking');
     try {
-      const available = await checkUsername(value);
-      setUsernameStatus(available ? 'available' : 'taken');
-      if (!available) usernameRef.current?.focus();
-      return available;
+      const result = await checkSignup({ [field]: value });
+      if (request === fieldRequests.current[field]) setStatus(result[field === 'username' ? 'username_available' : 'email_available'] ? 'available' : 'taken');
     } catch {
-      setUsernameStatus('error');
+      if (request === fieldRequests.current[field]) { checkedValues.current[field] = ''; setStatus('error'); }
+    }
+  }
+
+  async function validateSignup() {
+    const values = { username: username.trim().toLowerCase(), email: email.trim().toLowerCase() };
+    if (!validUsername(values.username) || !validEmail(values.email)) return false;
+    const idRequest = ++fieldRequests.current.username;
+    const emailRequest = ++fieldRequests.current.email;
+    setUsernameStatus('checking'); setEmailStatus('checking');
+    try {
+      const result = await checkSignup(values);
+      if (idRequest !== fieldRequests.current.username || emailRequest !== fieldRequests.current.email) return false;
+      setUsernameStatus(result.username_available ? 'available' : 'taken');
+      setEmailStatus(result.email_available ? 'available' : 'taken');
+      checkedValues.current = values;
+      if (!result.email_available) setError(t('This email is already registered. Sign in with your existing account, including Kakao, or reset your password.', '이미 가입된 이메일이에요. 카카오 등 기존 계정으로 로그인하거나 비밀번호를 재설정해 주세요.'));
+      else if (!result.username_available) setError(t('This ID is already taken. Choose another ID.', '이미 사용 중인 아이디예요. 다른 아이디를 입력해 주세요.'));
+      return !!result.username_available && !!result.email_available;
+    } catch {
+      setUsernameStatus('error'); setEmailStatus('error');
+      checkedValues.current = { username: '', email: '' };
+      setError(t('Couldn’t check your details. Please try again.', '가입 정보를 확인하지 못했어요. 잠시 후 다시 시도해 주세요.'));
       return false;
     }
   }
@@ -153,6 +166,9 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
   }
 
   function switchView(nextMethod: Method, nextMode: Mode) {
+    fieldRequests.current.username++; fieldRequests.current.email++;
+    checkedValues.current = { username: '', email: '' };
+    setUsernameStatus('idle'); setEmailStatus('idle');
     setConfirmationEmail('');
     setPasswordError(''); setConfirmError('');
     setSignupAgreed(false);
@@ -236,7 +252,10 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
       setPasswordError(invalid);
       setConfirmError(password !== confirm ? passwordMismatch(locale) : '');
       if (invalid || password !== confirm) return;
-      if (usernameStatus !== 'available') { usernameRef.current?.focus(); return; }
+      setBusy(true); setError('');
+      const available = await validateSignup();
+      setBusy(false);
+      if (!available) return;
     }
     if (mode === 'signup' && !signupAgreed) {
       setConsentOpen(true);
@@ -277,7 +296,7 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
           '가입된 계정이 있으면 비밀번호 재설정 링크를 이메일로 보내드려요.',
         ));
       } else if (mode === 'signup') {
-        if (!await validateUsername()) { setConsentOpen(false); return; }
+        if (!await validateSignup()) { setConsentOpen(false); return; }
         const { data, error: authError } = await auth.signUp({
           email: email.trim(),
           password,
@@ -289,7 +308,7 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
         if (authError) {
           // The UNIQUE constraint remains authoritative if another signup wins the race.
           if (authError.code === 'unexpected_failure') {
-            if (!await validateUsername()) { setConsentOpen(false); return; }
+            if (!await validateSignup()) { setConsentOpen(false); return; }
           }
           throw authError;
         }
@@ -469,7 +488,8 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
               ref={usernameRef}
               aria-invalid={usernameStatus === 'taken'}
               value={username}
-              onChange={event => { setUsernameStatus('idle'); setUsername(event.target.value); }}
+              onChange={event => { fieldRequests.current.username++; checkedValues.current.username = ''; setUsernameStatus('idle'); setUsername(event.target.value); setError(''); }}
+              onBlur={() => void checkField('username')}
               placeholder={t('Choose your ID', '사용할 아이디 입력')}
               aria-describedby="id-format id-availability"
             />
@@ -480,7 +500,7 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
                 : usernameStatus === 'taken' ? t('✕ Already taken. Choose another ID.', '✕ 이미 사용 중인 아이디예요')
                 : usernameStatus === 'error' ? t('Couldn’t check. Wait a moment and retry.', '확인하지 못했어요. 잠시 후 다시 시도해 주세요.') : ''}
             </small>
-            {usernameStatus === 'error' && <button type="button" className={styles.textButton} onClick={() => setUsernameRetry(value => value + 1)}>{t('Retry ID check', '아이디 다시 확인')}</button>}
+            {usernameStatus === 'error' && <button type="button" className={styles.textButton} onClick={() => void checkField('username', true)}>{t('Retry ID check', '아이디 다시 확인')}</button>}
           </label>}
           <label>
             {mode === 'signin' ? t('ID or email', '아이디 또는 이메일') : t('Email', '이메일')}
@@ -491,10 +511,20 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
               autoCapitalize="none"
               spellCheck={false}
               value={email}
-              onChange={event => setEmail(event.target.value)}
+              onChange={event => { fieldRequests.current.email++; checkedValues.current.email = ''; setEmailStatus('idle'); setEmail(event.target.value); setError(''); }}
+              onBlur={() => void checkField('email')}
+              aria-invalid={mode === 'signup' && emailStatus === 'taken'}
+              aria-describedby={mode === 'signup' ? 'email-availability' : undefined}
               placeholder={mode === 'signin' ? t('Enter your ID or email', '아이디 또는 이메일 입력') : 'you@example.com'}
               maxLength={254}
             />
+            {mode === 'signup' && <small id="email-availability" role="status" aria-live="polite" className={emailStatus === 'taken' || emailStatus === 'error' ? styles.fieldError : emailStatus === 'available' ? styles.fieldSuccess : undefined}>
+              {emailStatus === 'checking' ? t('Checking email…', '이메일 확인 중…')
+                : emailStatus === 'available' ? t('✓ Available for signup. Verification required.', '✓ 가입 가능한 이메일이에요. 이메일 인증이 필요해요.')
+                : emailStatus === 'taken' ? t('Already registered. Sign in with your existing account or Kakao.', '이미 가입된 이메일이에요. 기존 계정이나 카카오로 로그인해 주세요.')
+                : emailStatus === 'error' ? t('Couldn’t check. Retry or submit again.', '확인하지 못했어요. 다시 확인하거나 회원가입을 눌러 주세요.') : ''}
+            </small>}
+            {mode === 'signup' && emailStatus === 'error' && <button type="button" className={styles.textButton} onClick={() => void checkField('email', true)}>{t('Retry email check', '이메일 다시 확인')}</button>}
           </label>
           {mode !== 'forgot' && <label>
             {t('Password', '비밀번호')}
@@ -603,7 +633,7 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
           </>}
         </>}
 
-        <button type="submit" className={styles.primary} disabled={method === 'email' && mode === 'signup' && usernameStatus !== 'available'}>
+        <button type="submit" className={styles.primary} disabled={method === 'email' && mode === 'signup' && (usernameStatus === 'taken' || emailStatus === 'taken')}>
           {busy
             ? t('Please wait…', '처리 중…')
             : method === 'phone'
