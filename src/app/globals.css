@@ -536,13 +536,9 @@
 }
 
 /* Privacy-safe public participant roster */
-.public-roster{display:grid;gap:24px;padding:4px 0 132px}
-.public-roster-heading{display:grid;gap:8px}
-.public-roster-heading h2{font-size:28px;letter-spacing:-.045em}
-.public-roster-heading p{color:var(--muted);font-size:13px;line-height:1.55}
-.public-roster-schedule{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:18px;border:1px solid var(--border);border-radius:20px;background:var(--paper)}
-.public-roster-schedule span{color:var(--muted);font-size:13px}
-.public-roster-schedule strong{font-size:14px;text-align:right}
+.public-roster{display:grid;gap:20px;padding:4px 0 132px}
+.public-roster-heading{display:block}
+.public-roster-heading h2{margin:0;font-size:28px;letter-spacing:-.045em}
 .public-roster-groups{display:grid;gap:26px}
 .public-roster-group{display:grid;gap:13px}
 .public-roster-group h3{font-size:18px;letter-spacing:-.025em}
@@ -559,8 +555,6 @@
 .public-roster-updated{color:var(--muted);font-size:12px}
 @container roundy (max-width:360px){
  .public-roster-grid{grid-template-columns:1fr}
- .public-roster-schedule{align-items:flex-start;flex-direction:column}
- .public-roster-schedule strong{text-align:left}
 }
 
 /* Attendee previews, cancellation and map stacking */
@@ -2030,7 +2024,7 @@ body:not(:has(.route-admin)) .global-toast{border-radius:16px;padding:13px 14px 
 
 /* Center each event fact, including wrapped copy. */
 .route-events .detail-facts .event-fact{align-items:center}
-.route-events .event-description{white-space:pre-line;overflow-wrap:anywhere;margin:0;font-size:15px;font-weight:400;line-height:1.65;color:var(--muted)}
+.route-events .event-description{white-space:pre-line;overflow-wrap:anywhere;margin:0;font-size:15px;font-weight:400;line-height:1.6!important;color:#474a44}
 
 .route-events .detail-facts .nationality-text{white-space:pre-line}
 
