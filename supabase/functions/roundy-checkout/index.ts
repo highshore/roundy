@@ -293,8 +293,8 @@ async function createPaymentRequest(req: Request, user: User, body: Record<strin
   const boomerangDiscount = Number(quote.boomerang_discount_amount || 0);
   const discountAmount = Number(quote.discount_amount || 0);
   const finalAmount = Number(quote.final_amount || 0);
-  if (!Number.isSafeInteger(baseAmount) || !Number.isSafeInteger(finalAmount) || baseAmount <= 0 || finalAmount < 1_000) {
-    throw new ApiError("The final payment amount must be at least ₩1,000.", 400, "invalid-amount");
+  if (!Number.isSafeInteger(baseAmount) || !Number.isSafeInteger(finalAmount) || baseAmount <= 0 || finalAmount < 0 || (finalAmount > 0 && finalAmount < 1_000)) {
+    throw new ApiError("The final payment amount must be ₩0 or at least ₩1,000.", 400, "invalid-amount");
   }
 
   const [{ data: profileRow, error: profileError }, { data: eventRow, error: eventError }] = await Promise.all([
@@ -306,13 +306,13 @@ async function createPaymentRequest(req: Request, user: User, body: Record<strin
 
   const profile = (profileRow?.profile ?? {}) as Record<string, unknown>;
   const payerPhone = String(profile.phone || "").replace(/\D/g, "");
-  if (!/^010\d{8}$/.test(payerPhone)) throw new ApiError("Add a valid Korean phone number to your profile before payment.");
+  if (finalAmount > 0 && !/^010\d{8}$/.test(payerPhone)) throw new ApiError("Add a valid Korean phone number to your profile before payment.");
 
   const orderNumber = newOrderNumber();
   const { error: insertError } = await a.from("event_payment_orders").insert({
     order_number: orderNumber,
     charge_order_number: orderNumber,
-    provider: "payapp",
+    provider: finalAmount === 0 ? null : "payapp",
     event_id: eventId,
     user_id: user.id,
     status: "pending_auth",
@@ -336,6 +336,30 @@ async function createPaymentRequest(req: Request, user: User, body: Record<strin
   if (claimError) {
     await failPaymentOrder(orderNumber, user.id, "seat-claim-failed", claimError.message);
     throw new ApiError(claimError.message, 409, "seat-claim-failed");
+  }
+
+  if (finalAmount === 0) {
+    const { data: bookingId, error: completeError } = await a.rpc("complete_event_payment_order", {
+      p_order: orderNumber,
+      p_user: user.id,
+      p_billing_key: null,
+      p_authorization: { free_checkout: true, discount_code: code || null },
+      p_payment_result: { free_checkout: true, discount_code: code || null },
+    });
+    if (completeError) {
+      await failPaymentOrder(orderNumber, user.id, "free-checkout-completion-failed", completeError.message);
+      throw new ApiError("Could not confirm this zero-cost registration.", 500, "free-checkout-completion-failed");
+    }
+    return {
+      success: true,
+      completed: true,
+      free: true,
+      orderNumber,
+      eventId,
+      amount: 0,
+      bookingId,
+      quote,
+    };
   }
 
   let response: Record<string, string>;
@@ -491,6 +515,17 @@ async function cancelPaidBooking(user: User, body: Record<string, unknown>) {
     });
     if (reconcileError) throw new ApiError("Your refund was processed, but booking reconciliation still needs support.", 500, "refund-reconcile-pending");
     return { success: true, paid: true, reconciled: true, refundAmount: Number(refund.amount || 0) };
+  }
+
+  const refundAmount = Number(refund?.amount || 0);
+  if (refundAmount === 0) {
+    const { error: completeError } = await a.rpc("complete_event_refund", {
+      p_order: orderNumber,
+      p_user: user.id,
+      p_refund_response: { free_checkout: true, cancelled_by_user: true },
+    });
+    if (completeError) throw new ApiError("Could not cancel this zero-cost registration.", 500, "free-checkout-cancel-failed");
+    return { success: true, paid: true, free: true, refundAmount: 0 };
   }
 
   const { data: order, error: orderError } = await a
