@@ -32,9 +32,16 @@ assert.match(app, /const occupied=Math\.max\(0,e\.capacity-e\.seats_remaining\)/
 assert.match(app, /AttendeeStack count=\{confirmed\}/);
 assert.match(app, /occupancyLabel\(occupied,e.capacity,locale\)/);
 assert.match(app, /NotoAnimatedEmoji/);
+const paymentOnlyMigration = await read('supabase/migrations/20261001020500_hard_reset_payment_only.sql');
+assert.match(paymentOnlyMigration, /drop table if exists public\.credit_lots cascade/);
+assert.match(paymentOnlyMigration, /drop table if exists public\.referral_redemptions cascade/);
+assert.match(paymentOnlyMigration, /drop table if exists public\.applications cascade/);
+assert.match(paymentOnlyMigration, /alter table public\.bookings drop column if exists credit_lot_id/);
 const api = await read('src/app/api/[...path]/route.ts');
 assert.match(api, /events:\(data\?\?\[\]\)\.filter\(isRoundyEvent\)/);
 assert.match(api, /data\.event\)\?\{\.\.\.data,event:null,eligible:false\}/);
+assert.doesNotMatch(api, /from\('credit_lots'\)|rpc\('redeem'\)|rpc\('cancel_booking'\)|rpc\('referral_quote'\)/);
+assert.match(api, /balance:0,nextExpiry:null/);
 const legacy = await read('src/app/api/legacy-business-talks/route.ts');
 assert.match(legacy, /status: 410/);
 assert.match(legacy, /events: \[\]/);
