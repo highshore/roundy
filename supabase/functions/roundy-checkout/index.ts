@@ -4,6 +4,7 @@ import { createClient, type User } from "npm:@supabase/supabase-js@2";
 class ApiError extends Error {
   status: number;
   code: string;
+
   constructor(message: string, status = 400, code = "bad-request") {
     super(message);
     this.status = status;
@@ -14,19 +15,30 @@ class ApiError extends Error {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-const PAYPLE_CST_ID = Deno.env.get("PAYPLE_CST_ID") ?? "";
-const PAYPLE_CUST_KEY = Deno.env.get("PAYPLE_CUST_KEY") ?? "";
-const PAYPLE_CLIENT_KEY = Deno.env.get("PAYPLE_CLIENT_KEY") ?? "";
-const PAYPLE_REFUND_KEY = Deno.env.get("PAYPLE_REFUND_KEY") ?? "";
-const PAYPLE_HOST = (Deno.env.get("PAYPLE_HOST") || "https://cpay.payple.kr").replace(/\/+$/, "");
-const PAYPLE_AUTH_URL = Deno.env.get("PAYPLE_AUTH_URL") || PAYPLE_HOST + "/php/auth.php";
-const PAYPLE_HOSTNAME = (Deno.env.get("PAYPLE_HOSTNAME") || "https://roundy.team").replace(/\/+$/, "");
-const PAYPLE_FRONTEND_URL = (Deno.env.get("PAYPLE_FRONTEND_URL") || PAYPLE_HOSTNAME).replace(/\/+$/, "");
+
+// These values belong only in Supabase Edge Function secrets. They are never
+// returned to the browser or included in a PayApp redirect.
+const PAYAPP_USER_ID = Deno.env.get("PAYAPP_USER_ID") ?? "";
+const PAYAPP_LINK_KEY = Deno.env.get("PAYAPP_LINK_KEY") ?? "";
+const PAYAPP_LINK_VALUE = Deno.env.get("PAYAPP_LINK_VALUE") ?? "";
+const PAYAPP_TAX_MODE = (Deno.env.get("PAYAPP_TAX_MODE") ?? "").toLowerCase();
+const PAYAPP_OPEN_PAY_TYPE = Deno.env.get("PAYAPP_OPEN_PAY_TYPE") ?? "";
+const PAYAPP_APP_URL = (Deno.env.get("PAYAPP_APP_URL") ?? "").trim();
+const PAYAPP_SHOP_NAME = (Deno.env.get("PAYAPP_SHOP_NAME") ?? "Roundy").trim().slice(0, 60) || "Roundy";
+const PAYAPP_API_URL = (Deno.env.get("PAYAPP_API_URL") ?? "https://api.payapp.kr/oapi/apiLoad.html").trim();
+const PAYAPP_FRONTEND_URL = (Deno.env.get("PAYAPP_FRONTEND_URL") ?? "https://roundy.team").replace(/\/+$/, "");
+
+const ORDER_NUMBER = /^RNDY-A-\d{14}-[A-F0-9]{10}$/;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const PAYAPP_METHODS = new Set([
+  "card", "phone", "kakaopay", "naverpay", "smilepay", "rbank", "vbank",
+  "applepay", "payco", "wechat", "myaccount", "tosspay", "dvpay",
+]);
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": PAYPLE_FRONTEND_URL,
+  "Access-Control-Allow-Origin": PAYAPP_FRONTEND_URL,
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
 function json(body: unknown, status = 200) {
@@ -36,12 +48,37 @@ function json(body: unknown, status = 200) {
   });
 }
 
+function plainText(body: string, status = 200) {
+  return new Response(body, {
+    status,
+    headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" },
+  });
+}
+
 function assertConfigured() {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !SUPABASE_SERVICE_ROLE_KEY) {
     throw new ApiError("Roundy payment storage is not configured.", 503, "supabase-not-configured");
   }
-  if (!PAYPLE_CST_ID || !PAYPLE_CUST_KEY || !PAYPLE_CLIENT_KEY || !PAYPLE_REFUND_KEY) {
-    throw new ApiError("Roundy payments are not configured.", 503, "payple-not-configured");
+  if (!PAYAPP_USER_ID || !PAYAPP_LINK_KEY || !PAYAPP_LINK_VALUE) {
+    throw new ApiError("Roundy payments are not configured.", 503, "payapp-not-configured");
+  }
+  if (PAYAPP_TAX_MODE !== "taxable" && PAYAPP_TAX_MODE !== "taxfree") {
+    throw new ApiError("Roundy payment tax settings are not configured.", 503, "payapp-tax-not-configured");
+  }
+  let api: URL;
+  try {
+    api = new URL(PAYAPP_API_URL);
+  } catch {
+    throw new ApiError("Roundy payment settings are invalid.", 503, "payapp-api-invalid");
+  }
+  if (api.protocol !== "https:") {
+    throw new ApiError("Roundy payment settings are invalid.", 503, "payapp-api-invalid");
+  }
+  try {
+    const frontend = new URL(PAYAPP_FRONTEND_URL);
+    if (frontend.protocol !== "https:") throw new Error("https required");
+  } catch {
+    throw new ApiError("Roundy payment settings are invalid.", 503, "payapp-return-url-invalid");
   }
 }
 
@@ -74,7 +111,7 @@ function normalizeCode(value: unknown): string {
   return value.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "").slice(0, 24);
 }
 
-function newOrderNumber(prefix: "A" | "P") {
+function newOrderNumber() {
   const now = new Date();
   const stamp = [
     now.getUTCFullYear(),
@@ -84,43 +121,18 @@ function newOrderNumber(prefix: "A" | "P") {
     String(now.getUTCMinutes()).padStart(2, "0"),
     String(now.getUTCSeconds()).padStart(2, "0"),
   ].join("");
-  return "RNDY-" + prefix + "-" + stamp + "-" + crypto.randomUUID().replace(/-/g, "").slice(0, 10).toUpperCase();
+  return "RNDY-A-" + stamp + "-" + crypto.randomUUID().replace(/-/g, "").slice(0, 10).toUpperCase();
 }
 
-async function numericPayerNo(source: string, length = 12) {
-  const bytes = new TextEncoder().encode(source);
-  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
-  let digits = "";
-  for (const byte of digest) {
-    digits += String(byte % 10);
-    if (digits.length >= length) break;
-  }
-  return digits;
+function safeText(value: unknown, max = 240) {
+  return typeof value === "string" ? value.trim().slice(0, max) : "";
 }
 
-async function paypleAuth(isCancel = false) {
-  const response = await fetch(PAYPLE_AUTH_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Cache-Control": "no-cache", referer: PAYPLE_HOSTNAME },
-    body: JSON.stringify({
-      cst_id: PAYPLE_CST_ID,
-      custKey: PAYPLE_CUST_KEY,
-      PCD_PAY_TYPE: "card",
-      PCD_SIMPLE_FLAG: "Y",
-      PCD_PAY_WORK: "CERT",
-      PCD_PAYCANCEL_FLAG: isCancel ? "Y" : "N",
-    }),
-  });
-  const data = await response.json();
-  if (data?.result !== "success") {
-    throw new ApiError(data?.result_msg || "Payple authentication failed.", 502, "payple-auth-failed");
-  }
-  return data;
-}
-
-function paymentUrl(auth: Record<string, unknown>) {
-  if (auth.PCD_PAY_HOST && auth.PCD_PAY_URL) return String(auth.PCD_PAY_HOST) + String(auth.PCD_PAY_URL);
-  return PAYPLE_HOST + "/php/SimplePayCardAct.php?ACT_=PAYM";
+function positiveInteger(value: unknown, max = 100_000_000) {
+  const text = safeText(value, 16);
+  if (!/^\d+$/.test(text)) return null;
+  const result = Number(text);
+  return Number.isSafeInteger(result) && result >= 0 && result <= max ? result : null;
 }
 
 function friendlyCodeError(quote: Record<string, unknown>) {
@@ -131,11 +143,126 @@ function friendlyCodeError(quote: Record<string, unknown>) {
   return "Invalid or inactive referral / promo code.";
 }
 
-async function createWindow(req: Request, user: User, body: Record<string, unknown>) {
+function openPayTypes() {
+  const values = PAYAPP_OPEN_PAY_TYPE.split(",").map((value) => value.trim().toLowerCase()).filter(Boolean);
+  if (values.some((value) => !PAYAPP_METHODS.has(value))) {
+    throw new ApiError("Roundy payment method settings are invalid.", 503, "payapp-methods-invalid");
+  }
+  return [...new Set(values)].join(",");
+}
+
+function taxFields(amount: number) {
+  if (PAYAPP_TAX_MODE === "taxfree") {
+    return { amount_taxable: "0", amount_taxfree: String(amount), amount_vat: "0" };
+  }
+  const taxable = Math.floor(amount / 1.1);
+  return { amount_taxable: String(taxable), amount_taxfree: "0", amount_vat: String(amount - taxable) };
+}
+
+function appUrlField() {
+  if (!PAYAPP_APP_URL) return {};
+  try {
+    const url = new URL(PAYAPP_APP_URL);
+    if (["javascript:", "data:", "file:"].includes(url.protocol)) throw new Error("unsafe scheme");
+  } catch {
+    throw new ApiError("Roundy App-to-App settings are invalid.", 503, "payapp-app-url-invalid");
+  }
+  return { appurl: PAYAPP_APP_URL };
+}
+
+function paymentReturnUrl(orderNumber: string) {
+  const url = new URL("/payment/return", PAYAPP_FRONTEND_URL);
+  url.searchParams.set("order", orderNumber);
+  return url.toString();
+}
+
+function feedbackUrl() {
+  return SUPABASE_URL.replace(/\/+$/, "") + "/functions/v1/roundy-checkout/payapp/feedback";
+}
+
+function trustedPayAppUrl(value: string) {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new ApiError("PayApp did not return a valid payment URL.", 502, "payapp-invalid-payurl");
+  }
+  const host = url.hostname.toLowerCase();
+  if (host !== "payapp.kr" && !host.endsWith(".payapp.kr")) {
+    throw new ApiError("PayApp did not return a trusted payment URL.", 502, "payapp-invalid-payurl");
+  }
+  if (url.protocol === "http:") url.protocol = "https:";
+  if (url.protocol !== "https:") throw new ApiError("PayApp did not return a secure payment URL.", 502, "payapp-invalid-payurl");
+  return url.toString();
+}
+
+async function payAppRequest(values: Record<string, string>) {
+  const response = await fetch(PAYAPP_API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8", Accept: "text/plain" },
+    body: new URLSearchParams(values).toString(),
+    signal: AbortSignal.timeout(20_000),
+  });
+  const body = await response.text();
+  const result = Object.fromEntries(new URLSearchParams(body));
+  if (!response.ok) throw new ApiError("PayApp is temporarily unavailable. Please try again.", 502, "payapp-unavailable");
+  return result;
+}
+
+function providerResult(data: Record<string, string>) {
+  return {
+    state: safeText(data.state, 16),
+    errno: safeText(data.errno, 32),
+    errorMessage: safeText(data.errorMessage, 240),
+    mul_no: safeText(data.mul_no, 32),
+    price: safeText(data.price, 16),
+    csturl: safeText(data.CSTURL || data.csturl, 500),
+  };
+}
+
+async function failPaymentOrder(orderNumber: string, userId: string, code: string, message: string, result: Record<string, string> | null = null) {
+  const { error } = await admin().rpc("fail_event_payment_order", {
+    p_order: orderNumber,
+    p_user: userId,
+    p_error_code: code,
+    p_error_message: message.slice(0, 500),
+    p_authorization: null,
+    p_payment_result: result ? providerResult(result) : null,
+  });
+  if (error) console.error("roundy-checkout", "payment-failure-write-failed");
+}
+
+async function createPaymentRequest(req: Request, user: User, body: Record<string, unknown>) {
   const eventId = typeof body.eventId === "string" ? body.eventId : "";
   const code = normalizeCode(body.code);
-  if (!/^[0-9a-f-]{36}$/i.test(eventId)) throw new ApiError("Invalid event ID.");
+  if (!UUID.test(eventId)) throw new ApiError("Invalid event ID.");
   if (body.termsAccepted !== true) throw new ApiError("Confirm the cancellation and refund rules before paying.");
+
+  const a = admin();
+  const { data: activeOrder, error: activeOrderError } = await a
+    .from("event_payment_orders")
+    .select("order_number,status,provider,provider_payment_url,event_id,amount")
+    .eq("event_id", eventId)
+    .eq("user_id", user.id)
+    .in("status", ["pending_auth", "charging", "refunding"])
+    .maybeSingle();
+  if (activeOrderError) throw new ApiError("Could not check your payment status.", 500, "active-order-query-failed");
+
+  if (activeOrder?.status === "charging" && activeOrder.provider === "payapp" && activeOrder.provider_payment_url) {
+    return {
+      success: true,
+      resumed: true,
+      orderNumber: activeOrder.order_number,
+      eventId,
+      amount: Number(activeOrder.amount || 0),
+      paymentUrl: trustedPayAppUrl(String(activeOrder.provider_payment_url)),
+    };
+  }
+  if (activeOrder?.status === "pending_auth") {
+    await failPaymentOrder(String(activeOrder.order_number), user.id, "abandoned-before-request", "A newer checkout attempt replaced this unfinished request.");
+  } else if (activeOrder) {
+    throw new ApiError("A payment or refund is already being processed for this event.", 409, "payment-in-progress");
+  }
 
   const client = userClient(req);
   const { data: quoteData, error: quoteError } = await client.rpc("event_checkout_quote", {
@@ -146,48 +273,6 @@ async function createWindow(req: Request, user: User, body: Record<string, unkno
   const quote = (quoteData ?? {}) as Record<string, unknown>;
   if (code && quote.code_valid !== true) throw new ApiError(friendlyCodeError(quote));
 
-  const a = admin();
-  const { data: profileRow, error: profileError } = await a
-    .from("profiles")
-    .select("profile")
-    .eq("user_id", user.id)
-    .maybeSingle();
-  if (profileError) throw new ApiError(profileError.message, 500, "profile-query-failed");
-
-  const { data: eventRow, error: eventError } = await a
-    .from("events")
-    .select("id,title,starts_at")
-    .eq("id", eventId)
-    .maybeSingle();
-  if (eventError || !eventRow) throw new ApiError("Event unavailable.", 404, "event-not-found");
-
-  const profile = (profileRow?.profile ?? {}) as Record<string, unknown>;
-  const payerName = String(profile.full_name || user.user_metadata?.name || "Roundy member").slice(0, 30);
-  const payerPhone = String(profile.phone || "").replace(/\D/g, "");
-  if (!/^010\d{8}$/.test(payerPhone)) throw new ApiError("Add a valid Korean phone number to your profile before payment.");
-
-  const { data: activeOrder } = await a
-    .from("event_payment_orders")
-    .select("order_number,status")
-    .eq("event_id", eventId)
-    .eq("user_id", user.id)
-    .in("status", ["pending_auth", "charging", "refunding"])
-    .maybeSingle();
-
-  if (activeOrder?.status === "charging" || activeOrder?.status === "refunding") {
-    throw new ApiError("A payment or refund is already processing for this event.", 409, "payment-in-progress");
-  }
-  if (activeOrder?.status === "pending_auth") {
-    await a.from("event_payment_orders").update({
-      status: "failed",
-      error_code: "superseded",
-      error_message: "Replaced by a newer checkout attempt.",
-      updated_at: new Date().toISOString(),
-    }).eq("order_number", activeOrder.order_number);
-  }
-
-  const orderNumber = newOrderNumber("A");
-  const chargeOrderNumber = newOrderNumber("P");
   const baseAmount = Number(quote.base_amount || 0);
   const codeDiscount = Number(quote.code_discount_amount || 0);
   const genderDiscount = Number(quote.gender_balance_discount_amount || 0);
@@ -195,12 +280,26 @@ async function createWindow(req: Request, user: User, body: Record<string, unkno
   const boomerangDiscount = Number(quote.boomerang_discount_amount || 0);
   const discountAmount = Number(quote.discount_amount || 0);
   const finalAmount = Number(quote.final_amount || 0);
+  if (!Number.isSafeInteger(baseAmount) || !Number.isSafeInteger(finalAmount) || baseAmount <= 0 || finalAmount < 1_000) {
+    throw new ApiError("The final payment amount must be at least ₩1,000.", 400, "invalid-amount");
+  }
 
-  if (finalAmount <= 0 || baseAmount <= 0) throw new ApiError("Invalid checkout amount.", 400, "invalid-amount");
+  const [{ data: profileRow, error: profileError }, { data: eventRow, error: eventError }] = await Promise.all([
+    a.from("profiles").select("profile").eq("user_id", user.id).maybeSingle(),
+    a.from("events").select("id,title").eq("id", eventId).maybeSingle(),
+  ]);
+  if (profileError) throw new ApiError("Could not load your payment profile.", 500, "profile-query-failed");
+  if (eventError || !eventRow) throw new ApiError("Event unavailable.", 404, "event-not-found");
 
+  const profile = (profileRow?.profile ?? {}) as Record<string, unknown>;
+  const payerPhone = String(profile.phone || "").replace(/\D/g, "");
+  if (!/^010\d{8}$/.test(payerPhone)) throw new ApiError("Add a valid Korean phone number to your profile before payment.");
+
+  const orderNumber = newOrderNumber();
   const { error: insertError } = await a.from("event_payment_orders").insert({
     order_number: orderNumber,
-    charge_order_number: chargeOrderNumber,
+    charge_order_number: orderNumber,
+    provider: "payapp",
     event_id: eventId,
     user_id: user.id,
     status: "pending_auth",
@@ -218,191 +317,111 @@ async function createWindow(req: Request, user: User, body: Record<string, unkno
     pricing_snapshot: quote,
     terms_accepted_at: new Date().toISOString(),
   });
-  if (insertError) throw new ApiError(insertError.message, 409, "order-create-failed");
+  if (insertError) throw new ApiError("Could not create this payment order.", 409, "order-create-failed");
 
-  const now = new Date();
-  const paymentParams = {
-    clientKey: PAYPLE_CLIENT_KEY,
-    PCD_PAY_TYPE: "card",
-    PCD_PAY_WORK: "CERT",
-    PCD_CARD_VER: "01",
-    PCD_PAY_GOODS: String(eventRow.title).slice(0, 60) + " - Roundy",
-    PCD_PAY_TOTAL: finalAmount,
-    PCD_REGULER_FLAG: "N",
-    PCD_SIMPLE_FLAG: "Y",
-    PCD_PAY_OID: orderNumber,
-    PCD_PAY_YEAR: String(now.getFullYear()),
-    PCD_PAY_MONTH: String(now.getMonth() + 1).padStart(2, "0"),
-    PCD_PAYER_NO: await numericPayerNo(user.id),
-    PCD_PAYER_NAME: payerName,
-    PCD_PAYER_EMAIL: user.email || "",
-    PCD_PAYER_HP: payerPhone,
-    PCD_RST_URL: SUPABASE_URL + "/functions/v1/roundy-checkout/callback",
-    PCD_PAYER_AUTHTYPE: "sms",
-    PCD_USER_DEFINE1: user.id,
-    PCD_USER_DEFINE2: JSON.stringify({ event_id: eventId, order_number: orderNumber }),
-    PCD_SIMPLE_FNAME: "roundy-payment-result",
-  };
-
-  return { success: true, orderNumber, eventId, amount: finalAmount, quote, paymentParams };
-}
-
-async function verifyPayment(user: User, body: Record<string, unknown>) {
-  const orderNumber = typeof body.orderNumber === "string" ? body.orderNumber : "";
-  const paymentResponse = body.paymentResponse && typeof body.paymentResponse === "object"
-    ? body.paymentResponse as Record<string, unknown>
-    : {};
-  if (!orderNumber) throw new ApiError("Missing payment order.");
-
-  const a = admin();
-  const { data: order, error: orderError } = await a
-    .from("event_payment_orders")
-    .select("*")
-    .eq("order_number", orderNumber)
-    .eq("user_id", user.id)
-    .maybeSingle();
-  if (orderError || !order) throw new ApiError("Payment order not found.", 404, "order-not-found");
-
-  if (order.status === "completed") {
-    const { data: booking } = await a.from("bookings").select("id,event_id").eq("payment_order_number", orderNumber).maybeSingle();
-    return { success: true, bookingId: booking?.id ?? null, eventId: booking?.event_id ?? order.event_id, alreadyCompleted: true };
-  }
-
-  if (order.status === "charging" && order.payment_result?.PCD_PAY_RST === "success") {
-    const { data: bookingId, error: completeError } = await a.rpc("complete_event_payment_order", {
-      p_order: orderNumber,
-      p_user: user.id,
-      p_billing_key: String(order.billing_key_used || ""),
-      p_authorization: order.authorization_response || paymentResponse,
-      p_payment_result: order.payment_result,
-    });
-    if (completeError) throw new ApiError("Payment succeeded but booking settlement is pending. Contact Roundy support.", 500, "settlement-pending");
-    return { success: true, bookingId, eventId: order.event_id, recovered: true };
-  }
-
-  if (String(paymentResponse.PCD_PAY_OID || "") !== orderNumber) {
-    throw new ApiError("Payment order mismatch.", 400, "order-mismatch");
-  }
-
-  if (paymentResponse.PCD_PAY_RST !== "success") {
-    await a.rpc("fail_event_payment_order", {
-      p_order: orderNumber,
-      p_user: user.id,
-      p_error_code: String(paymentResponse.PCD_PAY_CODE || "authorization-failed"),
-      p_error_message: String(paymentResponse.PCD_PAY_MSG || "Payment authorization failed"),
-      p_authorization: paymentResponse,
-      p_payment_result: null,
-    });
-    throw new ApiError(String(paymentResponse.PCD_PAY_MSG || "Payment authorization failed."), 400, "authorization-failed");
-  }
-
-  const billingKey = String(paymentResponse.PCD_PAYER_ID || paymentResponse.PCD_CARD_BILLKEY || "");
-  if (!billingKey) throw new ApiError("Could not confirm the Payple billing key.", 500, "missing-billing-key");
-
-  const { data: claim, error: claimError } = await a.rpc("claim_event_payment_order", {
-    p_order: orderNumber,
-    p_user: user.id,
-  });
+  const { error: claimError } = await a.rpc("claim_event_payment_order", { p_order: orderNumber, p_user: user.id });
   if (claimError) {
-    await a.rpc("fail_event_payment_order", {
-      p_order: orderNumber,
-      p_user: user.id,
-      p_error_code: "seat-claim-failed",
-      p_error_message: claimError.message,
-      p_authorization: paymentResponse,
-      p_payment_result: null,
-    });
+    await failPaymentOrder(orderNumber, user.id, "seat-claim-failed", claimError.message);
     throw new ApiError(claimError.message, 409, "seat-claim-failed");
   }
 
-  const auth = await paypleAuth(false);
-  const amount = Number(claim?.amount ?? order.amount);
-  const chargeOrderNumber = String(claim?.charge_order_number || order.charge_order_number);
-  const now = new Date();
-  const chargeRequest = {
-    PCD_CST_ID: auth.cst_id,
-    PCD_CUST_KEY: auth.custKey,
-    PCD_AUTH_KEY: auth.AuthKey,
-    PCD_PAY_TYPE: "card",
-    PCD_PAYER_ID: billingKey,
-    PCD_PAY_GOODS: "Roundy 1:1 Mingle",
-    PCD_SIMPLE_FLAG: "Y",
-    PCD_PAY_TOTAL: amount,
-    PCD_PAY_OID: chargeOrderNumber,
-    PCD_PAYER_NO: await numericPayerNo(user.id),
-    PCD_PAY_YEAR: String(now.getFullYear()),
-    PCD_PAY_MONTH: String(now.getMonth() + 1).padStart(2, "0"),
-    PCD_PAY_ISTAX: "Y",
-    PCD_PAY_TAXTOTAL: String(Math.floor(amount / 11)),
-  };
-
-  const chargeResponse = await fetch(paymentUrl(auth), {
-    method: "POST",
-    headers: { "Content-Type": "application/json", referer: PAYPLE_HOSTNAME },
-    body: JSON.stringify(chargeRequest),
-  });
-  const payData = await chargeResponse.json();
-
-  if (payData?.PCD_PAY_RST !== "success") {
-    await a.rpc("fail_event_payment_order", {
-      p_order: orderNumber,
-      p_user: user.id,
-      p_error_code: String(payData?.PCD_PAY_CODE || "charge-failed"),
-      p_error_message: String(payData?.PCD_PAY_MSG || "Payment failed"),
-      p_authorization: paymentResponse,
-      p_payment_result: payData,
+  let response: Record<string, string>;
+  try {
+    response = await payAppRequest({
+      cmd: "payrequest",
+      userid: PAYAPP_USER_ID,
+      shopname: PAYAPP_SHOP_NAME,
+      goodname: (String(eventRow.title).trim().slice(0, 80) || "Roundy event") + " - Roundy",
+      price: String(finalAmount),
+      recvphone: payerPhone,
+      memo: "Roundy event reservation",
+      reqaddr: "0",
+      feedbackurl: feedbackUrl(),
+      returnurl: paymentReturnUrl(orderNumber),
+      var1: orderNumber,
+      var2: eventId,
+      smsuse: "n",
+      charset: "auto",
+      openpaytype: openPayTypes(),
+      checkretry: "y",
+      skip_cstpage: "y",
+      ...taxFields(finalAmount),
+      ...appUrlField(),
     });
-    throw new ApiError(payData?.PCD_PAY_MSG || "Payment failed.", 400, "charge-failed");
+  } catch (error) {
+    await failPaymentOrder(orderNumber, user.id, "payapp-request-failed", "PayApp could not create the payment request.");
+    throw error;
   }
 
-  await a.from("event_payment_orders").update({
-    billing_key_used: billingKey,
-    authorization_response: paymentResponse,
-    payment_result: payData,
+  const mulNo = safeText(response.mul_no, 32);
+  if (response.state !== "1" || !/^\d{1,24}$/.test(mulNo) || !response.payurl) {
+    await failPaymentOrder(orderNumber, user.id, "payapp-request-failed", "PayApp could not create the payment request.", response);
+    throw new ApiError(safeText(response.errorMessage, 240) || "PayApp could not create the payment request.", 502, "payapp-request-failed");
+  }
+
+  let paymentUrl: string;
+  try {
+    paymentUrl = trustedPayAppUrl(response.payurl);
+  } catch (error) {
+    await failPaymentOrder(orderNumber, user.id, "payapp-invalid-payurl", "PayApp returned an invalid payment URL.", response);
+    throw error;
+  }
+
+  const { error: providerWriteError } = await a.from("event_payment_orders").update({
+    provider_payment_id: mulNo,
+    provider_payment_url: paymentUrl,
+    provider_requested_at: new Date().toISOString(),
+    authorization_response: providerResult(response),
     updated_at: new Date().toISOString(),
   }).eq("order_number", orderNumber).eq("user_id", user.id);
+  // PayApp can send the first callback before this write completes. The callback
+  // path can safely fill in mul_no, so preserve a real payment URL for the user.
+  if (providerWriteError) console.error("roundy-checkout", "provider-request-write-failed");
 
-  const { data: bookingId, error: completeError } = await a.rpc("complete_event_payment_order", {
-    p_order: orderNumber,
-    p_user: user.id,
-    p_billing_key: billingKey,
-    p_authorization: paymentResponse,
-    p_payment_result: payData,
-  });
-  if (completeError) {
-    throw new ApiError("Payment succeeded but booking settlement is pending. Do not pay again; contact Roundy support.", 500, "settlement-pending");
-  }
-
-  return { success: true, bookingId, eventId: order.event_id, amount };
+  return { success: true, orderNumber, eventId, amount: finalAmount, quote, paymentUrl };
 }
 
-function yyyyMMdd(date: Date) {
-  return String(date.getFullYear()) + String(date.getMonth() + 1).padStart(2, "0") + String(date.getDate()).padStart(2, "0");
+async function paymentStatus(user: User, body: Record<string, unknown>) {
+  const orderNumber = safeText(body.orderNumber, 64);
+  if (!ORDER_NUMBER.test(orderNumber)) throw new ApiError("Invalid payment order.");
+  const { data: order, error } = await admin()
+    .from("event_payment_orders")
+    .select("order_number,event_id,amount,status,error_code,error_message")
+    .eq("order_number", orderNumber)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (error || !order) throw new ApiError("Payment order not found.", 404, "order-not-found");
+  const status = String(order.status);
+  return {
+    success: true,
+    orderNumber: order.order_number,
+    eventId: order.event_id,
+    amount: Number(order.amount || 0),
+    status,
+    completed: status === "completed",
+    pending: status === "pending_auth" || status === "charging",
+    failed: status === "failed",
+    error: status === "failed" ? safeText(order.error_message, 240) : undefined,
+  };
 }
 
 async function cancelPaidBooking(user: User, body: Record<string, unknown>) {
   const eventId = typeof body.eventId === "string" ? body.eventId : "";
-  if (!/^[0-9a-f-]{36}$/i.test(eventId)) throw new ApiError("Invalid event ID.");
+  if (!UUID.test(eventId)) throw new ApiError("Invalid event ID.");
   const a = admin();
-
   const { data: booking, error: bookingError } = await a
     .from("bookings")
     .select("id,payment_order_number")
     .eq("event_id", eventId)
     .eq("user_id", user.id)
     .maybeSingle();
-  if (bookingError) throw new ApiError(bookingError.message, 500, "booking-query-failed");
+  if (bookingError) throw new ApiError("Could not find the booking.", 500, "booking-query-failed");
   if (!booking?.payment_order_number) return { success: true, paid: false };
 
   const orderNumber = String(booking.payment_order_number);
-  const { data: refund, error: prepareError } = await a.rpc("prepare_event_refund", {
-    p_order: orderNumber,
-    p_user: user.id,
-  });
+  const { data: refund, error: prepareError } = await a.rpc("prepare_event_refund", { p_order: orderNumber, p_user: user.id });
   if (prepareError) throw new ApiError(prepareError.message, 400, "refund-not-allowed");
-
   if (refund?.already_refunded) return { success: true, paid: true, alreadyRefunded: true, refundAmount: Number(refund.amount || 0) };
-
   if (refund?.needs_reconcile) {
     const { error: reconcileError } = await a.rpc("complete_event_refund", {
       p_order: orderNumber,
@@ -413,104 +432,141 @@ async function cancelPaidBooking(user: User, body: Record<string, unknown>) {
     return { success: true, paid: true, reconciled: true, refundAmount: Number(refund.amount || 0) };
   }
 
-  const amount = Number(refund?.amount || 0);
-  const chargeOrderNumber = String(refund?.charge_order_number || "");
-  const result = (refund?.payment_result ?? {}) as Record<string, unknown>;
-  if (!amount || !chargeOrderNumber) throw new ApiError("Refund information is incomplete.", 500, "refund-data-missing");
-
-  const paidTime = String(result.PCD_PAY_TIME || "");
-  const paidAt = refund?.paid_at ? new Date(String(refund.paid_at)) : new Date();
-  const paidDate = paidTime.length >= 8 ? paidTime.slice(0, 8) : yyyyMMdd(paidAt);
-  const auth = await paypleAuth(true);
-  const response = await fetch(PAYPLE_HOST + "/php/account/api/cPayCAct.php", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Cache-Control": "no-cache", referer: PAYPLE_HOSTNAME },
-    body: JSON.stringify({
-      PCD_CST_ID: auth.cst_id,
-      PCD_CUST_KEY: auth.custKey,
-      PCD_AUTH_KEY: auth.AuthKey,
-      PCD_REFUND_KEY: PAYPLE_REFUND_KEY,
-      PCD_PAYCANCEL_FLAG: "Y",
-      PCD_PAY_OID: chargeOrderNumber,
-      PCD_PAY_DATE: paidDate,
-      PCD_REFUND_TOTAL: String(amount),
-    }),
-  });
-  const refundData = await response.json();
-
-  if (refundData?.PCD_PAY_RST !== "success") {
+  const { data: order, error: orderError } = await a
+    .from("event_payment_orders")
+    .select("provider,provider_payment_id")
+    .eq("order_number", orderNumber)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (orderError || !order || order.provider !== "payapp" || !/^\d{1,24}$/.test(String(order.provider_payment_id || ""))) {
     await a.rpc("fail_event_refund", {
       p_order: orderNumber,
       p_user: user.id,
-      p_error_code: String(refundData?.PCD_PAY_CODE || "refund-failed"),
-      p_error_message: String(refundData?.PCD_PAY_MSG || "Refund failed"),
-      p_refund_response: refundData,
+      p_error_code: "provider-reconcile-required",
+      p_error_message: "This historical payment needs manual refund reconciliation.",
+      p_refund_response: {},
     });
-    throw new ApiError(refundData?.PCD_PAY_MSG || "Refund failed.", 400, "refund-failed");
+    throw new ApiError("This payment needs manual refund reconciliation. Please contact Roundy support.", 409, "provider-reconcile-required");
   }
 
+  let response: Record<string, string>;
+  try {
+    response = await payAppRequest({
+      cmd: "paycancel",
+      userid: PAYAPP_USER_ID,
+      linkkey: PAYAPP_LINK_KEY,
+      mul_no: String(order.provider_payment_id),
+      cancelmemo: "Roundy event cancellation",
+      partcancel: "0",
+    });
+  } catch (error) {
+    await a.rpc("fail_event_refund", {
+      p_order: orderNumber,
+      p_user: user.id,
+      p_error_code: "payapp-refund-unavailable",
+      p_error_message: "PayApp could not process the cancellation.",
+      p_refund_response: {},
+    });
+    throw error;
+  }
+
+  if (response.state !== "1") {
+    await a.rpc("fail_event_refund", {
+      p_order: orderNumber,
+      p_user: user.id,
+      p_error_code: "payapp-refund-failed",
+      p_error_message: safeText(response.errorMessage, 240) || "PayApp could not process the cancellation.",
+      p_refund_response: providerResult(response),
+    });
+    throw new ApiError(safeText(response.errorMessage, 240) || "PayApp could not process the cancellation.", 400, "payapp-refund-failed");
+  }
+
+  const refundResponse = providerResult(response);
   const { error: completeError } = await a.rpc("complete_event_refund", {
     p_order: orderNumber,
     p_user: user.id,
-    p_refund_response: refundData,
+    p_refund_response: refundResponse,
   });
   if (completeError) {
     await a.rpc("mark_event_refund_reconcile", {
       p_order: orderNumber,
       p_user: user.id,
-      p_refund_response: refundData,
+      p_refund_response: refundResponse,
       p_error_message: completeError.message,
     });
-    throw new ApiError("The card refund succeeded, but booking reconciliation is pending. Contact Roundy support.", 500, "refund-reconcile-pending");
+    throw new ApiError("The refund succeeded, but booking reconciliation is pending. Please contact Roundy support.", 500, "refund-reconcile-pending");
   }
-
-  return { success: true, paid: true, refundAmount: amount };
+  return { success: true, paid: true, refundAmount: Number(refund?.amount || 0) };
 }
 
-const CALLBACK_FIELDS = new Set([
-  "PCD_PAY_RST","PCD_PAY_CODE","PCD_PAY_MSG","PCD_PAY_OID","PCD_PAY_TYPE","PCD_PAY_WORK",
-  "PCD_PAY_GOODS","PCD_PAY_TOTAL","PCD_PAY_TIME","PCD_PAY_YEAR","PCD_PAY_MONTH","PCD_PAY_CARDNAME",
-  "PCD_PAYER_ID","PCD_PAYER_NO","PCD_PAYER_NAME","PCD_PAYER_EMAIL","PCD_CARD_VER","PCD_CARD_BILLKEY",
-  "PCD_REGULER_FLAG","PCD_USER_DEFINE1"
-]);
+async function payAppFeedback(req: Request) {
+  if (req.method !== "POST") throw new ApiError("Method not allowed", 405, "method-not-allowed");
+  const length = Number(req.headers.get("content-length") || "0");
+  if (Number.isFinite(length) && length > 32_768) throw new ApiError("Feedback body is too large.", 413, "feedback-too-large");
+  const form = await req.formData();
+  const value = (key: string, max = 512) => safeText(form.get(key), max);
 
-function collectCallback(target: Record<string, string>, key: string, value: unknown) {
-  if (!CALLBACK_FIELDS.has(key)) return;
-  if (typeof value !== "string" && typeof value !== "number") return;
-  const textValue = String(value);
-  if (textValue.length <= 512) target[key] = textValue;
-}
+  const userid = value("userid", 120);
+  const linkkey = value("linkkey", 240);
+  const linkval = value("linkval", 240);
+  const orderNumber = value("var1", 64);
+  const eventId = value("var2", 64);
+  const mulNo = value("mul_no", 32);
+  const amount = positiveInteger(value("price", 16));
+  const payState = positiveInteger(value("pay_state", 8), 999);
 
-async function callback(req: Request) {
-  const data: Record<string, string> = {};
-  if (req.method === "POST") {
-    const type = req.headers.get("content-type") || "";
-    if (type.includes("application/json")) {
-      const body = await req.json().catch(() => ({}));
-      if (body && typeof body === "object" && !Array.isArray(body)) {
-        for (const [key, value] of Object.entries(body)) collectCallback(data, key, value);
-      }
-    } else {
-      const form = await req.formData();
-      for (const [key, value] of form.entries()) collectCallback(data, key, String(value));
-    }
-  } else {
-    const url = new URL(req.url);
-    for (const [key, value] of url.searchParams.entries()) collectCallback(data, key, value);
+  if (userid !== PAYAPP_USER_ID || linkkey !== PAYAPP_LINK_KEY || linkval !== PAYAPP_LINK_VALUE) {
+    throw new ApiError("Unverified PayApp feedback.", 403, "feedback-unverified");
   }
-  if (!Object.keys(data).length) return new Response("No payment data received", { status: 400 });
-  const params = new URLSearchParams(data);
-  return new Response(null, {
-    status: 303,
-    headers: { Location: PAYPLE_FRONTEND_URL + "/payment/result?" + params.toString() },
+  if (!ORDER_NUMBER.test(orderNumber) || !UUID.test(eventId) || !/^\d{1,24}$/.test(mulNo) || amount === null || payState === null) {
+    throw new ApiError("Invalid PayApp feedback.", 400, "feedback-invalid");
+  }
+
+  // Deliberately omit linkkey, linkval, recvphone, vbank account data and any
+  // unrecognised provider fields. The order already contains all needed identity.
+  const feedback = {
+    event_id: eventId,
+    pay_state: payState,
+    mul_no: mulNo,
+    price: amount,
+    goodname: value("goodname", 160),
+    pay_date: value("pay_date", 64),
+    pay_type: value("pay_type", 24),
+    paymethod_group: value("paymethod_group", 24),
+    payauthcode: value("payauthcode", 64),
+    card_name: value("card_name", 100),
+    card_quota: value("card_quota", 24),
+    csturl: value("csturl", 500),
+    vbank: value("vbank", 100),
+    depositor: value("depositor", 100),
+    orig_mul_no: value("orig_mul_no", 32),
+    orig_price: value("orig_price", 16),
+    received_at: new Date().toISOString(),
+  };
+  const { error } = await admin().rpc("record_payapp_feedback", {
+    p_order: orderNumber,
+    p_mul_no: mulNo,
+    p_pay_state: payState,
+    p_amount: amount,
+    p_feedback: feedback,
   });
+  if (error) throw new ApiError("Could not record PayApp feedback.", 500, "feedback-storage-failed");
+  return plainText("SUCCESS");
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-
   const url = new URL(req.url);
-  if (url.pathname.endsWith("/callback")) return callback(req);
+  if (url.pathname.endsWith("/payapp/feedback")) {
+    try {
+      assertConfigured();
+      return await payAppFeedback(req);
+    } catch (error) {
+      const err = error instanceof ApiError ? error : new ApiError("PayApp feedback error", 500, "feedback-internal");
+      console.error("roundy-checkout", err.code);
+      return plainText("FAIL", err.status >= 500 ? 500 : err.status);
+    }
+  }
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
     assertConfigured();
@@ -519,15 +575,15 @@ Deno.serve(async (req: Request) => {
     const action = String(body.action || "");
     const user = await caller(req);
 
-    if (action === "window") return json(await createWindow(req, user, body));
-    if (action === "verify") return json(await verifyPayment(user, body));
+    if (action === "create") return json(await createPaymentRequest(req, user, body));
+    if (action === "status") return json(await paymentStatus(user, body));
     if (action === "cancel") return json(await cancelPaidBooking(user, body));
     throw new ApiError("Unknown payment action.", 400, "unknown-action");
   } catch (error) {
     const err = error instanceof ApiError
       ? error
       : new ApiError(error instanceof Error ? error.message : "Payment error", 500, "internal");
-    console.error("roundy-checkout", err.code, err.message);
+    console.error("roundy-checkout", err.code);
     return json({ success: false, error: err.message, errorCode: err.code }, err.status);
   }
 });

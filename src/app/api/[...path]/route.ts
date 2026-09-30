@@ -238,18 +238,17 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
    if(req.method!=='POST')return json({error:'Method not allowed'},405);
    const body=await req.json().catch(()=>null);if(!body||typeof body!=='object')return json({error:'Invalid checkout request'},400);
    const action=String(body.action||'');
-   if(action==='window'){
+   if(action==='create'){
     const eventId=typeof body.eventId==='string'?body.eventId:'';
     const code=typeof body.code==='string'?body.code.trim().toUpperCase():'';
     if(body.termsAccepted!==true)return json({error:'Confirm the cancellation guidelines and terms before payment'},400);
     if(!/^[0-9a-f-]{36}$/i.test(eventId)||(code&&!/^[A-Z0-9_-]{4,24}$/.test(code)))return json({error:'Invalid checkout request'},400);
-    return json(await invokeRoundyCheckout(supabase,{action:'window',eventId,code:code||undefined,termsAccepted:true}));
+    return json(await invokeRoundyCheckout(supabase,{action:'create',eventId,code:code||undefined,termsAccepted:true}));
    }
-   if(action==='verify'){
+   if(action==='status'){
     const orderNumber=typeof body.orderNumber==='string'?body.orderNumber:'';
-    const paymentResponse=body.paymentResponse;
-    if(!orderNumber||!paymentResponse||typeof paymentResponse!=='object')return json({error:'Invalid payment verification request'},400);
-    return json(await invokeRoundyCheckout(supabase,{action:'verify',orderNumber,paymentResponse}));
+    if(!/^RNDY-A-\d{14}-[A-F0-9]{10}$/.test(orderNumber))return json({error:'Invalid payment status request'},400);
+    return json(await invokeRoundyCheckout(supabase,{action:'status',orderNumber}));
    }
    return json({error:'Invalid checkout action'},400);
   }
@@ -266,7 +265,7 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
    return json({error:'Method not allowed'},405);
   }
   if(path[0]==='bookings'){
-   if(req.method==='GET'){const {data,error}=await supabase.from('bookings').select('id,event_id,payment_order_number');if(error)throw error;const rows=data??[];const slugs=await eventSlugMap(supabase,[...new Set(rows.map(b=>String(b.event_id)))]);return json({bookings:rows.map(b=>({id:b.id,event_slug:slugs.get(String(b.event_id)),paid:Boolean(b.payment_order_number)}))});}
+   if(req.method==='GET'){const {data,error}=await supabase.from('bookings').select('id,event_id,payment_order_number,event_payment_orders(status)');if(error)throw error;const rows=(data??[]).filter(row=>{const payment=Array.isArray(row.event_payment_orders)?row.event_payment_orders[0]:row.event_payment_orders;return !row.payment_order_number||payment?.status==='completed';});const slugs=await eventSlugMap(supabase,[...new Set(rows.map(b=>String(b.event_id)))]);return json({bookings:rows.map(b=>({id:b.id,event_slug:slugs.get(String(b.event_id)),paid:Boolean(b.payment_order_number)}))});}
    if(req.method==='POST'){const body=await req.json();if(body.termsAccepted!==true)return json({error:'Confirm the cancellation guidelines and terms before enrolling'},400);const {data,error}=await supabase.rpc('redeem',{p_event:body.eventId,p_terms_accepted:true});if(error)throw error;return json({id:data});}
    if(req.method==='DELETE'){
     const body=await req.json();const eventId=typeof body.eventId==='string'?body.eventId:'';if(!/^[0-9a-f-]{36}$/i.test(eventId))return json({error:'Invalid event ID'},400);

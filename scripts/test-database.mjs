@@ -27,6 +27,7 @@ const profile={full_name:'Private Person',birth_date:'1997-05-10',gender:'female
 for(let n=1;n<=6;n++)await db.query('insert into profiles(user_id,profile) values($1,$2)',[uid(n),profile]);
 await db.exec(`insert into verifications(user_id,instagram,status) values('${uid(1)}','initial','Verified');`);
 async function as(n,sql,args=[]){await db.exec('set role authenticated');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[uid(n)]);try{return await db.query(sql,args);}finally{await db.exec('reset role');}}
+async function asService(sql,args=[]){await db.exec('set role service_role');try{return await db.query(sql,args);}finally{await db.exec('reset role');}}
 async function denied(n,sql,pattern){await assert.rejects(()=>as(n,sql),pattern);}
 // Per-event checkout uses the production payment schema and additive discounts.
 const pricingEvent=uid(99);
@@ -55,6 +56,24 @@ const selfCheckoutQuote=(await as(4,'select event_checkout_quote($1,$2) q',[pric
 assert.equal(selfCheckoutQuote.code_valid,false);
 assert.equal(selfCheckoutQuote.code_reason,'self');
 await db.exec(`delete from event_payment_orders where event_id='${pricingEvent}';delete from bookings where event_id='${pricingEvent}';delete from events where id='${pricingEvent}';delete from marketing_promo_codes where code='PROMO20';update profiles set profile=jsonb_set(profile,'{gender}','"female"') where user_id in('${uid(2)}','${uid(3)}');`);
+// PayApp feedback is service-only, verifies the persisted amount/order, and is
+// idempotent across the provider's repeated notifications.
+const payappEvent=uid(98);const payappOrder='RNDY-A-20300101000000-ABCDEF1234';
+await db.exec(`insert into events(id,title,starts_at,duration_minutes,venue,address,capacity,age_min,age_max,status) values('${payappEvent}','PayApp',now()+interval '20 days',120,'Venue','Address',12,19,100,'live');
+ insert into event_payment_orders(order_number,charge_order_number,provider,event_id,user_id,status,gender,base_amount,code_discount_amount,gender_balance_discount_amount,time_discount_amount,boomerang_discount_amount,discount_amount,amount,terms_accepted_at)
+ values('${payappOrder}','payapp-charge','payapp','${payappEvent}','${uid(1)}','charging','female',29000,0,0,0,0,0,29000,now());
+ insert into bookings(event_id,user_id,payment_order_number,terms_accepted_at) values('${payappEvent}','${uid(1)}','${payappOrder}',now());`);
+await denied(1,`select record_payapp_feedback('${payappOrder}','991122',4,29000,jsonb_build_object('event_id','${payappEvent}'))`,/permission denied/);
+await asService(`select record_payapp_feedback('${payappOrder}','991122',4,29000,jsonb_build_object('event_id','${payappEvent}','pay_state',4))`);
+await asService(`select record_payapp_feedback('${payappOrder}','991122',4,29000,jsonb_build_object('event_id','${payappEvent}','pay_state',4))`);
+let payappOrderRow=(await db.query(`select status,provider_payment_id from event_payment_orders where order_number='${payappOrder}'`)).rows[0];
+assert.equal(payappOrderRow.status,'completed');assert.equal(payappOrderRow.provider_payment_id,'991122');
+assert.equal((await db.query(`select count(*)::int n from bookings where payment_order_number='${payappOrder}'`)).rows[0].n,1,'Repeated PayApp success keeps one booking');
+assert.equal((await as(2,'select event_attendees($1) attendees',[payappEvent])).rows[0].attendees.total,1,'Only completed payment bookings count as attendees');
+await asService(`select record_payapp_feedback('${payappOrder}','991122',9,29000,jsonb_build_object('event_id','${payappEvent}','pay_state',9))`);
+payappOrderRow=(await db.query(`select status from event_payment_orders where order_number='${payappOrder}'`)).rows[0];
+assert.equal(payappOrderRow.status,'refunded');
+assert.equal((await db.query(`select count(*)::int n from bookings where payment_order_number='${payappOrder}'`)).rows[0].n,0,'Approval-cancellation feedback releases the booking');
 assert.equal((await as(1,'select * from profiles')).rows.length,1,'RLS hides other profiles');
 await denied(1,`insert into events(slug,title,neighborhood,starts_at,ends_at,venue,address,capacity,seats_remaining) values('unauthorized','No','Seoul',now()+interval '3 days',now()+interval '4 days','No','No',12,12)`,/permission denied|row-level security/);
 await as(6,`insert into events(slug,title,neighborhood,starts_at,ends_at,venue,address,capacity,seats_remaining) values('admin-event','Admin','Seoul',now()+interval '3 days',now()+interval '4 days','Admin','Admin',12,12)`);
