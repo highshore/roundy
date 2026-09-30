@@ -505,21 +505,21 @@ html:lang(ko) textarea{
 /* Larger overlapping attendee avatars */
 .event-card .attendee-stack{padding-left:7px}
 .event-card .attendee-avatar{
-  width:38px;
-  height:38px;
-  min-width:38px;
-  max-width:38px;
-  min-height:38px;
-  max-height:38px;
-  flex-basis:38px;
-  margin-left:-10px;
+  width:30px;
+  height:30px;
+  min-width:30px;
+  max-width:30px;
+  min-height:30px;
+  max-height:30px;
+  flex-basis:30px;
+  margin-left:-8px;
   border:0;
   background:#f2f0e9;
   box-shadow:0 3px 10px rgba(32,33,31,.12);
 }
 .event-card .attendee-avatar:first-child{margin-left:0}
 .event-card .attendee-avatar img{width:100%;height:100%}
-.event-card .attendee-avatar svg{width:17px;height:17px}
+.event-card .attendee-avatar svg{width:14px;height:14px}
 .event-card .attendee-avatar.more{font-size:10px}
 .event-card .event-attendance>div{gap:10px}
 
@@ -867,20 +867,20 @@ html:lang(ko) textarea{
   font-weight:750;
 }
 .attendee-simple-row .attendee-stack{
-  min-height:58px;
-  padding-left:8px;
+  min-height:44px;
+  padding-left:6px;
 }
 .attendee-simple-row .attendee-avatar{
-  width:56px;
-  height:56px;
-  flex-basis:56px;
-  margin-left:-14px;
+  width:42px;
+  height:42px;
+  flex-basis:42px;
+  margin-left:-10px;
   border:0;
   background:#f0eee8;
   box-shadow:0 4px 12px rgba(32,33,31,.12);
 }
 .attendee-simple-row .attendee-avatar:first-child{margin-left:0}
-.attendee-simple-row .attendee-avatar svg{width:22px;height:22px}
+.attendee-simple-row .attendee-avatar svg{width:17px;height:17px}
 .attendee-simple-row .attendee-avatar.more{font-size:11px}
 
 /* The frame owns the circular crop. Position photos outside grid sizing so

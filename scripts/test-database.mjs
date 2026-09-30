@@ -60,9 +60,13 @@ await db.exec(`delete from event_payment_orders where event_id='${pricingEvent}'
 // idempotent across the provider's repeated notifications.
 const payappEvent=uid(98);const payappOrder='RNDY-A-20300101000000-ABCDEF1234';
 await db.exec(`insert into events(id,title,starts_at,duration_minutes,venue,address,capacity,age_min,age_max,status) values('${payappEvent}','PayApp',now()+interval '20 days',120,'Venue','Address',12,19,100,'live');
- insert into event_payment_orders(order_number,charge_order_number,provider,event_id,user_id,status,gender,base_amount,code_discount_amount,gender_balance_discount_amount,time_discount_amount,boomerang_discount_amount,discount_amount,amount,terms_accepted_at)
- values('${payappOrder}','payapp-charge','payapp','${payappEvent}','${uid(1)}','charging','female',29000,0,0,0,0,0,29000,now());
+ insert into event_payment_orders(order_number,charge_order_number,provider,event_id,user_id,status,gender,base_amount,code_discount_amount,gender_balance_discount_amount,time_discount_amount,boomerang_discount_amount,discount_amount,amount,pricing_snapshot,terms_accepted_at)
+ values('${payappOrder}','payapp-charge','payapp','${payappEvent}','${uid(1)}','charging','female',29000,0,0,0,0,0,29000,jsonb_build_object('event_id','${payappEvent}','gender','female','base_amount',29000,'discount_amount',0,'final_amount',29000),now());
  insert into bookings(event_id,user_id,payment_order_number,terms_accepted_at) values('${payappEvent}','${uid(1)}','${payappOrder}',now());`);
+const pendingPayappQuote=(await as(1,'select event_checkout_quote($1,null) q',[payappEvent])).rows[0].q;
+assert.equal(pendingPayappQuote.final_amount,29000,'An active PayApp hold reuses its persisted price instead of looking confirmed');
+assert.equal((await as(2,'select event_attendees($1) attendees',[payappEvent])).rows[0].attendees.total,0,'Charging payment holds are hidden from attendee lists');
+await denied(1,'select * from event_payment_order_events',/permission denied/);
 await denied(1,`select record_payapp_feedback('${payappOrder}','991122',4,29000,jsonb_build_object('event_id','${payappEvent}'))`,/permission denied/);
 await asService(`select record_payapp_feedback('${payappOrder}','991122',4,29000,jsonb_build_object('event_id','${payappEvent}','pay_state',4))`);
 await asService(`select record_payapp_feedback('${payappOrder}','991122',4,29000,jsonb_build_object('event_id','${payappEvent}','pay_state',4))`);
