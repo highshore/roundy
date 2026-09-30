@@ -359,7 +359,6 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
   }
 
   if (confirmationEmail) return <section className={styles.security} aria-busy={busy}>
-    <RoundyBrand/>
     <div className={styles.statusIcon}><NotoAnimatedEmoji codepoint="1f4e8" fallback="📨" size={64}/></div>
     <h1>{t('Check your email', '이메일을 확인해 주세요')}</h1>
     <p><strong>{maskEmail(confirmationEmail)}</strong></p>
