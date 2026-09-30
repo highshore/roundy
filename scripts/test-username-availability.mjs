@@ -1,0 +1,22 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+import ts from 'typescript';
+import { webcrypto } from 'node:crypto';
+let handler, exists=false, limited=false, broken=false, lookups=0;
+const calls=[];
+const admin={rpc:async(name,args)=>{calls.push(args);return {data:!limited,error:null};},from:()=>({select:()=>({eq:(_,id)=>({maybeSingle:async()=>({data:exists?{user_id:'private-id'}:null,error:broken?{}:null})})})}),auth:{admin:{getUserById:()=>{lookups++;throw Error('Must not resolve emails');}}}};
+const source=fs.readFileSync('supabase/functions/roundy-username-login/index.ts','utf8').replace(/^import .*\n/,'');
+vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText,{createClient:()=>admin,crypto:webcrypto,TextEncoder,Response,Deno:{env:{get:()=>''},serve:fn=>handler=fn}});
+async function request(body,origin='https://roundy.team'){return handler(new Request('https://example.com',{method:'POST',headers:{origin,'content-type':'application/json','x-forwarded-for':'192.0.2.1'},body:JSON.stringify(body)}));}
+let response=await request({action:'check_availability',username:'  Kyle96  '});
+assert.equal(response.status,200);assert.deepEqual(await response.json(),{available:true});
+exists=true;response=await request({action:'check_availability',username:'kyle96'});assert.deepEqual(await response.json(),{available:false});
+assert.equal(lookups,0);assert.equal(calls.length,4);
+assert.equal((await request({action:'check_availability',username:'bad@email.com'})).status,401);
+assert.equal((await request({action:'check_availability',username:'ab'})).status,401);
+limited=true;assert.equal((await request({action:'check_availability',username:'kyle96'})).status,429);
+limited=false;broken=true;assert.equal((await request({action:'check_availability',username:'kyle96'})).status,503);
+assert.equal((await request({action:'check_availability',username:'kyle96'},'https://evil.example')).status,403);
+assert.equal((await request({username:'kyle96'})).status,401);
+console.log('PASS: availability, taken, normalization, invalid IDs, rate limits, backend errors, origin checks, email privacy and passwordless-login rejection');

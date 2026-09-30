@@ -17,6 +17,17 @@ import { maskEmail, authSecurityError, newPasswordError, passwordRequirements, p
 import { NotoAnimatedEmoji } from './noto-animated-emoji';
 import './auth-shell.css';
 
+type UsernameStatus = 'idle' | 'checking' | 'available' | 'taken' | 'error';
+const validUsername = (value: string) => /^[a-z0-9_][a-z0-9_-]{2,29}$/.test(value);
+
+async function checkUsername(value: string): Promise<boolean> {
+  const { data, error } = await createClient().functions.invoke('roundy-username-login', {
+    body: { action: 'check_availability', username: value },
+  });
+  if (error || typeof data?.available !== 'boolean') throw new Error('Availability unavailable');
+  return data.available;
+}
+
 type Method = 'email' | 'phone';
 type Mode = 'signin' | 'signup' | 'forgot';
 
@@ -31,6 +42,9 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
   const [mode, setMode] = useState<Mode>('signin');
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
+  const [usernameStatus, setUsernameStatus] = useState<UsernameStatus>('idle');
+  const [usernameRetry, setUsernameRetry] = useState(0);
+  const usernameRef = useRef<HTMLInputElement>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -77,6 +91,37 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
     const timer = window.setTimeout(() => setCooldown(value => value - 1), 1000);
     return () => window.clearTimeout(timer);
   }, [cooldown]);
+
+  useEffect(() => {
+    const value = username.trim().toLowerCase();
+    if (showMethods || confirmationEmail || method !== 'email' || mode !== 'signup' || !validUsername(value)) {
+      setUsernameStatus('idle');
+      return;
+    }
+    let active = true;
+    setUsernameStatus('checking');
+    const timer = window.setTimeout(() => {
+      void checkUsername(value).then(available => {
+        if (active) setUsernameStatus(available ? 'available' : 'taken');
+      }).catch(() => { if (active) setUsernameStatus('error'); });
+    }, 450);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [username, usernameRetry, method, mode, showMethods, confirmationEmail]);
+
+  async function validateUsername() {
+    const value = username.trim().toLowerCase();
+    if (!validUsername(value)) { usernameRef.current?.focus(); return false; }
+    setUsernameStatus('checking');
+    try {
+      const available = await checkUsername(value);
+      setUsernameStatus(available ? 'available' : 'taken');
+      if (!available) usernameRef.current?.focus();
+      return available;
+    } catch {
+      setUsernameStatus('error');
+      return false;
+    }
+  }
 
   function nextPath() {
     const query = new URLSearchParams(window.location.search);
@@ -191,6 +236,7 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
       setPasswordError(invalid);
       setConfirmError(password !== confirm ? passwordMismatch(locale) : '');
       if (invalid || password !== confirm) return;
+      if (usernameStatus !== 'available') { usernameRef.current?.focus(); return; }
     }
     if (mode === 'signup' && !signupAgreed) {
       setConsentOpen(true);
@@ -231,6 +277,7 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
           '가입된 계정이 있으면 비밀번호 재설정 링크를 이메일로 보내드려요.',
         ));
       } else if (mode === 'signup') {
+        if (!await validateUsername()) { setConsentOpen(false); return; }
         const { data, error: authError } = await auth.signUp({
           email: email.trim(),
           password,
@@ -239,7 +286,13 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
             data: { username: username.trim().toLowerCase(), locale },
           },
         });
-        if (authError) throw authError;
+        if (authError) {
+          // The UNIQUE constraint remains authoritative if another signup wins the race.
+          if (authError.code === 'unexpected_failure') {
+            if (!await validateUsername()) { setConsentOpen(false); return; }
+          }
+          throw authError;
+        }
         if (data.session) {
           await recordLegalConsent().catch(() => { /* Account consent will retry after navigation. */ });
           await finishAuth();
@@ -414,12 +467,21 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
               autoComplete="username"
               autoCapitalize="none"
               spellCheck={false}
+              ref={usernameRef}
+              aria-invalid={usernameStatus === 'taken'}
               value={username}
-              onChange={event => setUsername(event.target.value)}
+              onChange={event => { setUsernameStatus('idle'); setUsername(event.target.value); }}
               placeholder={t('Choose your ID', '사용할 아이디 입력')}
-              aria-describedby="id-format"
+              aria-describedby="id-format id-availability"
             />
             <small id="id-format">{t('3–30 letters, numbers, underscores or hyphens.', '영문, 숫자, 밑줄, 하이픈 3~30자')}</small>
+            <small id="id-availability" role="status" aria-live="polite" className={usernameStatus === 'taken' || usernameStatus === 'error' ? styles.fieldError : usernameStatus === 'available' ? styles.fieldSuccess : undefined}>
+              {usernameStatus === 'checking' ? t('Checking ID…', '아이디 확인 중…')
+                : usernameStatus === 'available' ? t('✓ Available', '✓ 사용할 수 있는 아이디예요')
+                : usernameStatus === 'taken' ? t('✕ Already taken. Choose another ID.', '✕ 이미 사용 중인 아이디예요')
+                : usernameStatus === 'error' ? t('Couldn’t check. Wait a moment and retry.', '확인하지 못했어요. 잠시 후 다시 시도해 주세요.') : ''}
+            </small>
+            {usernameStatus === 'error' && <button type="button" className={styles.textButton} onClick={() => setUsernameRetry(value => value + 1)}>{t('Retry ID check', '아이디 다시 확인')}</button>}
           </label>}
           <label>
             {mode === 'signin' ? t('ID or email', '아이디 또는 이메일') : t('Email', '이메일')}
@@ -542,7 +604,7 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
           </>}
         </>}
 
-        <button type="submit" className={styles.primary}>
+        <button type="submit" className={styles.primary} disabled={method === 'email' && mode === 'signup' && usernameStatus !== 'available'}>
           {busy
             ? t('Please wait…', '처리 중…')
             : method === 'phone'

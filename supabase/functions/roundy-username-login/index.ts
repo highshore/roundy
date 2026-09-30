@@ -23,19 +23,22 @@ Deno.serve(async (req: Request) => {
     if (raw.length > 4096) return json({ code: 'invalid_credentials' }, 400);
     const body = JSON.parse(raw);
     const username = typeof body.username === 'string' ? body.username.trim().toLowerCase() : '';
+    const availability = body.action === 'check_availability';
     const password = typeof body.password === 'string' ? body.password : '';
-    if (!/^[a-z0-9_][a-z0-9_-]{2,29}$/.test(username) || !password || password.length > 128) return json({ code: 'invalid_credentials' }, 401);
+    if (!/^[a-z0-9_][a-z0-9_-]{2,29}$/.test(username) || (!availability && (!password || password.length > 128))) return json({ code: 'invalid_credentials' }, 401);
     const url = Deno.env.get('SUPABASE_URL')!;
     const admin = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false, autoRefreshToken: false } });
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
     const [idBudget, ipBudget] = await Promise.all([
-      admin.rpc('consume_username_login_attempt', { p_key: await hash('id:' + username), p_limit: 10 }),
-      admin.rpc('consume_username_login_attempt', { p_key: await hash('ip:' + ip), p_limit: 30 }),
+      admin.rpc('consume_username_login_attempt', { p_key: await hash((availability ? 'availability:id:' : 'id:') + username), p_limit: 10 }),
+      admin.rpc('consume_username_login_attempt', { p_key: await hash((availability ? 'availability:ip:' : 'ip:') + ip), p_limit: 30 }),
     ]);
     if (idBudget.error || ipBudget.error) return json({ code: 'temporarily_unavailable' }, 503);
     if (!idBudget.data || !ipBudget.data) return json({ code: 'over_request_rate_limit' }, 429);
     const { data: alias, error: aliasError } = await admin.from('account_usernames').select('user_id').eq('username', username).maybeSingle();
     if (aliasError) return json({ code: 'temporarily_unavailable' }, 503);
+    // Availability returns only a boolean; never resolve emails or user details.
+    if (availability) return json({ available: !alias });
     let email = 'unassigned-roundy-login@invalid.example';
     if (alias) {
       const { data, error } = await admin.auth.admin.getUserById(alias.user_id);
