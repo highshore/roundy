@@ -70,6 +70,11 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
   const [cooldown, setCooldown] = useState(0);
   const [providers, setProviders] = useState<{email: boolean; phone: boolean} | null>(null);
   const t = (en: string, ko: string) => tr(locale, en, ko);
+  const passwordValid = password.length > 0 && !newPasswordError(password, locale);
+  const passwordInvalid = !!passwordError || (mode === 'signup' && password.length > 0 && !passwordValid);
+  const confirmInvalid = !!confirmError || (confirm.length > 0 && password !== confirm);
+  const passwordsMatch = passwordValid && confirm.length > 0 && password === confirm;
+
 
   useEffect(() => {
     const query = new URLSearchParams(window.location.search);
@@ -530,7 +535,7 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
             <div className={styles.password}>
               <input
                 ref={passwordRef}
-                aria-invalid={!!passwordError}
+                aria-invalid={passwordInvalid}
                 aria-describedby={mode === 'signup' || passwordError ? 'signup-password-feedback' : undefined}
                 onInvalid={event => { if (mode === 'signup') { event.preventDefault(); setPasswordError(passwordRequirements(locale)); passwordRef.current?.focus(); } }}
                 aria-label={t('Password', '비밀번호')}
@@ -552,7 +557,9 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
                 {showPassword ? <EyeOff size={19}/> : <Eye size={19}/>}
               </button>
             </div>
-            {(mode === 'signup' || passwordError) && <small id="signup-password-feedback" className={passwordError ? styles.fieldError : undefined} role={passwordError ? 'alert' : undefined}>{passwordError || passwordRequirements(locale)}</small>}
+            {(mode === 'signup' || passwordError) && <small id="signup-password-feedback" className={passwordInvalid ? styles.fieldError : passwordValid ? styles.fieldSuccess : undefined} role={passwordError ? 'alert' : 'status'} aria-live="polite">
+              {passwordError || (passwordValid ? t('✓ Meets requirements', '✓ 사용 가능한 비밀번호예요') : t('8+ characters, letters and numbers.', '영문과 숫자 포함 8자 이상'))}
+            </small>}
           </label>}
           {mode === 'signup' && <label>
             {t('Confirm password', '비밀번호 확인')}
@@ -562,14 +569,16 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
               maxLength={128}
               autoComplete="new-password"
               ref={confirmRef}
-              aria-invalid={!!confirmError}
-              aria-describedby={confirmError ? 'signup-confirm-feedback' : undefined}
+              aria-invalid={confirmInvalid}
+              aria-describedby="signup-confirm-feedback"
               onInvalid={event => { event.preventDefault(); setConfirmError(passwordMismatch(locale)); }}
               value={confirm}
               onChange={event => { setConfirm(event.target.value); setConfirmError(''); }}
               placeholder={t('Re-enter your password', '비밀번호 다시 입력')}
             />
-            {confirmError && <small id="signup-confirm-feedback" className={styles.fieldError} role="alert">{confirmError}</small>}
+            <small id="signup-confirm-feedback" className={confirmInvalid ? styles.fieldError : passwordsMatch ? styles.fieldSuccess : undefined} role={confirmError ? 'alert' : 'status'} aria-live="polite">
+              {confirmError || (confirmInvalid ? passwordMismatch(locale) : passwordsMatch ? t('✓ Passwords match', '✓ 비밀번호가 일치해요') : t('Re-enter your password.', '비밀번호를 한 번 더 입력해 주세요.'))}
+            </small>
           </label>}
           {mode === 'signin' && <button
             type="button"
@@ -632,7 +641,7 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
           </>}
         </>}
 
-        <button type="submit" className={styles.primary} disabled={method === 'email' && mode === 'signup' && (usernameStatus === 'taken' || emailStatus === 'taken')}>
+        <button type="submit" className={styles.primary} disabled={method === 'email' && mode === 'signup' && (usernameStatus === 'taken' || emailStatus === 'taken' || !passwordValid || !passwordsMatch || !!passwordError || !!confirmError)}>
           {busy
             ? t('Please wait…', '처리 중…')
             : method === 'phone'
