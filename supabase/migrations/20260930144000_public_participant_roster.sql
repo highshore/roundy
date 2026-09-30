@@ -39,14 +39,18 @@ set search_path=''
 as $$
 declare
   work text:=lower(
-    coalesce(p_profile->>'public_job','')||' '||
-    coalesce(p_profile->>'public_workplace','')
+    case
+      when coalesce(p_profile->>'public_job','')<>'' and lower(coalesce(p_profile->>'public_job',''))<>'professional'
+        then coalesce(p_profile->>'public_job','')||' '||coalesce(p_profile->>'public_workplace','')
+      else coalesce(p_profile->>'job_title','')||' '||coalesce(p_profile->>'workplace','')
+    end
   );
 begin
   if work ~ '(software|developer|engineer|programmer|data|technology)' then return 'developer'; end if;
   if work ~ '(doctor|physician|nurse|medical|healthcare|pharmac|dentist|hospital)' then return 'medical'; end if;
   if work ~ '(finance|bank|banking|investment|securit|insurance|asset management)' then return 'finance'; end if;
   if work ~ '(government|public sector|civil servant|public institution|public organization)' then return 'public'; end if;
+  if work ~ '(large company|large corporation|conglomerate)' then return 'large_company'; end if;
   if work ~ '(lawyer|attorney|accountant|tax|consultant|researcher|professor|architect|professional)' then return 'professional'; end if;
   if work ~ '(teacher|education|school|university|academy)' then return 'education'; end if;
   if work ~ '(designer|design|artist|creative|content|media|writer|editor)' then return 'creative'; end if;
