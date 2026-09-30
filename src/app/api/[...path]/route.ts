@@ -154,6 +154,11 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
     const profileRow={user_id:user.id,profile,updated_at:new Date().toISOString()};const write=old?await supabase.from('profiles').update(profileRow).eq('user_id',user.id):await supabase.from('profiles').insert(profileRow);if(write.error)throw write.error;const {data:verification,error:verificationError}=await supabase.from('verifications').select('status').eq('user_id',user.id).maybeSingle();if(verificationError)throw verificationError;return json({saved:true,verification:verification?.status??'Not started'});
    }
   }
+  if(path[0]==='credits'&&req.method==='GET')return json({balance:0,nextExpiry:null});
+  if(path[0]==='applications'){
+   if(req.method==='GET')return json({applications:[]});
+   return json({error:'Applications are retired. Continue to event checkout instead.'},410);
+  }
   if(path[0]==='verification-documents'&&req.method==='GET'&&path.length===3){
    if(path[1]!==user.id&&!await isAdmin(supabase))return json({error:'Document unavailable'},404);const {data,error}=await supabase.storage.from('wis-verification-documents').download(path.slice(1).join('/'));if(error)throw error;return new NextResponse(data,{headers:{'Content-Type':data.type,'Cache-Control':'private, no-store','Content-Disposition':'attachment','X-Content-Type-Options':'nosniff'}});
   }
