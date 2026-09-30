@@ -33,6 +33,10 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
  const path=(await params).path;const supabase=await createClient();
  try{
   if(path[0]==='events'&&path.length===1&&req.method==='GET'){const {data,error}=await supabase.from('events').select('*').is('deleted_at',null).order('starts_at');if(error)throw error;return json({events:(data??[]).filter(isRoundyEvent)});}
+  if(path[0]==='events'&&path.length===3&&path[2]==='roster'&&req.method==='GET'){
+   const eventId=path[1];if(!/^[0-9a-f-]{36}$/i.test(eventId))return json({error:'Invalid event ID'},400);
+   const {data,error}=await supabase.rpc('event_public_roster',{p_event:eventId});if(error)throw error;return json({roster:data});
+  }
   const {data:{user},error:authError}=await supabase.auth.getUser();if(authError||!user)return json({error:'Sign in required'},401);
   if(!isMemberUser(user))return json({error:'Member sign-in required'},403);
   if(path[0]==='events'&&path.length===3&&path[2]==='attendees'&&req.method==='GET'){
