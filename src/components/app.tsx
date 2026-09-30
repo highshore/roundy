@@ -84,6 +84,7 @@ function jobGroupLabel(value:string,locale:Locale){
   medical:['Medical','의료계'],
   finance:['Finance','금융계'],
   public:['Public sector','공공기관'],
+  large_company:['Large company','대기업'],
   professional:['Professional','전문직'],
   education:['Education','교육계'],
   creative:['Creative','크리에이티브'],
