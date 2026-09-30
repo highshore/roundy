@@ -541,8 +541,11 @@
 .public-roster-heading h2{margin:0;font-size:28px;letter-spacing:-.045em}
 .public-roster-groups{display:grid;gap:26px}
 .public-roster-group{display:grid;gap:13px}
-.public-roster-group h3{font-size:18px;letter-spacing:-.025em}
-.public-roster-group h3 strong{font-weight:850}
+.public-roster-group-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.public-roster-group h3{margin:0;font-size:18px;letter-spacing:-.025em}
+.public-roster-seat-tab{display:inline-flex;align-items:center;justify-content:center;min-height:30px;padding:6px 10px;border-radius:999px;font-size:12px;font-weight:800;line-height:1;white-space:nowrap}
+.public-roster-group.women .public-roster-seat-tab{background:#ffe3e3;color:#a23b45}
+.public-roster-group.men .public-roster-seat-tab{background:#e6f0ff;color:#315f9f}
 .public-roster-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .public-roster-chip{display:grid;grid-template-columns:10px minmax(0,auto) 1px minmax(0,1fr);align-items:center;gap:10px;min-height:58px;padding:13px 14px;border-radius:18px;background:#f6f5f2;font-size:14px;white-space:nowrap}
 .public-roster-chip>span:last-child{min-width:0;overflow:hidden;text-overflow:ellipsis}
