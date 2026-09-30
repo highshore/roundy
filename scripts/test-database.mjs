@@ -27,6 +27,7 @@ const profile={full_name:'Private Person',birth_date:'1997-05-10',gender:'female
 for(let n=1;n<=6;n++)await db.query('insert into profiles(user_id,profile) values($1,$2)',[uid(n),profile]);
 await db.exec(`insert into verifications(user_id,instagram,status) values('${uid(1)}','initial','Verified');`);
 async function as(n,sql,args=[]){await db.exec('set role authenticated');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[uid(n)]);try{return await db.query(sql,args);}finally{await db.exec('reset role');}}
+async function asAnon(sql,args=[]){await db.exec('set role anon');try{return await db.query(sql,args);}finally{await db.exec('reset role');}}
 async function asService(sql,args=[]){await db.exec('set role service_role');try{return await db.query(sql,args);}finally{await db.exec('reset role');}}
 async function denied(n,sql,pattern){await assert.rejects(()=>as(n,sql),pattern);}
 // Per-event checkout uses the production payment schema and additive discounts.
@@ -66,6 +67,7 @@ await db.exec(`insert into events(id,title,starts_at,duration_minutes,venue,addr
 const pendingPayappQuote=(await as(1,'select event_checkout_quote($1,null) q',[payappEvent])).rows[0].q;
 assert.equal(pendingPayappQuote.final_amount,29000,'An active PayApp hold reuses its persisted price instead of looking confirmed');
 assert.equal((await as(2,'select event_attendees($1) attendees',[payappEvent])).rows[0].attendees.total,0,'Charging payment holds are hidden from attendee lists');
+assert.equal((await asAnon('select event_public_roster($1) roster',[payappEvent])).rows[0].roster.total,0,'Public roster also hides unpaid payment holds');
 await denied(1,'select * from event_payment_order_events',/permission denied/);
 await denied(1,`select record_payapp_feedback('${payappOrder}','991122',4,29000,jsonb_build_object('event_id','${payappEvent}'))`,/permission denied/);
 await asService(`select record_payapp_feedback('${payappOrder}','991122',4,29000,jsonb_build_object('event_id','${payappEvent}','pay_state',4))`);
@@ -74,6 +76,11 @@ let payappOrderRow=(await db.query(`select status,provider_payment_id from event
 assert.equal(payappOrderRow.status,'completed');assert.equal(payappOrderRow.provider_payment_id,'991122');
 assert.equal((await db.query(`select count(*)::int n from bookings where payment_order_number='${payappOrder}'`)).rows[0].n,1,'Repeated PayApp success keeps one booking');
 assert.equal((await as(2,'select event_attendees($1) attendees',[payappEvent])).rows[0].attendees.total,1,'Only completed payment bookings count as attendees');
+const publicRoster=(await asAnon('select event_public_roster($1) roster',[payappEvent])).rows[0].roster;
+assert.equal(publicRoster.total,1,'Public roster includes only confirmed participants');
+assert.equal(publicRoster.women[0].age_band,'90_late','Public roster exposes only a broad birth-decade band');
+assert.equal(publicRoster.women[0].job_group,'creative','Public roster reduces work information to a broad category');
+assert.ok(!('photo' in publicRoster.women[0])&&!('full_name' in publicRoster.women[0])&&!('birth_date' in publicRoster.women[0]),'Public roster never exposes identifying profile fields');
 await asService(`select record_payapp_feedback('${payappOrder}','991122',9,29000,jsonb_build_object('event_id','${payappEvent}','pay_state',9))`);
 payappOrderRow=(await db.query(`select status from event_payment_orders where order_number='${payappOrder}'`)).rows[0];
 assert.equal(payappOrderRow.status,'refunded');
