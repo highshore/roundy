@@ -288,34 +288,53 @@ export function App({path}:{path:string}){
  else if(route==='checkout'&&event){
   const quote=priceQuote;
   const enteredCode=checkoutCode.trim().toUpperCase();
-  const codeMessage=enteredCode&&quote?(quote.code_valid?quote.code_kind==='promo'?tr(locale,`Promo code · ${quote.code_discount_percent}% off`,`프로모션 코드 · ${quote.code_discount_percent}% 할인`):tr(locale,'Referral code · 10% off','추천 코드 · 10% 할인'):discountCodeMessage(quote.code_reason)):'';
-  const row=(label:string,amount:number)=><div className="price-row"><span>{label}</span><strong>-₩{amount.toLocaleString()}</strong></div>;
-  content=state.booked[slug]?<Empty title={tr(locale,'Your seat is already confirmed.','이미 자리가 확정됐어요.')} body={tr(locale,'This event is already saved in My Events.','이미 예약한 모임이에요.')} href="/me/events" label={tr(locale,'View My Events','내 모임 보기')}/>:!eligibleToApply?<><Card label={tr(locale,'PROFILE REQUIRED','프로필 필요')} title={tr(locale,'Complete your profile first.','먼저 프로필을 완성해 주세요.')}>{tr(locale,'Your profile and verification must be approved before you can reserve a seat.','좌석을 예약하려면 프로필과 본인 인증 승인이 필요해요.')}</Card><Button href={!profileComplete(p)?'/onboarding/basics/'+slug:'/onboarding/verification/'+slug}>{tr(locale,'Complete Profile','프로필 완성하기')}</Button></>:<>
-   <Card label={tr(locale,'EVENT PAYMENT','모임 결제')} title={localizeEvent(event,locale).title}>{dateLabelForLocale(event.starts_at,locale)} · {timeLabelForLocale(event.starts_at,locale)} KST<br/>{localizeEvent(event,locale).venue}</Card>
+  const item=localizeEvent(event,locale);
+  const codeMessage=enteredCode&&quote?(quote.code_valid?quote.code_kind==='promo'?tr(locale,'Promo code · '+quote.code_discount_percent+'% off','프로모션 코드 · '+quote.code_discount_percent+'% 할인'):tr(locale,'Referral code · 10% off','추천 코드 · 10% 할인'):discountCodeMessage(quote.code_reason)):'';
+  const row=(label:string,amount:number)=><div className="price-row discount"><span>{label}</span><strong>-₩{amount.toLocaleString()}</strong></div>;
+  const discounted=Boolean(quote&&quote.final_amount<quote.original_amount);
+  content=state.booked[slug]?<Empty title={tr(locale,'Your seat is already confirmed.','이미 자리가 확정됐어요.')} body={tr(locale,'This event is already saved in My Events.','이미 예약한 모임이에요.')} href="/me/events" label={tr(locale,'View My Events','내 모임 보기')}/>:!eligibleToApply?<><Card label={tr(locale,'PROFILE REQUIRED','프로필 필요')} title={tr(locale,'Complete your profile first.','먼저 프로필을 완성해 주세요.')}>{tr(locale,'Your profile and verification must be approved before you can reserve a seat.','좌석을 예약하려면 프로필과 본인 인증 승인이 필요해요.')}</Card><Button href={!profileComplete(p)?'/onboarding/basics/'+slug:'/onboarding/verification/'+slug}>{tr(locale,'Complete Profile','프로필 완성하기')}</Button></>:<div className="checkout-page">
+   <section className="checkout-ticket" aria-label={tr(locale,'Event payment ticket','모임 결제 티켓')}>
+    <p className="eyebrow">{tr(locale,'EVENT PAYMENT','모임 결제')}</p>
+    <h2>{headline(item.title)}</h2>
+    <div className="checkout-ticket-meta">
+     <p>{dateLabelForLocale(event.starts_at,locale)} · {timeLabelForLocale(event.starts_at,locale)} KST</p>
+     <p>{item.venue}</p>
+    </div>
+   </section>
+
    <section className="referral-box">
     <div className="referral-head"><h3>{tr(locale,'Discount code','할인 코드')}</h3><span>{tr(locale,'Optional','선택')}</span></div>
-    <p className="referral-help">{tr(locale,'Friend referral codes give 10% off. Marketing promo codes can give up to 20% off. Only one code discount applies.','친구 추천 코드는 10%, 마케팅 프로모션 코드는 최대 20% 할인됩니다. 코드 할인은 하나만 적용됩니다.')}</p>
-    <div className="referral-entry"><input value={checkoutCode} maxLength={24} autoCapitalize="characters" autoCorrect="off" spellCheck={false} disabled={Boolean(quote?.locked)} placeholder={tr(locale,'Referral or promo code','추천 또는 프로모션 코드')} onChange={e=>{setCheckoutCode(e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g,'').slice(0,24));setPriceQuote(null);setCheckoutTermsAccepted(false);}}/><button className="referral-apply" type="button" disabled={busy||Boolean(quote?.locked)} onClick={()=>void applyDiscountCode()}>{enteredCode?tr(locale,'Apply','적용'):tr(locale,'Refresh','새로고침')}</button></div>
+    <div className="referral-entry"><input value={checkoutCode} maxLength={24} autoCapitalize="characters" autoCorrect="off" spellCheck={false} disabled={Boolean(quote?.locked)} placeholder={tr(locale,'Referral or promo code','지인 추천 또는 프로모션 코드')} onChange={e=>{setCheckoutCode(e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g,'').slice(0,24));setPriceQuote(null);setCheckoutTermsAccepted(false);}}/><button className="referral-apply" type="button" disabled={busy||Boolean(quote?.locked)} onClick={()=>void applyDiscountCode()}>{tr(locale,'Refresh','새로고침')}</button></div>
     {codeMessage&&<p className={'referral-message '+(quote?.code_valid?'success':'error')}>{codeMessage}</p>}
    </section>
-   {quote?.locked&&<Note>{tr(locale,'You already have an unfinished PayApp payment for this event. The price and discounts are locked to that payment request, and continuing will resume the same request rather than create a second charge.','이 모임에 완료되지 않은 PayApp 결제가 있어요. 가격과 할인은 기존 결제 요청 기준으로 고정되며, 계속하면 새 결제를 만들지 않고 같은 결제 요청을 이어갑니다.')}</Note>}
-   {!quote?<Card label={tr(locale,'LIVE PRICE','실시간 가격')} title={tr(locale,'Calculating your event price…','모임 가격을 계산하고 있어요…')}>{tr(locale,'Availability, gender balance, timing and returning-user discounts are checked securely before payment.','결제 전 참가 현황, 성비, 시점, 재참여 할인을 안전하게 확인합니다.')}</Card>:<>
-    <div className="price-row"><span>{tr(locale,'Original price','기본 가격')}</span><strong>₩{quote.original_amount.toLocaleString()}</strong></div>
+
+   {!quote?<section className="checkout-price-card loading"><p className="eyebrow">{tr(locale,'PRICE','가격')}</p><h3>{tr(locale,'Calculating your event price…','모임 가격을 계산하고 있어요…')}</h3></section>:<section className="checkout-price-card">
+    <div className="price-row original"><span>{tr(locale,'Regular price','정식 판매가')}</span><strong>₩{quote.original_amount.toLocaleString()}</strong></div>
     {quote.referral_discount_amount>0&&row(tr(locale,'Referral discount (10%)','추천 할인 (10%)'),quote.referral_discount_amount)}
-    {quote.promo_discount_amount>0&&row(tr(locale,`Promo discount (${quote.code_discount_percent}%)`,`프로모션 할인 (${quote.code_discount_percent}%)`),quote.promo_discount_amount)}
+    {quote.promo_discount_amount>0&&row(tr(locale,'Promo discount ('+quote.code_discount_percent+'%)','프로모션 할인 ('+quote.code_discount_percent+'%)'),quote.promo_discount_amount)}
     {quote.gender_balance_discount_amount>0&&row(tr(locale,'Gender balance discount (10%)','성비 균형 할인 (10%)'),quote.gender_balance_discount_amount)}
     {quote.time_discount_amount>0&&row(quote.time_discount_kind==='early_bird'?tr(locale,'Early bird (5%)','얼리버드 (5%)'):tr(locale,'Last-minute deal (5%)','마감 임박 할인 (5%)'),quote.time_discount_amount)}
     {quote.boomerang_discount_amount>0&&row(tr(locale,'Boomerang discount (5%)','재참여 할인 (5%)'),quote.boomerang_discount_amount)}
-    <div className="price-row total"><span>{tr(locale,'Total','최종 금액')}</span><strong>₩{quote.final_amount.toLocaleString()}</strong></div>
-   </>}
-   <Note>{tr(locale,'All discounts are calculated from the original event price, not compounded. The final price is recalculated securely when payment begins. Discounts and promo/referral benefits are not reissued after cancellation.','모든 할인은 기본 가격을 기준으로 합산되며 복리 방식으로 계산되지 않습니다. 결제 시작 시 최종 금액을 서버에서 다시 계산합니다. 취소 후에는 할인이나 프로모션/추천 혜택이 다시 지급되지 않습니다.')}</Note>
-   <Note>{lockdownNotice(event.lockdown_minutes??0,locale)} {tr(locale,'Before the deadline and check-in: 100% of the amount actually paid is refundable. At or after the deadline, or after check-in: voluntary cancellation is unavailable. Mandatory legal rights and organizer cancellations are handled under the Refund Policy.','취소 마감 전이며 체크인 전이면 실제 결제금액의 100%를 환불합니다. 마감 시점부터 또는 체크인 후에는 자발적 취소가 제한됩니다. 법령상 권리와 회사 사정에 따른 취소는 환불 규정에 따릅니다.')} {tr(locale,'Cancellation deadline: ','취소 마감: ')}{new Date(Date.parse(event.starts_at)-(event.lockdown_minutes??0)*60000).toLocaleString(locale==='ko'?'ko-KR':'en-US',{timeZone:'Asia/Seoul',year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})} KST</Note>
-   {!quote?.locked&&<label className="check-row checkout-terms"><input type="checkbox" checked={checkoutTermsAccepted} onChange={e=>setCheckoutTermsAccepted(e.target.checked)}/><span>{tr(locale,'I agree to the ','다음 내용에 동의합니다: ')}<Link href="/refund-policy" target="_blank">{tr(locale,'Refund Policy','환불 규정')}</Link>, <Link href="/terms" target="_blank">{tr(locale,'Terms of Use','이용약관')}</Link>{tr(locale,' and ',' 및 ')}<Link href="/privacy" target="_blank">{tr(locale,'Privacy Policy','개인정보 처리방침')}</Link>.</span></label>}
-   <Card label={tr(locale,'PAY PER EVENT','모임별 결제')} title={tr(locale,'No membership or ticket pack','멤버십이나 티켓 묶음 없음')}>{tr(locale,'This payment is only for this event. Your price can change by event timing, gender balance, referral/promo code and returning-user status.','이 결제는 해당 모임에만 적용됩니다. 모임 시점, 성비, 추천/프로모션 코드, 재참여 여부에 따라 가격이 달라질 수 있습니다.')}</Card>
-   <Button disabled={busy||(!checkoutTermsAccepted&&!quote?.locked)||Boolean(enteredCode&&quote&&!quote.code_valid&&!quote.locked)} onClick={()=>void payForEvent(event)}>{demoMode?tr(locale,'Preview event payment','모임 결제 미리보기'):quote?<>{quote.locked?tr(locale,'Resume payment','결제 이어하기'):tr(locale,'Pay','결제')} ₩{quote.final_amount.toLocaleString()}</>:tr(locale,'Continue to PayApp','PayApp으로 계속하기')}</Button>
+    <div className="checkout-total-row">
+     <span>{tr(locale,'Final amount','최종 금액')}</span>
+     <div className="checkout-total-prices">{discounted&&<><s>₩{quote.original_amount.toLocaleString()}</s><span aria-hidden="true">→</span></>}<strong>₩{quote.final_amount.toLocaleString()}</strong></div>
+    </div>
+   </section>}
+
+   <section className="checkout-check-card">
+    <p className="eyebrow">{tr(locale,'PLEASE CHECK','꼭 확인해 주세요')}</p>
+    <div className="checkout-check-list">
+     {quote?.locked&&<p className="pending-payment-note"><LockKeyhole size={18}/><span>{tr(locale,'You already have an unfinished PayApp payment for this event. The price and discounts are locked to that payment request, and continuing will resume the same request rather than create a second charge.','이 모임에 완료되지 않은 PayApp 결제가 있어요. 가격과 할인은 기존 결제 요청 기준으로 고정되며, 계속하면 새 결제를 만들지 않고 같은 결제 요청을 이어갑니다.')}</span></p>}
+     <p><Check size={18}/><span>{tr(locale,'Discounts and promo/referral benefits are not reissued after cancellation.','취소 후에는 할인이나 프로모션/추천 혜택이 다시 지급되지 않습니다.')}</span></p>
+     <p><Check size={18}/><span><strong>{tr(locale,'Lockdown period','락다운 기간')}:</strong> {lockdownNotice(event.lockdown_minutes??0,locale)} {tr(locale,'If you cancel before lockdown, 100% of the amount actually paid will be refunded. Refunds are unavailable after lockdown.','락다운 전에 참가를 취소할 경우 실제 결제금액의 100%를 환불합니다. 락다운 기간 이후에 취소할 경우 환불은 불가능합니다.')}</span></p>
+    </div>
+    {!quote?.locked&&<label className="check-row checkout-terms"><input type="checkbox" checked={checkoutTermsAccepted} onChange={e=>setCheckoutTermsAccepted(e.target.checked)}/><span>{tr(locale,'I agree to the ','다음 내용에 동의합니다: ')}<Link href="/refund-policy" target="_blank">{tr(locale,'Refund Policy','환불 규정')}</Link>, <Link href="/terms" target="_blank">{tr(locale,'Terms of Use','이용약관')}</Link>{tr(locale,' and ',' 및 ')}<Link href="/privacy" target="_blank">{tr(locale,'Privacy Policy','개인정보 처리방침')}</Link>.</span></label>}
+   </section>
+
+   <Button disabled={busy||(!checkoutTermsAccepted&&!quote?.locked)||Boolean(enteredCode&&quote&&!quote.code_valid&&!quote.locked)} onClick={()=>void payForEvent(event)}>{demoMode?tr(locale,'Preview event payment','모임 결제 미리보기'):quote?<><span>{quote.locked?tr(locale,'Resume payment','결제 이어하기'):tr(locale,'Pay','결제')}</span><span className="checkout-button-prices">{discounted&&<><s>₩{quote.original_amount.toLocaleString()}</s><span aria-hidden="true">→</span></>}<strong>₩{quote.final_amount.toLocaleString()}</strong></span></>:tr(locale,'Continue to PayApp','PayApp으로 계속하기')}</Button>
    {quote?.locked&&<Button secondary disabled={busy} onClick={()=>void abandonPayment(event)}>{tr(locale,'Cancel this payment attempt','이 결제 시도 취소하기')}</Button>}
-   {ticketBalance>0&&!quote?.locked&&<Button secondary disabled={busy||!checkoutTermsAccepted} onClick={()=>work(async()=>{await api('bookings',{eventId:event.id,termsAccepted:true});setState(s=>({...s,booked:{...s.booked,[slug]:true}}));await Promise.all([refreshEvents(),refreshCredits()]);router.push('/me/events');})}>{tr(locale,`Use legacy ticket credit (${ticketBalance})`,`기존 티켓 크레딧 사용 (${ticketBalance})`)}</Button>}
-  </>;
+   {ticketBalance>0&&!quote?.locked&&<Button secondary disabled={busy||!checkoutTermsAccepted} onClick={()=>work(async()=>{await api('bookings',{eventId:event.id,termsAccepted:true});setState(s=>({...s,booked:{...s.booked,[slug]:true}}));await Promise.all([refreshEvents(),refreshCredits()]);router.push('/me/events');})}>{tr(locale,'Use legacy ticket credit ('+ticketBalance+')','기존 티켓 크레딧 사용 ('+ticketBalance+')')}</Button>}
+  </div>;
  }
  else if(route==='ticket'&&event)content=!state.booked[slug]?<Empty title={tr(locale,'No confirmed booking yet.','아직 확정된 예약이 없어요.')} body={tr(locale,'Return to the event page to complete this event’s payment and confirm your seat.','이벤트 페이지에서 해당 모임 결제를 완료하고 좌석을 확정해 주세요.')} href={'/events/'+slug} label={tr(locale,'View event','모임 보기')}/>:<>{demoMode&&<div className="qr-card">{qr&&<Image src={qr} alt="Demo QR code, not a valid admission ticket" width={230} height={230}/>}<b>PREVIEW TICKET — NOT VALID FOR ENTRY</b></div>}<Card label={tr(locale,'BOOKING CONFIRMED','예약 확정')} title={dateLabelForLocale(event.starts_at,locale)+' · '+timeLabelForLocale(event.starts_at,locale)}>{localizeEvent(event,locale).venue}<br/>{tr(locale,'Arrive 15 minutes early and bring photo ID.','15분 일찍 도착하고 사진이 있는 신분증을 지참해 주세요.')}</Card><Note>{tr(locale,'Your booking is attached to your account. The host will verify your identity at check-in.','예약은 계정에 연결되어 있습니다. 체크인 시 호스트가 신원을 확인합니다.')}</Note>{demoMode&&<div className="demo-controls"><p>Event-night preview</p><Button onClick={()=>{setState(s=>({...s,checked:{...s.checked,[slug]:true}}));router.push('/event-night/'+slug);}}>Preview staff check-in</Button></div>}</>;
  else if(route==='event-night'&&event)content=<EventNight event={event} locale={locale}/>;
