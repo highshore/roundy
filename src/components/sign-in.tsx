@@ -491,16 +491,15 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
               onChange={event => { fieldRequests.current.username++; checkedValues.current.username = ''; setUsernameStatus('idle'); setUsername(event.target.value); setError(''); }}
               onBlur={() => void checkField('username')}
               placeholder={t('Choose your ID', '사용할 아이디 입력')}
-              aria-describedby="id-format id-availability"
+              aria-describedby="id-availability"
             />
-            <small id="id-format">{t('3–30 letters, numbers, underscores or hyphens.', '영문, 숫자, 밑줄, 하이픈 3~30자')}</small>
-            <small id="id-availability" role="status" aria-live="polite" className={usernameStatus === 'taken' || usernameStatus === 'error' ? styles.fieldError : usernameStatus === 'available' ? styles.fieldSuccess : undefined}>
+            <small id="id-availability" role="status" aria-live="polite" className={[styles.idFeedback, usernameStatus === 'taken' || usernameStatus === 'error' ? styles.fieldError : usernameStatus === 'available' ? styles.fieldSuccess : ''].join(' ')}>
               {usernameStatus === 'checking' ? t('Checking ID…', '아이디 확인 중…')
-                : usernameStatus === 'available' ? t('✓ Available', '✓ 사용할 수 있는 아이디예요')
-                : usernameStatus === 'taken' ? t('✕ Already taken. Choose another ID.', '✕ 이미 사용 중인 아이디예요')
-                : usernameStatus === 'error' ? t('Couldn’t check. Wait a moment and retry.', '확인하지 못했어요. 잠시 후 다시 시도해 주세요.') : ''}
+                : usernameStatus === 'available' ? t('✓ Available', '✓ 사용 가능')
+                : usernameStatus === 'taken' ? t('✕ Already taken', '✕ 이미 사용 중인 아이디예요')
+                : usernameStatus === 'error' ? <button type="button" className={styles.inlineRetry} onClick={() => void checkField('username', true)}>{t('Couldn’t check. Retry', '확인하지 못했어요. 다시 확인')}</button>
+                : t('3–30 letters, numbers, underscores or hyphens.', '영문, 숫자, 밑줄, 하이픈 3~30자')}
             </small>
-            {usernameStatus === 'error' && <button type="button" className={styles.textButton} onClick={() => void checkField('username', true)}>{t('Retry ID check', '아이디 다시 확인')}</button>}
           </label>}
           <label>
             {mode === 'signin' ? t('ID or email', '아이디 또는 이메일') : t('Email', '이메일')}

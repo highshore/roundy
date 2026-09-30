@@ -18,4 +18,6 @@
 
 .fields .fieldError{color:#b42318}.fields input[aria-invalid="true"]{border-color:#b42318}.fields input[aria-invalid="true"]:focus{outline-color:#b42318}
 
-.fieldSuccess { color: #167347; }
+.fields .fieldSuccess { color: #167347; }
+.fields .idFeedback{white-space:nowrap;font-size:clamp(10px,2.8vw,12px)}
+.inlineRetry{border:0;background:none;color:inherit;font:inherit;padding:0;margin:0;text-decoration:underline;text-underline-offset:2px;cursor:pointer}
