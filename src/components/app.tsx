@@ -281,9 +281,10 @@ export function App({path}:{path:string}){
   const cancellationLocked=Date.now()>=Date.parse(event.starts_at)-((event.lockdown_minutes??0)*60000);
   const alreadyBooked=Boolean(state.booked[event.slug]);
   const rosterInfo=publicRosters[event.id]??{women:[],men:[],women_count:0,men_count:0,total:0,updated_at:null};
+  const genderCapacity=Math.floor(event.capacity/2);
   const rosterGroups=[
-   {key:'men',label:tr(locale,'Gents','남성'),entries:rosterInfo.men,count:rosterInfo.men_count,tone:'men'},
-   {key:'women',label:tr(locale,'Ladies','여성'),entries:rosterInfo.women,count:rosterInfo.women_count,tone:'women'}
+   {key:'women',label:tr(locale,'Ladies','여성'),entries:rosterInfo.women,count:rosterInfo.women_count,tone:'women'},
+   {key:'men',label:tr(locale,'Gents','남성'),entries:rosterInfo.men,count:rosterInfo.men_count,tone:'men'}
   ] as const;
   content=<>
    <div className="detail-photo"><Image src={event.image||'/images/yeouido.webp'} alt={event.title} fill sizes="(max-width: 640px) 100vw, 800px" priority/></div>
@@ -305,7 +306,7 @@ export function App({path}:{path:string}){
     </header>
     <div className="public-roster-groups">
      {rosterGroups.map(group=><section className={'public-roster-group '+group.tone} key={group.key}>
-      <h3>{group.label} <strong>{group.count}{tr(locale,' people','명')}</strong></h3>
+      <div className="public-roster-group-head"><h3>{group.label}</h3><span className="public-roster-seat-tab">{group.count}/{genderCapacity} {tr(locale,'Seats Taken','좌석 확정')}</span></div>
       {group.entries.length?<div className="public-roster-grid">{group.entries.map((entry,index)=><div className="public-roster-chip" key={group.key+'-'+index}><span className="public-roster-dot" aria-hidden="true"/><span>{ageBandLabel(entry.age_band,locale)}</span><i aria-hidden="true"/><span>{jobGroupLabel(entry.job_group,locale)}</span></div>)}</div>:<p className="public-roster-empty">{tr(locale,'No confirmed participants yet.','아직 확정된 참가자가 없어요.')}</p>}
      </section>)}
     </div>
