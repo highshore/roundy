@@ -16,6 +16,7 @@ import styles from './sign-in.module.css';
 import { maskEmail, authSecurityError, newPasswordError, passwordRequirements, passwordMismatch } from '@/lib/auth-security';
 import { NotoAnimatedEmoji } from './noto-animated-emoji';
 import './auth-shell.css';
+import { checkUsername, normalizeUsername, validUsername, type UsernameStatus } from '@/lib/username-availability';
 
 type Method = 'email' | 'phone';
 type Mode = 'signin' | 'signup' | 'forgot';
@@ -31,6 +32,8 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
   const [mode, setMode] = useState<Mode>('signin');
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
+  const [usernameStatus, setUsernameStatus] = useState<UsernameStatus>('idle');
+  const usernameRequest = useRef(0);
   const [showPassword, setShowPassword] = useState(false);
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -52,6 +55,31 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
   const [cooldown, setCooldown] = useState(0);
   const [providers, setProviders] = useState<{email: boolean; phone: boolean} | null>(null);
   const t = (en: string, ko: string) => tr(locale, en, ko);
+
+  useEffect(() => {
+    const request = ++usernameRequest.current;
+    if (showMethods || confirmationEmail || mode !== 'signup' || method !== 'email' || !validUsername(username)) {
+      setUsernameStatus('idle');
+      return;
+    }
+    setUsernameStatus('checking');
+    const timer = window.setTimeout(async () => {
+      const status = await checkUsername(username);
+      if (usernameRequest.current === request) setUsernameStatus(status);
+    }, 400);
+    return () => { window.clearTimeout(timer); usernameRequest.current++; };
+  }, [username, mode, method, showMethods, confirmationEmail]);
+
+  async function requireAvailableUsername() {
+    const request = ++usernameRequest.current;
+    const status = await checkUsername(username);
+    if (usernameRequest.current === request) setUsernameStatus(status);
+    if (status === 'available') return true;
+    setError(status === 'taken'
+      ? t('This ID is already taken. Choose another one.', '이미 사용 중인 아이디예요. 다른 아이디를 입력해 주세요.')
+      : t('We couldn’t check this ID. Please try again.', '아이디를 확인하지 못했어요. 잠시 후 다시 시도해 주세요.'));
+    return false;
+  }
 
   useEffect(() => {
     const query = new URLSearchParams(window.location.search);
@@ -191,6 +219,10 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
       setPasswordError(invalid);
       setConfirmError(password !== confirm ? passwordMismatch(locale) : '');
       if (invalid || password !== confirm) return;
+      setBusy(true);
+      const available = await requireAvailableUsername();
+      setBusy(false);
+      if (!available) return;
     }
     if (mode === 'signup' && !signupAgreed) {
       setConsentOpen(true);
@@ -231,15 +263,20 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
           '가입된 계정이 있으면 비밀번호 재설정 링크를 이메일로 보내드려요.',
         ));
       } else if (mode === 'signup') {
+        if (!await requireAvailableUsername()) { setConsentOpen(false); return; }
         const { data, error: authError } = await auth.signUp({
           email: email.trim(),
           password,
           options: {
             emailRedirectTo: callback(),
-            data: { username: username.trim().toLowerCase(), locale },
+            data: { username: normalizeUsername(username), locale },
           },
         });
-        if (authError) throw authError;
+        if (authError) {
+          // A competing signup may have claimed the ID after the preflight check.
+          if (authError.code === 'unexpected_failure' && !await requireAvailableUsername()) { setConsentOpen(false); return; }
+          throw authError;
+        }
         if (data.session) {
           await recordLegalConsent().catch(() => { /* Account consent will retry after navigation. */ });
           await finishAuth();
@@ -306,7 +343,6 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
   }
 
   if (confirmationEmail) return <section className={styles.security} aria-busy={busy}>
-    <RoundyBrand/>
     <div className={styles.statusIcon}><NotoAnimatedEmoji codepoint="1f4e8" fallback="📨" size={64}/></div>
     <h1>{t('Check your email', '이메일을 확인해 주세요')}</h1>
     <p><strong>{maskEmail(confirmationEmail)}</strong></p>
@@ -415,11 +451,18 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
               autoCapitalize="none"
               spellCheck={false}
               value={username}
-              onChange={event => setUsername(event.target.value)}
+              onChange={event => { usernameRequest.current++; setUsername(event.target.value); setUsernameStatus('idle'); setError(''); }}
               placeholder={t('Choose your ID', '사용할 아이디 입력')}
-              aria-describedby="id-format"
+              aria-describedby="id-format id-availability"
+              aria-invalid={usernameStatus === 'taken'}
             />
             <small id="id-format">{t('3–30 letters, numbers, underscores or hyphens.', '영문, 숫자, 밑줄, 하이픈 3~30자')}</small>
+            <small id="id-availability" role="status" aria-live="polite" className={usernameStatus === 'available' ? styles.fieldSuccess : usernameStatus === 'taken' || usernameStatus === 'error' ? styles.fieldError : undefined}>
+              {usernameStatus === 'checking' ? t('Checking ID…', '아이디 확인 중…')
+                : usernameStatus === 'available' ? t('✓ Available', '✓ 사용 가능한 아이디예요')
+                : usernameStatus === 'taken' ? t('✕ Already taken', '✕ 이미 사용 중인 아이디예요')
+                : usernameStatus === 'error' ? t('Couldn’t check. Try again or submit to retry.', '확인하지 못했어요. 다시 입력하거나 회원가입을 눌러 재시도해 주세요.') : ''}
+            </small>
           </label>}
           <label>
             {mode === 'signin' ? t('ID or email', '아이디 또는 이메일') : t('Email', '이메일')}
