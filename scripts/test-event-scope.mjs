@@ -27,7 +27,10 @@ assert.doesNotMatch(app, /legacyTalks|event-category-filters|80\+|roundy-busines
 assert.match(app, /data\.events\.filter\(isRoundyEvent\)/);
 assert.match(app, /d\.events\.filter\(isRoundyEvent\)/);
 assert.match(app, /nativePast\.map/);
-assert.match(app, /occupancyLabel\(attending,e.capacity,locale\)/);
+assert.match(app, /const confirmed=attendees\?\.total\?\?0/);
+assert.match(app, /const occupied=Math\.max\(0,e\.capacity-e\.seats_remaining\)/);
+assert.match(app, /AttendeeStack count=\{confirmed\}/);
+assert.match(app, /occupancyLabel\(occupied,e.capacity,locale\)/);
 assert.match(app, /NotoAnimatedEmoji/);
 const api = await read('src/app/api/[...path]/route.ts');
 assert.match(api, /events:\(data\?\?\[\]\)\.filter\(isRoundyEvent\)/);

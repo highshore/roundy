@@ -234,14 +234,13 @@ async function failPaymentOrder(orderNumber: string, userId: string, code: strin
 
 async function createPaymentRequest(req: Request, user: User, body: Record<string, unknown>) {
   const eventId = typeof body.eventId === "string" ? body.eventId : "";
-  const code = normalizeCode(body.code);
+  let code = normalizeCode(body.code);
   if (!UUID.test(eventId)) throw new ApiError("Invalid event ID.");
-  if (body.termsAccepted !== true) throw new ApiError("Confirm the cancellation and refund rules before paying.");
 
   const a = admin();
   const { data: activeOrder, error: activeOrderError } = await a
     .from("event_payment_orders")
-    .select("order_number,status,provider,provider_payment_url,event_id,amount")
+    .select("order_number,status,provider,provider_payment_url,event_id,amount,pricing_snapshot,terms_accepted_at")
     .eq("event_id", eventId)
     .eq("user_id", user.id)
     .in("status", ["pending_auth", "charging", "refunding"])
@@ -258,19 +257,33 @@ async function createPaymentRequest(req: Request, user: User, body: Record<strin
       paymentUrl: trustedPayAppUrl(String(activeOrder.provider_payment_url)),
     };
   }
+  let resumedPendingQuote: Record<string, unknown> | null = null;
+  let acceptedAt: string | null = null;
   if (activeOrder?.status === "pending_auth") {
-    await failPaymentOrder(String(activeOrder.order_number), user.id, "abandoned-before-request", "A newer checkout attempt replaced this unfinished request.");
+    resumedPendingQuote = activeOrder.pricing_snapshot && typeof activeOrder.pricing_snapshot === "object"
+      ? activeOrder.pricing_snapshot as Record<string, unknown>
+      : null;
+    acceptedAt = safeText(activeOrder.terms_accepted_at, 64) || null;
+    if (resumedPendingQuote) code = normalizeCode(resumedPendingQuote.code);
+    await failPaymentOrder(String(activeOrder.order_number), user.id, "restarted-before-provider-request", "The unfinished checkout was safely restarted before a PayApp request existed.");
   } else if (activeOrder) {
     throw new ApiError("A payment or refund is already being processed for this event.", 409, "payment-in-progress");
   }
 
-  const client = userClient(req);
-  const { data: quoteData, error: quoteError } = await client.rpc("event_checkout_quote", {
-    p_event: eventId,
-    p_code: code || null,
-  });
-  if (quoteError) throw new ApiError(quoteError.message);
-  const quote = (quoteData ?? {}) as Record<string, unknown>;
+  if (body.termsAccepted !== true && !acceptedAt) throw new ApiError("Confirm the cancellation and refund rules before paying.");
+
+  let quote: Record<string, unknown>;
+  if (resumedPendingQuote) {
+    quote = resumedPendingQuote;
+  } else {
+    const client = userClient(req);
+    const { data: quoteData, error: quoteError } = await client.rpc("event_checkout_quote", {
+      p_event: eventId,
+      p_code: code || null,
+    });
+    if (quoteError) throw new ApiError(quoteError.message);
+    quote = (quoteData ?? {}) as Record<string, unknown>;
+  }
   if (code && quote.code_valid !== true) throw new ApiError(friendlyCodeError(quote));
 
   const baseAmount = Number(quote.base_amount || 0);
@@ -315,7 +328,7 @@ async function createPaymentRequest(req: Request, user: User, body: Record<strin
     discount_amount: discountAmount,
     amount: finalAmount,
     pricing_snapshot: quote,
-    terms_accepted_at: new Date().toISOString(),
+    terms_accepted_at: acceptedAt || new Date().toISOString(),
   });
   if (insertError) throw new ApiError("Could not create this payment order.", 409, "order-create-failed");
 
@@ -379,6 +392,54 @@ async function createPaymentRequest(req: Request, user: User, body: Record<strin
   if (providerWriteError) console.error("roundy-checkout", "provider-request-write-failed");
 
   return { success: true, orderNumber, eventId, amount: finalAmount, quote, paymentUrl };
+}
+
+async function abandonPendingPayment(user: User, body: Record<string, unknown>) {
+  const eventId = typeof body.eventId === "string" ? body.eventId : "";
+  if (!UUID.test(eventId)) throw new ApiError("Invalid event ID.");
+
+  const a = admin();
+  const { data: order, error } = await a
+    .from("event_payment_orders")
+    .select("order_number,status,provider,provider_payment_id")
+    .eq("event_id", eventId)
+    .eq("user_id", user.id)
+    .in("status", ["pending_auth", "charging"])
+    .maybeSingle();
+  if (error) throw new ApiError("Could not check your payment status.", 500, "active-order-query-failed");
+  if (!order) return { success: true, abandoned: false };
+
+  const orderNumber = String(order.order_number);
+  if (order.status === "pending_auth") {
+    await failPaymentOrder(orderNumber, user.id, "user-cancelled-payment-request", "The user cancelled this unfinished payment request.");
+    return { success: true, abandoned: true, orderNumber };
+  }
+
+  if (order.provider !== "payapp") throw new ApiError("This payment request cannot be cancelled here.", 409, "provider-cancel-unsupported");
+  const mulNo = String(order.provider_payment_id || "");
+  if (!/^\d{1,24}$/.test(mulNo)) throw new ApiError("PayApp has not finished creating this payment request yet. Please try again.", 409, "provider-request-pending");
+
+  let response: Record<string, string>;
+  try {
+    response = await payAppRequest({
+      cmd: "paycancel",
+      userid: PAYAPP_USER_ID,
+      linkkey: PAYAPP_LINK_KEY,
+      mul_no: mulNo,
+      cancelmemo: "Roundy checkout cancelled by user",
+      cancelmode: "ready",
+      partcancel: "0",
+    });
+  } catch (error) {
+    throw error;
+  }
+
+  if (response.state !== "1") {
+    throw new ApiError(safeText(response.errorMessage, 240) || "PayApp could not cancel this unpaid payment request.", 409, "payapp-request-cancel-failed");
+  }
+
+  await failPaymentOrder(orderNumber, user.id, "user-cancelled-payment-request", "The user cancelled this unpaid PayApp request.", response);
+  return { success: true, abandoned: true, orderNumber };
 }
 
 async function paymentStatus(user: User, body: Record<string, unknown>) {
@@ -577,6 +638,7 @@ Deno.serve(async (req: Request) => {
 
     if (action === "create") return json(await createPaymentRequest(req, user, body));
     if (action === "status") return json(await paymentStatus(user, body));
+    if (action === "abandon") return json(await abandonPendingPayment(user, body));
     if (action === "cancel") return json(await cancelPaidBooking(user, body));
     throw new ApiError("Unknown payment action.", 400, "unknown-action");
   } catch (error) {

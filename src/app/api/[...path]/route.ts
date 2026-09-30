@@ -202,8 +202,21 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
     const eventId=typeof body.eventId==='string'?body.eventId:'';
     const code=typeof body.code==='string'?body.code.trim().toUpperCase():'';
     if(!/^[0-9a-f-]{36}$/i.test(eventId)||(code&&!/^[A-Z0-9_-]{4,24}$/.test(code)))return json({error:'Invalid pricing request'},400);
-    const {data,error}=await supabase.rpc('event_checkout_quote',{p_event:eventId,p_code:code||null});if(error)throw error;
-    const raw=(data??{}) as Record<string,unknown>;
+    const {data:activeOrder,error:activeOrderError}=await supabase.from('event_payment_orders').select('order_number,status,pricing_snapshot,discount_code').eq('event_id',eventId).in('status',['pending_auth','charging']).maybeSingle();
+    if(activeOrderError)throw activeOrderError;
+    let raw:Record<string,unknown>;
+    let paymentPending=false;
+    let orderNumber:string|null=null;
+    let paymentStatus:string|null=null;
+    if(activeOrder?.pricing_snapshot&&typeof activeOrder.pricing_snapshot==='object'){
+     raw=activeOrder.pricing_snapshot as Record<string,unknown>;
+     paymentPending=true;
+     orderNumber=String(activeOrder.order_number);
+     paymentStatus=String(activeOrder.status);
+    }else{
+     const {data,error}=await supabase.rpc('event_checkout_quote',{p_event:eventId,p_code:code||null});if(error)throw error;
+     raw=(data??{}) as Record<string,unknown>;
+    }
     const codeKind=raw.code_kind==='referral'?'referral':raw.code_kind==='marketing'?'promo':'none';
     const original=Number(raw.base_amount||0);
     const codeDiscount=Number(raw.code_discount_amount||0);
@@ -230,7 +243,11 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
      final_amount:Number(raw.final_amount||0),
      male_count:Number(raw.men_count||0),
      female_count:Number(raw.women_count||0),
-     hours_to_start:Number(raw.hours_until_event||0)
+     hours_to_start:Number(raw.hours_until_event||0),
+     payment_pending:paymentPending,
+     payment_status:paymentStatus,
+     payment_order_number:orderNumber,
+     locked:paymentPending
     };
     return json({quote});
    }
@@ -250,6 +267,11 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
     if(!/^RNDY-A-\d{14}-[A-F0-9]{10}$/.test(orderNumber))return json({error:'Invalid payment status request'},400);
     return json(await invokeRoundyCheckout(supabase,{action:'status',orderNumber}));
    }
+   if(action==='abandon'){
+    const eventId=typeof body.eventId==='string'?body.eventId:'';
+    if(!/^[0-9a-f-]{36}$/i.test(eventId))return json({error:'Invalid payment cancellation request'},400);
+    return json(await invokeRoundyCheckout(supabase,{action:'abandon',eventId}));
+   }
    return json({error:'Invalid checkout action'},400);
   }
   if(path[0]==='event-night'&&path.length===2){
@@ -265,7 +287,7 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
    return json({error:'Method not allowed'},405);
   }
   if(path[0]==='bookings'){
-   if(req.method==='GET'){const {data,error}=await supabase.from('bookings').select('id,event_id,payment_order_number,event_payment_orders(status)');if(error)throw error;const rows=(data??[]).filter(row=>{const payment=Array.isArray(row.event_payment_orders)?row.event_payment_orders[0]:row.event_payment_orders;return !row.payment_order_number||payment?.status==='completed';});const slugs=await eventSlugMap(supabase,[...new Set(rows.map(b=>String(b.event_id)))]);return json({bookings:rows.map(b=>({id:b.id,event_slug:slugs.get(String(b.event_id)),paid:Boolean(b.payment_order_number)}))});}
+   if(req.method==='GET'){const [{data,error},{data:pending,error:pendingError}]=await Promise.all([supabase.from('bookings').select('id,event_id,payment_order_number,event_payment_orders(status)'),supabase.from('event_payment_orders').select('order_number,event_id,status,amount').in('status',['pending_auth','charging']).order('created_at',{ascending:false})]);if(error||pendingError)throw error||pendingError;const rows=(data??[]).filter(row=>{const payment=Array.isArray(row.event_payment_orders)?row.event_payment_orders[0]:row.event_payment_orders;return !row.payment_order_number||payment?.status==='completed';});const eventIds=[...new Set([...rows.map(b=>String(b.event_id)),...(pending??[]).map(o=>String(o.event_id))])];const slugs=await eventSlugMap(supabase,eventIds);return json({bookings:rows.map(b=>({id:b.id,event_slug:slugs.get(String(b.event_id)),paid:Boolean(b.payment_order_number)})),pending_payments:(pending??[]).map(o=>({event_slug:slugs.get(String(o.event_id)),order_number:String(o.order_number),status:String(o.status),amount:Number(o.amount||0)})).filter(o=>o.event_slug)});}
    if(req.method==='POST'){const body=await req.json();if(body.termsAccepted!==true)return json({error:'Confirm the cancellation guidelines and terms before enrolling'},400);const {data,error}=await supabase.rpc('redeem',{p_event:body.eventId,p_terms_accepted:true});if(error)throw error;return json({id:data});}
    if(req.method==='DELETE'){
     const body=await req.json();const eventId=typeof body.eventId==='string'?body.eventId:'';if(!/^[0-9a-f-]{36}$/i.test(eventId))return json({error:'Invalid event ID'},400);
