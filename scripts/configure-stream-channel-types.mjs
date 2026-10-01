@@ -15,16 +15,16 @@ const matchGrants={
  anonymous:[],
  guest:[],
  user:[],
- channel_member:['read-channel','read-channel-members','read-events','create-reaction','delete-reaction-owner','upload-attachment','flag-message'],
- channel_moderator:['read-channel','read-channel-members','read-events','create-reaction','delete-reaction-owner','upload-attachment','flag-message'],
+ channel_member:['read-channel','read-channel-members','create-reaction','delete-reaction-owner','upload-attachment','flag-message'],
+ channel_moderator:['read-channel','read-channel-members','create-reaction','delete-reaction-owner','upload-attachment','flag-message'],
 };
 
 const notificationGrants={
  anonymous:[],
  guest:[],
  user:[],
- channel_member:['read-channel','read-channel-members','read-events'],
- channel_moderator:['read-channel','read-channel-members','read-events'],
+ channel_member:['read-channel','read-channel-members'],
+ channel_moderator:['read-channel','read-channel-members'],
 };
 
 const channelTypes={
