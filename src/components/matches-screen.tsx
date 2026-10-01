@@ -136,8 +136,9 @@ export function MatchesScreen({locale}:{locale:Locale}){
       if(event.type==='message.new'||event.type==='message.updated'||event.type==='message.deleted'||event.type==='reaction.new'||event.type==='reaction.updated'||event.type==='reaction.deleted'||event.type==='message.read'||event.type==='notification.mark_read'||event.type==='notification.mark_unread')syncChannel(entry,channel);
       if(event.type==='typing.start'&&event.user?.id&&event.user.id!==inbox.streamUserId)setTyping(previous=>({...previous,[entry.key]:true}));
       if(event.type==='typing.stop'&&event.user?.id&&event.user.id!==inbox.streamUserId)setTyping(previous=>({...previous,[entry.key]:false}));
-      if(event.type==='message.new'&&event.message?.user?.id!==inbox.streamUserId&&visible(entry)){
-       void channel.markRead().then(()=>syncChannel(entry,channel)).catch(()=>undefined);
+      if(event.type==='message.new'&&event.message?.user?.id!==inbox.streamUserId){
+       if(entry.kind==='match')void refreshSession(entry);
+       if(visible(entry))void channel.markRead().then(()=>syncChannel(entry,channel)).catch(()=>undefined);
       }
      });
      cleanups.push(()=>listener.unsubscribe());
@@ -156,14 +157,23 @@ export function MatchesScreen({locale}:{locale:Locale}){
  const lastMessage=conversationMessages.at(-1)??null;
 
  function updateSession(matchId:string,session:SessionUpdate){
-  setInbox(previous=>previous?{...previous,channels:previous.channels.map(channel=>channel.matchId===matchId?{...channel,chatState:session.chat_state??channel.chatState,canSend:session.can_send??channel.canSend,deadline:session.deadline===undefined?channel.deadline:session.deadline,firstMessageByViewer:session.first_message_by_viewer??channel.firstMessageByViewer}:channel)}:previous);
+  setInbox(previous=>previous?{...previous,channels:previous.channels.map(channel=>channel.matchId===matchId?{...channel,kind:session.chat_state==='expired'?'expired':channel.kind==='expired'?'match':channel.kind,chatState:session.chat_state??channel.chatState,canSend:session.can_send??channel.canSend,deadline:session.deadline===undefined?channel.deadline:session.deadline,firstMessageByViewer:session.first_message_by_viewer??channel.firstMessageByViewer}:channel)}:previous);
+ }
+ async function refreshSession(channel:InboxChannel){
+  if(!channel.matchId)return;
+  try{
+   const response=await fetch('/api/chat/matches/'+encodeURIComponent(channel.matchId),{cache:'no-store'});
+   if(!response.ok)return;
+   const data=await response.json();
+   if(data.session&&typeof data.session==='object')updateSession(channel.matchId,data.session as SessionUpdate);
+  }catch{/* Realtime messages still render if the state refresh is temporarily unavailable. */}
  }
  function stopTyping(channelKey=selectedKey){const channel=channelsRef.current[channelKey];if(channel)void channel.stopTyping().catch(()=>undefined);}
  function openConversation(channel:InboxChannel){
   if(recording)stopRecording();
   stopTyping();
   setSelectedKey(channel.key);setMobileConversation(true);setDraft('');setReplyTo(null);setPendingAttachments([]);setEmojiOpen(false);setActiveMessageId(null);setSendError('');setFeatureNotice('');
-  window.setTimeout(()=>{const streamChannel=channelsRef.current[channel.key];if(streamChannel)void streamChannel.markRead().then(()=>setUnread(previous=>({...previous,[channel.key]:0}))).catch(()=>undefined);},0);
+  window.setTimeout(()=>{const streamChannel=channelsRef.current[channel.key];if(streamChannel)void streamChannel.markRead().then(()=>setUnread(previous=>({...previous,[channel.key]:0}))).catch(()=>undefined);if(channel.kind==='match')void refreshSession(channel);},0);
  }
  function closeConversation(){if(recording)stopRecording();stopTyping();setMobileConversation(false);setReplyTo(null);setPendingAttachments([]);setEmojiOpen(false);setActiveMessageId(null);}
  function preview(channel:InboxChannel){if(channel.kind==='expired')return tr(locale,'Match expired','매칭 만료');const last=messages[channel.key]?.at(-1);if(last?.text)return last.text;if(last?.attachments?.length)return attachmentLabel(last.attachments[0],locale);return channel.kind==='roundy'?tr(locale,'Welcome and updates from Roundy','Roundy의 환영 메시지와 안내'):tr(locale,'Say hello to your match','매칭 상대에게 인사해 보세요');}
