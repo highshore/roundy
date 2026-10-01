@@ -3,6 +3,7 @@ import { isMemberUser } from '@/lib/auth-user';
 import { validFeedback } from '@/lib/feedback';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createServiceRoleClient } from '@/lib/supabase/service';
 import { mbtiTypes, smokingFrequencies, alcoholFrequencies, religions, sameReligionImportance, formatKoreanPhone, interests, isKoreanPhone } from '@/lib/data';
 import { countryCodes,normalizeNationality } from '@/lib/profile-options';
 import { marketingApi } from '@/lib/marketing';
@@ -69,6 +70,61 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
     const body=await req.json();if(!/^[0-9a-f-]{36}$/i.test(path[2])||!['new','reviewing','resolved','dismissed'].includes(body.status)||typeof body.notes!=='string'||body.notes.length>10000)return json({error:'Invalid review'},400);
     const {error}=await supabase.rpc('admin_review_report',{p_report:path[2],p_status:body.status,p_notes:body.notes});if(error)throw error;return json({saved:true});
    }
+   if(path[1]==='promo-codes'){
+    const code=path[2]?.trim().toUpperCase()||'';
+    const codePattern=/^[A-Z0-9_-]{4,24}$/;
+    const parseNullableInt=(value:unknown)=>value===null||value===''?null:Number.isInteger(Number(value))&&Number(value)>0?Number(value):NaN;
+    const parseNullableDate=(value:unknown)=>value===null||value===''?null:typeof value==='string'&&!Number.isNaN(Date.parse(value))?new Date(value).toISOString():'invalid';
+    const normalizePromo=(body:Record<string,unknown>,partial=false)=>{
+      const next:Record<string,unknown>={};
+      if(!partial||'campaign_name'in body){if(typeof body.campaign_name!=='string'||body.campaign_name.trim().length>120)throw new Error('Campaign name must be 120 characters or fewer.');next.campaign_name=body.campaign_name.trim();}
+      if(!partial||'discount_percent'in body){const discount=Number(body.discount_percent);if(!Number.isInteger(discount)||discount<1||discount>100)throw new Error('Discount must be between 1% and 100%.');next.discount_percent=discount;}
+      if(!partial||'active'in body){if(typeof body.active!=='boolean')throw new Error('Invalid active status.');next.active=body.active;}
+      if(!partial||'starts_at'in body){const starts=parseNullableDate(body.starts_at);if(starts==='invalid')throw new Error('Invalid start date.');next.starts_at=starts;}
+      if(!partial||'ends_at'in body){const ends=parseNullableDate(body.ends_at);if(ends==='invalid')throw new Error('Invalid end date.');next.ends_at=ends;}
+      if(!partial||'max_redemptions'in body){const max=parseNullableInt(body.max_redemptions);if(Number.isNaN(max))throw new Error('Total redemption limit must be a positive integer or blank.');next.max_redemptions=max;}
+      if(!partial||'max_redemptions_per_user'in body){const maxPerUser=parseNullableInt(body.max_redemptions_per_user);if(Number.isNaN(maxPerUser))throw new Error('Per-user limit must be a positive integer or blank.');next.max_redemptions_per_user=maxPerUser;}
+      if(!partial||'allowed_user_id'in body){const allowed=body.allowed_user_id===null||body.allowed_user_id===''?null:String(body.allowed_user_id);if(allowed&&!/^[0-9a-f-]{36}$/i.test(allowed))throw new Error('Invalid member restriction.');next.allowed_user_id=allowed;}
+      return next;
+    };
+    if(path.length===2&&req.method==='GET'){
+      const service=createServiceRoleClient();
+      const [promoResult,redemptionResult,memberResult]=await Promise.all([
+        supabase.from('marketing_promo_codes').select('*').order('created_at',{ascending:false}),
+        service.from('checkout_discount_redemptions').select('code,user_id,status').eq('kind','marketing').in('status',['reserved','consumed']),
+        supabase.rpc('admin_members')
+      ]);
+      if(promoResult.error)throw promoResult.error;if(redemptionResult.error)throw redemptionResult.error;if(memberResult.error)throw memberResult.error;
+      const redemptions=redemptionResult.data??[];
+      const codes=(promoResult.data??[]).map(item=>{const rows=redemptions.filter(row=>row.code===item.code);return {...item,redemptions:rows.length,consumed_redemptions:rows.filter(row=>row.status==='consumed').length,distinct_users:new Set(rows.map(row=>row.user_id)).size};});
+      const members=((memberResult.data??[]) as Array<Record<string,unknown>>).map(member=>{const profile=member.profile&&typeof member.profile==='object'?member.profile as Record<string,unknown>:{};return {user_id:String(member.user_id||''),email:typeof member.email==='string'?member.email:'',name:typeof profile.full_name==='string'?profile.full_name:''};}).filter(member=>member.user_id);
+      return json({codes,members});
+    }
+    if(path.length===2&&req.method==='POST'){
+      const body=await req.json().catch(()=>null);if(!body||typeof body!=='object')return json({error:'Invalid promo code.'},400);
+      const next=normalizePromo(body as Record<string,unknown>);
+      const nextCode=String((body as Record<string,unknown>).code||'').trim().toUpperCase();if(!codePattern.test(nextCode))return json({error:'Use 4–24 uppercase letters, numbers, underscores or hyphens.'},400);
+      if(next.starts_at&&next.ends_at&&Date.parse(String(next.ends_at))<=Date.parse(String(next.starts_at)))return json({error:'End date must be after start date.'},400);
+      if(next.allowed_user_id){const {data:member,error:memberError}=await supabase.from('members').select('id').eq('id',String(next.allowed_user_id)).maybeSingle();if(memberError)throw memberError;if(!member)return json({error:'Restricted member was not found.'},400);}
+      const {data,error}=await supabase.from('marketing_promo_codes').insert({code:nextCode,...next}).select('*').single();if(error){if(error.code==='23505')return json({error:'That promo code already exists.'},409);throw error;}return json({code:data},201);
+    }
+    if(path.length===3&&codePattern.test(code)&&req.method==='PATCH'){
+      const body=await req.json().catch(()=>null);if(!body||typeof body!=='object')return json({error:'Invalid promo code update.'},400);
+      const {data:current,error:currentError}=await supabase.from('marketing_promo_codes').select('*').eq('code',code).maybeSingle();if(currentError)throw currentError;if(!current)return json({error:'Promo code not found.'},404);
+      const next=normalizePromo(body as Record<string,unknown>,true);
+      const starts='starts_at'in next?next.starts_at:current.starts_at;const ends='ends_at'in next?next.ends_at:current.ends_at;
+      if(starts&&ends&&Date.parse(String(ends))<=Date.parse(String(starts)))return json({error:'End date must be after start date.'},400);
+      if(next.allowed_user_id){const {data:member,error:memberError}=await supabase.from('members').select('id').eq('id',String(next.allowed_user_id)).maybeSingle();if(memberError)throw memberError;if(!member)return json({error:'Restricted member was not found.'},400);}
+      if(!Object.keys(next).length)return json({error:'Nothing to update.'},400);
+      const {data,error}=await supabase.from('marketing_promo_codes').update(next).eq('code',code).select('*').single();if(error)throw error;return json({code:data});
+    }
+    if(path.length===3&&codePattern.test(code)&&req.method==='DELETE'){
+      const service=createServiceRoleClient();const {count,error:countError}=await service.from('checkout_discount_redemptions').select('id',{count:'exact',head:true}).eq('kind','marketing').eq('code',code).in('status',['reserved','consumed']);if(countError)throw countError;if((count??0)>0)return json({error:'Used promo codes cannot be deleted. Disable the code instead.'},409);
+      const {error}=await supabase.from('marketing_promo_codes').delete().eq('code',code);if(error)throw error;return json({deleted:true});
+    }
+    return json({error:'Not found'},404);
+   }
+
    if(path[1]==='marketing')return await marketingApi(req,supabase,path.slice(2));
    if(path[1]==='overview'&&path.length===2&&req.method==='GET'){
     const now=new Date().toISOString();
