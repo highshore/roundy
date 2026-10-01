@@ -114,7 +114,7 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
       const next=normalizePromo(body as Record<string,unknown>,true);
       const starts='starts_at'in next?next.starts_at:current.starts_at;const ends='ends_at'in next?next.ends_at:current.ends_at;
       if(starts&&ends&&Date.parse(String(ends))<=Date.parse(String(starts)))return json({error:'End date must be after start date.'},400);
-      if(next.allowed_user_id){const {data:member,error:memberError}=await supabase.from('members').select('id').eq('id',String(next.allowed_user_id)).maybeSingle();if(memberError)throw memberError;if(!member)return json({error:'Restricted member was not found.'},400);}
+      if(next.allowed_user_id){const service=createServiceRoleClient();const {data:member,error:memberError}=await service.from('members').select('id').eq('id',String(next.allowed_user_id)).maybeSingle();if(memberError)throw memberError;if(!member)return json({error:'Restricted member was not found.'},400);}
       if(!Object.keys(next).length)return json({error:'Nothing to update.'},400);
       const {data,error}=await supabase.from('marketing_promo_codes').update(next).eq('code',code).select('*').single();if(error)throw error;return json({code:data});
     }
