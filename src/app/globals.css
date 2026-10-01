@@ -2749,7 +2749,6 @@ html:lang(ko) .legal-intro h1{word-break:keep-all}
 }
 
 .route-matches:has(.stream-inbox) .content.narrow{max-width:1180px;width:100%;padding:0;gap:0;min-height:0}
-.route-matches:has(.stream-inbox) .site-footer{display:none}
 .stream-inbox{
   min-height:min(680px,calc(100dvh - 180px));
   display:grid;
@@ -2760,7 +2759,7 @@ html:lang(ko) .legal-intro h1{word-break:keep-all}
   background:var(--paper);
 }
 .inbox-sidebar{border-right:1px solid var(--border);background:var(--paper);overflow-y:auto}
-.inbox-sidebar>header{display:flex;align-items:center;justify-content:space-between;padding:24px 20px 16px;border-bottom:0}
+.inbox-sidebar>header{display:flex;align-items:center;justify-content:flex-end;padding:8px 20px;border-bottom:0}
 .inbox-sidebar .eyebrow{margin:0 0 5px;color:var(--brand)}
 .inbox-sidebar h1{margin:0;font-size:30px;letter-spacing:-.045em}
 .inbox-list{display:grid;padding:0 12px;gap:0}
@@ -2808,13 +2807,11 @@ html:lang(ko) .legal-intro h1{word-break:keep-all}
 .inbox-connection-error{padding:10px 20px;color:var(--muted);font-size:13px}
 .inbox-connection-error button{border:0;background:none;text-decoration:underline;color:var(--ink)}
 @container roundy (max-width:759px){
-  .route-matches:has(.stream-inbox) .site-header{display:none}
-  .route-matches:has(.mobile-conversation) .bottom-nav{display:none}
-  .stream-inbox{display:block;min-height:100dvh;border-radius:0}
-  .inbox-sidebar{min-height:100dvh;padding-bottom:100px;border-right:0}.inbox-conversation{display:none;min-height:0;height:100dvh}
+  .stream-inbox{display:block;min-height:calc(100dvh - 146px);border-radius:0}
+  .inbox-sidebar{min-height:calc(100dvh - 146px);padding-bottom:24px;border-right:0}.inbox-conversation{display:none;min-height:0;height:calc(100dvh - 146px - env(safe-area-inset-bottom))}
   .inbox-row.selected{background:transparent}
   .stream-inbox.mobile-conversation .inbox-sidebar{display:none}.stream-inbox.mobile-conversation .inbox-conversation{display:flex}
-  .inbox-back{display:grid}.inbox-sidebar>header{padding:22px 18px 13px}.inbox-conversation-header{padding:14px}
+  .inbox-back{display:grid}.inbox-sidebar>header{padding:8px 18px}.inbox-conversation-header{padding:14px}
   .inbox-messages{padding:16px}.content form.inbox-composer{padding:12px 16px calc(12px + env(safe-area-inset-bottom))}.inbox-phase,.inbox-read-only{padding:10px 16px}
   .inbox-read-only{padding-bottom:calc(14px + env(safe-area-inset-bottom));flex-shrink:0}
 }
