@@ -1,5 +1,6 @@
 'use client';
 
+import { Heading } from '@/components/heading';
 import { useEffect,useState } from 'react';
 import Link from 'next/link';
 import { CheckCircle2,UserCheck } from 'lucide-react';
@@ -33,14 +34,14 @@ export function AdminQrCheckIn({token,locale}:{token:string;locale:Locale}){
 
  if(loading)return <LoadingScreen/>;
 
- if(error)return <section className="qr-checkin-result"><UserCheck size={34}/><p className="eyebrow">{tr(locale,'CHECK-IN','체크인')}</p><h1>{tr(locale,'Could not check in','체크인할 수 없어요')}</h1><p>{error}</p><Link className="button secondary" href="/admin">{tr(locale,'Back to Event Management','이벤트 관리로 돌아가기')}</Link></section>;
+ if(error)return <section className="qr-checkin-result"><UserCheck size={34}/><p className="eyebrow">{tr(locale,'CHECK-IN','체크인')}</p><Heading level={1}>{tr(locale,'Could not check in','체크인할 수 없어요')}</Heading><p>{error}</p><Link className="button secondary" href="/admin">{tr(locale,'Back to Event Management','이벤트 관리로 돌아가기')}</Link></section>;
 
  if(!result)return null;
 
  return <section className="qr-checkin-result success">
   <CheckCircle2 size={46}/>
   <p className="eyebrow">{result.already_checked_in?tr(locale,'ALREADY CHECKED IN','이미 체크인됨'):tr(locale,'CHECK-IN COMPLETE','체크인 완료')}</p>
-  <h1>{result.full_name}</h1>
+  <Heading level={1}>{result.full_name}</Heading>
   <p>{result.event_title}</p>
   <span>{result.gender==='female'?tr(locale,'Woman','여성'):result.gender==='male'?tr(locale,'Man','남성'):''}</span>
   <Link className="button" href={'/admin/events/'+encodeURIComponent(result.event_id)}>{tr(locale,'Back to Meetup Control','밋업 컨트롤로 돌아가기')}</Link>

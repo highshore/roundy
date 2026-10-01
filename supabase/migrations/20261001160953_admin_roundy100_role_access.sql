@@ -31,7 +31,9 @@ $$;
 revoke all on function roundy_private.grant_admin_for_verified_phone() from public, anon, authenticated;
 
 insert into public.user_roles(user_id, role)
-values ('01f361ec-c487-46a7-bf2b-1f701b9f63b4'::uuid, 'admin')
+select id, 'admin'
+from auth.users
+where id = '01f361ec-c487-46a7-bf2b-1f701b9f63b4'::uuid
 on conflict (user_id) do update
 set role = excluded.role,
     updated_at = now();

@@ -1,4 +1,5 @@
 'use client';
+import { Heading } from '@/components/heading';
 import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ShieldCheck } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
@@ -51,7 +52,7 @@ export function LegalConsentDialog({ locale, busy, error, onAccept, onCancel }: 
         </button>
         <div>
           <p>{t('Required agreement', '필수 동의')}</p>
-          <h2 id="legal-consent-title">{view === 'terms' ? t('Terms of Use', '이용약관') : t('Privacy Policy', '개인정보 처리방침')}</h2>
+          <Heading level={2} id="legal-consent-title">{view === 'terms' ? t('Terms of Use', '이용약관') : t('Privacy Policy', '개인정보 처리방침')}</Heading>
         </div>
       </div>
       <div className={styles.legalScroll} tabIndex={0} aria-label={view === 'terms' ? t('Scrollable Terms of Use', '스크롤 가능한 이용약관') : t('Scrollable Privacy Policy', '스크롤 가능한 개인정보 처리방침')}>
@@ -69,7 +70,7 @@ export function LegalConsentDialog({ locale, busy, error, onAccept, onCancel }: 
           size={88}
           className={styles.cryingEmoji}
         />
-        <h2 id="legal-consent-title">{t('Agreement required', '동의가 필요해요')}</h2>
+        <Heading level={2} id="legal-consent-title">{t('Agreement required', '동의가 필요해요')}</Heading>
         <p>{t('To use Roundy, please agree to the Terms and Privacy Policy.', 'Roundy를 이용하려면 이용약관과 개인정보 처리방침에 동의해 주세요.')}</p>
       </div>
       {error && <p className={styles.error} role="alert">{error}</p>}
@@ -81,7 +82,7 @@ export function LegalConsentDialog({ locale, busy, error, onAccept, onCancel }: 
       </button>
     </> : <>
       <div className={styles.icon}><ShieldCheck size={26}/></div>
-      <h2 id="legal-consent-title">{t('Before we get started', '시작하기 전에 확인해 주세요')}</h2>
+      <Heading level={2} id="legal-consent-title">{t('Before we get started', '시작하기 전에 확인해 주세요')}</Heading>
       <p>{t('Please review and agree to the following to use your Roundy account.', 'Roundy 계정을 이용하려면 아래 내용을 확인하고 동의해 주세요.')}</p>
       <div className={styles.agreements}>
         <div className={styles.row}>

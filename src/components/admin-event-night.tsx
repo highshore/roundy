@@ -1,5 +1,6 @@
 'use client';
 
+import { Heading } from '@/components/heading';
 import { useCallback,useEffect, useMemo, useState } from 'react';
 import { Check, Play, RotateCw, ScanLine, Square, UserCheck, UserX } from 'lucide-react';
 import { tr, type Locale } from '@/lib/locale';
@@ -78,7 +79,7 @@ export function AdminEventNight({event,locale}:{event:Event;locale:Locale}){
  const stateLabel={waiting:tr(locale,'Waiting','대기 중'),ready:tr(locale,'Ready','준비 완료'),live:tr(locale,'Live','진행 중'),final_choices:tr(locale,'Final choices','최종 선택'),finished:tr(locale,'Finished','종료')}[state.state];
  return <div className="admin-night">
   <section className="admin-night-summary">
-   <div><p className="admin-kicker">{tr(locale,'MEETUP CONTROL','밋업 컨트롤')}</p><h3>{event.title}</h3></div>
+   <div><p className="admin-kicker">{tr(locale,'MEETUP CONTROL','밋업 컨트롤')}</p><Heading level={3}>{event.title}</Heading></div>
    <span className={'admin-night-state '+state.state}>{stateLabel}</span>
   </section>
 
@@ -90,7 +91,7 @@ export function AdminEventNight({event,locale}:{event:Event;locale:Locale}){
   </div>
 
   <section className="admin-checkin-list">
-   <div className="admin-night-section-head"><div><h4>{tr(locale,'Attendee check-in','참가자 체크인')}</h4><span>{tr(locale,'QR scan or manual check-in','QR 스캔 또는 수동 체크인')}</span></div><button type="button" className="admin-secondary qr-scan-button" disabled={busy||state.state!=='waiting'||!state.check_in_open} onClick={()=>setScannerOpen(true)}><ScanLine size={16}/>{tr(locale,'Scan QR','QR 스캔')}</button></div>
+   <div className="admin-night-section-head"><div><Heading level={4}>{tr(locale,'Attendee check-in','참가자 체크인')}</Heading><span>{tr(locale,'QR scan or manual check-in','QR 스캔 또는 수동 체크인')}</span></div><button type="button" className="admin-secondary qr-scan-button" disabled={busy||state.state!=='waiting'||!state.check_in_open} onClick={()=>setScannerOpen(true)}><ScanLine size={16}/>{tr(locale,'Scan QR','QR 스캔')}</button></div>
    {state.attendees.map(person=><div className="admin-checkin-row" key={person.user_id}>
     <span className="admin-checkin-avatar" style={person.photo?{backgroundImage:`url("${person.photo}")`}:undefined}>{!person.photo&&(person.full_name?.[0]||'?')}</span>
     <div><b>{person.full_name}</b><span>{person.gender==='female'?tr(locale,'Woman','여성'):person.gender==='male'?tr(locale,'Man','남성'):tr(locale,'Not set','미설정')}</span></div>

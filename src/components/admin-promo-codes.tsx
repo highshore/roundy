@@ -1,5 +1,6 @@
 'use client';
 
+import { Heading } from '@/components/heading';
 import { useEffect, useMemo, useState } from 'react';
 import { Pencil, Plus, Power, TicketPercent, Trash2, X } from 'lucide-react';
 import { LoadingScreen } from './loading-screen';
@@ -192,7 +193,7 @@ export function AdminPromoCodes({ locale }: { locale: Locale }) {
     <div className="admin-toolbar">
       <div className="admin-heading">
         <p className="admin-kicker">Roundy Admin</p>
-        <h1>{tr(locale, 'Promo Codes', '프로모션 코드')}</h1>
+        <Heading level={1}>{tr(locale, 'Promo Codes', '프로모션 코드')}</Heading>
         <p>{tr(locale, 'Create and manage operator-issued discount codes. User-generated referral codes are separate and do not appear here.', '운영자가 발급하는 할인 코드를 생성하고 관리합니다. 회원이 생성한 추천 코드는 별도이며 이 화면에 표시되지 않습니다.')}</p>
       </div>
       <button className="admin-primary" type="button" onClick={openCreate}><Plus size={18}/>{tr(locale, 'New promo code', '새 프로모션 코드')}</button>
@@ -215,7 +216,7 @@ export function AdminPromoCodes({ locale }: { locale: Locale }) {
               <div><code>{code.code}</code><span className={'promo-code-status ' + status.key}>{status.label}</span></div>
               <strong>{code.discount_percent}% OFF</strong>
             </div>
-            <h2>{code.campaign_name || tr(locale, 'Untitled campaign', '이름 없는 캠페인')}</h2>
+            <Heading level={2}>{code.campaign_name || tr(locale, 'Untitled campaign', '이름 없는 캠페인')}</Heading>
             <div className="promo-code-facts">
               <span><b>{tr(locale, 'Usage', '사용')}</b>{usage}</span>
               <span><b>{tr(locale, 'Per user', '회원별')}</b>{code.max_redemptions_per_user === null ? tr(locale, 'Unlimited', '무제한') : code.max_redemptions_per_user}</span>
@@ -235,7 +236,7 @@ export function AdminPromoCodes({ locale }: { locale: Locale }) {
 
     {open && <div className="modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget && !saving) setOpen(false); }}>
       <section className="roundy-modal promo-code-modal" role="dialog" aria-modal="true" aria-labelledby="promo-code-title">
-        <header><div><p className="admin-kicker">{editing ? tr(locale, 'Edit promo code', '프로모션 코드 수정') : tr(locale, 'New promo code', '새 프로모션 코드')}</p><h2 id="promo-code-title">{editing || tr(locale, 'Create promo code', '프로모션 코드 만들기')}</h2></div><button className="icon-button" type="button" disabled={saving} aria-label={tr(locale, 'Close', '닫기')} onClick={() => setOpen(false)}><X/></button></header>
+        <header><div><p className="admin-kicker">{editing ? tr(locale, 'Edit promo code', '프로모션 코드 수정') : tr(locale, 'New promo code', '새 프로모션 코드')}</p><Heading level={2} id="promo-code-title">{editing || tr(locale, 'Create promo code', '프로모션 코드 만들기')}</Heading></div><button className="icon-button" type="button" disabled={saving} aria-label={tr(locale, 'Close', '닫기')} onClick={() => setOpen(false)}><X/></button></header>
         <div className="admin-form">
           <div className="admin-two">
             <label><span>{tr(locale, 'Code', '코드')}</span><input value={form.code} disabled={Boolean(editing)} maxLength={24} autoCapitalize="characters" autoCorrect="off" spellCheck={false} placeholder="ROUNDY20" onChange={event => setForm(current => ({...current, code:event.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g,'').slice(0,24)}))}/><small className="admin-help">{tr(locale, '4–24 uppercase letters, numbers, underscores or hyphens. The code cannot be renamed after creation.', '영문 대문자, 숫자, 밑줄, 하이픈 4–24자. 생성 후에는 코드명을 변경할 수 없습니다.')}</small></label>

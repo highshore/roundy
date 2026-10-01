@@ -1,5 +1,6 @@
 'use client';
 
+import { Heading } from '@/components/heading';
 import { useEffect, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import type { User } from '@supabase/supabase-js';
@@ -74,12 +75,12 @@ export function AccountSecurity({ locale, mode }: { locale: Locale; mode: 'email
     // A social/phone identity does not prove that a password exists. Offer the
     // email recovery route instead of requiring a password they never created.
     const emailIdentity = user.identities?.some(identity => identity.provider === 'email');
-    if (!emailIdentity) return <section className={styles.security}><h1>{t('Password', '비밀번호')}</h1><p>{user.email ? t('Use email recovery to set or reset a password for this account.', '이메일 인증으로 이 계정의 비밀번호를 설정하거나 재설정할 수 있어요.') : t('Add and confirm an email address first.', '먼저 이메일 주소를 추가하고 인증해 주세요.')}</p><Link className="button" href={user.email ? '/signin?mode=forgot' : '/me/email'}>{user.email ? t('Continue by email', '이메일로 계속하기') : t('Add email', '이메일 추가')}</Link><Link href="/me/settings">{t('Back to settings', '설정으로 돌아가기')}</Link></section>;
+    if (!emailIdentity) return <section className={styles.security}><Heading level={1}>{t('Password', '비밀번호')}</Heading><p>{user.email ? t('Use email recovery to set or reset a password for this account.', '이메일 인증으로 이 계정의 비밀번호를 설정하거나 재설정할 수 있어요.') : t('Add and confirm an email address first.', '먼저 이메일 주소를 추가하고 인증해 주세요.')}</p><Link className="button" href={user.email ? '/signin?mode=forgot' : '/me/email'}>{user.email ? t('Continue by email', '이메일로 계속하기') : t('Add email', '이메일 추가')}</Link><Link href="/me/settings">{t('Back to settings', '설정으로 돌아가기')}</Link></section>;
     return <PasswordForm locale={locale}/>;
   }
 
   return <section className={styles.security} aria-busy={busy}>
-    <h1>{user.new_email ? t('Confirm both emails', '이메일 변경을 확인해 주세요') : t('Email address', '이메일 주소')}</h1>
+    <Heading level={1}>{user.new_email ? t('Confirm both emails', '이메일 변경을 확인해 주세요') : t('Email address', '이메일 주소')}</Heading>
     <p>{t('Current email', '현재 이메일')}: <strong>{user.email ? maskEmail(user.email) : t('Not added', '등록되지 않음')}</strong></p>
     {user.new_email ? <>
       <p>{t('Pending email', '변경 대기 중')}: <strong>{maskEmail(user.new_email)}</strong></p>

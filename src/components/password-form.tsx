@@ -1,5 +1,6 @@
 'use client';
 
+import { Heading } from '@/components/heading';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
@@ -81,13 +82,13 @@ export function PasswordForm({ locale, recovery = false }: { locale: Locale; rec
 
   if (done) return <section className={styles.security}>
     <div className={styles.statusIcon}><NotoAnimatedEmoji codepoint="2705" fallback="✅" size={64}/></div>
-    <h1>{t('Password updated', '비밀번호가 변경되었어요')}</h1>
+    <Heading level={1}>{t('Password updated', '비밀번호가 변경되었어요')}</Heading>
     <p>{t('Use your new password next time you sign in.', '다음 로그인부터 새 비밀번호를 사용해 주세요.')}</p>
     <Link className="button" href={recovery ? '/me' : '/me/settings'}>{t('Continue', '계속하기')}</Link>
   </section>;
 
   return <section className={styles.security} aria-busy={busy}>
-    <h1>{verifying ? t('Verify it’s you', '본인 확인이 필요해요') : recovery ? t('Reset password', '비밀번호 재설정') : t('Change password', '비밀번호 변경')}</h1>
+    <Heading level={1}>{verifying ? t('Verify it’s you', '본인 확인이 필요해요') : recovery ? t('Reset password', '비밀번호 재설정') : t('Change password', '비밀번호 변경')}</Heading>
     <form className={styles.form} onSubmit={submit}>
       <fieldset className={styles.fields} disabled={busy}>
         {verifying ? <label>{t('Verification code', '인증번호')}<input autoFocus required inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} value={nonce} onChange={e => setNonce(e.target.value.replace(/\D/g, ''))}/></label> : <>
