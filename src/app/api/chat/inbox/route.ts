@@ -36,6 +36,30 @@ export async function GET(){
    return typeof id==='string'&&isUuid(id)?[id]:[];
   }):[];
   const service=createServiceRoleClient();
+  // Only aggregate finalized incoming choices. Never return unilateral identities.
+  // A likes failure must not take the chat inbox offline.
+  const likesCountPromise=(async()=>{
+   const senders=new Set<string>();
+   for(let offset=0;;offset+=200){
+   const {data:choices,error}=await service.from('choices').select('user_id,event_id').eq('recipient_id',user.id).eq('choice','yes').order('encounter_id').range(offset,offset+199);
+   if(error)throw error;
+   if(!choices?.length)break;
+   const eventIds=[...new Set(choices.map(choice=>choice.event_id))];
+   const senderIds=[...new Set(choices.map(choice=>choice.user_id))];
+   const [events,members,exclusions]=await Promise.all([
+    service.from('event_sessions').select('event_id').in('event_id',eventIds).eq('state','finished'),
+    service.from('members').select('id').in('id',senderIds).is('deleted_at',null),
+    service.from('pair_exclusions').select('user_a,user_b').or('user_a.eq.'+user.id+',user_b.eq.'+user.id),
+   ]);
+   if(events.error||members.error||exclusions.error)throw new Error('Likes unavailable');
+   const finished=new Set(events.data.map(event=>event.event_id));
+   const active=new Set(members.data.map(member=>member.id));
+   const excluded=new Set(exclusions.data.map(pair=>pair.user_a===user.id?pair.user_b:pair.user_a));
+   for(const choice of choices){if(finished.has(choice.event_id)&&active.has(choice.user_id)&&!excluded.has(choice.user_id))senders.add(choice.user_id);}
+   if(choices.length<200)break;
+   }
+   return senders.size;
+  })().catch(()=>null);
   const sessions:MatchChatSession[]=[];
   for(const id of ids){
    const {data,error}=await service.rpc('service_match_chat_session',{p_actor:user.id,p_match:id});
@@ -65,6 +89,7 @@ export async function GET(){
    apiKey:streamChatApiKey(),
    token:streamUserToken(user.id),
    streamUserId:roundyId,
+   likesCount:await likesCountPromise,
    channels:[
     {key:'roundy',kind:'roundy',channelType:ROUNDY_NOTIFICATION_CHANNEL_TYPE,channelId:roundyChannelId,title:'Roundy Team',photo:null,matchId:null,chatState:'active',deadline:null,canSend:false,firstMessageByViewer:false},
     ...sessions.map(session=>({
@@ -77,6 +102,7 @@ export async function GET(){
      matchId:session.id,
      chatState:session.chat_state,
      deadline:session.deadline,
+     openingExpiresAt:session.opening_expires_at,
      canSend:session.can_send,
      firstMessageByViewer:session.first_message_by_viewer,
     })),
