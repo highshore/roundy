@@ -82,8 +82,8 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
       if(!partial||'active'in body){if(typeof body.active!=='boolean')throw new Error('Invalid active status.');next.active=body.active;}
       if(!partial||'starts_at'in body){const starts=parseNullableDate(body.starts_at);if(starts==='invalid')throw new Error('Invalid start date.');next.starts_at=starts;}
       if(!partial||'ends_at'in body){const ends=parseNullableDate(body.ends_at);if(ends==='invalid')throw new Error('Invalid end date.');next.ends_at=ends;}
-      if(!partial||'max_redemptions'in body){const max=parseNullableInt(body.max_redemptions);if(Number.isNaN(max))throw new Error('Total redemption limit must be a positive integer or blank.');next.max_redemptions=max;}
-      if(!partial||'max_redemptions_per_user'in body){const maxPerUser=parseNullableInt(body.max_redemptions_per_user);if(Number.isNaN(maxPerUser))throw new Error('Per-user limit must be a positive integer or blank.');next.max_redemptions_per_user=maxPerUser;}
+      if(!partial||'max_redemptions'in body){const max=parseNullableInt(body.max_redemptions);if(max!==null&&Number.isNaN(max))throw new Error('Total redemption limit must be a positive integer or blank.');next.max_redemptions=max;}
+      if(!partial||'max_redemptions_per_user'in body){const maxPerUser=parseNullableInt(body.max_redemptions_per_user);if(maxPerUser!==null&&Number.isNaN(maxPerUser))throw new Error('Per-user limit must be a positive integer or blank.');next.max_redemptions_per_user=maxPerUser;}
       if(!partial||'allowed_user_id'in body){const allowed=body.allowed_user_id===null||body.allowed_user_id===''?null:String(body.allowed_user_id);if(allowed&&!/^[0-9a-f-]{36}$/i.test(allowed))throw new Error('Invalid member restriction.');next.allowed_user_id=allowed;}
       return next;
     };
@@ -105,7 +105,7 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
       const next=normalizePromo(body as Record<string,unknown>);
       const nextCode=String((body as Record<string,unknown>).code||'').trim().toUpperCase();if(!codePattern.test(nextCode))return json({error:'Use 4–24 uppercase letters, numbers, underscores or hyphens.'},400);
       if(next.starts_at&&next.ends_at&&Date.parse(String(next.ends_at))<=Date.parse(String(next.starts_at)))return json({error:'End date must be after start date.'},400);
-      if(next.allowed_user_id){const {data:member,error:memberError}=await supabase.from('members').select('id').eq('id',String(next.allowed_user_id)).maybeSingle();if(memberError)throw memberError;if(!member)return json({error:'Restricted member was not found.'},400);}
+      if(next.allowed_user_id){const service=createServiceRoleClient();const {data:member,error:memberError}=await service.from('members').select('id').eq('id',String(next.allowed_user_id)).maybeSingle();if(memberError)throw memberError;if(!member)return json({error:'Restricted member was not found.'},400);}
       const {data,error}=await supabase.from('marketing_promo_codes').insert({code:nextCode,...next}).select('*').single();if(error){if(error.code==='23505')return json({error:'That promo code already exists.'},409);throw error;}return json({code:data},201);
     }
     if(path.length===3&&codePattern.test(code)&&req.method==='PATCH'){
