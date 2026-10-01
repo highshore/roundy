@@ -1985,6 +1985,9 @@ body:not(:has(.route-admin)) .global-toast{border-radius:16px;padding:13px 14px 
 .match-pair{display:flex;align-items:center;padding-right:8px;margin-bottom:32px}
 .match-photo{position:relative;display:grid;place-items:center;flex:0 0 auto;width:132px;height:132px;aspect-ratio:1;border-radius:50%;overflow:hidden;background:var(--paper);color:var(--ink)}
 .match-photo.dark{background:var(--ink);color:var(--paper)}
+.match-photo.match-status-ring{border:4px solid var(--paper)}
+.match-photo.match-status-ring.pink{box-shadow:0 0 0 3px var(--brand)}
+.match-photo.match-status-ring.expired{box-shadow:0 0 0 3px #9a9a9a}
 .match-photo img{object-fit:cover;object-position:center;width:100%;height:100%;display:block}
 .match-pair .match-photo+.match-photo{margin-left:-16px}
 .match-reveal h1{font-size:28px;line-height:1.15;letter-spacing:-.035em;overflow-wrap:anywhere}
@@ -2025,7 +2028,22 @@ body:not(:has(.route-admin)) .global-toast{border-radius:16px;padding:13px 14px 
 .match-contact .eyebrow,.match-contact>a{display:flex;align-items:center;gap:8px}
 .match-contact>a{font-size:20px;font-weight:600;overflow-wrap:anywhere}
 .match-contact-error{font-size:13px;color:#a53333;line-height:1.5}
+.match-chat-cta{width:100%;justify-content:center;gap:9px}
+.match-chat-cta.expired{display:flex;align-items:flex-start;gap:12px;padding:16px;border:1px solid #c8c8c8;border-radius:16px;background:#f5f5f5;color:#4d4d4d}
+.match-chat-cta.expired>svg{flex:0 0 auto;margin-top:2px}.match-chat-cta.expired>div{display:grid;gap:4px}.match-chat-cta.expired p{font-size:13px;line-height:1.5;color:#666}
 @container roundy (max-width:359px){.match-reveal,.matched-profile-hero,.matched-profile-body{padding-left:18px;padding-right:18px}.match-pair .match-photo{width:116px;height:116px}.match-reveal h1{font-size:26px}.matched-profile-hero h1{font-size:32px}.match-contact{padding:14px}.match-contact>a{font-size:18px}}
+
+/* Match chat is intentionally bespoke instead of Stream's default composer: all
+   sends pass through Roundy's 72-hour server-side state gate. */
+.match-chat{display:grid;min-height:calc(100dvh - 180px);margin:0 16px;border:1px solid var(--border);border-radius:28px;overflow:hidden;background:var(--paper)}
+.match-chat-header{display:grid;grid-template-columns:44px minmax(0,1fr) auto;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--border);background:var(--paper)}
+.match-chat-header .icon-button{border-radius:50%;background:var(--surface)}.match-chat-person{display:flex;align-items:center;gap:10px;min-width:0}.match-chat-person>div{display:grid;gap:2px;min-width:0}.match-chat-person strong{overflow:hidden;font-size:15px;text-overflow:ellipsis;white-space:nowrap}.match-chat-person small{font-size:11px;color:var(--muted)}
+.match-chat-avatar{position:relative;display:grid;place-items:center;width:42px;height:42px;flex:0 0 auto;border-radius:50%;overflow:hidden;background:var(--surface);color:var(--muted)}.match-chat-avatar img{object-fit:cover}.match-chat-brand{font-size:10px;font-weight:800;letter-spacing:.08em;color:var(--muted)}
+.match-chat-phase{display:flex;gap:10px;padding:13px 18px;border-bottom:1px solid var(--border);background:#fff4f3;color:var(--ink)}.match-chat-phase.expired{background:#f2f2f2;color:#585858}.match-chat-phase.active{background:#f8f8f6}.match-chat-phase>svg{flex:0 0 auto;margin-top:2px}.match-chat-phase>div{display:grid;gap:3px}.match-chat-phase strong{font-size:13px}.match-chat-phase p{font-size:12px;line-height:1.45;color:var(--muted)}.match-chat-phase small{font-size:11px;font-weight:700;color:var(--ink)}
+.match-chat-messages{display:flex;min-height:300px;flex:1;flex-direction:column;justify-content:flex-end;gap:9px;padding:20px 16px;background:#fafaf8;overflow:auto}.match-chat-empty-state{align-self:center;margin:auto;color:var(--muted);font-size:13px;text-align:center}.match-chat-bubble{display:grid;gap:4px;max-width:min(80%,320px);padding:10px 12px;border:1px solid var(--border);border-radius:18px 18px 18px 5px;background:var(--paper);box-shadow:0 1px 1px #00000008}.match-chat-bubble.mine{align-self:flex-end;border-color:var(--brand);border-radius:18px 18px 5px 18px;background:var(--brand)}.match-chat-bubble p{overflow-wrap:anywhere;font-size:14px;line-height:1.42;white-space:pre-wrap}.match-chat-bubble small{font-size:10px;color:var(--muted);text-align:right}.match-chat-bubble.mine small{color:#6a3434}
+.match-chat-composer{position:relative;display:grid;grid-template-columns:minmax(0,1fr) 44px;gap:8px;padding:12px 14px;border-top:1px solid var(--border);background:var(--paper)}.match-chat-composer textarea{min-height:46px;max-height:108px;padding:12px 14px;border:1px solid var(--border);border-radius:16px;resize:none;background:var(--surface);font:inherit;font-size:14px;line-height:1.35}.match-chat-composer textarea:disabled{opacity:.62;cursor:not-allowed}.match-chat-send{display:grid;place-items:center;align-self:end;width:44px;height:44px;border:0;border-radius:50%;background:var(--brand);color:var(--ink);cursor:pointer}.match-chat-send:disabled{opacity:.35;cursor:not-allowed}.match-chat-send-error{grid-column:1/-1;font-size:12px;line-height:1.4;color:#a53333}.match-chat-connection-error{padding:8px 16px;background:#fff5f5;color:#a53333;font-size:12px;line-height:1.4}
+.match-chat-expired,.match-chat-empty{display:flex;min-height:360px;flex-direction:column;align-items:flex-start;justify-content:center;gap:16px;padding:32px 24px;background:#f4f4f2}.match-chat-expired h1,.match-chat-empty h1{font-size:28px;line-height:1.1;letter-spacing:-.04em}.match-chat-expired p,.match-chat-empty p{max-width:380px;color:var(--muted);line-height:1.55}.match-chat-empty{margin:0 16px;border:1px solid var(--border);border-radius:28px;background:var(--paper)}
+.route-matches:has(.match-chat) .bottom-nav{display:none}
 
 /* Center each event fact, including wrapped copy. */
 .route-events .detail-facts .event-fact{align-items:center}

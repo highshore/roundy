@@ -34,10 +34,23 @@ Configure server-only values through the corresponding project's environment set
 | General work descriptions | Vercel `OPENAI_API_KEY`; optional `PROFILE_SUMMARY_MODEL` (default `gpt-4.1-mini`) |
 | Kakao reminders | Supabase Edge secrets `KAKAO_APPKEY`, `KAKAO_SECRET_KEY`, `KAKAO_SENDER_KEY`, `KAKAO_TEMPLATE_CODE` |
 | PayApp event payments | Supabase Edge secrets `PAYAPP_USER_ID`, `PAYAPP_LINK_KEY`, `PAYAPP_LINK_VALUE`, `PAYAPP_TAX_MODE` (`taxable` or `taxfree`), and `PAYAPP_FRONTEND_URL=https://roundy.team`; optional `PAYAPP_SHOP_NAME`, `PAYAPP_OPEN_PAY_TYPE`, `PAYAPP_APP_URL` for a future native App-to-App return |
+| Match chat | Vercel `NEXT_PUBLIC_STREAM_CHAT_API_KEY`, `STREAM_CHAT_API_SECRET`, and `SUPABASE_SERVICE_ROLE_KEY`; Supabase Edge Function secrets `STREAM_CHAT_API_KEY` and `STREAM_CHAT_API_SECRET` |
 
 NAVER API HUB Local Search is the default venue-name and address search path. NAVER Cloud Maps Geocoding resolves an entered address when no exact Local Search result is available. Ambiguous results require selection. Work summaries send only occupation/workplace fields, never documents, photos or contact details. If generation is unavailable, a generic description is saved with `summary_status: pending` and retried on a subsequent profile save.
 
 The Kakao adapter follows 1cup-web's NHN Alimtalk integration and requires a **Roundy-approved** template with `meetup-time`, `meetup-location`, `meetup-link` substitutions. Its deployed health check currently reports `configured: false`. The admin editor clearly shows unavailable reminder delivery. Only due reminders for confirmed bookings are claimed; disabling/rescheduling cancels stale queued jobs. Atomic claims, a unique event/user/start key, and the provider idempotency header prevent repeated dispatch. At-start reminders allow 10 minutes of scheduler grace. `sent` means provider acceptance, not confirmed handset delivery. Ambiguous failures stay failed for manual provider reconciliation; they are not automatically retried. SMS fallback is disabled. Changing provider settings requires an authorized test recipient before claiming delivery is verified.
+
+## Match chat
+
+Match state is enforced in Postgres, not by the browser or Stream: either person can open a match within 72 hours, the recipient gets one 72-hour reply window, and the chat becomes active only after that reply. Expired matches remain visible with a grey profile ring, while their Stream room is hard-deleted by the `roundy-match-chat-expiry` Edge Function. The scheduler runs every minute and uses the existing Supabase gateway configuration.
+
+Before enabling chat in any environment:
+
+1. In Vercel, set `NEXT_PUBLIC_STREAM_CHAT_API_KEY` to the Stream app key and set `STREAM_CHAT_API_SECRET` and `SUPABASE_SERVICE_ROLE_KEY` as server-only values. Never prefix either secret with `NEXT_PUBLIC_`.
+2. In Supabase Dashboard → Edge Function Secrets, set `STREAM_CHAT_API_KEY` and `STREAM_CHAT_API_SECRET`. Supabase already provides its own `SUPABASE_URL`, anon key, and service-role key to the deployed function.
+3. Deploy the migration and `roundy-match-chat-expiry` function, then run `vercel env pull .env.local --environment=production` followed by `npm run configure:stream` once. This creates the `roundy_match` and `roundy_notification` channel types with browser write actions removed. Deploy the web app only after that setup completes.
+
+The server-only helper `sendRoundyNotification(userId, text)` in `src/lib/stream-chat.server.ts` creates or reuses the private `roundy_notification` 1:1 channel and sends as Roundy. Call it only from trusted server-side campaign code after the existing marketing-consent/eligibility check; it intentionally has no browser endpoint.
 
 ## Payment flow
 

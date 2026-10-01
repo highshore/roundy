@@ -6,3 +6,5 @@
 supabase/.temp/
 AGENTS.md
 CLAUDE.md
+.vercel
+.env*
