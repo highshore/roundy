@@ -2325,17 +2325,30 @@ html:lang(ko) .eyebrow{
  line-height:1.55!important;
  color:var(--muted);
 }
-.discovery-hero-card{position:relative;isolation:isolate;overflow:hidden;container-type:inline-size;width:100%;aspect-ratio:1/1.08;min-height:350px;border-radius:24px;background:#302b26;color:#fff}
-.discovery-hero-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center}
-.discovery-hero-card::after{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;background:linear-gradient(180deg,rgba(0,0,0,.25),transparent 35%,rgba(0,0,0,.22) 50%,rgba(0,0,0,.82) 100%)}
-.discovery-hero-label{position:absolute;z-index:2;top:24px;left:24px;font-size:16px;font-weight:650}
-.discovery-hero-playback{position:absolute;z-index:3;top:14px;right:14px;display:grid;place-items:center;width:44px;height:44px;border:1px solid #ffffff40;border-radius:50%;background:#00000040;color:#fff}
-.discovery-hero-overlay{position:absolute;z-index:2;inset:auto 24px 24px;display:grid;gap:12px}
-.landing-v1 .discovery-hero-overlay h1{font-size:clamp(28px,8.4cqi,44px);font-weight:700;letter-spacing:-.04em;color:inherit;text-wrap:initial}
-.discovery-hero-bottom{display:flex;align-items:flex-end;gap:16px}
-.discovery-hero-bottom p{flex:1;font-size:15px;line-height:1.45!important;color:#fffffff0}
+.discovery-carousel{width:100%;min-width:0}
+.discovery-deck{position:relative;width:100%;aspect-ratio:3/4;margin-bottom:20px;touch-action:pan-y;user-select:none;cursor:grab}
+.discovery-deck:active{cursor:grabbing}
+.discovery-hero-card{position:absolute;inset:0;isolation:isolate;overflow:hidden;container-type:inline-size;width:100%;height:100%;border-radius:24px;background:#302b26;color:#fff;transform-origin:center bottom;transition:transform 240ms ease,opacity 240ms ease;box-shadow:0 8px 20px #241b1814}
+.discovery-hero-card:not(.is-front){pointer-events:none}
+.discovery-hero-card.is-dragging{transition:none}
+.discovery-hero-video,.discovery-hero-card>img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center}
+.discovery-hero-card::after{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;background:linear-gradient(180deg,#00000026 0%,#0000001a 42%,#00000038 64%,#000000a6 100%)}
+.discovery-hero-label{position:absolute;z-index:2;top:24px;left:24px;font-size:15px;font-weight:650;text-shadow:0 1px 8px #0005}
+.discovery-hero-overlay{position:absolute;z-index:2;inset:auto 24px 24px;display:grid;gap:14px}
+.landing-v1 .discovery-hero-overlay h1,.landing-v1 .discovery-hero-overlay h2{font-size:clamp(24px,8.1cqi,34px);font-weight:700;line-height:1.16!important;letter-spacing:-.035em;color:inherit;text-wrap:initial;white-space:pre-line}
+.discovery-hero-bottom{display:flex;align-items:flex-end;gap:14px}
+.discovery-hero-bottom p{flex:1;min-width:0;font-size:15px;line-height:1.5!important;color:#fffffff0}
+html:lang(ko) .discovery-hero-bottom p{line-height:1.75!important;word-break:keep-all}
+html:lang(ko) .landing-v1 .discovery-hero-overlay h1,html:lang(ko) .landing-v1 .discovery-hero-overlay h2{line-height:1.3!important;font-size:clamp(23px,7.6cqi,32px)}
 .discovery-hero-cta{display:grid;place-items:center;flex:0 0 44px;width:44px;height:44px;border-radius:50%;background:#fff;color:#242424}
-.discovery-hero-cta:focus-visible,.discovery-hero-playback:focus-visible{outline-color:#fff;outline-offset:3px}
+.discovery-hero-cta:focus-visible{outline-color:#fff;outline-offset:3px}
+.discovery-carousel-nav{display:flex;align-items:center;justify-content:center;gap:12px;padding-top:4px}
+.discovery-carousel-nav button{display:grid;place-items:center;width:44px;height:44px;padding:0;border:0;background:transparent;color:var(--muted);border-radius:50%}
+.discovery-carousel-dots{display:flex;gap:0}
+.discovery-carousel-dots button{width:30px}
+.discovery-carousel-dots span{width:6px;height:6px;border-radius:99px;background:var(--border);transition:width 200ms,background 200ms}
+.discovery-carousel-dots [aria-current=true] span{width:18px;background:var(--ink)}
+@media(prefers-reduced-motion:reduce){.discovery-hero-card,.discovery-carousel-dots span{transition:none}}
 .landing-v1-event-type-image img,.landing-v1-event-image img{object-fit:cover;object-position:center}
 .landing-v1-primary{width:100%;margin:0}
 .landing-v1-primary:active{transform:scale(.98)}
