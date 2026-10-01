@@ -3,7 +3,6 @@ import { createClient } from '@/lib/supabase/server';
 import { authConfigured, profileSetupPath, safeReturnPath, signInPath } from '@/lib/auth-routing';
 import { emptyProfile, profileComplete } from '@/lib/data';
 import { kakaoProfilePrefill, type KakaoUserInfo } from '@/lib/kakao-profile';
-import { deliverRoundyWelcome } from '@/lib/roundy-welcome.server';
 
 export const runtime='nodejs';
 
@@ -21,9 +20,6 @@ export async function GET(req:NextRequest){
    const supabase=await createClient();
    const {data,error}=await supabase.auth.exchangeCodeForSession(code);
    if(!error){
-    // The welcome queue exists only for accounts created after this feature is
-    // deployed. A chat outage must never block a verified sign-in.
-    if(data.user)await deliverRoundyWelcome(data.user.id).catch(()=>undefined);
     let destination=next;
     if(next!=='/reset-password'&&next!=='/me/email'&&data.user){
      const {data:profileRow,error:profileError}=await supabase.from('profiles').select('profile').eq('user_id',data.user.id).maybeSingle();

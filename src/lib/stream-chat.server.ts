@@ -49,12 +49,16 @@ function responseStatus(error:unknown){
 }
 
 export async function ensureRoundyNotificationChannel(session:MatchChatSession){
+ return ensureRoundyNotificationChannelForUser(session.viewer_stream_user_id,session.viewer_name,session.viewer_photo,session.notification_channel_id);
+}
+
+export async function ensureRoundyNotificationChannelForUser(userId:string,name?:string,image?:string|null,channelId=roundyNotificationChannelId(userId)){
  const client=streamChatServer();
  await client.upsertUsers([
-  streamUser(session.viewer_stream_user_id,session.viewer_name,session.viewer_photo),
+  streamUser(userId,name?.trim()||'Roundy member',image??null),
   {id:ROUNDY_STREAM_USER_ID,name:'Roundy Team'},
  ]);
- const channel=client.channel(ROUNDY_NOTIFICATION_CHANNEL_TYPE,session.notification_channel_id,{members:[ROUNDY_STREAM_USER_ID,session.viewer_stream_user_id]});
+ const channel=client.channel(ROUNDY_NOTIFICATION_CHANNEL_TYPE,channelId,{members:[ROUNDY_STREAM_USER_ID,userId]});
  await channel.create();
  return channel;
 }
