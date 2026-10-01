@@ -7,8 +7,8 @@ function errorText(error:unknown){
  return error instanceof Error?error.message.slice(0,500):'Welcome delivery failed';
 }
 
-/** Auth callbacks and the inbox both invoke this. Existing members are enrolled
- * only when they first open their private Roundy Team conversation. */
+/** Existing members are enrolled only when they first open their private
+ * Roundy Team conversation. */
 export async function deliverRoundyWelcome(userId:string){
  const service=createServiceRoleClient();
  const {error:ensureError}=await service.rpc('service_ensure_roundy_welcome_notification',{p_user:userId});
