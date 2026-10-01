@@ -2793,7 +2793,7 @@ html:lang(ko) .legal-intro h1{word-break:keep-all}
 .inbox-new-matches h2,.inbox-section-heading{font-size:20px;line-height:1.25;letter-spacing:-.03em;margin:0 24px 16px;font-weight:700}
 .inbox-new-matches h2 span{color:var(--muted);font-weight:400;margin-left:4px}
 .inbox-match-strip{display:flex;overflow-x:auto;gap:16px;padding:4px 24px 28px;scrollbar-width:none}
-.inbox-match-strip button{display:flex;flex-direction:column;align-items:center;gap:6px;width:76px;flex:none;background:none;border:0;padding:0;color:var(--ink)}
+.inbox-match-strip button,.inbox-likes-tile{display:flex;flex-direction:column;align-items:center;gap:6px;width:76px;flex:none;background:none;border:0;padding:0;color:var(--ink)}
 .inbox-match-strip .inbox-avatar{width:72px;height:72px;border-width:3px}
 .inbox-match-strip strong{font-size:14px;max-width:76px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .inbox-match-strip small{font-size:12px;color:var(--muted)}
@@ -2817,10 +2817,6 @@ html:lang(ko) .legal-intro h1{word-break:keep-all}
 .inbox-match-strip button{cursor:pointer;scroll-snap-align:start}
 .inbox-match-ring{display:grid;place-items:center;width:76px;height:76px;border-radius:50%;background:conic-gradient(var(--brand) var(--remaining),var(--border) 0);padding:3px}
 .inbox-match-ring .inbox-avatar{width:70px;height:70px;border:3px solid var(--paper)}
-.inbox-likes-art{position:relative;display:grid;place-items:center;width:70px;height:76px;border:2px solid var(--brand);border-radius:22px;background:linear-gradient(145deg,var(--surface),color-mix(in srgb,var(--brand) 24%,var(--paper)));color:var(--brand)}
-.inbox-likes-art b{position:absolute;bottom:-3px;min-width:30px;padding:2px 7px;border-radius:12px;background:var(--brand);color:white;font-size:12px;border:2px solid var(--paper)}
-.inbox-match-empty{align-self:center;flex:1;min-width:130px;margin:0;font-size:14px;line-height:1.5;color:var(--ink)}
-.inbox-match-empty small{display:block;margin-top:5px;font-size:12px}
-.inbox-likes-detail{margin:0 24px 24px;padding:16px 0;border-top:1px solid var(--border);font-size:14px}
-.inbox-likes-detail p{margin:6px 0 0;color:var(--muted);line-height:1.6}
+.inbox-likes-art{display:flex;align-items:center;justify-content:center;gap:6px;width:76px;height:76px;border-radius:20px;background:var(--surface);color:var(--brand)}
+.inbox-likes-art b{font-size:18px;font-weight:700;letter-spacing:-.02em;color:var(--ink)}
 .inbox-match-strip button:focus-visible{outline:2px solid var(--ink);outline-offset:4px;border-radius:8px}
