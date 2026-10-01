@@ -2331,6 +2331,24 @@ html:lang(ko) .eyebrow{
 .landing-v1-hero-main img,.landing-v1-event-type-image img,.landing-v1-event-image img{object-fit:cover;object-position:center}
 .landing-v1-primary{width:100%;margin:0}
 .landing-v1-primary:active{transform:scale(.98)}
+.landing-v1-social-proof{
+ display:flex;
+ align-items:center;
+ gap:12px;
+ width:100%;
+ padding:16px 18px;
+ border-radius:18px;
+ background:#111;
+ color:#fff;
+}
+.landing-v1-social-proof svg{flex:0 0 auto}
+.landing-v1-social-proof p{
+ margin:0;
+ font-size:13px;
+ line-height:1.45!important;
+ font-weight:650;
+ color:inherit;
+}
 
 .landing-v1-section-heading{display:flex;flex-direction:column;gap:8px}
 .landing-v1-event-type{display:flex;flex-direction:column;gap:12px;margin-top:2px}
