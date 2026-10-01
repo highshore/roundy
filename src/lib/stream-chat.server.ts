@@ -58,7 +58,7 @@ export async function ensureRoundyNotificationChannelForUser(userId:string,name?
   streamUser(userId,name?.trim()||'Roundy member',image??null),
   {id:ROUNDY_STREAM_USER_ID,name:'Roundy Team'},
  ]);
- const channel=client.channel(ROUNDY_NOTIFICATION_CHANNEL_TYPE,channelId,{members:[ROUNDY_STREAM_USER_ID,userId]});
+ const channel=client.channel(ROUNDY_NOTIFICATION_CHANNEL_TYPE,channelId,{created_by_id:ROUNDY_STREAM_USER_ID,members:[ROUNDY_STREAM_USER_ID,userId]});
  await channel.create();
  return channel;
 }
@@ -69,7 +69,7 @@ export async function ensureMatchChatChannel(session:MatchChatSession){
   streamUser(session.viewer_stream_user_id,session.viewer_name,session.viewer_photo),
   streamUser(session.other_stream_user_id,session.other_name,session.other_photo),
  ]);
- const channel=client.channel(MATCH_CHAT_CHANNEL_TYPE,session.channel_id,{members:[session.viewer_stream_user_id,session.other_stream_user_id]});
+ const channel=client.channel(MATCH_CHAT_CHANNEL_TYPE,session.channel_id,{created_by_id:session.viewer_stream_user_id,members:[session.viewer_stream_user_id,session.other_stream_user_id]});
  await channel.create();
  return channel;
 }
@@ -85,7 +85,7 @@ export async function sendRoundyNotification(userId:string,text:string){
  const client=streamChatServer();
  const recipient=streamUserId(userId);
  await client.upsertUsers([{id:recipient},{id:ROUNDY_STREAM_USER_ID,name:'Roundy Team'}]);
- const channel=client.channel(ROUNDY_NOTIFICATION_CHANNEL_TYPE,roundyNotificationChannelId(userId),{members:[ROUNDY_STREAM_USER_ID,recipient]});
+ const channel=client.channel(ROUNDY_NOTIFICATION_CHANNEL_TYPE,roundyNotificationChannelId(userId),{created_by_id:ROUNDY_STREAM_USER_ID,members:[ROUNDY_STREAM_USER_ID,recipient]});
  await channel.create();
  return channel.sendMessage({text:message,user_id:ROUNDY_STREAM_USER_ID});
 }
@@ -97,7 +97,7 @@ export async function sendRoundyWelcomeNotification(userId:string){
  const channelId=roundyNotificationChannelId(userId);
  const messageId=roundyWelcomeStreamMessageId(userId);
  await client.upsertUsers([{id:recipient},{id:ROUNDY_STREAM_USER_ID,name:'Roundy Team'}]);
- const channel=client.channel(ROUNDY_NOTIFICATION_CHANNEL_TYPE,channelId,{members:[ROUNDY_STREAM_USER_ID,recipient]});
+ const channel=client.channel(ROUNDY_NOTIFICATION_CHANNEL_TYPE,channelId,{created_by_id:ROUNDY_STREAM_USER_ID,members:[ROUNDY_STREAM_USER_ID,recipient]});
  await channel.create();
 
  try{
