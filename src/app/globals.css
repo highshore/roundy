@@ -478,6 +478,7 @@
 .referral-message{font-size:12px;line-height:18px;font-weight:650}
 .referral-message.success{color:#27613f}
 .referral-message.error{color:#8d3029}
+.referral-message.pending{color:var(--muted)}
 .referral-code-value{font-size:28px!important;font-weight:800;letter-spacing:.16em;color:var(--ink)!important;margin-bottom:8px}
 
 .checkout-amount-card{gap:5px;padding:22px 22px 13px}
