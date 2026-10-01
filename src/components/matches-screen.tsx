@@ -111,7 +111,7 @@ export function MatchesScreen({locale}:{locale:Locale}){
    setUnread(previous=>({...previous,[entry.key]:channel.countUnread()}));
    if(entry.kind==='match'){
     const read=channel.state.read as unknown as Record<string,{last_read?:string|Date,user?:{id?:string}}>;
-    const otherRead=Object.entries(read).find(([userId])=>userId!==inbox.streamUserId)?.[1];
+    const otherRead=Object.entries(read).find(([userId])=>userId!==inbox!.streamUserId)?.[1];
     setReadAt(previous=>({...previous,[entry.key]:dateString(otherRead?.last_read)}));
    }
   }
@@ -228,7 +228,8 @@ export function MatchesScreen({locale}:{locale:Locale}){
    const result=await channel.sendFile(file,name,mimeType);
    const url=typeof (result as {file?:unknown}).file==='string'?(result as {file:string}).file:'';
    if(!url)throw new Error('Upload failed');
-   setPendingAttachments(previous=>[...previous,{id:crypto.randomUUID(),type:'audio',url,title:tr(locale,'Voice message','음성 메시지'),mimeType,fileSize:blob.size}].slice(0,MAX_ATTACHMENTS));
+   const attachment:PendingAttachment={id:crypto.randomUUID(),type:'audio',url,title:tr(locale,'Voice message','음성 메시지'),mimeType,fileSize:blob.size};
+   setPendingAttachments(previous=>[...previous,attachment].slice(0,MAX_ATTACHMENTS));
   }catch{setSendError(tr(locale,'Could not attach the voice message.','음성 메시지를 첨부하지 못했어요.'));}finally{setUploading(false);}
  }
 
