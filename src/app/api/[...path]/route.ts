@@ -199,7 +199,7 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
     const eventId=typeof body.eventId==='string'?body.eventId:'';
     const code=typeof body.code==='string'?body.code.trim().toUpperCase():'';
     if(!/^[0-9a-f-]{36}$/i.test(eventId)||(code&&!/^[A-Z0-9_-]{4,24}$/.test(code)))return json({error:'Invalid pricing request'},400);
-    const {data:activeOrder,error:activeOrderError}=await supabase.from('event_payment_orders').select('order_number,status,pricing_snapshot,discount_code').eq('event_id',eventId).in('status',['pending_auth','charging']).maybeSingle();
+    const {data:activeOrder,error:activeOrderError}=await supabase.from('event_payment_orders').select('order_number,status,pricing_snapshot,discount_code').eq('event_id',eventId).eq('user_id',user.id).in('status',['pending_auth','charging']).maybeSingle();
     if(activeOrderError)throw activeOrderError;
     let raw:Record<string,unknown>;
     let paymentPending=false;
