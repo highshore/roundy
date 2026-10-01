@@ -32,6 +32,12 @@ assert.match(app, /const occupied=Math\.max\(0,e\.capacity-e\.seats_remaining\)/
 assert.match(app, /AttendeeStack count=\{confirmed\}/);
 assert.match(app, /occupancyLabel\(occupied,e.capacity,locale,confirmed\)/);
 assert.match(app, /payment\.completed===true/);
+assert.match(app, /quoteMatchesCode/);
+assert.match(app, /tr\(locale,'Apply','적용'\)/);
+assert.match(app, /Tap Apply to update the price/);
+assert.doesNotMatch(app, /onChange=\{e=>\{setCheckoutCode\([^\n]+setPriceQuote\(null\)/);
+assert.match(app, /No payment required/);
+assert.match(app, /Confirm participation/);
 assert.match(app, /NotoAnimatedEmoji/);
 const paymentOnlyMigration = await read('supabase/migrations/20261001020500_hard_reset_payment_only.sql');
 assert.match(paymentOnlyMigration, /drop table if exists public\.credit_lots cascade/);
