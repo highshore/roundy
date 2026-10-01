@@ -1,3 +1,4 @@
+import { Heading } from '@/components/heading';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import type { Locale } from '@/lib/locale';
@@ -31,7 +32,7 @@ function LegalPage({locale, document, eyebrow, title, summary, effective, versio
 
     <header className="legal-intro">
       <p className="eyebrow">{eyebrow}</p>
-      <h1>{title}</h1>
+      <Heading level={1}>{title}</Heading>
       <p className="legal-summary">{summary}</p>
       <dl className="legal-meta">
         <div><dt>{korean?'시행일':'Effective'}</dt><dd>{effective}</dd></div>
@@ -51,7 +52,7 @@ function LegalPage({locale, document, eyebrow, title, summary, effective, versio
         {sections.map((section,index)=><div className="legal-section-wrap" key={section.title}>
           {section.chapter&&<p className="legal-chapter">{section.chapter}</p>}
           <section id={'legal-section-'+(index+1)}>
-            <h2>{section.title}</h2>
+            <Heading level={2}>{section.title}</Heading>
             <div>{section.children}</div>
           </section>
         </div>)}
@@ -205,7 +206,7 @@ export function LegalConsentDocument({ locale, document }: { locale: Locale; doc
       {sections.map(section=><div className="legal-section-wrap" key={section.title}>
         {section.chapter&&<p className="legal-chapter">{section.chapter}</p>}
         <section>
-          <h2>{section.title}</h2>
+          <Heading level={2}>{section.title}</Heading>
           <div>{section.children}</div>
         </section>
       </div>)}

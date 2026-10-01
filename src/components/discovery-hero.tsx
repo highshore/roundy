@@ -1,5 +1,6 @@
 'use client';
 
+import { Heading } from '@/components/heading';
 import { useEffect, useRef, useState, type PointerEvent } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -73,7 +74,7 @@ export function DiscoveryHero({ locale }: { locale: Locale }) {
      {card.image?<Image src={card.image} alt="" fill sizes="(max-width: 430px) calc(100vw - 48px), 382px" draggable={false}/>:<DiscoveryVideo active={front}/>}
      <span className="discovery-hero-label">{tr(locale,'Roundy | Seoul','Roundy | 서울')}</span>
      <div className="discovery-hero-overlay">
-      {index===0?<h1>{card.title}</h1>:<h2>{card.title}</h2>}
+      {index===0?<Heading level={1}>{card.title}</Heading>:<Heading level={2}>{card.title}</Heading>}
       <div className="discovery-hero-bottom"><p>{card.body}</p><Link href={card.href} className="discovery-hero-cta" aria-label={card.action} draggable={false}><ChevronRight size={24} aria-hidden="true"/></Link></div>
      </div>
     </article>;

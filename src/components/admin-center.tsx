@@ -1,5 +1,6 @@
 'use client';
 
+import { Heading } from '@/components/heading';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowUpRight, CalendarDays, LayoutDashboard, Megaphone, TicketPercent, UsersRound } from 'lucide-react';
@@ -30,17 +31,17 @@ function AdminOverview({ locale }: { locale: Locale }) {
   if (error) return <p className="admin-error" role="alert">{locale==='ko'?tr(locale,'Could not load overview','개요를 불러오지 못했어요'):error}</p>;
   if (!data) return <LoadingScreen />;
   return <section className="admin-panel">
-    <div className="admin-heading"><p className="admin-kicker">Roundy Admin</p><h1>{tr(locale, 'Overview', '개요')}</h1><p>{tr(locale, 'Your members and upcoming events, at a glance.', '회원과 예정된 이벤트를 한눈에 확인하세요.')}</p></div>
+    <div className="admin-heading"><p className="admin-kicker">Roundy Admin</p><Heading level={1}>{tr(locale, 'Overview', '개요')}</Heading><p>{tr(locale, 'Your members and upcoming events, at a glance.', '회원과 예정된 이벤트를 한눈에 확인하세요.')}</p></div>
     <div className="admin-metrics">{[
       [tr(locale, 'Members', '전체 회원'), data.members, '/admin/members'],
       [tr(locale, 'Review needed', '승인 대기'), data.pending, '/admin/members?status=Reviewing'],
       [tr(locale, 'Upcoming events', '예정 이벤트'), data.upcoming, '/admin/events'],
       [tr(locale, 'Drafts', '초안'), data.drafts, '/admin/events?status=draft'],
     ].map(([label, count, href]) => <Link className="admin-metric" href={String(href)} key={String(label)}><span>{label}</span><strong>{count}</strong><ArrowUpRight size={18} /></Link>)}</div>
-    <div className="admin-heading"><h2>{tr(locale, 'Needs attention', '확인이 필요한 항목')}</h2></div>
+    <div className="admin-heading"><Heading level={2}>{tr(locale, 'Needs attention', '확인이 필요한 항목')}</Heading></div>
     <Link className="admin-attention" href="/admin/members?status=Reviewing"><span>{data.pending ? tr(locale, `${data.pending} profiles awaiting review`, `승인 대기 중인 프로필 ${data.pending}개`) : tr(locale, 'All profiles reviewed', '모든 프로필을 검토했어요')}</span><ArrowUpRight size={20}/></Link>
-    <div className="admin-section-title"><h2>{tr(locale, 'Upcoming events', '예정 이벤트')}</h2><Link href="/admin/events">{tr(locale, 'View all', '전체 보기')} <ArrowUpRight size={16}/></Link></div>
-    <div className="admin-upcoming">{data.events.map(event => <Link className="admin-upcoming-event" href={'/events/' + event.slug} key={event.id}><span className="admin-kicker">{dateLabelForLocale(event.starts_at, locale)} / {timeLabelForLocale(event.starts_at, locale)} KST</span><h3>{event.title}</h3><p>{event.venue} — {event.capacity - event.seats_remaining} / {event.capacity} {tr(locale, 'attending', '참가 예정')}</p></Link>)}{!data.events.length && <p className="admin-empty">{tr(locale, 'No upcoming live events.', '예정된 공개 이벤트가 없어요.')}</p>}</div>
+    <div className="admin-section-title"><Heading level={2}>{tr(locale, 'Upcoming events', '예정 이벤트')}</Heading><Link href="/admin/events">{tr(locale, 'View all', '전체 보기')} <ArrowUpRight size={16}/></Link></div>
+    <div className="admin-upcoming">{data.events.map(event => <Link className="admin-upcoming-event" href={'/events/' + event.slug} key={event.id}><span className="admin-kicker">{dateLabelForLocale(event.starts_at, locale)} / {timeLabelForLocale(event.starts_at, locale)} KST</span><Heading level={3}>{event.title}</Heading><p>{event.venue} — {event.capacity - event.seats_remaining} / {event.capacity} {tr(locale, 'attending', '참가 예정')}</p></Link>)}{!data.events.length && <p className="admin-empty">{tr(locale, 'No upcoming live events.', '예정된 공개 이벤트가 없어요.')}</p>}</div>
     <Link className="admin-primary" href="/admin/events/new">{tr(locale, 'Create new event', '새 이벤트 만들기')}</Link>
   </section>;
 }

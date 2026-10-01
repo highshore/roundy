@@ -1,4 +1,5 @@
 'use client';
+import { Heading } from '@/components/heading';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
@@ -20,7 +21,7 @@ export function ResetPassword({ locale }: { locale: Locale }) {
   return <section className={'sign-in-panel ' + styles.panel}>
     <RoundyBrand/>
     {status === 'ready' ? <PasswordForm locale={locale} recovery/> : <>
-      <h1>{tr(locale, 'Reset password', '비밀번호 재설정')}</h1>
+      <Heading level={1}>{tr(locale, 'Reset password', '비밀번호 재설정')}</Heading>
       <p role="status">{status === 'checking'
         ? tr(locale, 'Checking reset link…', '재설정 링크 확인 중…')
         : status === 'missing'

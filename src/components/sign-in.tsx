@@ -1,5 +1,6 @@
 'use client';
 
+import { Heading } from '@/components/heading';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Smartphone, Eye, EyeOff, Mail } from 'lucide-react';
@@ -384,7 +385,7 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
 
   if (confirmationEmail) return <section className={styles.security} aria-busy={busy}>
     <div className={styles.statusIcon}><NotoAnimatedEmoji codepoint="1f4e8" fallback="📨" size={64}/></div>
-    <h1>{t('Check your email', '이메일을 확인해 주세요')}</h1>
+    <Heading level={1}>{t('Check your email', '이메일을 확인해 주세요')}</Heading>
     <p><strong>{maskEmail(confirmationEmail)}</strong></p>
     <p>{t('If this email needs confirmation, you’ll receive a link to complete signup.', '인증이 필요한 이메일이면 가입을 완료할 수 있는 링크를 보내드려요.')}</p>
     <p className={styles.help}>{t('Already registered? Sign in or reset your password. A confirmed account won’t receive another signup email.', '이미 가입했다면 로그인하거나 비밀번호를 재설정해 주세요. 인증이 완료된 계정에는 가입 메일이 다시 발송되지 않아요.')}</p>
@@ -450,7 +451,7 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
     </div>
     <div className={styles.brand}><RoundyBrand/></div>
     <div className={styles.heading}>
-      <h1>
+      <Heading level={1}>
         {mode === 'signup'
           ? t('Create your account', 'Roundy 시작하기')
           : mode === 'forgot'
@@ -458,7 +459,7 @@ export function SignIn({ eventSlug, locale }: { eventSlug?: string; locale: Loca
             : method === 'phone'
               ? t('Continue with your phone.', '휴대폰 번호로 로그인')
               : t('Welcome back', '다시 만나 반가워요')}
-      </h1>
+      </Heading>
       <p>
         {mode === 'signup'
           ? t('Create an account to join Roundy.', '계정을 만들고 Roundy를 시작해보세요.')

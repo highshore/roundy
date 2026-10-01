@@ -27,7 +27,7 @@
     "build": "next build",
     "start": "next start --hostname 0.0.0.0",
     "typecheck": "tsc --noEmit",
-    "test": "node scripts/test-auth.mjs && node scripts/test-auth-security.mjs && node scripts/test-admin-routing.mjs && node scripts/test-event-scope.mjs && node scripts/test-match-flow.mjs",
+    "test": "node scripts/test-auth.mjs && node scripts/test-auth-security.mjs && node scripts/test-admin-routing.mjs && node scripts/test-event-scope.mjs && node scripts/test-match-flow.mjs && node scripts/test-event-status.mjs",
     "test:event-management": "node scripts/test-event-management.mjs",
     "test:auth-security": "node scripts/test-auth-security.mjs",
     "configure:stream": "node --env-file-if-exists=.env.local scripts/configure-stream-channel-types.mjs"
