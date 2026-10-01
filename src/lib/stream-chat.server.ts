@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { StreamChat } from 'stream-chat';
 import {
  MATCH_CHAT_CHANNEL_TYPE,
+ MATCH_CHAT_MAX_MESSAGE_LENGTH,
  ROUNDY_WELCOME_MESSAGE,
  ROUNDY_NOTIFICATION_CHANNEL_TYPE,
  ROUNDY_STREAM_USER_ID,
@@ -48,6 +49,31 @@ function responseStatus(error:unknown){
  return typeof status==='number'?status:null;
 }
 
+const configuredRichChannels=new Set<string>();
+const richMatchOverrides={
+ typing_events:true,
+ reactions:true,
+ replies:false,
+ quotes:true,
+ uploads:true,
+ url_enrichment:true,
+ max_message_length:MATCH_CHAT_MAX_MESSAGE_LENGTH,
+ grants:{
+  channel_member:['read-channel-members','read-events','create-reaction','delete-reaction-owner','upload-attachment','flag-message'],
+  channel_moderator:['read-channel-members','read-events','create-reaction','delete-reaction-owner','upload-attachment','flag-message'],
+ },
+};
+
+async function enableRichMatchFeatures(channelId:string,channel:ReturnType<ReturnType<typeof streamChatServer>['channel']>){
+ if(configuredRichChannels.has(channelId))return;
+ // Message creation intentionally remains absent from the client grants. Roundy
+ // keeps every message behind its server-side 72-hour state gate, while safe
+ // real-time affordances such as typing, reactions and uploads can use Stream.
+ const partialChannel=channel as unknown as {updatePartial:(payload:{set:Record<string,unknown>})=>Promise<unknown>};
+ await partialChannel.updatePartial({set:{config_overrides:richMatchOverrides,roundy_chat_features_version:2}});
+ configuredRichChannels.add(channelId);
+}
+
 export async function ensureRoundyNotificationChannel(session:MatchChatSession){
  return ensureRoundyNotificationChannelForUser(session.viewer_stream_user_id,session.viewer_name,session.viewer_photo,session.notification_channel_id);
 }
@@ -71,6 +97,7 @@ export async function ensureMatchChatChannel(session:MatchChatSession){
  ]);
  const channel=client.channel(MATCH_CHAT_CHANNEL_TYPE,session.channel_id,{created_by_id:session.viewer_stream_user_id,members:[session.viewer_stream_user_id,session.other_stream_user_id]});
  await channel.create();
+ await enableRichMatchFeatures(session.channel_id,channel);
  return channel;
 }
 
@@ -113,5 +140,6 @@ export async function sendRoundyWelcomeNotification(userId:string){
 }
 
 export async function hardDeleteMatchChatChannel(channelId:string){
+ configuredRichChannels.delete(channelId);
  return streamChatServer().deleteChannels([MATCH_CHAT_CHANNEL_TYPE+':'+channelId],{hard_delete:true});
 }
