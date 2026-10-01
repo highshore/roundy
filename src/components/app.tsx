@@ -20,6 +20,7 @@ import { SiteFooter } from '@/components/site-footer';
 import { FeedbackPage, FeedbackPrompt } from '@/components/feedback';
 import { AboutUs } from '@/components/about-us';
 import { RoundyBrand } from '@/components/roundy-brand';
+import { DiscoveryVideo } from '@/components/discovery-video';
 import { LocaleToggle } from '@/components/locale-toggle';
 import { LoadingScreen } from '@/components/loading-screen';
 import { useToast } from '@/components/toast';
@@ -131,13 +132,17 @@ function LandingPage({events,locale,attendeesByEvent}:{events:Event[];locale:Loc
  ];
  return <div className="landing landing-v1">
   <section className="landing-v1-hero">
-   <span className="eyebrow landing-v1-eyebrow">ROUNDY / SEOUL</span>
-   <h1><span>{tr(locale,'Skip the Swipe,','직접 만나야')}</span><br/><span>{tr(locale,'Meet in Real Life','알 수 있는 사이')}</span></h1>
-   <p>{tr(locale,'Meet one on one, get to know each other, and reconnect when the feeling is mutual.','한 사람씩 마주 앉아 대화하고, 서로 마음이 맞으면 다시 만나요.')}</p>
-   <div className="landing-v1-hero-media" aria-label={tr(locale,'1:1 Mingle','1:1 밍글')}>
-    <div className="landing-v1-hero-main"><Image src="/images/roundy-mingle-hero-photo.webp" alt={tr(locale,'1:1 Mingle Event','1:1 밍글 모임')} fill priority sizes="(max-width: 430px) calc(100vw - 48px), 342px"/></div>
+   <div className="discovery-hero-card">
+    <DiscoveryVideo locale={locale}/>
+    <span className="discovery-hero-label">{tr(locale,'1:1 Mingle','1:1 밍글')}</span>
+    <div className="discovery-hero-overlay">
+     <h1><span>{tr(locale,'Skip the Swipe,','직접 만나야')}</span><br/><span>{tr(locale,'Meet in Real Life','알 수 있는 사이')}</span></h1>
+     <div className="discovery-hero-bottom">
+      <p>{tr(locale,'Meet one on one, get to know each other, and reconnect when the feeling is mutual.','한 사람씩 마주 앉아 대화하고, 서로 마음이 맞으면 다시 만나요.')}</p>
+      <Link className="discovery-hero-cta" href="/events" aria-label={tr(locale,"See this week's events",'이번 주 모임 보기')}><ChevronRight size={24} aria-hidden="true"/></Link>
+     </div>
+    </div>
    </div>
-   <Link className="button landing-v1-primary" href="/events">{tr(locale,"See this week's events",'이번 주 모임 보기')}</Link>
    <div className="landing-v1-social-proof">
     <UsersRound size={20} aria-hidden="true"/>
     <p>{tr(locale,'Built by Hosts of an English Debate Club vetted by 80+ Members','80명 이상의 멤버가 검증한 영어 토론 모임 호스트가 만들었습니다')}</p>
