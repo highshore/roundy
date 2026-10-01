@@ -23,7 +23,8 @@ for (const dir of ['src/components', 'src/lib']) {
  }
 }
 const app = await read('src/components/app.tsx');
-assert.doesNotMatch(app, /legacyTalks|event-category-filters|80\+|roundy-business-hero/);
+assert.doesNotMatch(app, /legacyTalks|event-category-filters|roundy-business-hero/);
+assert.match(app, /Built by Hosts of an English Debate Club vetted by 80\+ Members/);
 assert.match(app, /data\.events\.filter\(isRoundyEvent\)/);
 assert.match(app, /d\.events\.filter\(isRoundyEvent\)/);
 assert.match(app, /nativePast\.map/);
