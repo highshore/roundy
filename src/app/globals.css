@@ -2859,3 +2859,54 @@ html:lang(ko) .legal-intro h1{word-break:keep-all}
 .inbox-likes-art{display:flex;align-items:center;justify-content:center;gap:6px;width:76px;height:76px;border-radius:20px;background:var(--surface);color:var(--brand)}
 .inbox-likes-art b{font-size:18px;font-weight:700;letter-spacing:-.02em;color:var(--ink)}
 .inbox-match-strip button:focus-visible{outline:2px solid var(--ink);outline-offset:4px;border-radius:8px}
+
+
+/* Admin promo code management */
+.admin-promo-codes{gap:24px}
+.admin-promo-codes .admin-toolbar{align-items:flex-end}
+.admin-promo-codes .admin-toolbar .admin-heading{max-width:760px}
+.promo-code-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.promo-code-metrics>div{display:grid;gap:8px;padding:20px;border-radius:18px;background:var(--surface)}
+.promo-code-metrics span{color:var(--muted);font-size:11px;font-weight:750;text-transform:uppercase;letter-spacing:.04em}
+.promo-code-metrics strong{font-size:28px;line-height:1}
+.promo-code-list{display:grid;gap:12px}
+.promo-code-card{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:20px;align-items:center;padding:22px 24px;border:1px solid var(--border);border-radius:20px;background:var(--paper)}
+.promo-code-main{min-width:0;display:grid;gap:10px}
+.promo-code-title-row{display:flex;align-items:center;justify-content:space-between;gap:14px}
+.promo-code-title-row>div{display:flex;align-items:center;gap:9px;min-width:0}
+.promo-code-title-row code{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:inherit;font-size:18px;font-weight:800;letter-spacing:.01em}
+.promo-code-title-row>strong{flex:none;font-size:20px;letter-spacing:-.03em}
+.promo-code-card h2{font-size:16px;letter-spacing:-.02em}
+.promo-code-status{display:inline-flex;align-items:center;min-height:25px;padding:4px 8px;border-radius:999px;background:var(--surface);color:var(--muted);font-size:10px;font-weight:800;white-space:nowrap}
+.promo-code-status.active{background:#dcf1e8;color:#17623e}
+.promo-code-status.scheduled{background:#eef0ff;color:#2b45fa}
+.promo-code-status.expired,.promo-code-status.inactive,.promo-code-status.exhausted{background:#f2f2ed;color:#6b6f65}
+.promo-code-facts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.promo-code-facts span{display:grid;gap:3px;min-width:0;padding:10px 12px;border-radius:12px;background:var(--surface);color:var(--ink);font-size:12px;overflow-wrap:anywhere}
+.promo-code-facts b{color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.04em}
+.promo-code-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.promo-code-actions .admin-delete{min-height:40px;border:1px solid #dca194;border-radius:999px;background:var(--paper);color:#9b3828;padding:8px 13px;display:inline-flex;align-items:center;gap:7px;font-weight:700;font-size:13px}
+.promo-code-actions .admin-delete:disabled{opacity:.4;cursor:not-allowed}
+.promo-code-modal{max-width:760px}
+.promo-code-modal .admin-help{font-size:11px;line-height:1.45}
+.promo-code-modal .admin-form-actions{position:static!important;padding:0!important;border-top:0!important}
+@media(max-width:980px){
+ .promo-code-card{grid-template-columns:1fr}
+ .promo-code-actions{justify-content:flex-start}
+ .promo-code-facts{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@container roundy (max-width:759px){
+ .admin-promo-codes .admin-toolbar{align-items:stretch;flex-direction:column}
+ .admin-promo-codes .admin-toolbar .admin-primary{width:100%}
+ .promo-code-metrics{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+ .promo-code-metrics>div{padding:14px}
+ .promo-code-metrics strong{font-size:24px}
+ .promo-code-metrics span{font-size:9px}
+ .promo-code-card{padding:18px}
+ .promo-code-title-row{align-items:flex-start}
+ .promo-code-title-row>strong{font-size:17px}
+ .promo-code-facts{grid-template-columns:1fr 1fr}
+ .promo-code-actions{display:grid;grid-template-columns:1fr 1fr}
+ .promo-code-actions>*{justify-content:center}
+ .promo-code-actions .admin-delete{grid-column:1/-1;justify-content:center}
+}
