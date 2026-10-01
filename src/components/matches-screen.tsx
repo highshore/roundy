@@ -37,8 +37,8 @@ export function MatchesScreen({locale}:{locale:Locale}){
  const likesCount=inbox?.likesCount??null;
  const visibleChannels=inbox?.channels??[];
  return <section className={'stream-inbox'+(mobileConversation?' mobile-conversation':'')}><aside className="inbox-sidebar" aria-label={tr(locale,'Inbox conversations','메시지 목록')}>
-   <section className="inbox-new-matches"><h2>{tr(locale,'Your matches','새로운 매칭')} <span>{newMatches.length}</span></h2><div className="inbox-match-strip">
-    <div className="inbox-likes-tile" aria-label={likesCount===null?tr(locale,'Likes unavailable','좋아요를 불러올 수 없어요'):tr(locale,`${likesCount} likes`,`${likesCount}개의 좋아요`)}><span className="inbox-likes-art"><Heart size={22} strokeWidth={1.8} aria-hidden="true"/><b>{likesCount===null?'—':likesCount}</b></span><strong>{tr(locale,'Liked you','받은 좋아요')}</strong></div>
+   <section className="inbox-new-matches"><h2>{tr(locale,'Your matches','새로운 매칭')}</h2><div className="inbox-match-strip">
+    <div className="inbox-likes-tile" aria-label={likesCount===null?tr(locale,'Likes unavailable','좋아요를 불러올 수 없어요'):tr(locale,`${likesCount} likes`,`${likesCount}개의 좋아요`)}><span className="inbox-likes-art"><Heart size={22} strokeWidth={1.8} aria-hidden="true"/><b>{likesCount===null?'—':likesCount}</b></span></div>
     {newMatches.map(channel=>{const expires=channel.openingExpiresAt??channel.deadline!;const remaining=Math.max(0,Math.min(1,(Date.parse(expires)-now)/(72*3_600_000)));return <button key={channel.key} onClick={()=>openConversation(channel)} aria-label={channel.title+', '+deadlineLabel({...channel,deadline:expires},locale,now)}><span className="inbox-match-ring" style={{'--remaining':`${remaining*360}deg`} as CSSProperties}><Avatar channel={channel}/></span><strong>{channel.title.split(' ')[0]}</strong><small>{deadlineLabel({...channel,deadline:expires},locale,now)}</small></button>;})}
    </div></section>
    <h2 className="inbox-section-heading">{tr(locale,'Conversations','대화')}</h2>
