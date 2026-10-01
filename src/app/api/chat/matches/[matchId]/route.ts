@@ -19,9 +19,20 @@ export const runtime='nodejs';
 const json=(data:unknown,status=200)=>NextResponse.json(data,{status,headers:{'Cache-Control':'private, no-store'}});
 
 class MatchChatExpiredError extends Error {}
+class InvalidChatPayloadError extends Error {}
+
+type SafeAttachment={
+ type:'image'|'video'|'audio'|'file';
+ image_url?:string;
+ asset_url?:string;
+ title?:string;
+ mime_type?:string;
+ file_size?:number;
+};
 
 function errorResponse(error:unknown){
  const message=error instanceof Error?error.message:'';
+ if(error instanceof InvalidChatPayloadError)return json({error:error.message},400);
  if(error instanceof StreamChatConfigurationError||error instanceof SupabaseServiceConfigurationError)return json({error:error.message},503);
  if(error instanceof MatchChatExpiredError||message.includes('Match chat has expired'))return json({error:'This match has expired. Its chat is no longer available.'},410);
  if(message.includes('Waiting for your match to reply'))return json({error:'Your match has 72 hours to reply before this chat expires.'},409);
@@ -78,6 +89,49 @@ async function messageWasDelivered(session:MatchChatSession,messageId:string){
  }
 }
 
+function safeHttpsUrl(value:unknown){
+ if(typeof value!=='string'||value.length>2048)return null;
+ try{const url=new URL(value);return url.protocol==='https:'?url.toString():null;}catch{return null;}
+}
+
+function sanitizeAttachments(value:unknown):SafeAttachment[]{
+ if(value===undefined||value===null)return [];
+ if(!Array.isArray(value)||value.length>4)throw new InvalidChatPayloadError('Attach up to 4 files at a time.');
+ return value.flatMap(item=>{
+  if(!item||typeof item!=='object')throw new InvalidChatPayloadError('Invalid attachment.');
+  const raw=item as Record<string,unknown>;
+  const type=raw.type;
+  if(type!=='image'&&type!=='video'&&type!=='audio'&&type!=='file')throw new InvalidChatPayloadError('Unsupported attachment type.');
+  const imageUrl=safeHttpsUrl(raw.image_url);
+  const assetUrl=safeHttpsUrl(raw.asset_url);
+  const url=type==='image'?imageUrl:assetUrl;
+  if(!url)throw new InvalidChatPayloadError('Invalid attachment URL.');
+  const title=typeof raw.title==='string'?raw.title.trim().slice(0,240):'';
+  const mimeType=typeof raw.mime_type==='string'?raw.mime_type.trim().slice(0,120):'';
+  const fileSize=typeof raw.file_size==='number'&&Number.isFinite(raw.file_size)&&raw.file_size>=0&&raw.file_size<=20*1024*1024?Math.round(raw.file_size):undefined;
+  return [{
+   type,
+   ...(type==='image'?{image_url:url}:{asset_url:url}),
+   ...(title?{title}:{}),
+   ...(mimeType?{mime_type:mimeType}:{}),
+   ...(fileSize===undefined?{}:{file_size:fileSize}),
+  }];
+ });
+}
+
+async function validateQuote(session:MatchChatSession,messageId:string|null){
+ if(!messageId)return;
+ if(messageId.length>255)throw new InvalidChatPayloadError('Invalid quoted message.');
+ try{
+  const {message}=await streamChatServer().getMessage(messageId);
+  if(message.cid!==MATCH_CHAT_CHANNEL_TYPE+':'+session.channel_id)throw new InvalidChatPayloadError('Invalid quoted message.');
+ }catch(error){
+  if(error instanceof InvalidChatPayloadError)throw error;
+  if(responseStatus(error)===404)throw new InvalidChatPayloadError('The message you replied to is no longer available.');
+  throw error;
+ }
+}
+
 export async function GET(_request:NextRequest,{params}:{params:Promise<{matchId:string}>}){
  const {matchId}=await params;
  if(!isUuid(matchId))return json({error:'Invalid match ID'},400);
@@ -101,7 +155,10 @@ export async function POST(request:NextRequest,{params}:{params:Promise<{matchId
  const body=await request.json().catch(()=>null);
  const text=typeof body?.text==='string'?body.text.trim():'';
  const messageId=typeof body?.messageId==='string'?body.messageId:'';
- if(!text||Array.from(text).length>MATCH_CHAT_MAX_MESSAGE_LENGTH)return json({error:'Use a message up to 1,000 characters.'},400);
+ const quotedMessageId=typeof body?.quotedMessageId==='string'&&body.quotedMessageId?body.quotedMessageId:null;
+ let attachments:SafeAttachment[]=[];
+ try{attachments=sanitizeAttachments(body?.attachments);}catch(error){return errorResponse(error);}
+ if((!text&&!attachments.length)||Array.from(text).length>MATCH_CHAT_MAX_MESSAGE_LENGTH)return json({error:'Use a message up to '+MATCH_CHAT_MAX_MESSAGE_LENGTH.toLocaleString()+' characters, or attach a file.'},400);
  if(!isUuid(messageId))return json({error:'Invalid message ID'},400);
 
  let reserved=false,delivered=false,deliveryUncertain=false;
@@ -112,13 +169,20 @@ export async function POST(request:NextRequest,{params}:{params:Promise<{matchId
   reserved=true;
   const session=reservation as MatchChatSession;
   const channel=await createMatchChannels(member.user.id,session);
+  await validateQuote(session,quotedMessageId);
   // A retry after a database/network interruption reuses the reservation. Check
   // Stream first, then only create the deterministic message if it is absent.
   deliveryUncertain=Boolean(session.already_reserved);
   delivered=await messageWasDelivered(session,messageId);
   if(!delivered){
    try{
-    await channel.sendMessage({id:matchChatStreamMessageId(session.id,messageId),text,user_id:session.viewer_stream_user_id});
+    await channel.sendMessage({
+     id:matchChatStreamMessageId(session.id,messageId),
+     text,
+     user_id:session.viewer_stream_user_id,
+     ...(attachments.length?{attachments}:{}),
+     ...(quotedMessageId?{quoted_message_id:quotedMessageId}:{}),
+    });
     delivered=true;
    }catch(error){
     try{delivered=await messageWasDelivered(session,messageId);}catch{deliveryUncertain=true;}
