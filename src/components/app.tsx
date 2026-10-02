@@ -183,7 +183,7 @@ function LandingPage({events,locale,attendeesByEvent,publicRosters}:{events:Even
   </section>
 
   <section className="landing-v1-safety">
-   <div className="landing-safety-visual"><Image src="/images/discovery-safety.png" alt="" fill sizes="(max-width: 430px) calc(100vw - 48px), 382px"/></div>
+   <div className="landing-safety-visual"><Image src="/images/discovery-safety-v2.webp" alt="" fill sizes="(max-width: 430px) calc(100vw - 48px), 382px"/></div>
    <Heading level={2}>{tr(locale,'Safety first, always.','안전을 가장 먼저 생각합니다.')}</Heading>
    <p>{tr(locale,'Three safeguards before and after you meet.','만남 전후를 지키는 세 가지 안전장치')}</p>
    <div className="landing-safety-features">
