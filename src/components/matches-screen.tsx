@@ -503,5 +503,27 @@ export function MatchesScreen({locale}:{locale:Locale}){
     </form>}
    </>}
   </article>
+  {profileOpen&&<div className="inbox-profile-backdrop" onMouseDown={()=>setProfileOpen(false)}>
+   <section className="inbox-profile-modal" role="dialog" aria-modal="true" aria-labelledby="inbox-profile-name" onMouseDown={event=>event.stopPropagation()}>
+    <button type="button" className="inbox-profile-close" aria-label={tr(locale,'Close profile','프로필 닫기')} onClick={()=>setProfileOpen(false)}><X size={20}/></button>
+    {profileLoading?<div className="inbox-profile-loading"><span/><p>{tr(locale,'Loading profile…','프로필 불러오는 중…')}</p></div>:profileError?<div className="inbox-profile-error"><UserRound size={32}/><p>{profileError}</p></div>:profile&&<>
+     <div className="inbox-profile-photo">
+      {profile.photos?.[profilePhotoIndex]?<Image src={profile.photos[profilePhotoIndex]} alt="" fill sizes="(max-width: 760px) 92vw, 430px" unoptimized/>:<UserRound size={48}/>}
+      {profile.photos.length>1&&<><button type="button" className="inbox-profile-prev" aria-label={tr(locale,'Previous photo','이전 사진')} onClick={()=>setProfilePhotoIndex(index=>(index-1+profile.photos.length)%profile.photos.length)}>‹</button><button type="button" className="inbox-profile-next" aria-label={tr(locale,'Next photo','다음 사진')} onClick={()=>setProfilePhotoIndex(index=>(index+1)%profile.photos.length)}>›</button><div className="inbox-profile-dots">{profile.photos.map((_,index)=><button key={index} type="button" aria-label={tr(locale,'Show photo '+(index+1),'사진 '+(index+1)+' 보기')} className={index===profilePhotoIndex?'active':''} onClick={()=>setProfilePhotoIndex(index)}/>)}</div></>}
+     </div>
+     <div className="inbox-profile-copy">
+      <div className="inbox-profile-title"><Heading level={2} id="inbox-profile-name">{profile.full_name}{profile.age?', '+profile.age:''}</Heading>{profile.mbti&&<span>{profile.mbti}</span>}</div>
+      <div className="inbox-profile-facts">
+       {profile.nationality&&<span>{nationalityLabel(profile.nationality,locale)}</span>}
+       {profile.height_cm&&<span>{profile.height_cm} cm</span>}
+       {profile.public_job&&<span>{profile.public_job}</span>}
+       {profile.public_workplace&&<span>{profile.public_workplace}</span>}
+      </div>
+      {profile.interests?.length>0&&<div className="inbox-profile-interests">{profile.interests.map(interest=><span key={interest}>{interest}</span>)}</div>}
+      {profile.event_title&&<div className="inbox-profile-met-at"><small>{tr(locale,'YOU MET AT','처음 만난 모임')}</small><strong>{profile.event_title}</strong>{profile.round_number&&<span>{tr(locale,'Round ','라운드 ')}{profile.round_number}{profile.table_number?tr(locale,' · Table ',' · 테이블 ')+profile.table_number:''}</span>}</div>}
+     </div>
+    </>}
+   </section>
+  </div>}
  </section>;
 }
