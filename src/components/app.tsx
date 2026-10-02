@@ -102,90 +102,101 @@ function rosterUpdatedLabel(value:string|null,locale:Locale){
 }
 export function EventCard({e,locale,href,attendees,past=false}:{e:Event;locale:Locale;href?:string;attendees?:EventAttendees;past?:boolean}){const item=localizeEvent(e,locale);const confirmed=attendees?.total??0;const preview=attendees?[...attendees.women,...attendees.men]:[];return <Link href={href??'/events/'+e.slug} className={'event-card'+(past?' past-event':'')}><div className="event-photo"><Image src={e.image||'/images/yeouido.webp'} alt={e.title} fill sizes="(max-width: 640px) 100vw, 500px"/><span className="photo-arrow"><ArrowUpRight size={24}/></span></div><div className="event-copy"><div className="event-tags"><span>{categoryLabel(e,locale)}</span><span>{e.age_min}–{e.age_max}{tr(locale,' years','세')}</span><div className="nationality-chip-group"><NationalityBadges requirements={e.nationality_requirements} locale={locale}/></div></div><Heading level={2}>{headline(item.title)}</Heading><p className="event-time"><CalendarDays size={16}/>{dateLabelForLocale(e.starts_at,locale)} · {timeLabelForLocale(e.starts_at,locale)} KST</p><p className="event-location"><MapPin size={16}/>{item.venue}</p><div className="event-attendance">{past?<><div><span className="past-event-status">{tr(locale,'Ended','종료')}</span></div><span>{confirmed}/{e.capacity} {tr(locale,'attended','참여')}</span></>:<><div><AttendeeStack count={confirmed} kind={tr(locale,'Attendees','참가자')} locale={locale} attendees={preview}/></div></>}</div>{!past&&<EventStatusStrip event={e} attendees={attendees} locale={locale}/>}</div></Link>;}
 
-function LandingEventPreview({e,locale,attendees}:{e:Event;locale:Locale;attendees?:EventAttendees}){
+function landingRosterProfiles(roster:PublicRoster|undefined,locale:Locale){
+ const profiles:string[]=[];
+ for(const entry of roster?.women??[])profiles.push(tr(locale,'Woman','여성')+' · '+ageBandLabel(entry.age_band,locale)+' · '+jobGroupLabel(entry.job_group,locale));
+ for(const entry of roster?.men??[])profiles.push(tr(locale,'Man','남성')+' · '+ageBandLabel(entry.age_band,locale)+' · '+jobGroupLabel(entry.job_group,locale));
+ return profiles.slice(0,8);
+}
+function LandingParticipantTicker({roster,locale}:{roster?:PublicRoster;locale:Locale}){
+ const profiles=landingRosterProfiles(roster,locale);
+ const items=profiles.length?profiles:[tr(locale,'Profiles update as seats fill','참가자 정보는 예약에 따라 업데이트돼요')];
+ const rolling=items.length>2;
+ const rendered=rolling?[...items,...items]:items;
+ return <div className="landing-profile-ticker" aria-label={tr(locale,'Participant profile preview','참가자 프로필 미리보기')}>
+  <div className={'landing-profile-track'+(rolling?' rolling':'')}>{rendered.map((label,index)=><span key={label+'-'+index} aria-hidden={rolling&&index>=items.length?true:undefined}>{label}</span>)}</div>
+ </div>;
+}
+function LandingMingleCard({e,locale,attendees,roster}:{e:Event;locale:Locale;attendees?:EventAttendees;roster?:PublicRoster}){
  const item=localizeEvent(e,locale);
- const confirmed=attendees?.total??0;
-
- const preview=attendees?[...attendees.women,...attendees.men]:[];
- return <Link href={'/events/'+e.slug} className="landing-v1-event-card">
-  <div className="landing-v1-event-image"><Image src={e.image||'/images/yeouido.webp'} alt={item.title} fill sizes="92px"/></div>
-  <div className="landing-v1-event-copy">
-   <span className="landing-v1-event-category mingle">{tr(locale,'1:1 Mingle','1:1 밍글')}</span>
-   <Heading level={3}>{headline(item.title)}</Heading>
-   <p><MapPin size={14} aria-hidden="true"/><span>{item.venue}</span></p>
-   <p><CalendarDays size={14} aria-hidden="true"/><span>{dateLabelForLocale(e.starts_at,locale)} · {timeLabelForLocale(e.starts_at,locale)}</span></p>
-   <div className="landing-v1-event-bottom">
-    <div className="landing-v1-attendees"><AttendeeStack count={confirmed} kind={tr(locale,'Attendees','참가자')} locale={locale} attendees={preview}/></div>
-    <EventStatusStrip event={e} attendees={attendees} locale={locale} compact/>
-   </div>
+ return <Link href={'/events/'+e.slug} className="landing-mingle-card">
+  <div className="landing-mingle-media">
+   <Image src={e.image||'/images/yeouido.webp'} alt={item.title} fill sizes="(max-width: 430px) calc(100vw - 48px), 382px"/>
+   <span className="landing-mingle-tag">{tr(locale,'1:1 Mingle','1:1 밍글')}</span>
   </div>
+  <Heading level={3}>{headline(item.title)}</Heading>
+  <p className="landing-mingle-date">{dateLabelForLocale(e.starts_at,locale)} · {timeLabelForLocale(e.starts_at,locale)} KST</p>
+  <p className="landing-mingle-venue">{item.venue}</p>
+  <LandingParticipantTicker roster={roster} locale={locale}/>
+  <EventStatusStrip event={e} attendees={attendees} locale={locale}/>
  </Link>;
 }
-function LandingPage({events,locale,attendeesByEvent}:{events:Event[];locale:Locale;attendeesByEvent:Record<string,EventAttendees>}){
- const upcoming=[...events].sort((a,b)=>Date.parse(a.starts_at)-Date.parse(b.starts_at)).slice(0,2);
- const howSteps=[
-  {label:tr(locale,'01 / CHOOSE','01 / 고르기'),title:tr(locale,'Choose Your Event','모임 고르기'),body:tr(locale,'Choose a 1:1 Mingle and reserve your place.','원하는 날짜의 1:1 밍글을 고르고 자리를 예약하세요.')},
-  {label:tr(locale,'02 / MEET','02 / 만남'),title:tr(locale,'Meet Offline','직접 만나기'),body:tr(locale,'Join a hosted Event in Seoul. No endless profiles to browse before you arrive.','서울에서 열리는 라운디 모임에서 직접 만나요. 만나기 전부터 프로필을 끝없이 넘겨볼 필요는 없어요.')},
-  {label:tr(locale,'03 / CONNECT','03 / 이어가기'),title:tr(locale,'Keep What Clicks','잘 통했다면 이어가기'),body:tr(locale,'For 1:1 Mingle, only mutual choices become Matches after the Event.','1:1 밍글에서는 모임이 끝난 뒤 서로 선택한 경우에만 매칭돼요.')}
- ];
+function LandingSafetyIcon({kind}:{kind:'profile'|'id'|'match'}){
+ if(kind==='profile')return <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M4 18c.6-3.1 2.2-5 5-5s4.4 1.9 5 5"/><path d="m15.5 11.5 2 2 3-4"/></svg>;
+ if(kind==='id')return <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5"/><circle cx="8" cy="10" r="2"/><path d="M5.5 16c.4-1.8 1.3-2.8 2.7-2.8 1.4 0 2.3 1 2.7 2.8"/><path d="m14 10 1.7 1.7L19 8"/></svg>;
+ return <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="7" cy="8" r="2.4"/><circle cx="17" cy="8" r="2.4"/><path d="M3.5 17c.5-2.8 1.7-4.4 3.5-4.4s3 1.6 3.5 4.4M13.5 17c.5-2.8 1.7-4.4 3.5-4.4s3 1.6 3.5 4.4"/><path d="M12 13s-2.4-1.5-2.4-3a1.5 1.5 0 0 1 2.4-1 1.5 1.5 0 0 1 2.4 1c0 1.5-2.4 3-2.4 3Z"/></svg>;
+}
+function LandingPage({events,locale,attendeesByEvent,publicRosters}:{events:Event[];locale:Locale;attendeesByEvent:Record<string,EventAttendees>;publicRosters:Record<string,PublicRoster>}){
+ const upcoming=[...events].sort((a,b)=>Date.parse(a.starts_at)-Date.parse(b.starts_at)).slice(0,4);
+ const [eventSlide,setEventSlide]=useState(0);
+ const activeIndex=upcoming.length?eventSlide%upcoming.length:0;
+ const activeEvent=upcoming[activeIndex];
+ const moveEvent=(direction:number)=>{if(upcoming.length>1)setEventSlide(current=>(current+direction+upcoming.length)%upcoming.length);};
  return <div className="landing landing-v1">
   <section className="landing-v1-hero">
    <DiscoveryHero locale={locale}/>
-   <div className="landing-v1-social-proof">
-    <UsersRound size={20} aria-hidden="true"/>
-    <p>{tr(locale,'Built by Hosts of an English Debate Club vetted by 80+ Members','80명 이상의 멤버가 검증한 영어 토론 모임 호스트가 만들었습니다')}</p>
+  </section>
+
+  <section className="landing-v1-meetups">
+   <Heading level={2}>{tr(locale,'Meet someone, in real life','서울에서 직접 만나보세요')}</Heading>
+   {activeEvent?<div className="landing-mingle-carousel">
+    <LandingMingleCard e={activeEvent} locale={locale} attendees={attendeesByEvent[activeEvent.id]} roster={publicRosters[activeEvent.id]}/>
+    {upcoming.length>1&&<div className="landing-mingle-controls" aria-label={tr(locale,'Upcoming Mingle carousel','예정 밍글 캐러셀')}>
+     <button type="button" onClick={()=>moveEvent(-1)} aria-label={tr(locale,'Previous Mingle','이전 밍글')}><ArrowLeft size={17}/></button>
+     <div className="landing-mingle-position">{upcoming.map((_,index)=><span key={index} className={index===activeIndex?'active':''}/>)}
+      <small>{activeIndex+1} / {upcoming.length}</small>
+     </div>
+     <button type="button" onClick={()=>moveEvent(1)} aria-label={tr(locale,'Next Mingle','다음 밍글')}><ArrowRight size={17}/></button>
+    </div>}
+   </div>:<p className="landing-v1-empty">{tr(locale,'New events are being prepared.','다음 모임을 준비하고 있어요.')}</p>}
+   <Link className="landing-v1-all-events-button" href="/events">{tr(locale,'See all events','모든 모임 보기')}</Link>
+  </section>
+
+  <section className="landing-v1-reviews">
+   <Heading level={2}>{tr(locale,'What people say','참가자 후기')}</Heading>
+   <p>{tr(locale,'Verified attendee reviews from past Mingles.','지난 밍글 참가자의 후기를 소개하는 공간입니다.')}</p>
+   <div className="landing-review-viewport">
+    <div className="landing-review-track">
+     <article className="landing-review-card">
+      <span>{tr(locale,'Verified attendee','참가자 인증')}</span>
+      <p>{tr(locale,'Public attendee reviews will appear here when available.','공개 가능한 참가자 후기가 준비되면 여기에 소개할게요.')}</p>
+      <small>{tr(locale,'Roundy Mingle','Roundy 밍글')}</small>
+     </article>
+     <article className="landing-review-card">
+      <span>{tr(locale,'Verified attendee','참가자 인증')}</span>
+      <p>{tr(locale,'Reviews are displayed only with attendee permission.','참가자가 공개에 동의한 후기만 소개합니다.')}</p>
+      <small>{tr(locale,'Roundy Mingle','Roundy 밍글')}</small>
+     </article>
+    </div>
+   </div>
+   <div className="landing-review-position" aria-hidden="true"><span className="active"/><span/></div>
+  </section>
+
+  <section className="landing-v1-safety">
+   <div className="landing-safety-visual"><Image src="/images/discovery-safety.png" alt="" fill sizes="(max-width: 430px) calc(100vw - 48px), 382px"/></div>
+   <Heading level={2}>{tr(locale,'Safety first, always.','안전을 가장 먼저 생각합니다.')}</Heading>
+   <p>{tr(locale,'Three safeguards before and after you meet.','만남 전후를 지키는 세 가지 안전장치')}</p>
+   <div className="landing-safety-features">
+    <article><span className="landing-safety-icon"><LandingSafetyIcon kind="profile"/></span><strong>{tr(locale,'Profile validation','프로필 검증')}</strong></article>
+    <article><span className="landing-safety-icon"><LandingSafetyIcon kind="id"/></span><strong>{tr(locale,'ID verification','신분증 확인')}</strong></article>
+    <article className="contact"><span className="landing-safety-icon"><LandingSafetyIcon kind="match"/></span><strong>{tr(locale,'Name & contact after match','매칭 후 이름·연락처 공개')}</strong></article>
    </div>
   </section>
 
-  <section className="landing-v1-section">
-   <div className="landing-v1-section-heading">
-    <span className="eyebrow landing-v1-eyebrow">{tr(locale,'1:1 MINGLE','라운디의 만남')}</span>
-    <Heading level={2}>{tr(locale,'A Conversation Before a Profile','프로필보다 대화가 먼저')}</Heading>
-    <p>{tr(locale,'Take time to talk, then decide who you would like to meet again.','먼저 충분히 이야기하고, 다시 만나고 싶은 사람을 골라요.')}</p>
-   </div>
-   <div className="landing-v1-event-type">
-    <div className="landing-v1-event-type-image"><Image src="/images/roundy-mingle-hero.webp" alt={tr(locale,'1:1 Mingle Event','1:1 밍글 모임')} fill sizes="342px"/></div>
-    <span className="eyebrow landing-v1-event-type-label mingle">{tr(locale,'1:1 / MUTUAL MATCH','1:1 / 상호 매칭')}</span>
-    <Heading level={3}>{tr(locale,'1:1 Mingle','1:1 밍글')}</Heading>
-    <p>{tr(locale,'Meet the person before the profile. Short rotations, a later profile reveal, then private mutual matching.','프로필보다 사람을 먼저 만나보세요. 짧은 로테이션, 이후 프로필 공개, 그리고 비공개 상호 매칭으로 이어집니다.')}</p>
-    <Link className="landing-v1-text-link" href="/how-it-works/mingle">{tr(locale,'How 1:1 Mingle works','1:1 밍글은 이렇게 진행돼요')}<ArrowRight size={18} aria-hidden="true"/></Link>
-   </div>
-  </section>
-
-  <section className="landing-v1-section landing-v1-upcoming">
-   <div className="landing-v1-section-heading">
-    <span className="eyebrow landing-v1-eyebrow">{tr(locale,'NEXT UP','다음 모임')}</span>
-    <Heading level={2}>{tr(locale,'Upcoming in Seoul','서울에서 곧 만나요')}</Heading>
-    <p>{tr(locale,'Find a date that works for you.','함께하고 싶은 날짜를 확인해보세요.')}</p>
-   </div>
-   {upcoming.length>0?<div className="landing-v1-event-list">{upcoming.map(item=><LandingEventPreview key={item.id} e={item} locale={locale} attendees={attendeesByEvent[item.id]}/>)}</div>:<p className="landing-v1-empty">{tr(locale,'New events are being prepared.','다음 모임을 준비하고 있어요.')}</p>}
-   <Link className="landing-v1-text-link landing-v1-all-events" href="/events">{tr(locale,'See all events','모든 모임 보기')}<ArrowRight size={18} aria-hidden="true"/></Link>
-  </section>
-
-  <section className="landing-v1-section">
-   <div className="landing-v1-section-heading">
-    <span className="eyebrow landing-v1-eyebrow">{tr(locale,'HOW ROUNDY WORKS','ROUNDY는 이렇게 만나요')}</span>
-    <Heading level={2}>{tr(locale,'How Roundy Works','Roundy는 이렇게 만나요')}</Heading>
-    <p>{tr(locale,'Enough structure to make meeting strangers easy, without making it feel like an interview.','낯선 사람과도 자연스럽게 대화할 수 있도록, 필요한 만큼만 흐름을 만들었어요.')}</p>
-   </div>
-   <div className="landing-v1-steps">
-    {howSteps.map(step=><article className="landing-v1-step" key={step.label}><span>{step.label}</span><div><Heading level={3}>{step.title}</Heading><p>{step.body}</p></div></article>)}
-   </div>
-  </section>
-
-  <section className="info-card landing-v1-proof">
-   <span className="eyebrow landing-v1-eyebrow">{tr(locale,'MEET WITH CONFIDENCE','편안한 만남을 위한 약속')}</span>
-   <Heading level={3}>{tr(locale,'Profiles Are Reviewed Before Joining','참여 전 프로필 검토')}</Heading>
-   <p>{tr(locale,'Verification handles and private details are not shown to other attendees.','인증 계정과 비공개 정보는 다른 참가자에게 공개되지 않습니다.')}</p>
-   <Heading level={3}>{tr(locale,'Contact Stays Private Until It Is Mutual','서로 선택하기 전까지 연락처는 비공개')}</Heading>
-   <p>{tr(locale,'For 1:1 Mingle, contact details are shared only after a mutual Match.','1:1 밍글에서는 서로 매칭된 뒤에만 연락처가 공개됩니다.')}</p>
-   <Link className="landing-v1-text-link" href="/how-it-works">{tr(locale,'How it works & safety','이용 방법 및 안전')}<ArrowRight size={18} aria-hidden="true"/></Link>
-  </section>
-
-  <section className="landing-v1-final">
-   <Heading level={2}>{tr(locale,'Choose Your Event','모임 고르기')}</Heading>
-   <p>{tr(locale,'Find your next 1:1 Mingle and join us.','예정된 1:1 밍글을 확인하고 함께해요.')}</p>
-   <Link className="button landing-v1-primary" href="/events">{tr(locale,'See all events','모든 모임 보기')}</Link>
+  <section className="landing-hosting-proof">
+   <span className="eyebrow">{tr(locale,'HOSTING EXPERIENCE','운영 경험')}</span>
+   <div><strong>80+</strong><span>{tr(locale,'offline English meetups hosted in Seoul','서울에서 진행한 오프라인 영어 밋업')}</span></div>
+   <p>{tr(locale,'That hosting experience shapes how every Roundy Mingle is run.','80회 이상의 오프라인 밋업 운영 경험을 모든 Roundy 밍글에 반영합니다.')}</p>
   </section>
  </div>;
 }
@@ -210,9 +221,17 @@ export function App({path}:{path:string}){
    try{
     const data=await api('events/'+e.id+(authed?'/attendees':'/roster'));
     const counts:EventAttendees=authed?data.attendees:{women:[],men:[],women_count:data.roster.women_count,men_count:data.roster.men_count,total:data.roster.total};
-    return [e.id,counts] as const;
+    let roster:PublicRoster|null=authed?null:(data.roster as PublicRoster);
+    if(authed){try{const publicData=await api('events/'+e.id+'/roster');roster=(publicData.roster??null) as PublicRoster|null;}catch{/* Public roster preview remains optional. */}}
+    return {id:e.id,counts,roster};
    }catch{return null;}
-  })).then(rows=>{if(active)setAttendeesByEvent(Object.fromEntries(rows.filter(row=>row!==null)));});
+  })).then(rows=>{
+   if(!active)return;
+   const valid=rows.filter((row):row is {id:string;counts:EventAttendees;roster:PublicRoster|null}=>row!==null);
+   setAttendeesByEvent(Object.fromEntries(valid.map(row=>[row.id,row.counts])));
+   const rosters=valid.flatMap(row=>row.roster?[[row.id,row.roster] as const]:[]);
+   if(rosters.length)setPublicRosters(previous=>({...previous,...Object.fromEntries(rosters)}));
+  });
   return()=>{active=false;};
  },[authed,events]);
  useEffect(()=>{if(route!=='events'||!event||event.status!=='live')return;let active=true;void fetch('/api/events/'+event.id+'/roster',{cache:'no-store'}).then(async response=>{const data=await response.json();if(!response.ok)throw new Error(data.error||'Could not load participant list.');if(active&&data.roster)setPublicRosters(prev=>({...prev,[event.id]:data.roster as PublicRoster}));}).catch(()=>{/* The event page remains usable if the public roster is unavailable. */});return()=>{active=false;};},[route,event?.id,event?.status]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -265,7 +284,7 @@ export function App({path}:{path:string}){
 
  let content:ReactNode;
  let wizardHeader:ReactNode=null;
- if(route==='home'||route==='discover')content=<LandingPage events={publicEvents} locale={locale} attendeesByEvent={attendeesByEvent}/>;
+ if(route==='home'||route==='discover')content=<LandingPage events={publicEvents} locale={locale} attendeesByEvent={attendeesByEvent} publicRosters={publicRosters}/>;
  else if(route==='payment'&&parts[1]==='result')content=<><Card label={tr(locale,'SECURE PAYMENT','안전한 결제')} title={tr(locale,'Finishing your payment','결제를 확인하고 있어요')}>{tr(locale,'Roundy is waiting for PayApp’s server confirmation before it confirms your seat.','Roundy가 PayApp의 서버 확인을 받은 뒤에만 자리를 확정합니다.')}</Card><Note>{tr(locale,'If this page does not finish after a payment attempt, do not pay again. Check My Events first or contact Roundy support.','결제 시도 후 이 화면에서 진행되지 않더라도 다시 결제하지 마세요. 먼저 내 모임을 확인하거나 Roundy 고객지원에 문의해 주세요.')}</Note></>;
  else if(route==='payment')content=<><section className="intro payment-referral-intro"><p className="eyebrow">{tr(locale,'EVENT CHECKOUT','모임 결제')}</p><Heading level={1}>{tr(locale,'Choose an event','모임을 선택하세요')}</Heading><p>{/^[A-Z0-9_-]{4,24}$/.test(referralParam)?tr(locale,`Referral code ${referralParam} is ready and will be filled in automatically at checkout.`,`추천 코드 ${referralParam}가 준비되었습니다. 결제 화면에 자동으로 입력됩니다.`):tr(locale,'Choose an event, then review your live price and optional discount code at checkout.','모임을 고른 뒤 결제 화면에서 실시간 가격과 선택 할인 코드를 확인하세요.')}</p></section><div className="event-grid">{publicEvents.map(e=><EventCard key={e.id} e={e} locale={locale} attendees={attendeesByEvent[e.id]} href={'/events/'+e.slug+(/^[A-Z0-9_-]{4,24}$/.test(referralParam)?'?ref='+encodeURIComponent(referralParam):'')}/>)}</div>{publicEvents.length===0&&<Empty title={tr(locale,'New events are on their way.','다음 모임을 준비하고 있어요.')} body={tr(locale,'Check back soon for an event where you can use your referral code.','추천 코드를 사용할 수 있는 모임이 열리면 여기에서 확인할 수 있어요.')}/>}</>;
  else if(route==='events'&&!event){
