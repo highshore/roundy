@@ -2289,7 +2289,7 @@ html:lang(ko) .eyebrow{
 }
 
 
-/* Discover V1 — aligned to shared Roundy public-page primitives. */
+/* Discover — Figma mobile-first landing, 2026-10-03. */
 .landing-v1{
  display:flex;
  flex-direction:column;
@@ -2299,32 +2299,16 @@ html:lang(ko) .eyebrow{
  gap:56px;
  color:var(--ink);
 }
-.landing-v1-hero,.landing-v1-section,.landing-v1-final{
- display:flex;
- flex-direction:column;
- gap:18px;
+.landing-v1-hero,.landing-v1-meetups,.landing-v1-reviews,.landing-v1-safety,.landing-hosting-proof{
  width:100%;
-}
-.landing-v1-eyebrow{
- font-family:'DM Sans',var(--font-noto-sans-kr),"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+ min-width:0;
 }
 .landing-v1 h1,.landing-v1 h2,.landing-v1 h3{text-wrap:balance}
+.landing-v1 h2{font-size:28px;line-height:32px!important;letter-spacing:-.03em}
+.landing-v1 h3{line-height:1.22!important}
+.landing-v1 p{margin:0}
 
-.landing-v1-hero h1{line-height:1.12!important}
-.landing-v1-section-heading h2,
-.landing-v1-event-type h3,
-.landing-v1-step h3,
-.landing-v1-proof h3,
-.landing-v1-final h2{line-height:1.2!important}
-.landing-v1-hero h1{max-width:none}
-.landing-v1-hero>p,
-.landing-v1-section-heading p,
-.landing-v1-event-type>p,
-.landing-v1-final>p{
- font-size:15px;
- line-height:1.55!important;
- color:var(--muted);
-}
+/* Existing three-card hero, matched to the approved Figma deck. */
 .discovery-carousel{width:100%;min-width:0}
 .discovery-deck{position:relative;width:100%;aspect-ratio:3/4;margin-bottom:20px;touch-action:pan-y;user-select:none;cursor:grab}
 .discovery-deck:active{cursor:grabbing}
@@ -2343,119 +2327,77 @@ html:lang(ko) .landing-v1 .discovery-hero-overlay h1,html:lang(ko) .landing-v1 .
 .discovery-hero-cta{display:grid;place-items:center;flex:0 0 44px;width:44px;height:44px;border-radius:50%;background:#fff;color:#242424}
 .discovery-hero-cta:focus-visible{outline-color:#fff;outline-offset:3px}
 .discovery-carousel-nav{display:flex;align-items:center;justify-content:center;gap:12px;padding-top:4px}
-.discovery-carousel-nav button{display:grid;place-items:center;width:44px;height:44px;padding:0;border:0;background:transparent;color:var(--muted);border-radius:50%}
+.discovery-carousel-nav button{display:grid;place-items:center;width:44px;height:44px;padding:0;border:0;background:transparent;color:var(--ink);border-radius:50%}
 .discovery-carousel-dots{display:flex;gap:0}
 .discovery-carousel-dots button{width:30px}
 .discovery-carousel-dots span{width:6px;height:6px;border-radius:99px;background:var(--border);transition:width 200ms,background 200ms}
 .discovery-carousel-dots [aria-current=true] span{width:18px;background:var(--ink)}
-@media(prefers-reduced-motion:reduce){.discovery-hero-card,.discovery-carousel-dots span{transition:none}}
-.landing-v1-event-type-image img,.landing-v1-event-image img{object-fit:cover;object-position:center}
-.landing-v1-primary{width:100%;margin:0}
-.landing-v1-primary:active{transform:scale(.98)}
-.landing-v1-social-proof{
- display:flex;
- align-items:center;
- gap:12px;
- width:100%;
- padding:16px 18px;
- border-radius:18px;
- background:#111;
- color:#fff;
-}
-.landing-v1-social-proof svg{flex:0 0 auto}
-.landing-v1-social-proof p{
- margin:0;
- font-size:13px;
- line-height:1.45!important;
- font-weight:650;
- color:inherit;
-}
 
-.landing-v1-section-heading{display:flex;flex-direction:column;gap:8px}
-.landing-v1-event-type{display:flex;flex-direction:column;gap:12px;margin-top:2px}
-.landing-v1-event-type+.landing-v1-event-type{margin-top:24px}
-.landing-v1-event-type-image{position:relative;width:100%;height:188px;overflow:hidden;border-radius:22px;background:var(--surface)}
-.landing-v1-event-type-label{font-family:'DM Sans',var(--font-noto-sans-kr),"Apple SD Gothic Neo","Malgun Gothic",sans-serif;color:var(--muted)}
-.landing-v1-event-type-label.mingle{color:var(--brand)}
-.landing-v1-event-type h3{font-size:24px;line-height:1.16;letter-spacing:-.035em}
-.landing-v1-text-link{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:44px;color:var(--ink);font-size:14px;font-weight:700;border-bottom:1px solid var(--border);transition:color .16s ease,transform .16s ease}
-.landing-v1-text-link:hover{color:var(--brand)}
-.landing-v1-text-link:active{transform:scale(.99)}
-
-.landing-v1-upcoming{gap:16px}
-.landing-v1-event-list{display:grid;gap:12px}
-.landing-v1-event-card{display:grid;grid-template-columns:92px minmax(0,1fr);align-items:stretch;gap:14px;width:100%;min-height:120px;padding:14px 16px;border:1px solid var(--border);border-radius:20px;background:var(--paper);color:var(--ink);text-decoration:none;box-shadow:0 1px 4px rgba(32,33,31,.05);transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}
-.landing-v1-event-card:hover{transform:translateY(-1px);border-color:#c9cabf;box-shadow:0 4px 12px rgba(32,33,31,.08)}
-.landing-v1-event-card:active{transform:scale(.99)}
-.landing-v1-event-image{position:relative;display:grid;place-items:center;width:92px;height:92px;align-self:center;overflow:hidden;border-radius:12px;background:var(--surface)}
-.landing-v1-event-copy{display:flex;min-width:0;min-height:92px;flex-direction:column;gap:3px}
-.landing-v1-event-category{font-family:'DM Sans',var(--font-noto-sans-kr),"Apple SD Gothic Neo","Malgun Gothic",sans-serif;width:fit-content;font-size:10px;line-height:1.25;letter-spacing:.035em;font-weight:700;color:var(--muted)}
-.landing-v1-event-category.mingle{color:var(--brand)}
-.landing-v1-event-copy h3{margin-bottom:2px;font-size:15px;line-height:1.22;letter-spacing:-.018em;overflow-wrap:anywhere}
-.landing-v1-event-copy>p{display:flex;align-items:center;gap:6px;min-width:0;font-size:12px;line-height:1.35;color:var(--muted)}
-.landing-v1-event-copy>p svg{flex:0 0 auto;width:14px;height:14px}
-.landing-v1-event-copy>p span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.landing-v1-event-bottom{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:auto;padding-top:7px}
-.landing-v1-attendees{display:flex;align-items:center;min-width:0;gap:6px}
-.landing-v1-attendees>.attendee-stack{padding-left:3px}
-.landing-v1-attendees .attendee-avatar{width:24px;height:24px;min-width:24px;max-width:24px;min-height:24px;max-height:24px;flex-basis:24px;margin-left:-6px;border-width:2px}
-.landing-v1-attendees>span,.landing-v1-legacy-count{display:inline-flex;align-items:center;gap:5px;font-size:10px;line-height:1.3;color:var(--muted);white-space:nowrap}
-.landing-v1-legacy-count svg{flex:0 0 auto;width:15px;height:15px}
-.landing-v1-event-status{display:inline-flex;align-items:center;justify-content:center;min-height:32px;padding:6px 11px;border-radius:999px;background:var(--ink);color:var(--paper);font-size:11px;line-height:1.2;font-weight:700;white-space:nowrap}
-.landing-v1-event-bottom>.landing-v1-event-status:only-child{margin-left:auto}
-.landing-v1-event-status.mingle{background:var(--brand)}
-.landing-v1-event-card.legacy-talk-preview .landing-v1-event-image>img{width:100%;height:100%;object-fit:cover}
-.landing-v1-event-card.legacy-talk-preview .legacy-talk-placeholder{min-height:92px}
-.landing-v1-all-events{margin-top:0}
+/* Upcoming Mingle carousel. */
+.landing-v1-meetups{display:flex;flex-direction:column;gap:18px}
+.landing-mingle-carousel{display:flex;flex-direction:column;gap:14px;min-width:0}
+.landing-mingle-card{display:flex;flex-direction:column;gap:12px;width:100%;min-width:0;color:var(--ink);text-decoration:none}
+.landing-mingle-media{position:relative;width:100%;height:210px;overflow:hidden;border-radius:22px;background:var(--surface)}
+.landing-mingle-media img{object-fit:cover;object-position:center}
+.landing-mingle-tag{position:absolute;top:12px;left:12px;z-index:1;display:inline-flex;align-items:center;min-height:30px;padding:6px 12px;border-radius:999px;background:#fff;color:var(--ink);box-shadow:0 2px 8px #00000012;font-size:11px;line-height:1;font-weight:700}
+.landing-mingle-card h3{margin:0;font-size:18px;line-height:23px!important;letter-spacing:-.025em}
+.landing-mingle-date{font-size:12px;line-height:16px;font-weight:700;text-transform:uppercase;color:var(--ink)}
+.landing-mingle-venue{font-size:12px;line-height:17px;color:var(--muted)}
+.landing-profile-ticker{width:100%;height:30px;overflow:hidden;mask-image:linear-gradient(90deg,transparent,#000 4%,#000 96%,transparent);-webkit-mask-image:linear-gradient(90deg,transparent,#000 4%,#000 96%,transparent)}
+.landing-profile-track{display:flex;align-items:center;gap:8px;width:max-content;height:30px}
+.landing-profile-track>span{display:inline-flex;align-items:center;justify-content:center;height:28px;padding:0 10px;border:1px solid var(--border);border-radius:999px;background:var(--surface);font-size:11px;line-height:14px;font-weight:700;white-space:nowrap}
+.landing-profile-track.rolling{animation:landingProfileTicker 24s linear infinite}
+@keyframes landingProfileTicker{to{transform:translateX(-50%)}}
+.landing-mingle-card .event-status-strip{min-height:44px;padding:10px 14px;border:0;border-radius:14px;background:color-mix(in srgb,var(--brand) 16%,var(--paper));color:var(--ink)}
+.landing-mingle-card .event-status-info{min-width:0;gap:3px}
+.landing-mingle-card .event-status-labels{gap:5px}
+.landing-mingle-card .event-status-badge,.landing-mingle-card .event-status-badge.balance{padding:0;background:transparent;color:var(--ink);font-size:11px;line-height:15px}
+.landing-mingle-card .event-status-timer{font-size:10px;line-height:13px;color:var(--muted)}
+.landing-mingle-card .event-status-count{font-size:11px;line-height:15px}
+.landing-mingle-controls{display:grid;grid-template-columns:40px 1fr 40px;align-items:center;width:100%;height:47px}
+.landing-mingle-controls>button{display:grid;place-items:center;width:40px;height:40px;padding:0;border:1px solid var(--border);border-radius:50%;background:var(--paper);color:var(--ink)}
+.landing-mingle-controls>button:last-child{justify-self:end}
+.landing-mingle-position{display:flex;align-items:center;justify-content:center;gap:7px;height:40px}
+.landing-mingle-position>span{width:6px;height:6px;border-radius:99px;background:var(--border)}
+.landing-mingle-position>span.active{width:24px;background:var(--brand)}
+.landing-mingle-position>small{margin-left:2px;font-size:11px;line-height:14px;font-weight:700;color:var(--muted)}
+.landing-v1-all-events-button{display:flex;align-items:center;justify-content:center;width:100%;height:52px;border-radius:999px;background:#0a0a0a;color:#fff;font-size:13px;font-weight:700;text-decoration:none}
 .landing-v1-empty{padding:18px;border:1px solid var(--border);border-radius:20px;background:var(--surface);font-size:13px;line-height:1.5;color:var(--muted)}
 
-.landing-v1-steps{border-top:1px solid var(--border)}
-.landing-v1-step{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:16px;padding:18px 0;border-bottom:1px solid var(--border)}
-.landing-v1-step>span{display:block;width:max-content;min-width:max-content;padding-top:2px;font-family:'DM Sans',var(--font-noto-sans-kr),"Apple SD Gothic Neo","Malgun Gothic",sans-serif;font-size:12px;line-height:1.3!important;letter-spacing:.02em;font-weight:700;color:var(--brand);white-space:nowrap!important;word-break:normal!important;overflow-wrap:normal!important}
-.landing-v1-step>div{display:grid;gap:6px}
-.landing-v1-step h3{font-size:18px;line-height:1.3;letter-spacing:-.02em}
-.landing-v1-step p{font-size:15px;line-height:1.55!important;color:var(--muted)}
+/* Reviews. Real public quotes are not fabricated; this is a publish-ready empty state. */
+.landing-v1-reviews{display:flex;flex-direction:column;gap:14px}
+.landing-v1-reviews>p{font-size:13px;line-height:18px;color:var(--muted)}
+.landing-review-card{display:flex;flex-direction:column;gap:12px;min-height:156px;padding:18px;border:1px solid var(--border);border-radius:20px;background:#fff;color:var(--ink)}
+.landing-review-card>span{display:inline-flex;align-items:center;width:fit-content;min-height:26px;padding:5px 10px;border-radius:999px;background:color-mix(in srgb,var(--brand) 16%,var(--paper));font-size:10px;line-height:13px;font-weight:700}
+.landing-review-card>p{font-size:14px;line-height:20px}
+.landing-review-card>small{margin-top:auto;font-size:11px;line-height:15px;color:var(--muted)}
+.landing-review-cta{display:flex;align-items:center;justify-content:space-between;width:100%;height:48px;padding:0 16px;border:1px solid var(--border);border-radius:999px;background:var(--paper);color:var(--ink);font-size:13px;font-weight:700;text-decoration:none}
 
-.landing-v1-proof{padding:24px;border-radius:22px;gap:12px;background:var(--surface)}
-.landing-v1-proof>strong{font-size:44px;line-height:1;letter-spacing:-.05em;color:var(--brand)}
-.landing-v1-proof>p{font-size:15px;line-height:1.55!important;color:var(--muted)}
-.landing-v1-proof h3{font-size:18px;line-height:1.3;letter-spacing:-.02em}
-.landing-v1-proof-divider{width:100%;height:1px;background:var(--border);margin:4px 0}
-.landing-v1-proof .landing-v1-text-link{margin-top:2px}
-.landing-v1-final{padding-top:2px}
+/* Safety. */
+.landing-v1-safety{display:flex;flex-direction:column;gap:14px}
+.landing-safety-visual{position:relative;width:100%;height:176px;overflow:hidden;border-radius:22px;background:#f7f7f5}
+.landing-safety-visual img{object-fit:cover;object-position:center}
+.landing-v1-safety>p{font-size:14px;line-height:20px;color:var(--muted)}
+.landing-safety-features{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;width:100%}
+.landing-safety-features>article{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:9px;height:112px;padding:12px 8px;border:1px solid var(--border);border-radius:18px;background:var(--surface);text-align:center}
+.landing-safety-icon{display:grid;place-items:center;flex:none;width:44px;height:44px;border-radius:50%;background:var(--brand);color:#fff}
+.landing-safety-icon svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.landing-safety-features strong{font-size:12px;line-height:16px;letter-spacing:-.01em}
+.landing-safety-features .contact strong{font-size:11px;line-height:15px}
 
-html:lang(ko) .landing-v1{
- font-family:'DM Sans',var(--font-noto-sans-kr),"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
- word-break:keep-all;
- overflow-wrap:break-word;
-}
-html:lang(ko) .landing-v1 h1,
-html:lang(ko) .landing-v1 h2,
-html:lang(ko) .landing-v1 h3{
- font-family:inherit;
- line-height:1.16!important;
- letter-spacing:-.025em;
- word-break:keep-all;
- overflow-wrap:break-word;
-}
-html:lang(ko) .landing-v1-hero>p,
-html:lang(ko) .landing-v1-section-heading p,
-html:lang(ko) .landing-v1-event-type>p,
-html:lang(ko) .landing-v1-step p,
-html:lang(ko) .landing-v1-proof>p,
-html:lang(ko) .landing-v1-final>p{
- line-height:1.55!important;
- word-break:keep-all;
- overflow-wrap:break-word;
-}
-html:lang(ko) .landing-v1 .eyebrow,
-html:lang(ko) .landing-v1-event-type-label,
-html:lang(ko) .landing-v1-event-category,
-html:lang(ko) .landing-v1-step>span{
- line-height:1.3!important;
-}
-html:lang(ko) .landing-v1-text-link{line-height:1.4!important}
-html:lang(ko) .landing-v1-primary{line-height:1.3!important}
+/* Compact proof, secondary to the Safety section. */
+.landing-hosting-proof{display:flex;flex-direction:column;gap:10px;padding:18px;border-radius:20px;background:#0a0a0a;color:#fff}
+.landing-hosting-proof .eyebrow{font-size:10px;line-height:14px;color:#fff}
+.landing-hosting-proof>div{display:flex;align-items:center;gap:12px;min-height:56px}
+.landing-hosting-proof>div strong{flex:none;font-size:30px;line-height:32px;letter-spacing:-.03em}
+.landing-hosting-proof>div span{font-size:12px;line-height:17px;color:#ffffffc7}
+.landing-hosting-proof>p{font-size:12px;line-height:18px;color:#fff}
+
+html:lang(ko) .landing-v1{font-family:'DM Sans',var(--font-noto-sans-kr),"Apple SD Gothic Neo","Malgun Gothic",sans-serif;word-break:keep-all;overflow-wrap:break-word}
+html:lang(ko) .landing-v1 h1,html:lang(ko) .landing-v1 h2,html:lang(ko) .landing-v1 h3{font-family:inherit;word-break:keep-all;overflow-wrap:break-word}
+html:lang(ko) .landing-mingle-date{text-transform:none}
+html:lang(ko) .landing-profile-track>span{font-weight:600}
+html:lang(ko) .landing-safety-features strong{word-break:keep-all}
 
 @container roundy (min-width:760px){
  .route-home .content.wide,.route-discover .content.wide{display:flex;justify-content:center}
@@ -2465,18 +2407,17 @@ html:lang(ko) .landing-v1-primary{line-height:1.3!important}
 }
 @container roundy (max-width:359px){
  .landing-v1{gap:48px}
- .landing-v1-event-type h3{font-size:22px}
- .landing-v1-event-card{grid-template-columns:82px minmax(0,1fr);padding:13px 14px;gap:11px}
- .landing-v1-event-image{width:82px;height:82px}
- .landing-v1-event-copy{min-height:82px}
- .landing-v1-event-copy h3{font-size:14px}
- .landing-v1-event-bottom{align-items:flex-end}
- .landing-v1-attendees>span{display:none}
+ .landing-v1 h2{font-size:25px;line-height:30px!important}
+ .landing-safety-features{gap:8px}
+ .landing-safety-features>article{padding-inline:5px}
+ .landing-safety-features strong{font-size:10.5px;line-height:14px}
+ .landing-safety-features .contact strong{font-size:10px}
 }
 @media(prefers-reduced-motion:reduce){
- .landing-v1-primary,.landing-v1-text-link,.landing-v1-event-card{transition:none}
- .landing-v1-primary:active,.landing-v1-text-link:active,.landing-v1-event-card:active{transform:none}
+ .discovery-hero-card,.discovery-carousel-dots span{transition:none}
+ .landing-profile-track.rolling{animation:none}
 }
+
 
 /* LEGAL DOCUMENT SHELL — 2026-09-29 */
 .route-refund-policy .content.narrow,
