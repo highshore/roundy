@@ -8,7 +8,7 @@ import { StreamChat } from 'stream-chat';
 
 type StreamChannel=any;
 import { LoadingScreen } from './loading-screen';
-import { MATCH_CHAT_MAX_MESSAGE_LENGTH } from '@/lib/match-chat';
+import { matchChatStreamMessageId, MATCH_CHAT_MAX_MESSAGE_LENGTH } from '@/lib/match-chat';
 import { tr, type Locale } from '@/lib/locale';
 
 type ChatState='awaiting_opening'|'awaiting_reply'|'active'|'expired';
@@ -16,9 +16,25 @@ type InboxChannel={key:string;kind:'roundy'|'match'|'expired';channelType:string
 type InboxResponse={apiKey:string;token:string;streamUserId:string;channels:InboxChannel[];likesCount:number|null};
 type ChatAttachment={type:string;assetUrl:string|null;imageUrl:string|null;thumbUrl:string|null;title:string|null;mimeType:string|null;fileSize:number|null;titleLink:string|null;text:string|null};
 type ChatReaction={type:string;count:number;own:boolean};
-type ChatMessage={id:string;text:string;createdAt:string|null;senderId:string;quotedMessage:{id:string;text:string;senderId:string}|null;attachments:ChatAttachment[];reactions:ChatReaction[]};
+type ChatMessage={id:string;text:string;createdAt:string|null;senderId:string;quotedMessage:{id:string;text:string;senderId:string}|null;attachments:ChatAttachment[];reactions:ChatReaction[];pending?:boolean};
 type PendingAttachment={id:string;type:'image'|'video'|'audio'|'file';url:string;title:string;mimeType:string;fileSize:number};
 type SessionUpdate={chat_state?:ChatState;can_send?:boolean;deadline?:string|null;first_message_by_viewer?:boolean};
+type MatchProfile={
+ id:string;
+ full_name:string;
+ age:number|null;
+ nationality:string|null;
+ height_cm:number|null;
+ mbti:string|null;
+ public_job:string|null;
+ public_workplace:string|null;
+ interests:string[];
+ photos:string[];
+ event_title:string|null;
+ event_starts_at:string|null;
+ round_number:number|null;
+ table_number:number|null;
+};
 
 const REACTIONS=[['love','♥'],['like','👍'],['haha','😂'],['wow','😮']] as const;
 const EMOJIS=['😊','😂','❤️','👍','🔥','🎉','🥰','🙌','👋','☕','✨','🤍'];
@@ -72,6 +88,7 @@ function reactionGlyph(type:string){return REACTIONS.find(([name])=>name===type)
 function attachmentLabel(attachment:ChatAttachment,locale:Locale){if(attachment.type==='image')return tr(locale,'Photo','사진');if(attachment.type==='video')return tr(locale,'Video','동영상');if(attachment.type==='audio')return tr(locale,'Voice message','음성 메시지');return attachment.title??tr(locale,'Attachment','첨부 파일');}
 function dayKey(value:string|null){if(!value)return '';const date=new Date(value);return Number.isNaN(date.getTime())?'':date.getFullYear()+'-'+date.getMonth()+'-'+date.getDate();}
 function dayLabel(value:string|null,locale:Locale){if(!value)return '';const date=new Date(value);if(Number.isNaN(date.getTime()))return '';return new Intl.DateTimeFormat(locale==='ko'?'ko-KR':'en-US',{month:'short',day:'numeric',year:date.getFullYear()!==new Date().getFullYear()?'numeric':undefined}).format(date);}
+function nationalityLabel(value:string|null,locale:Locale){if(!value)return '';try{return new Intl.DisplayNames([locale==='ko'?'ko-KR':'en-US'],{type:'region'}).of(value.toUpperCase())??value;}catch{return value;}}
 function Avatar({channel}:{channel:InboxChannel}){const [failed,setFailed]=useState(false);if(channel.kind==='roundy')return <span className="inbox-avatar roundy-avatar" aria-label="Roundy Team">R</span>;return <span className={'inbox-avatar'+(channel.kind==='expired'?' expired':'')}>{channel.photo&&!failed?<Image src={channel.photo} alt="" fill sizes="56px" unoptimized onError={()=>setFailed(true)}/>:<UserRound size={22}/>}</span>;}
 
 function AttachmentView({attachment,locale}:{attachment:ChatAttachment;locale:Locale}){
@@ -92,8 +109,11 @@ export function MatchesScreen({locale}:{locale:Locale}){
  const [typing,setTyping]=useState<Record<string,boolean>>({}),[unread,setUnread]=useState<Record<string,number>>({}),[readAt,setReadAt]=useState<Record<string,string|null>>({});
  const [replyTo,setReplyTo]=useState<ChatMessage|null>(null),[pendingAttachments,setPendingAttachments]=useState<PendingAttachment[]>([]),[uploading,setUploading]=useState(false),[emojiOpen,setEmojiOpen]=useState(false),[activeMessageId,setActiveMessageId]=useState<string|null>(null),[featureNotice,setFeatureNotice]=useState('');
  const [recording,setRecording]=useState(false);
+ const [connectionState,setConnectionState]=useState<'connecting'|'online'|'offline'>('connecting');
+ const [profileOpen,setProfileOpen]=useState(false),[profileLoading,setProfileLoading]=useState(false),[profileError,setProfileError]=useState(''),[profile,setProfile]=useState<MatchProfile|null>(null),[profilePhotoIndex,setProfilePhotoIndex]=useState(0);
  const channelsRef=useRef<Record<string,StreamChannel>>({}),selectedKeyRef=useRef(selectedKey),mobileConversationRef=useRef(mobileConversation),composerRef=useRef<HTMLTextAreaElement|null>(null),fileInputRef=useRef<HTMLInputElement|null>(null),messagesEndRef=useRef<HTMLDivElement|null>(null);
  const recorderRef=useRef<MediaRecorder|null>(null),recordingChunksRef=useRef<Blob[]>([]),recordingStreamRef=useRef<MediaStream|null>(null);
+ const connectionSignature=inbox?[inbox.apiKey,inbox.streamUserId,...inbox.channels.map(channel=>channel.key+':'+(channel.channelType??'')+':'+(channel.channelId??''))].join('|'):'';
 
  useEffect(()=>{selectedKeyRef.current=selectedKey;},[selectedKey]);
  useEffect(()=>{mobileConversationRef.current=mobileConversation;},[mobileConversation]);
