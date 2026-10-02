@@ -59,8 +59,8 @@ const richMatchOverrides={
  url_enrichment:true,
  max_message_length:MATCH_CHAT_MAX_MESSAGE_LENGTH,
  grants:{
-  channel_member:['read-channel-members','create-reaction','delete-reaction-owner','upload-attachment','flag-message'],
-  channel_moderator:['read-channel-members','create-reaction','delete-reaction-owner','upload-attachment','flag-message'],
+  channel_member:['read-channel','read-channel-members','create-reaction','delete-reaction-owner','upload-attachment','flag-message'],
+  channel_moderator:['read-channel','read-channel-members','create-reaction','delete-reaction-owner','upload-attachment','flag-message'],
  },
 };
 

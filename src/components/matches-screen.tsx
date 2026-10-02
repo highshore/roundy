@@ -8,7 +8,7 @@ import { StreamChat } from 'stream-chat';
 
 type StreamChannel=any;
 import { LoadingScreen } from './loading-screen';
-import { MATCH_CHAT_MAX_MESSAGE_LENGTH } from '@/lib/match-chat';
+import { matchChatStreamMessageId, MATCH_CHAT_MAX_MESSAGE_LENGTH } from '@/lib/match-chat';
 import { tr, type Locale } from '@/lib/locale';
 
 type ChatState='awaiting_opening'|'awaiting_reply'|'active'|'expired';
@@ -16,9 +16,25 @@ type InboxChannel={key:string;kind:'roundy'|'match'|'expired';channelType:string
 type InboxResponse={apiKey:string;token:string;streamUserId:string;channels:InboxChannel[];likesCount:number|null};
 type ChatAttachment={type:string;assetUrl:string|null;imageUrl:string|null;thumbUrl:string|null;title:string|null;mimeType:string|null;fileSize:number|null;titleLink:string|null;text:string|null};
 type ChatReaction={type:string;count:number;own:boolean};
-type ChatMessage={id:string;text:string;createdAt:string|null;senderId:string;quotedMessage:{id:string;text:string;senderId:string}|null;attachments:ChatAttachment[];reactions:ChatReaction[]};
+type ChatMessage={id:string;text:string;createdAt:string|null;senderId:string;quotedMessage:{id:string;text:string;senderId:string}|null;attachments:ChatAttachment[];reactions:ChatReaction[];pending?:boolean};
 type PendingAttachment={id:string;type:'image'|'video'|'audio'|'file';url:string;title:string;mimeType:string;fileSize:number};
 type SessionUpdate={chat_state?:ChatState;can_send?:boolean;deadline?:string|null;first_message_by_viewer?:boolean};
+type MatchProfile={
+ id:string;
+ full_name:string;
+ age:number|null;
+ nationality:string|null;
+ height_cm:number|null;
+ mbti:string|null;
+ public_job:string|null;
+ public_workplace:string|null;
+ interests:string[];
+ photos:string[];
+ event_title:string|null;
+ event_starts_at:string|null;
+ round_number:number|null;
+ table_number:number|null;
+};
 
 const REACTIONS=[['love','♥'],['like','👍'],['haha','😂'],['wow','😮']] as const;
 const EMOJIS=['😊','😂','❤️','👍','🔥','🎉','🥰','🙌','👋','☕','✨','🤍'];
@@ -72,6 +88,7 @@ function reactionGlyph(type:string){return REACTIONS.find(([name])=>name===type)
 function attachmentLabel(attachment:ChatAttachment,locale:Locale){if(attachment.type==='image')return tr(locale,'Photo','사진');if(attachment.type==='video')return tr(locale,'Video','동영상');if(attachment.type==='audio')return tr(locale,'Voice message','음성 메시지');return attachment.title??tr(locale,'Attachment','첨부 파일');}
 function dayKey(value:string|null){if(!value)return '';const date=new Date(value);return Number.isNaN(date.getTime())?'':date.getFullYear()+'-'+date.getMonth()+'-'+date.getDate();}
 function dayLabel(value:string|null,locale:Locale){if(!value)return '';const date=new Date(value);if(Number.isNaN(date.getTime()))return '';return new Intl.DateTimeFormat(locale==='ko'?'ko-KR':'en-US',{month:'short',day:'numeric',year:date.getFullYear()!==new Date().getFullYear()?'numeric':undefined}).format(date);}
+function nationalityLabel(value:string|null,locale:Locale){if(!value)return '';try{return new Intl.DisplayNames([locale==='ko'?'ko-KR':'en-US'],{type:'region'}).of(value.toUpperCase())??value;}catch{return value;}}
 function Avatar({channel}:{channel:InboxChannel}){const [failed,setFailed]=useState(false);if(channel.kind==='roundy')return <span className="inbox-avatar roundy-avatar" aria-label="Roundy Team">R</span>;return <span className={'inbox-avatar'+(channel.kind==='expired'?' expired':'')}>{channel.photo&&!failed?<Image src={channel.photo} alt="" fill sizes="56px" unoptimized onError={()=>setFailed(true)}/>:<UserRound size={22}/>}</span>;}
 
 function AttachmentView({attachment,locale}:{attachment:ChatAttachment;locale:Locale}){
@@ -92,8 +109,11 @@ export function MatchesScreen({locale}:{locale:Locale}){
  const [typing,setTyping]=useState<Record<string,boolean>>({}),[unread,setUnread]=useState<Record<string,number>>({}),[readAt,setReadAt]=useState<Record<string,string|null>>({});
  const [replyTo,setReplyTo]=useState<ChatMessage|null>(null),[pendingAttachments,setPendingAttachments]=useState<PendingAttachment[]>([]),[uploading,setUploading]=useState(false),[emojiOpen,setEmojiOpen]=useState(false),[activeMessageId,setActiveMessageId]=useState<string|null>(null),[featureNotice,setFeatureNotice]=useState('');
  const [recording,setRecording]=useState(false);
+ const [connectionState,setConnectionState]=useState<'connecting'|'online'|'offline'>('connecting');
+ const [profileOpen,setProfileOpen]=useState(false),[profileLoading,setProfileLoading]=useState(false),[profileError,setProfileError]=useState(''),[profile,setProfile]=useState<MatchProfile|null>(null),[profilePhotoIndex,setProfilePhotoIndex]=useState(0);
  const channelsRef=useRef<Record<string,StreamChannel>>({}),selectedKeyRef=useRef(selectedKey),mobileConversationRef=useRef(mobileConversation),composerRef=useRef<HTMLTextAreaElement|null>(null),fileInputRef=useRef<HTMLInputElement|null>(null),messagesEndRef=useRef<HTMLDivElement|null>(null);
  const recorderRef=useRef<MediaRecorder|null>(null),recordingChunksRef=useRef<Blob[]>([]),recordingStreamRef=useRef<MediaStream|null>(null);
+ const connectionSignature=inbox?[inbox.apiKey,inbox.streamUserId,...inbox.channels.map(channel=>channel.key+':'+(channel.channelType??'')+':'+(channel.channelId??''))].join('|'):'';
 
  useEffect(()=>{selectedKeyRef.current=selectedKey;},[selectedKey]);
  useEffect(()=>{mobileConversationRef.current=mobileConversation;},[mobileConversation]);
@@ -101,17 +121,36 @@ export function MatchesScreen({locale}:{locale:Locale}){
  useEffect(()=>{const controller=new AbortController();setLoading(true);setError('');setInbox(null);setMessages({});setUnread({});setReadAt({});channelsRef.current={};void fetch('/api/chat/inbox',{cache:'no-store',signal:controller.signal}).then(async response=>{const data=await response.json();if(!response.ok)throw new Error(data.error||'Could not load your inbox.');return data as InboxResponse;}).then(data=>{if(!controller.signal.aborted){setInbox(data);setSelectedKey(previous=>data.channels.some(channel=>channel.key===previous)?previous:'roundy');}}).catch(reason=>{if(!controller.signal.aborted)setError(reason instanceof Error?reason.message:tr(locale,'Could not load your inbox.','메시지를 불러오지 못했어요.'));}).finally(()=>{if(!controller.signal.aborted)setLoading(false);});return()=>controller.abort();},[locale,retry]);
 
  useEffect(()=>{
-  if(!inbox)return;
+  if(!inbox||!connectionSignature)return;
   let active=true;
+  const source=inbox;
   const cleanups:(()=>void)[]=[];
-  const client=StreamChat.getInstance(inbox.apiKey);
+  const client=StreamChat.getInstance(source.apiKey);
+  let firstToken=source.token;
+
+  async function tokenProvider(){
+   if(firstToken){const token=firstToken;firstToken='';return token;}
+   let lastError:unknown=null;
+   for(let attempt=0;attempt<3;attempt++){
+    try{
+     const response=await fetch('/api/chat/token',{cache:'no-store',credentials:'same-origin'});
+     const data=await response.json();
+     if(!response.ok||typeof data.token!=='string')throw new Error(data.error||'Could not refresh chat token.');
+     return data.token as string;
+    }catch(error){
+     lastError=error;
+     await new Promise(resolve=>window.setTimeout(resolve,250*(2**attempt)));
+    }
+   }
+   throw lastError instanceof Error?lastError:new Error('Could not refresh chat token.');
+  }
   function syncChannel(entry:InboxChannel,channel:StreamChannel){
    if(!active)return;
    setMessages(previous=>({...previous,[entry.key]:toMessages(channel.state.messages as unknown[])}));
    setUnread(previous=>({...previous,[entry.key]:channel.countUnread()}));
    if(entry.kind==='match'){
     const read=channel.state.read as unknown as Record<string,{last_read?:string|Date,user?:{id?:string}}>;
-    const otherRead=Object.entries(read).find(([userId])=>userId!==inbox!.streamUserId)?.[1];
+    const otherRead=Object.entries(read).find(([userId])=>userId!==source.streamUserId)?.[1];
     setReadAt(previous=>({...previous,[entry.key]:dateString(otherRead?.last_read)}));
    }
   }
@@ -120,13 +159,12 @@ export function MatchesScreen({locale}:{locale:Locale}){
    if(typeof window==='undefined')return false;
    return mobileConversationRef.current||window.matchMedia('(min-width: 760px)').matches;
   }
-  void (async()=>{
-   try{
-    if(client.userID&&client.userID!==inbox.streamUserId)await client.disconnectUser();
-    await client.connectUser({id:inbox.streamUserId},inbox.token);
-    for(const entry of inbox.channels){
-     if(!entry.channelType||!entry.channelId)continue;
-     const channel=client.channel(entry.channelType,entry.channelId);
+  async function watchEntry(entry:InboxChannel){
+   if(!entry.channelType||!entry.channelId)return;
+   const channel=client.channel(entry.channelType,entry.channelId);
+   let lastError:unknown=null;
+   for(let attempt=0;attempt<3;attempt++){
+    try{
      await channel.watch();
      if(!active)return;
      channelsRef.current[entry.key]=channel;
@@ -134,19 +172,69 @@ export function MatchesScreen({locale}:{locale:Locale}){
      const listener=channel.on(event=>{
       if(!active)return;
       if(event.type==='message.new'||event.type==='message.updated'||event.type==='message.deleted'||event.type==='reaction.new'||event.type==='reaction.updated'||event.type==='reaction.deleted'||event.type==='message.read'||event.type==='notification.mark_read'||event.type==='notification.mark_unread')syncChannel(entry,channel);
-      if(event.type==='typing.start'&&event.user?.id&&event.user.id!==inbox.streamUserId)setTyping(previous=>({...previous,[entry.key]:true}));
-      if(event.type==='typing.stop'&&event.user?.id&&event.user.id!==inbox.streamUserId)setTyping(previous=>({...previous,[entry.key]:false}));
-      if(event.type==='message.new'&&event.message?.user?.id!==inbox.streamUserId){
+      if(event.type==='typing.start'&&event.user?.id&&event.user.id!==source.streamUserId)setTyping(previous=>({...previous,[entry.key]:true}));
+      if(event.type==='typing.stop'&&event.user?.id&&event.user.id!==source.streamUserId)setTyping(previous=>({...previous,[entry.key]:false}));
+      if(event.type==='message.new'&&event.message?.user?.id!==source.streamUserId){
        if(entry.kind==='match')void refreshSession(entry);
        if(visible(entry))void channel.markRead().then(()=>syncChannel(entry,channel)).catch(()=>undefined);
       }
      });
      cleanups.push(()=>listener.unsubscribe());
+     return;
+    }catch(error){
+     lastError=error;
+     if(attempt<2)await new Promise(resolve=>window.setTimeout(resolve,350*(2**attempt)));
     }
-   }catch(reason){if(active)setError(reason instanceof Error?reason.message:tr(locale,'Could not connect to chat.','채팅에 연결하지 못했어요.'));}
+   }
+   throw lastError;
+  }
+  async function resync(){
+   if(!active||!navigator.onLine)return;
+   try{
+    await Promise.all(source.channels.map(async entry=>{
+     const channel=channelsRef.current[entry.key];
+     if(!channel)return;
+     await channel.watch();
+     syncChannel(entry,channel);
+    }));
+    if(active)setConnectionState('online');
+   }catch{if(active)setConnectionState('offline');}
+  }
+  const connectionListener=client.on('connection.changed',event=>{
+   const online=(event as {online?:boolean}).online;
+   if(!active)return;
+   setConnectionState(online===false?'offline':'online');
+   if(online!==false)void resync();
+  });
+  const recoveredListener=client.on('connection.recovered',()=>{if(active){setConnectionState('online');void resync();}});
+  const recover=()=>{if(document.visibilityState==='visible'&&navigator.onLine)void resync();};
+  window.addEventListener('online',recover);
+  document.addEventListener('visibilitychange',recover);
+
+  void (async()=>{
+   try{
+    setConnectionState('connecting');
+    if(client.userID)await client.disconnectUser();
+    await client.connectUser({id:source.streamUserId},tokenProvider);
+    if(!active)return;
+    setConnectionState('online');
+    for(const entry of source.channels){
+     try{await watchEntry(entry);}catch{if(active)setConnectionState('offline');}
+    }
+   }catch{if(active)setConnectionState('offline');}
   })();
-  return()=>{active=false;cleanups.forEach(cleanup=>cleanup());channelsRef.current={};void client.disconnectUser();};
- },[inbox,locale]);
+
+  return()=>{
+   active=false;
+   cleanups.forEach(cleanup=>cleanup());
+   connectionListener.unsubscribe();
+   recoveredListener.unsubscribe();
+   window.removeEventListener('online',recover);
+   document.removeEventListener('visibilitychange',recover);
+   channelsRef.current={};
+   void client.disconnectUser();
+  };
+ },[connectionSignature]);
 
  useEffect(()=>{const timer=window.setInterval(()=>setNow(Date.now()),60_000);return()=>window.clearInterval(timer);},[]);
  useEffect(()=>{messagesEndRef.current?.scrollIntoView({block:'end'});},[selectedKey,mobileConversation,messages[selectedKey]?.length,typing[selectedKey]]);
@@ -168,6 +256,29 @@ export function MatchesScreen({locale}:{locale:Locale}){
    if(data.session&&typeof data.session==='object')updateSession(channel.matchId,data.session as SessionUpdate);
   }catch{/* Realtime messages still render if the state refresh is temporarily unavailable. */}
  }
+ async function reconcileChannel(channelKey:string){
+  const channel=channelsRef.current[channelKey];
+  if(!channel)return null;
+  try{
+   await channel.watch();
+   const fresh=toMessages(channel.state.messages as unknown[]);
+   setMessages(previous=>({...previous,[channelKey]:fresh}));
+   setUnread(previous=>({...previous,[channelKey]:channel.countUnread()}));
+   return fresh;
+  }catch{return null;}
+ }
+ async function openProfile(channel:InboxChannel){
+  if(!channel.matchId)return;
+  setProfileOpen(true);setProfileLoading(true);setProfileError('');setProfile(null);setProfilePhotoIndex(0);
+  try{
+   const response=await fetch('/api/chat/matches/'+encodeURIComponent(channel.matchId),{cache:'no-store'});
+   const data=await response.json();
+   if(!response.ok)throw new Error(data.error||'Could not load this profile.');
+   if(data.session&&typeof data.session==='object')updateSession(channel.matchId,data.session as SessionUpdate);
+   if(!data.profile||typeof data.profile!=='object')throw new Error(tr(locale,'This profile is unavailable.','이 프로필을 불러올 수 없어요.'));
+   setProfile(data.profile as MatchProfile);
+  }catch(reason){setProfileError(reason instanceof Error?reason.message:tr(locale,'Could not load this profile.','프로필을 불러오지 못했어요.'));}finally{setProfileLoading(false);}
+ }
  function stopTyping(channelKey=selectedKey){const channel=channelsRef.current[channelKey];if(channel)void channel.stopTyping().catch(()=>undefined);}
  function openConversation(channel:InboxChannel){
   if(recording)stopRecording();
@@ -180,16 +291,42 @@ export function MatchesScreen({locale}:{locale:Locale}){
 
  async function send(event:FormEvent<HTMLFormElement>){
   event.preventDefault();
+  const current=selected;
   const text=draft.trim();
-  if(!selected?.matchId||!selected.canSend||(!text&&!pendingAttachments.length)||sending||uploading)return;
+  if(!current?.matchId||!current.canSend||(!text&&!pendingAttachments.length)||sending||uploading||!inbox)return;
+  const browserMessageId=crypto.randomUUID();
+  const streamMessageId=matchChatStreamMessageId(current.matchId,browserMessageId);
+  const attachmentSnapshot=[...pendingAttachments];
+  const replySnapshot=replyTo;
+  const optimistic:ChatMessage={
+   id:streamMessageId,
+   text,
+   createdAt:new Date().toISOString(),
+   senderId:inbox.streamUserId,
+   quotedMessage:replySnapshot?{id:replySnapshot.id,text:replySnapshot.text,senderId:replySnapshot.senderId}:null,
+   attachments:attachmentSnapshot.map(attachment=>({
+    type:attachment.type,
+    assetUrl:attachment.type==='image'?null:attachment.url,
+    imageUrl:attachment.type==='image'?attachment.url:null,
+    thumbUrl:null,
+    title:attachment.title,
+    mimeType:attachment.mimeType,
+    fileSize:attachment.fileSize,
+    titleLink:null,
+    text:null,
+   })),
+   reactions:[],
+   pending:true,
+  };
+  setMessages(previous=>({...previous,[current.key]:mergeMessage(previous[current.key]??[],optimistic)}));
   setSending(true);setSendError('');setFeatureNotice('');
   try{
-   stopTyping(selected.key);
-   const response=await fetch('/api/chat/matches/'+encodeURIComponent(selected.matchId),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+   stopTyping(current.key);
+   const response=await fetch('/api/chat/matches/'+encodeURIComponent(current.matchId),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
     text,
-    messageId:crypto.randomUUID(),
-    quotedMessageId:replyTo?.id??null,
-    attachments:pendingAttachments.map(attachment=>({
+    messageId:browserMessageId,
+    quotedMessageId:replySnapshot?.id??null,
+    attachments:attachmentSnapshot.map(attachment=>({
      type:attachment.type,
      ...(attachment.type==='image'?{image_url:attachment.url}:{asset_url:attachment.url}),
      title:attachment.title,
@@ -199,10 +336,22 @@ export function MatchesScreen({locale}:{locale:Locale}){
    })});
    const data=await response.json();
    if(!response.ok)throw new Error(data.error||'Could not send your message.');
+   setMessages(previous=>({...previous,[current.key]:(previous[current.key]??[]).map(message=>message.id===streamMessageId?{...message,pending:false}:message)}));
    setDraft('');setReplyTo(null);setPendingAttachments([]);setEmojiOpen(false);
-   if(data.session&&typeof data.session==='object')updateSession(selected.matchId,data.session as SessionUpdate);
-   const channel=channelsRef.current[selected.key];if(channel)void channel.markRead().catch(()=>undefined);
-  }catch(reason){setSendError(reason instanceof Error?reason.message:tr(locale,'Could not send your message.','메시지를 보내지 못했어요.'));}finally{setSending(false);}
+   if(data.session&&typeof data.session==='object')updateSession(current.matchId,data.session as SessionUpdate);
+   const channel=channelsRef.current[current.key];
+   if(channel)void channel.markRead().catch(()=>undefined);
+   void reconcileChannel(current.key);
+  }catch(reason){
+   const fresh=await reconcileChannel(current.key);
+   const delivered=Boolean(fresh?.some(message=>message.id===streamMessageId));
+   if(delivered){
+    setDraft('');setReplyTo(null);setPendingAttachments([]);setEmojiOpen(false);
+   }else{
+    setMessages(previous=>({...previous,[current.key]:(previous[current.key]??[]).filter(message=>message.id!==streamMessageId)}));
+   }
+   setSendError(reason instanceof Error?reason.message:tr(locale,'Could not send your message.','메시지를 보내지 못했어요.'));
+  }finally{setSending(false);}
  }
 
  async function uploadFiles(files:File[]){
@@ -298,9 +447,9 @@ export function MatchesScreen({locale}:{locale:Locale}){
   <article className="inbox-conversation">
    <header className="inbox-conversation-header">
     <button className="icon-button inbox-back" aria-label={tr(locale,'Back to conversations','대화 목록으로 돌아가기')} onClick={closeConversation}><ArrowLeft size={21}/></button>
-    <Avatar key={selected.key} channel={selected}/>
-    <div><Heading level={2}>{selected.title}</Heading><p>{typing[selected.key]?tr(locale,'Typing…','입력 중…'):deadlineLabel(selected,locale,now)}</p></div>
+    {selected.matchId?<button type="button" className="inbox-profile-trigger" onClick={()=>void openProfile(selected)} aria-label={tr(locale,'View match profile','매칭 프로필 보기')}><Avatar key={selected.key} channel={selected}/><span><strong>{selected.title}</strong><small>{typing[selected.key]?tr(locale,'Typing…','입력 중…'):deadlineLabel(selected,locale,now)}</small></span></button>:<><Avatar key={selected.key} channel={selected}/><div><Heading level={2}>{selected.title}</Heading><p>{deadlineLabel(selected,locale,now)}</p></div></>}
    </header>
+   {connectionState!=='online'&&<p className={'inbox-live-status '+connectionState}><span/>{connectionState==='connecting'?tr(locale,'Connecting chat…','채팅 연결 중…'):tr(locale,'Reconnecting… messages can still be sent.','재연결 중… 메시지는 계속 보낼 수 있어요.')}</p>}
 
    {selected.kind==='expired'?<div className="inbox-expired"><Clock3 size={25}/><Heading level={3}>{tr(locale,'Match expired','매칭이 만료되었어요')}</Heading><p>{phaseCopy(selected,locale)}</p></div>:<>
     {selected.kind==='match'&&selected.chatState!=='active'&&<p className="inbox-phase"><Clock3 size={16}/>{phaseCopy(selected,locale)}</p>}
@@ -320,7 +469,7 @@ export function MatchesScreen({locale}:{locale:Locale}){
          {message.text&&<p>{message.text}</p>}
         </div>
         {message.reactions.length>0&&<div className="inbox-reactions">{message.reactions.map(reaction=><button type="button" key={reaction.type} className={reaction.own?'own':''} onClick={()=>void toggleReaction(message,reaction.type)}>{reactionGlyph(reaction.type)} <span>{reaction.count}</span></button>)}</div>}
-        <div className="inbox-message-meta">{message.createdAt&&<small>{new Intl.DateTimeFormat(locale==='ko'?'ko-KR':'en-US',{hour:'numeric',minute:'2-digit'}).format(new Date(message.createdAt))}</small>}{mine&&isLast&&<small>{seen?tr(locale,'Read','읽음'):tr(locale,'Sent','전송됨')}</small>}</div>
+        <div className="inbox-message-meta">{message.createdAt&&<small>{new Intl.DateTimeFormat(locale==='ko'?'ko-KR':'en-US',{hour:'numeric',minute:'2-digit'}).format(new Date(message.createdAt))}</small>}{mine&&isLast&&<small>{message.pending?tr(locale,'Sending…','전송 중…'):seen?tr(locale,'Read','읽음'):tr(locale,'Sent','전송됨')}</small>}</div>
         {activeMessageId===message.id&&selected.kind==='match'&&<div className="inbox-message-actions">
          {REACTIONS.map(([type,glyph])=><button type="button" key={type} aria-label={type} onClick={()=>void toggleReaction(message,type)}>{glyph}</button>)}
          <button type="button" aria-label={tr(locale,'Reply','답장')} onClick={()=>reply(message)}><Reply size={16}/></button>
@@ -354,5 +503,27 @@ export function MatchesScreen({locale}:{locale:Locale}){
     </form>}
    </>}
   </article>
+  {profileOpen&&<div className="inbox-profile-backdrop" onMouseDown={()=>setProfileOpen(false)}>
+   <section className="inbox-profile-modal" role="dialog" aria-modal="true" aria-labelledby="inbox-profile-name" onMouseDown={event=>event.stopPropagation()}>
+    <button type="button" className="inbox-profile-close" aria-label={tr(locale,'Close profile','프로필 닫기')} onClick={()=>setProfileOpen(false)}><X size={20}/></button>
+    {profileLoading?<div className="inbox-profile-loading"><span/><p>{tr(locale,'Loading profile…','프로필 불러오는 중…')}</p></div>:profileError?<div className="inbox-profile-error"><UserRound size={32}/><p>{profileError}</p></div>:profile&&<>
+     <div className="inbox-profile-photo">
+      {profile.photos?.[profilePhotoIndex]?<Image src={profile.photos[profilePhotoIndex]} alt="" fill sizes="(max-width: 760px) 92vw, 430px" unoptimized/>:<UserRound size={48}/>}
+      {profile.photos.length>1&&<><button type="button" className="inbox-profile-prev" aria-label={tr(locale,'Previous photo','이전 사진')} onClick={()=>setProfilePhotoIndex(index=>(index-1+profile.photos.length)%profile.photos.length)}>‹</button><button type="button" className="inbox-profile-next" aria-label={tr(locale,'Next photo','다음 사진')} onClick={()=>setProfilePhotoIndex(index=>(index+1)%profile.photos.length)}>›</button><div className="inbox-profile-dots">{profile.photos.map((_,index)=><button key={index} type="button" aria-label={tr(locale,'Show photo '+(index+1),'사진 '+(index+1)+' 보기')} className={index===profilePhotoIndex?'active':''} onClick={()=>setProfilePhotoIndex(index)}/>)}</div></>}
+     </div>
+     <div className="inbox-profile-copy">
+      <div className="inbox-profile-title"><Heading level={2} id="inbox-profile-name">{profile.full_name}{profile.age?', '+profile.age:''}</Heading>{profile.mbti&&<span>{profile.mbti}</span>}</div>
+      <div className="inbox-profile-facts">
+       {profile.nationality&&<span>{nationalityLabel(profile.nationality,locale)}</span>}
+       {profile.height_cm&&<span>{profile.height_cm} cm</span>}
+       {profile.public_job&&<span>{profile.public_job}</span>}
+       {profile.public_workplace&&<span>{profile.public_workplace}</span>}
+      </div>
+      {profile.interests?.length>0&&<div className="inbox-profile-interests">{profile.interests.map(interest=><span key={interest}>{interest}</span>)}</div>}
+      {profile.event_title&&<div className="inbox-profile-met-at"><small>{tr(locale,'YOU MET AT','처음 만난 모임')}</small><strong>{profile.event_title}</strong>{profile.round_number&&<span>{tr(locale,'Round ','라운드 ')}{profile.round_number}{profile.table_number?tr(locale,' · Table ',' · 테이블 ')+profile.table_number:''}</span>}</div>}
+     </div>
+    </>}
+   </section>
+  </div>}
  </section>;
 }
