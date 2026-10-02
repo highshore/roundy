@@ -447,9 +447,9 @@ export function MatchesScreen({locale}:{locale:Locale}){
   <article className="inbox-conversation">
    <header className="inbox-conversation-header">
     <button className="icon-button inbox-back" aria-label={tr(locale,'Back to conversations','대화 목록으로 돌아가기')} onClick={closeConversation}><ArrowLeft size={21}/></button>
-    <Avatar key={selected.key} channel={selected}/>
-    <div><Heading level={2}>{selected.title}</Heading><p>{typing[selected.key]?tr(locale,'Typing…','입력 중…'):deadlineLabel(selected,locale,now)}</p></div>
+    {selected.matchId?<button type="button" className="inbox-profile-trigger" onClick={()=>void openProfile(selected)} aria-label={tr(locale,'View match profile','매칭 프로필 보기')}><Avatar key={selected.key} channel={selected}/><span><strong>{selected.title}</strong><small>{typing[selected.key]?tr(locale,'Typing…','입력 중…'):deadlineLabel(selected,locale,now)}</small></span></button>:<><Avatar key={selected.key} channel={selected}/><div><Heading level={2}>{selected.title}</Heading><p>{deadlineLabel(selected,locale,now)}</p></div></>}
    </header>
+   {connectionState!=='online'&&<p className={'inbox-live-status '+connectionState}><span/>{connectionState==='connecting'?tr(locale,'Connecting chat…','채팅 연결 중…'):tr(locale,'Reconnecting… messages can still be sent.','재연결 중… 메시지는 계속 보낼 수 있어요.')}</p>}
 
    {selected.kind==='expired'?<div className="inbox-expired"><Clock3 size={25}/><Heading level={3}>{tr(locale,'Match expired','매칭이 만료되었어요')}</Heading><p>{phaseCopy(selected,locale)}</p></div>:<>
     {selected.kind==='match'&&selected.chatState!=='active'&&<p className="inbox-phase"><Clock3 size={16}/>{phaseCopy(selected,locale)}</p>}
@@ -469,7 +469,7 @@ export function MatchesScreen({locale}:{locale:Locale}){
          {message.text&&<p>{message.text}</p>}
         </div>
         {message.reactions.length>0&&<div className="inbox-reactions">{message.reactions.map(reaction=><button type="button" key={reaction.type} className={reaction.own?'own':''} onClick={()=>void toggleReaction(message,reaction.type)}>{reactionGlyph(reaction.type)} <span>{reaction.count}</span></button>)}</div>}
-        <div className="inbox-message-meta">{message.createdAt&&<small>{new Intl.DateTimeFormat(locale==='ko'?'ko-KR':'en-US',{hour:'numeric',minute:'2-digit'}).format(new Date(message.createdAt))}</small>}{mine&&isLast&&<small>{seen?tr(locale,'Read','읽음'):tr(locale,'Sent','전송됨')}</small>}</div>
+        <div className="inbox-message-meta">{message.createdAt&&<small>{new Intl.DateTimeFormat(locale==='ko'?'ko-KR':'en-US',{hour:'numeric',minute:'2-digit'}).format(new Date(message.createdAt))}</small>}{mine&&isLast&&<small>{message.pending?tr(locale,'Sending…','전송 중…'):seen?tr(locale,'Read','읽음'):tr(locale,'Sent','전송됨')}</small>}</div>
         {activeMessageId===message.id&&selected.kind==='match'&&<div className="inbox-message-actions">
          {REACTIONS.map(([type,glyph])=><button type="button" key={type} aria-label={type} onClick={()=>void toggleReaction(message,type)}>{glyph}</button>)}
          <button type="button" aria-label={tr(locale,'Reply','답장')} onClick={()=>reply(message)}><Reply size={16}/></button>
