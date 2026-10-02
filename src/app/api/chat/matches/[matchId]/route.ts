@@ -140,7 +140,10 @@ export async function GET(_request:NextRequest,{params}:{params:Promise<{matchId
  try{
   const session=await matchSession(member.user.id,matchId);
   if(session.chat_state!=='expired')await createMatchChannels(member.user.id,session);
-  return json({session,apiKey:streamChatApiKey(),token:session.chat_state==='expired'?null:streamUserToken(member.user.id)});
+  const {data:cards,error:profileError}=await member.supabase.rpc('match_cards',{p_match:matchId});
+  if(profileError)throw new Error(profileError.message);
+  const profile=Array.isArray(cards)?cards[0]??null:null;
+  return json({session,profile,apiKey:streamChatApiKey(),token:session.chat_state==='expired'?null:streamUserToken(member.user.id)});
  }catch(error){
   return errorResponse(error);
  }
