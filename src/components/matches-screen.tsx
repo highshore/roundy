@@ -121,17 +121,36 @@ export function MatchesScreen({locale}:{locale:Locale}){
  useEffect(()=>{const controller=new AbortController();setLoading(true);setError('');setInbox(null);setMessages({});setUnread({});setReadAt({});channelsRef.current={};void fetch('/api/chat/inbox',{cache:'no-store',signal:controller.signal}).then(async response=>{const data=await response.json();if(!response.ok)throw new Error(data.error||'Could not load your inbox.');return data as InboxResponse;}).then(data=>{if(!controller.signal.aborted){setInbox(data);setSelectedKey(previous=>data.channels.some(channel=>channel.key===previous)?previous:'roundy');}}).catch(reason=>{if(!controller.signal.aborted)setError(reason instanceof Error?reason.message:tr(locale,'Could not load your inbox.','메시지를 불러오지 못했어요.'));}).finally(()=>{if(!controller.signal.aborted)setLoading(false);});return()=>controller.abort();},[locale,retry]);
 
  useEffect(()=>{
-  if(!inbox)return;
+  if(!inbox||!connectionSignature)return;
   let active=true;
+  const source=inbox;
   const cleanups:(()=>void)[]=[];
-  const client=StreamChat.getInstance(inbox.apiKey);
+  const client=StreamChat.getInstance(source.apiKey);
+  let firstToken=source.token;
+
+  async function tokenProvider(){
+   if(firstToken){const token=firstToken;firstToken='';return token;}
+   let lastError:unknown=null;
+   for(let attempt=0;attempt<3;attempt++){
+    try{
+     const response=await fetch('/api/chat/token',{cache:'no-store',credentials:'same-origin'});
+     const data=await response.json();
+     if(!response.ok||typeof data.token!=='string')throw new Error(data.error||'Could not refresh chat token.');
+     return data.token as string;
+    }catch(error){
+     lastError=error;
+     await new Promise(resolve=>window.setTimeout(resolve,250*(2**attempt)));
+    }
+   }
+   throw lastError instanceof Error?lastError:new Error('Could not refresh chat token.');
+  }
   function syncChannel(entry:InboxChannel,channel:StreamChannel){
    if(!active)return;
    setMessages(previous=>({...previous,[entry.key]:toMessages(channel.state.messages as unknown[])}));
    setUnread(previous=>({...previous,[entry.key]:channel.countUnread()}));
    if(entry.kind==='match'){
     const read=channel.state.read as unknown as Record<string,{last_read?:string|Date,user?:{id?:string}}>;
-    const otherRead=Object.entries(read).find(([userId])=>userId!==inbox!.streamUserId)?.[1];
+    const otherRead=Object.entries(read).find(([userId])=>userId!==source.streamUserId)?.[1];
     setReadAt(previous=>({...previous,[entry.key]:dateString(otherRead?.last_read)}));
    }
   }
@@ -140,13 +159,12 @@ export function MatchesScreen({locale}:{locale:Locale}){
    if(typeof window==='undefined')return false;
    return mobileConversationRef.current||window.matchMedia('(min-width: 760px)').matches;
   }
-  void (async()=>{
-   try{
-    if(client.userID&&client.userID!==inbox.streamUserId)await client.disconnectUser();
-    await client.connectUser({id:inbox.streamUserId},inbox.token);
-    for(const entry of inbox.channels){
-     if(!entry.channelType||!entry.channelId)continue;
-     const channel=client.channel(entry.channelType,entry.channelId);
+  async function watchEntry(entry:InboxChannel){
+   if(!entry.channelType||!entry.channelId)return;
+   const channel=client.channel(entry.channelType,entry.channelId);
+   let lastError:unknown=null;
+   for(let attempt=0;attempt<3;attempt++){
+    try{
      await channel.watch();
      if(!active)return;
      channelsRef.current[entry.key]=channel;
@@ -154,19 +172,69 @@ export function MatchesScreen({locale}:{locale:Locale}){
      const listener=channel.on(event=>{
       if(!active)return;
       if(event.type==='message.new'||event.type==='message.updated'||event.type==='message.deleted'||event.type==='reaction.new'||event.type==='reaction.updated'||event.type==='reaction.deleted'||event.type==='message.read'||event.type==='notification.mark_read'||event.type==='notification.mark_unread')syncChannel(entry,channel);
-      if(event.type==='typing.start'&&event.user?.id&&event.user.id!==inbox.streamUserId)setTyping(previous=>({...previous,[entry.key]:true}));
-      if(event.type==='typing.stop'&&event.user?.id&&event.user.id!==inbox.streamUserId)setTyping(previous=>({...previous,[entry.key]:false}));
-      if(event.type==='message.new'&&event.message?.user?.id!==inbox.streamUserId){
+      if(event.type==='typing.start'&&event.user?.id&&event.user.id!==source.streamUserId)setTyping(previous=>({...previous,[entry.key]:true}));
+      if(event.type==='typing.stop'&&event.user?.id&&event.user.id!==source.streamUserId)setTyping(previous=>({...previous,[entry.key]:false}));
+      if(event.type==='message.new'&&event.message?.user?.id!==source.streamUserId){
        if(entry.kind==='match')void refreshSession(entry);
        if(visible(entry))void channel.markRead().then(()=>syncChannel(entry,channel)).catch(()=>undefined);
       }
      });
      cleanups.push(()=>listener.unsubscribe());
+     return;
+    }catch(error){
+     lastError=error;
+     if(attempt<2)await new Promise(resolve=>window.setTimeout(resolve,350*(2**attempt)));
     }
-   }catch(reason){if(active)setError(reason instanceof Error?reason.message:tr(locale,'Could not connect to chat.','채팅에 연결하지 못했어요.'));}
+   }
+   throw lastError;
+  }
+  async function resync(){
+   if(!active||!navigator.onLine)return;
+   try{
+    await Promise.all(source.channels.map(async entry=>{
+     const channel=channelsRef.current[entry.key];
+     if(!channel)return;
+     await channel.watch();
+     syncChannel(entry,channel);
+    }));
+    if(active)setConnectionState('online');
+   }catch{if(active)setConnectionState('offline');}
+  }
+  const connectionListener=client.on('connection.changed',event=>{
+   const online=(event as {online?:boolean}).online;
+   if(!active)return;
+   setConnectionState(online===false?'offline':'online');
+   if(online!==false)void resync();
+  });
+  const recoveredListener=client.on('connection.recovered',()=>{if(active){setConnectionState('online');void resync();}});
+  const recover=()=>{if(document.visibilityState==='visible'&&navigator.onLine)void resync();};
+  window.addEventListener('online',recover);
+  document.addEventListener('visibilitychange',recover);
+
+  void (async()=>{
+   try{
+    setConnectionState('connecting');
+    if(client.userID)await client.disconnectUser();
+    await client.connectUser({id:source.streamUserId},tokenProvider);
+    if(!active)return;
+    setConnectionState('online');
+    for(const entry of source.channels){
+     try{await watchEntry(entry);}catch{if(active)setConnectionState('offline');}
+    }
+   }catch{if(active)setConnectionState('offline');}
   })();
-  return()=>{active=false;cleanups.forEach(cleanup=>cleanup());channelsRef.current={};void client.disconnectUser();};
- },[inbox,locale]);
+
+  return()=>{
+   active=false;
+   cleanups.forEach(cleanup=>cleanup());
+   connectionListener.unsubscribe();
+   recoveredListener.unsubscribe();
+   window.removeEventListener('online',recover);
+   document.removeEventListener('visibilitychange',recover);
+   channelsRef.current={};
+   void client.disconnectUser();
+  };
+ },[connectionSignature]);
 
  useEffect(()=>{const timer=window.setInterval(()=>setNow(Date.now()),60_000);return()=>window.clearInterval(timer);},[]);
  useEffect(()=>{messagesEndRef.current?.scrollIntoView({block:'end'});},[selectedKey,mobileConversation,messages[selectedKey]?.length,typing[selectedKey]]);
