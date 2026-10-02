@@ -256,6 +256,29 @@ export function MatchesScreen({locale}:{locale:Locale}){
    if(data.session&&typeof data.session==='object')updateSession(channel.matchId,data.session as SessionUpdate);
   }catch{/* Realtime messages still render if the state refresh is temporarily unavailable. */}
  }
+ async function reconcileChannel(channelKey:string){
+  const channel=channelsRef.current[channelKey];
+  if(!channel)return null;
+  try{
+   await channel.watch();
+   const fresh=toMessages(channel.state.messages as unknown[]);
+   setMessages(previous=>({...previous,[channelKey]:fresh}));
+   setUnread(previous=>({...previous,[channelKey]:channel.countUnread()}));
+   return fresh;
+  }catch{return null;}
+ }
+ async function openProfile(channel:InboxChannel){
+  if(!channel.matchId)return;
+  setProfileOpen(true);setProfileLoading(true);setProfileError('');setProfile(null);setProfilePhotoIndex(0);
+  try{
+   const response=await fetch('/api/chat/matches/'+encodeURIComponent(channel.matchId),{cache:'no-store'});
+   const data=await response.json();
+   if(!response.ok)throw new Error(data.error||'Could not load this profile.');
+   if(data.session&&typeof data.session==='object')updateSession(channel.matchId,data.session as SessionUpdate);
+   if(!data.profile||typeof data.profile!=='object')throw new Error(tr(locale,'This profile is unavailable.','이 프로필을 불러올 수 없어요.'));
+   setProfile(data.profile as MatchProfile);
+  }catch(reason){setProfileError(reason instanceof Error?reason.message:tr(locale,'Could not load this profile.','프로필을 불러오지 못했어요.'));}finally{setProfileLoading(false);}
+ }
  function stopTyping(channelKey=selectedKey){const channel=channelsRef.current[channelKey];if(channel)void channel.stopTyping().catch(()=>undefined);}
  function openConversation(channel:InboxChannel){
   if(recording)stopRecording();
