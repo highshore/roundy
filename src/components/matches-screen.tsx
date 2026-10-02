@@ -291,16 +291,42 @@ export function MatchesScreen({locale}:{locale:Locale}){
 
  async function send(event:FormEvent<HTMLFormElement>){
   event.preventDefault();
+  const current=selected;
   const text=draft.trim();
-  if(!selected?.matchId||!selected.canSend||(!text&&!pendingAttachments.length)||sending||uploading)return;
+  if(!current?.matchId||!current.canSend||(!text&&!pendingAttachments.length)||sending||uploading||!inbox)return;
+  const browserMessageId=crypto.randomUUID();
+  const streamMessageId=matchChatStreamMessageId(current.matchId,browserMessageId);
+  const attachmentSnapshot=[...pendingAttachments];
+  const replySnapshot=replyTo;
+  const optimistic:ChatMessage={
+   id:streamMessageId,
+   text,
+   createdAt:new Date().toISOString(),
+   senderId:inbox.streamUserId,
+   quotedMessage:replySnapshot?{id:replySnapshot.id,text:replySnapshot.text,senderId:replySnapshot.senderId}:null,
+   attachments:attachmentSnapshot.map(attachment=>({
+    type:attachment.type,
+    assetUrl:attachment.type==='image'?null:attachment.url,
+    imageUrl:attachment.type==='image'?attachment.url:null,
+    thumbUrl:null,
+    title:attachment.title,
+    mimeType:attachment.mimeType,
+    fileSize:attachment.fileSize,
+    titleLink:null,
+    text:null,
+   })),
+   reactions:[],
+   pending:true,
+  };
+  setMessages(previous=>({...previous,[current.key]:mergeMessage(previous[current.key]??[],optimistic)}));
   setSending(true);setSendError('');setFeatureNotice('');
   try{
-   stopTyping(selected.key);
-   const response=await fetch('/api/chat/matches/'+encodeURIComponent(selected.matchId),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+   stopTyping(current.key);
+   const response=await fetch('/api/chat/matches/'+encodeURIComponent(current.matchId),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
     text,
-    messageId:crypto.randomUUID(),
-    quotedMessageId:replyTo?.id??null,
-    attachments:pendingAttachments.map(attachment=>({
+    messageId:browserMessageId,
+    quotedMessageId:replySnapshot?.id??null,
+    attachments:attachmentSnapshot.map(attachment=>({
      type:attachment.type,
      ...(attachment.type==='image'?{image_url:attachment.url}:{asset_url:attachment.url}),
      title:attachment.title,
@@ -310,10 +336,22 @@ export function MatchesScreen({locale}:{locale:Locale}){
    })});
    const data=await response.json();
    if(!response.ok)throw new Error(data.error||'Could not send your message.');
+   setMessages(previous=>({...previous,[current.key]:(previous[current.key]??[]).map(message=>message.id===streamMessageId?{...message,pending:false}:message)}));
    setDraft('');setReplyTo(null);setPendingAttachments([]);setEmojiOpen(false);
-   if(data.session&&typeof data.session==='object')updateSession(selected.matchId,data.session as SessionUpdate);
-   const channel=channelsRef.current[selected.key];if(channel)void channel.markRead().catch(()=>undefined);
-  }catch(reason){setSendError(reason instanceof Error?reason.message:tr(locale,'Could not send your message.','메시지를 보내지 못했어요.'));}finally{setSending(false);}
+   if(data.session&&typeof data.session==='object')updateSession(current.matchId,data.session as SessionUpdate);
+   const channel=channelsRef.current[current.key];
+   if(channel)void channel.markRead().catch(()=>undefined);
+   void reconcileChannel(current.key);
+  }catch(reason){
+   const fresh=await reconcileChannel(current.key);
+   const delivered=Boolean(fresh?.some(message=>message.id===streamMessageId));
+   if(delivered){
+    setDraft('');setReplyTo(null);setPendingAttachments([]);setEmojiOpen(false);
+   }else{
+    setMessages(previous=>({...previous,[current.key]:(previous[current.key]??[]).filter(message=>message.id!==streamMessageId)}));
+   }
+   setSendError(reason instanceof Error?reason.message:tr(locale,'Could not send your message.','메시지를 보내지 못했어요.'));
+  }finally{setSending(false);}
  }
 
  async function uploadFiles(files:File[]){
