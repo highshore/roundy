@@ -165,12 +165,21 @@ function LandingPage({events,locale,attendeesByEvent,publicRosters}:{events:Even
   <section className="landing-v1-reviews">
    <Heading level={2}>{tr(locale,'What people say','참가자 후기')}</Heading>
    <p>{tr(locale,'Verified attendee reviews from past Mingles.','지난 밍글 참가자의 후기를 소개하는 공간입니다.')}</p>
-   <article className="landing-review-card">
-    <span>{tr(locale,'Verified attendee reviews','참가자 후기')}</span>
-    <p>{tr(locale,'Public attendee reviews will appear here when available.','공개 가능한 참가자 후기가 준비되면 여기에 소개할게요.')}</p>
-    <small>{tr(locale,'Roundy Mingle','Roundy 밍글')}</small>
-   </article>
-   <Link className="landing-review-cta" href="/feedback"><span>{tr(locale,'Attended a Mingle? Share feedback','밍글에 참여하셨나요? 후기 남기기')}</span><ArrowRight size={17}/></Link>
+   <div className="landing-review-viewport">
+    <div className="landing-review-track">
+     <article className="landing-review-card">
+      <span>{tr(locale,'Verified attendee','참가자 인증')}</span>
+      <p>{tr(locale,'Public attendee reviews will appear here when available.','공개 가능한 참가자 후기가 준비되면 여기에 소개할게요.')}</p>
+      <small>{tr(locale,'Roundy Mingle','Roundy 밍글')}</small>
+     </article>
+     <article className="landing-review-card">
+      <span>{tr(locale,'Verified attendee','참가자 인증')}</span>
+      <p>{tr(locale,'Reviews are displayed only with attendee permission.','참가자가 공개에 동의한 후기만 소개합니다.')}</p>
+      <small>{tr(locale,'Roundy Mingle','Roundy 밍글')}</small>
+     </article>
+    </div>
+   </div>
+   <div className="landing-review-position" aria-hidden="true"><span className="active"/><span/></div>
   </section>
 
   <section className="landing-v1-safety">
@@ -220,7 +229,7 @@ export function App({path}:{path:string}){
    if(!active)return;
    const valid=rows.filter((row):row is {id:string;counts:EventAttendees;roster:PublicRoster|null}=>row!==null);
    setAttendeesByEvent(Object.fromEntries(valid.map(row=>[row.id,row.counts])));
-   const rosters=valid.filter(row=>row.roster).map(row=>[row.id,row.roster] as const);
+   const rosters=valid.flatMap(row=>row.roster?[[row.id,row.roster] as const]:[]);
    if(rosters.length)setPublicRosters(previous=>({...previous,...Object.fromEntries(rosters)}));
   });
   return()=>{active=false;};
