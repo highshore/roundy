@@ -201,10 +201,10 @@ function LandingPage({events,locale,attendeesByEvent,publicRosters}:{events:Even
     </div>
     <div className="landing-host-story-intro">
      <span className="eyebrow">{tr(locale,'THE PEOPLE BEHIND ROUNDY','라운디를 만드는 사람들')}</span>
-     <Heading level={2}>{tr(locale,'Built by people who actually host.','모임을 직접 운영해온 팀.')}</Heading>
+     <Heading level={2}>{tr(locale,'Built by people who actually host.','80회 넘는 오프라인 모임에서 배운 것들로 만들었어요')}</Heading>
     </div>
    </div>
-   <p>{tr(locale,'80+ offline gatherings in Seoul before Roundy. That experience shapes every Mingle today.','Roundy 이전부터 서울에서 80회 넘게 오프라인 모임을 운영해왔어요.')}</p>
+   <p>{tr(locale,'80+ offline gatherings in Seoul before Roundy. That experience shapes every Mingle today.','그 현장 경험을 지금의 모든 Mingle에 담고 있어요.')}</p>
    <div className="landing-host-story-footer">
     <span>{tr(locale,'80+ gatherings hosted','80회+ 모임 운영')}</span>
     <span>{tr(locale,'About Roundy','Roundy 소개')}<ArrowRight size={16} aria-hidden="true"/></span>
