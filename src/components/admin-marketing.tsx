@@ -9,13 +9,16 @@ import { tr, type Locale } from '@/lib/locale';
 import type { Event } from '@/lib/data';
 import { useToast } from './toast';
 type Channel='instagram'|'koreapas';
+type GrowthTopic='mbti'|'dating_archetype'|'book_insight'|'trend_research'|'meme_remix'|'dating_myth'|'conversation_prompt'|'seoul_dating'|'mini_quiz';
+type CarouselSlide={eyebrow:string;title:string;body:string;source_label:string;variant:'hook'|'content'|'source'|'roundy'};
+type ResearchSource={title:string;publisher:string;url:string;date:string};
 type Template={id?:string;channel:Channel;name:string;title:string;caption:string;cta:string;destination_url:string;images:string[];days:number[];time_kst:string;enabled:boolean};
 type Run={id:string;channel:Channel;snapshot:Template;status:string;message:string;external_url?:string;created_at:string};
-type AutomationSettings={daily_instagram_enabled:boolean;daily_time_kst:string;draft_generation_time_kst:string;optimization_enabled:boolean;auto_reply_enabled:boolean;content_mode:'prelaunch'|'live_event'};
-type Draft={id:string;draft_date:string;event_id:string|null;content_mode:'prelaunch'|'live_event';content_pillar:string;caption:string;cta:string;destination_url:string;images:string[];status:string;generation_reason:string;recommended_time_kst:string;window_start_kst:string;window_end_kst:string;scheduled_for:string|null;revision:number;eligible_for_optimization:boolean;last_regeneration_mode?:'text'|'image'|'both'|null;last_regeneration_instruction?:string;regenerated_at?:string|null};
+type AutomationSettings={daily_instagram_enabled:boolean;daily_time_kst:string;draft_generation_time_kst:string;optimization_enabled:boolean;auto_reply_enabled:boolean;content_mode:'prelaunch'|'live_event';growth_carousel_enabled:boolean;growth_posts_per_week:number;growth_days:number[]};
+type Draft={id:string;draft_date:string;event_id:string|null;content_mode:'prelaunch'|'live_event';draft_kind:'brand'|'growth_carousel';growth_topic_type:GrowthTopic|null;carousel_slides:CarouselSlide[];research_sources:ResearchSource[];research_status:'not_required'|'pending'|'generated'|'failed';content_pillar:string;caption:string;cta:string;destination_url:string;images:string[];status:string;generation_reason:string;recommended_time_kst:string;window_start_kst:string;window_end_kst:string;scheduled_for:string|null;revision:number;eligible_for_optimization:boolean;last_regeneration_mode?:'text'|'image'|'both'|null;last_regeneration_instruction?:string;regenerated_at?:string|null};
 type Recommendation={dow:number;recommended_time_kst:string;window_start_kst:string;window_end_kst:string;sample_size:number;score:number;source:string;rationale:string};
 type WebhookSetup={callback_url:string;verify_token:string;verified_at:string|null;last_received_at:string|null};
-const defaultAutomation:AutomationSettings={daily_instagram_enabled:true,daily_time_kst:'20:00',draft_generation_time_kst:'10:00',optimization_enabled:true,auto_reply_enabled:true,content_mode:'prelaunch'};
+const defaultAutomation:AutomationSettings={daily_instagram_enabled:true,daily_time_kst:'20:00',draft_generation_time_kst:'10:00',optimization_enabled:true,auto_reply_enabled:true,content_mode:'prelaunch',growth_carousel_enabled:true,growth_posts_per_week:3,growth_days:[0,2,4]};
 const blank=(channel:Channel):Template=>({channel,name:'',title:'',caption:'',cta:'Join us',destination_url:'https://roundy.team',images:[],days:[],time_kst:'10:00',enabled:false});
 async function request(path='',body?:unknown,method='POST'){const r=await fetch('/api/admin/marketing'+path,body?{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:undefined);const d=await r.json();if(!r.ok)throw new Error(d.error||'Request failed');return d;}
 async function prepareMarketingPhoto(file:File){
@@ -23,6 +26,42 @@ async function prepareMarketingPhoto(file:File){
  const bitmap=await createImageBitmap(file);const ratio=bitmap.width/bitmap.height;
  if(ratio<.8||ratio>1.91){bitmap.close();throw new Error('Use an image between 4:5 portrait and 1.91:1 landscape. Crop it before uploading.');}
  const canvas=document.createElement('canvas');canvas.width=Math.min(1080,bitmap.width);canvas.height=Math.round(canvas.width/ratio);const context=canvas.getContext('2d');if(!context)throw new Error('Image conversion unavailable');context.fillStyle='#fff';context.fillRect(0,0,canvas.width,canvas.height);context.drawImage(bitmap,0,0,canvas.width,canvas.height);bitmap.close();const blob=await new Promise<Blob>((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error('Image conversion failed')),'image/jpeg',.92));return new File([blob],'marketing.jpg',{type:'image/jpeg'});
+}
+function wrapCanvasText(ctx:CanvasRenderingContext2D,text:string,maxWidth:number,maxLines:number){
+ const words=text.replace(/\s+/g,' ').trim().split(' '),lines:string[]=[];let line='';
+ for(const word of words){
+  const test=line?line+' '+word:word;
+  if(ctx.measureText(test).width<=maxWidth){line=test;continue;}
+  if(line)lines.push(line);line=word;
+  if(lines.length>=maxLines)break;
+ }
+ if(lines.length<maxLines&&line)lines.push(line);
+ if(lines.length===maxLines&&words.join(' ').length>lines.join(' ').length)lines[maxLines-1]=lines[maxLines-1].replace(/[.,!?]?$/,'')+'…';
+ return lines;
+}
+async function renderCarouselCard(slide:CarouselSlide,index:number,total:number){
+ const canvas=document.createElement('canvas');canvas.width=1080;canvas.height=1350;
+ const ctx=canvas.getContext('2d');if(!ctx)throw new Error('Could not render carousel slide.');
+ const palette=slide.variant==='hook'?{bg:'#ff6666',fg:'#20211f',muted:'#4f2929'}:slide.variant==='roundy'?{bg:'#20211f',fg:'#fffefa',muted:'#c9c9bf'}:slide.variant==='source'?{bg:'#f3f3ee',fg:'#20211f',muted:'#6b6f65'}:{bg:'#fffefa',fg:'#20211f',muted:'#6b6f65'};
+ ctx.fillStyle=palette.bg;ctx.fillRect(0,0,1080,1350);
+ ctx.strokeStyle=slide.variant==='roundy'?'#ff6666':'#dedfd7';ctx.lineWidth=2;
+ ctx.beginPath();ctx.arc(920,160,92,0,Math.PI*2);ctx.stroke();
+ ctx.beginPath();ctx.arc(860,220,46,0,Math.PI*2);ctx.stroke();
+ ctx.fillStyle=palette.muted;ctx.font="700 26px 'DM Sans', 'Apple SD Gothic Neo', sans-serif";ctx.fillText(slide.eyebrow||'ROUNDY NOTES',72,96);
+ ctx.textAlign='right';ctx.fillText(String(index+1).padStart(2,'0')+' / '+String(total).padStart(2,'0'),1008,96);ctx.textAlign='left';
+ ctx.fillStyle=palette.fg;ctx.font="700 76px 'DM Sans', 'Apple SD Gothic Neo', sans-serif";
+ let y=270;for(const line of wrapCanvasText(ctx,slide.title,900,4)){ctx.fillText(line,72,y);y+=88;}
+ y+=34;ctx.fillStyle=palette.muted;ctx.font="500 38px 'DM Sans', 'Apple SD Gothic Neo', sans-serif";
+ for(const line of wrapCanvasText(ctx,slide.body,900,8)){ctx.fillText(line,72,y);y+=54;}
+ if(slide.source_label){ctx.fillStyle=palette.muted;ctx.font="600 24px 'DM Sans', 'Apple SD Gothic Neo', sans-serif";const sourceLines=wrapCanvasText(ctx,slide.source_label,900,2);let sy=1205;for(const line of sourceLines){ctx.fillText(line,72,sy);sy+=32;}}
+ if(slide.variant==='roundy'){ctx.fillStyle='#ff6666';ctx.fillRect(72,1255,122,8);ctx.fillStyle=palette.fg;ctx.font="700 26px 'DM Sans', sans-serif";ctx.fillText('@roundy.meet',216,1270);}
+ const blob=await new Promise<Blob>((resolve,reject)=>canvas.toBlob(value=>value?resolve(value):reject(new Error('Could not export carousel slide.')),'image/jpeg',.92));
+ return new File([blob],'roundy-growth-'+String(index+1)+'.jpg',{type:'image/jpeg'});
+}
+async function uploadCarouselSlides(slides:CarouselSlide[]){
+ const urls:string[]=[];
+ for(let index=0;index<slides.length;index++)urls.push(await uploadFile(await renderCarouselCard(slides[index],index,slides.length),'wis-event-images'));
+ return urls;
 }
 function runStatusLabel(status:string,locale:Locale){
  const labels:Record<string,[string,string]>={
