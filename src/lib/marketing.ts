@@ -375,7 +375,7 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
  if(id==='settings'&&req.method==='PUT'){
   const body=await req.json().catch(()=>null);
   const timePattern=/^([01]\d|2[0-3]):[0-5]\d(:00)?$/;
-  const growthDays=Array.isArray(body?.growth_days)?body.growth_days.map(Number):[];
+  const growthDays:number[]=Array.isArray(body?.growth_days)?body.growth_days.map((value:unknown)=>Number(value)):[];
   const growthCount=Number(body?.growth_posts_per_week);
   if(!body||typeof body.daily_instagram_enabled!=='boolean'||typeof body.auto_reply_enabled!=='boolean'||typeof body.optimization_enabled!=='boolean'||typeof body.growth_carousel_enabled!=='boolean'||typeof body.daily_time_kst!=='string'||typeof body.draft_generation_time_kst!=='string'||!['prelaunch','live_event'].includes(body.content_mode)||!timePattern.test(body.daily_time_kst)||!timePattern.test(body.draft_generation_time_kst)||!Number.isInteger(growthCount)||growthCount<0||growthCount>7||growthDays.some(day=>!Number.isInteger(day)||day<0||day>6)||new Set(growthDays).size!==growthDays.length||growthDays.length!==growthCount)return json({error:'Invalid automation settings'},400);
   const {data,error}=await db.from('marketing_automation_settings').update({
