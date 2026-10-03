@@ -9,7 +9,7 @@ const apiVersion=()=>Deno.env.get('INSTAGRAM_API_VERSION')||'v25.0';
 const connection=()=>({instagram:Boolean(token()&&userId()),koreapas:Boolean(Deno.env.get('KOREAPAS_USER_ID')&&Deno.env.get('KOREAPAS_PASSWORD'))});
 const json=(data:unknown,status=200)=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
 
-type Template={channel:'instagram'|'koreapas';title:string;caption:string;cta:string;destination_url:string;images:string[];name?:string};
+type Template={channel:'instagram'|'koreapas';title:string;caption:string;cta:string;destination_url:string;images:string[];name?:string;draft_id?:string;eligible_for_optimization?:boolean;content_pillar?:string};
 type EventRow={
  id:string;slug:string;title:string;starts_at:string;venue:string;neighborhood:string;
  age_min:number;age_max:number;capacity:number;seats_remaining:number;images:string[];
@@ -338,18 +338,39 @@ Deno.serve(async req=>{
     await replyInbox(item as InboxRow,body.reply);
     return json({ok:true});
    }
+   if(body.action==='regenerate_draft'){
+    if(!/^[0-9a-f-]{36}$/i.test(body.draft_id))return json({error:'Invalid draft'},400);
+    return json({draft:await regenerateDraft(body.draft_id)});
+   }
+   if(body.action==='generate_draft_now'){
+    return json({draft:await ensureDailyDraft()});
+   }
    const {data:template,error}=await adminClient.from('marketing_templates').select('*').eq('id',body.template_id).single();if(error||!template)return json({error:'Template not found'},404);validate(template);const result=await adminClient.rpc('enqueue_marketing',{p_template:body.template_id,p_request_key:body.request_key});if(result.error)throw result.error;
   }
-  if(schedulerKey)await enqueueDailyInstagram();
+  if(schedulerKey){
+   await ensureDailyDraft();
+   const insightsChanged=await captureDueInsights();
+   if(insightsChanged)await refreshTimeRecommendations();
+  }
   const {data:runs,error}=await service.rpc('claim_marketing');if(error)throw error;
   const results=[];
-  for(const run of runs??[]){let externalAttempt=false;let outcome:Record<string,unknown>;
-   try{const t=run.snapshot as Template;validate(t);
+  for(const run of runs??[]){
+   let externalAttempt=false;let outcome:Record<string,unknown>;const t=run.snapshot as Template;
+   try{
+    validate(t);
     if(t.channel==='koreapas'&&await hasAdvertOnGopasFirstPage(t.title))outcome={status:'skipped',message:'A post with this title is already on the first Koreapas page.'};
     else if(t.channel==='instagram'){const result=await publishInstagram(t,()=>{externalAttempt=true;});outcome={status:'sent',message:'Published to @roundy.meet',...result};}
     else {const html='<p>'+escapeHtml(t.caption).replace(/\n/g,'<br>')+'</p>'+t.images.map(image=>'<p><img src="'+escapeHtml(image)+'" alt="Roundy event"></p>').join('')+(t.destination_url?'<p><a href="'+escapeHtml(t.destination_url)+'">'+escapeHtml(t.cta||t.destination_url)+'</a></p>':'');externalAttempt=true;const external_url=await publishToKoreapas(t.title,html);outcome={status:'sent',message:'Published to Koreapas',external_url};}
    }catch(error){outcome={status:externalAttempt?'needs_review':'failed',message:(error instanceof Error?error.message:'Publishing failed').slice(0,500)};}
-   const {error:updateError}=await service.from('marketing_runs').update({...outcome,finished_at:new Date().toISOString()}).eq('id',run.id).eq('status','publishing');if(updateError)throw updateError;results.push({id:run.id,...outcome});
+   const finishedAt=new Date().toISOString();
+   const {error:updateError}=await service.from('marketing_runs').update({...outcome,finished_at:finishedAt}).eq('id',run.id).eq('status','publishing');if(updateError)throw updateError;
+   if(t.draft_id){
+    const draftUpdate:Record<string,unknown>={marketing_run_id:run.id};
+    if(outcome.status==='sent')Object.assign(draftUpdate,{status:'published',published_at:finishedAt});
+    else if(outcome.status==='failed')draftUpdate.status='failed';
+    const {error:draftError}=await service.from('instagram_post_drafts').update(draftUpdate).eq('id',t.draft_id);if(draftError)throw draftError;
+   }
+   results.push({id:run.id,...outcome});
   }
   return json({ok:true,runs:results});
  }catch(error){return json({error:error instanceof Error?error.message:'Marketing request failed'},400);}
