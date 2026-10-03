@@ -1,6 +1,7 @@
 import { Cigarette, Globe, MapPin, Mars, Ruler, Venus } from 'lucide-react';
 import { flag } from '@/lib/profile-options';
 import { tr, type Locale } from '@/lib/locale';
+import { eventLanguageLabel, type EventLanguage } from '@/lib/event-presentation';
 import {
   heightRuleLabel,
   smokingRuleLabel,
@@ -31,8 +32,8 @@ export function NationalityBadges({requirements,locale}:Props){
  })}</>;
 }
 
-export function EventCategoryBadges({category,requirements,locale}:Props&{category:string}){
- return <div className="event-detail-badges"><span className="event-detail-badge category-badge">{category}</span><NationalityBadges requirements={requirements} locale={locale}/></div>;
+export function EventCategoryBadges({category,requirements,language,locale}:Props&{category:string;language?:EventLanguage}){
+ return <div className="event-detail-badges"><span className="event-detail-badge category-badge">{category}</span><span className="event-detail-badge language-badge">{eventLanguageLabel(language,locale)}</span><NationalityBadges requirements={requirements} locale={locale}/></div>;
 }
 
 export function NationalityFact({requirements,locale}:Props){
