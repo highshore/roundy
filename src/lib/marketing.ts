@@ -35,6 +35,18 @@ async function invokeMarketingWorker(db:Client,body:Record<string,unknown>,timeo
 }
 
 type AiTransport={base:string;key:string;gateway:boolean};
+async function upstreamApiError(response:Response,fallback:string){
+ const raw=await response.text().catch(()=> '');
+ let detail='';
+ if(raw){
+  try{
+   const parsed=JSON.parse(raw) as {error?:{message?:unknown};message?:unknown};
+   detail=typeof parsed.error?.message==='string'?parsed.error.message:typeof parsed.message==='string'?parsed.message:'';
+  }catch{detail=raw;}
+ }
+ detail=detail.replace(/\s+/g,' ').trim().slice(0,500);
+ return new Error(detail?fallback+': '+detail:fallback+' ('+response.status+').');
+}
 function aiTransport():AiTransport{
  const direct=process.env.OPENAI_API_KEY?.trim();
  if(direct)return {base:'https://api.openai.com/v1',key:direct,gateway:false};
@@ -58,7 +70,7 @@ async function openAIJson(system:string,input:Record<string,unknown>){
   }),
   signal:AbortSignal.timeout(45000)
  });
- if(!response.ok){const detail=await response.text().catch(()=> '');throw new Error('Could not generate marketing copy'+(detail?' ('+response.status+')':'')+'.');}
+ if(!response.ok)throw await upstreamApiError(response,'Could not generate marketing copy');
  const result=await response.json();
  const raw=result.choices?.[0]?.message?.content;
  if(typeof raw!=='string')throw new Error('AI returned an invalid marketing draft.');
@@ -178,7 +190,7 @@ async function generateGrowthCarousel(db:Client,draftId:string,body:Record<strin
   }),
   signal:AbortSignal.timeout(90000)
  });
- if(!response.ok){const detail=await response.text().catch(()=> '');throw new Error('Could not research the Growth Carousel'+(detail?' ('+response.status+')':'')+'.');}
+ if(!response.ok)throw await upstreamApiError(response,'Could not research the Growth Carousel');
  const result=await response.json(),generated=parseJsonObject(responseText(result));
  const slides=validateGrowthSlides(generated.slides),sources=validateResearchSources(generated.sources);
  const caption=String(generated.caption??'').trim(),cta=String(generated.cta??'Follow @roundy.meet for launch updates').trim();
@@ -223,7 +235,7 @@ async function generateMarketingImage(prompt:string,draftId:string){
    }),
    signal:AbortSignal.timeout(120000)
   });
-  if(!response.ok){const detail=await response.text().catch(()=> '');throw new Error('Could not generate the marketing image'+(detail?' ('+response.status+')':'')+'.');}
+  if(!response.ok)throw await upstreamApiError(response,'Could not generate the marketing image');
   const result=await response.json();
   encoded=result.data?.[0]?.b64_json;
  }else{
@@ -231,20 +243,22 @@ async function generateMarketingImage(prompt:string,draftId:string){
    method:'POST',
    headers:{Authorization:'Bearer '+ai.key,'Content-Type':'application/json'},
    body:JSON.stringify({
-    model:process.env.MARKETING_IMAGE_ORCHESTRATOR_MODEL||'gpt-5.1',
+    model:process.env.MARKETING_IMAGE_ORCHESTRATOR_MODEL||'gpt-5',
     input:[{role:'user',content:[{type:'input_text',text:prompt}]}],
     tools:[{
      type:'image_generation',
-     model:process.env.MARKETING_IMAGE_MODEL||'gpt-image-1',
+     model:process.env.MARKETING_IMAGE_MODEL||'gpt-image-2',
+     action:'generate',
      size:'1024x1024',
      quality:'medium',
      output_format:'jpeg',
      background:'opaque'
-    }]
+    }],
+    tool_choice:{type:'image_generation'}
    }),
    signal:AbortSignal.timeout(120000)
   });
-  if(!response.ok)throw new Error('Could not generate the marketing image.');
+  if(!response.ok)throw await upstreamApiError(response,'Could not generate the marketing image');
   const result=await response.json();
   const imageCall=Array.isArray(result.output)?result.output.find((item:Record<string,unknown>)=>item?.type==='image_generation_call'&&typeof item.result==='string'):null;
   encoded=typeof imageCall?.result==='string'?imageCall.result:undefined;
@@ -434,8 +448,14 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
  if(id==='draft'&&path[1]&&path[2]==='growth-generate'&&req.method==='POST'){
   if(!/^[0-9a-f-]{36}$/i.test(path[1]))return json({error:'Invalid draft'},400);
   const requestBody=await req.json().catch(()=>({}));
-  const draft=await generateGrowthCarousel(db,path[1],requestBody&&typeof requestBody==='object'?requestBody as Record<string,unknown>:{});
-  return json({draft});
+  try{
+   const draft=await generateGrowthCarousel(db,path[1],requestBody&&typeof requestBody==='object'?requestBody as Record<string,unknown>:{});
+   return json({draft});
+  }catch(error){
+   const message=error instanceof Error?error.message:'Growth Carousel generation failed.';
+   await db.from('instagram_post_drafts').update({research_status:'failed',generation_reason:message.slice(0,1000)}).eq('id',path[1]).eq('status','needs_approval');
+   throw error;
+  }
  }
  if(id==='draft'&&path[1]&&path[2]==='regenerate'&&req.method==='POST'){
   if(!/^[0-9a-f-]{36}$/i.test(path[1]))return json({error:'Invalid draft'},400);
