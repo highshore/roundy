@@ -59,6 +59,23 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
    const admin=await isAdmin(supabase);
    if(path[1]==='role'&&req.method==='GET')return json({isAdmin:admin});
    if(!admin)return json({error:'Administrator access required'},403);
+   if(path[1]==='support'&&path.length===3&&path[2]==='summary'&&req.method==='GET'){
+    const [instagram,reports]=await Promise.all([
+     supabase.from('instagram_inbox').select('id',{count:'exact',head:true}).in('status',['new','needs_review','failed']),
+     supabase.from('reports').select('id',{count:'exact',head:true}).in('status',['new','reviewing'])
+    ]);
+    if(instagram.error||reports.error)throw instagram.error||reports.error;
+    const instagramCount=instagram.count??0,reportsCount=reports.count??0;
+    return json({instagram:instagramCount,reports:reportsCount,total:instagramCount+reportsCount});
+   }
+   if(path[1]==='support'&&path.length===3&&path[2]==='instagram'&&req.method==='GET'){
+    const {data,error}=await supabase.from('instagram_inbox')
+     .select('id,kind,sender_id,sender_username,text,status,decision_reason,suggested_reply,reply_text,received_at,replied_at')
+     .in('status',['new','needs_review','failed'])
+     .order('received_at',{ascending:false})
+     .limit(100);
+    if(error)throw error;return json({inbox:data??[]});
+   }
    if(path[1]==='reports'&&path.length===2&&req.method==='GET'){
     const status=req.nextUrl.searchParams.get('status')||'all';const kind=req.nextUrl.searchParams.get('kind')||'all';const page=Number(req.nextUrl.searchParams.get('page')||0);
     if(!['all','new','reviewing','resolved','dismissed'].includes(status)||!['all','report','feedback'].includes(kind)||!Number.isInteger(page)||page<0||page>100000)return json({error:'Invalid filters'},400);
