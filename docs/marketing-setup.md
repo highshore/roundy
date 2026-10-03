@@ -18,19 +18,24 @@ No OAuth callback is required for the owner-managed dashboard-token setup above.
 
 Instagram feed posts need at least one image. Uploads are converted to JPEG, up to 10 images, with aspect ratios between 4:5 and 1.91:1. Use one aspect ratio across carousel images. Captions plus CTA/link are limited to 2,200 characters. Caption URLs are not clickable; keep the profile bio link current.
 
-### Daily drafts, approval and time optimization
+### Daily drafts, approval, custom regeneration and time optimization
 
-- At **10:00 KST** by default, the worker creates one Instagram draft for the current day. The generation time is configurable in `/admin/marketing`.
+- The default daily content mode is **Pre-launch Promotion** while Roundy is not officially launched. In this mode the system deliberately ignores website event rows because the current events are test data.
+- Pre-launch posts may talk about the Roundy concept, Seoul dating pain points, Korean/international social discovery, face-to-face 1:1 conversations and trust-building. They must not claim a launch date, real attendees, reviews, ticket prices, venue, seat availability or live booking status.
+- Admins can switch a draft between **Pre-launch Promotion** and **Live Event** during regeneration. Switching to pre-launch removes the draft's event reference.
+- Every draft has a **Custom regeneration** panel with a free-form instruction up to 500 characters and three modes: **Text only**, **Image only**, or **Text + image**.
+- Text regeneration uses the admin instruction as creative direction but preserves Roundy's factual constraints. Image regeneration creates a new square hyper-realistic dating/lifestyle visual with no text, logo, watermark or alcohol and stores it as a JPEG in Roundy's existing public marketing-image bucket.
+- Quick prompt chips are available for premium, concise, Seoul/international, trust-focused and playful directions.
+- At **10:00 KST** by default, the worker creates one Instagram draft for the current day. The generation time and default content mode are configurable in `/admin/marketing`.
 - A draft is never published automatically. It stays **Needs approval** until an admin reviews the image, caption, CTA and recommended posting window.
-- Admin actions are **Approve & schedule**, **Save edits**, **Regenerate**, and **Skip today**.
+- Admin actions are **Approve & schedule**, **Save edits**, **Custom regeneration**, and **Skip today**. Approval is blocked when an image is missing.
 - Approved drafts are queued for the recommended time. If the recommended window has already passed when approval happens, the post is scheduled shortly after approval and excluded from timing-model training.
-- Content rotates across event, urgency, dating-problem, Roundy-concept, Seoul and trust pillars. When the next event is close, event urgency overrides normal rotation.
 - Initial time priors are: Sunday 21:00, Monday 19:00, Tuesday 19:00, Wednesday 18:00, Thursday 12:30, Friday 21:00 and Saturday 21:00 KST. Each is treated as a 60-minute window rather than a rigid exact minute.
 - The worker collects post performance at approximately **24h and 72h**. With `instagram_business_manage_insights`, it uses reach, views, saves, shares, comments and likes. Saves and shares receive the highest engagement weight.
 - The optimizer blends benchmark priors with Roundy data. Before enough posts are measured, the benchmark dominates. As the sample grows, the Roundy measurements receive up to 65% of the recommendation score.
 - Five candidate slots are evaluated: 12:30, 18:00, 19:00, 20:00 and 21:00 KST. Recommended times are slightly varied within the selected window to avoid learning only from exact clock-minute behavior.
 - Clear FAQs about schedule, location, base price, age range, format, registration, discounts, greetings, and acknowledgements are answered automatically from current event data.
-- Payment/refund/cancellation, safety/reporting, account/privacy, nationality/religion and unclassified messages are sent to **Human review**. For a sensitive DM, Roundy sends only a receipt acknowledgement and leaves the substantive reply for an admin. Sensitive comments are not answered publicly until reviewed.
+- Payment/refund/cancellation, safety/reporting, account/privacy, nationality/religion and unclassified messages are sent to **Customer Support** for human review. For a sensitive DM, Roundy sends only a receipt acknowledgement and leaves the substantive reply for an admin. Sensitive comments are not answered publicly until reviewed.
 - Instagram only permits DM replies within conversations initiated by the Instagram user; this integration never sends cold DMs.
 
 
