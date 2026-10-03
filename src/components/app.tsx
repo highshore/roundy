@@ -169,13 +169,13 @@ function LandingPage({events,locale,attendeesByEvent,publicRosters}:{events:Even
     <div className="landing-review-track">
      <article className="landing-review-card">
       <span>{tr(locale,'Verified attendee','참가자 인증')}</span>
-      <p>{tr(locale,'Public attendee reviews will appear here when available.','공개 가능한 참가자 후기가 준비되면 여기에 소개할게요.')}</p>
-      <small>{tr(locale,'Roundy Mingle','Roundy 밍글')}</small>
+      <p>{tr(locale,'Everything was really well prepared, and I had such a great time. It was perfect!','준비가 정말 잘 되어 있어서 너무 즐거운 시간이었어요. 완벽했습니다!')}</p>
+      <small>{tr(locale,'1:1 Speed Mingle · Verified attendee','1:1 Speed Mingle · 참가자 인증')}</small>
      </article>
-     <article className="landing-review-card">
-      <span>{tr(locale,'Verified attendee','참가자 인증')}</span>
-      <p>{tr(locale,'Reviews are displayed only with attendee permission.','참가자가 공개에 동의한 후기만 소개합니다.')}</p>
-      <small>{tr(locale,'Roundy Mingle','Roundy 밍글')}</small>
+     <article className="landing-review-card landing-review-card-coming">
+      <span>{tr(locale,'More stories soon','다음 후기도 곧')}</span>
+      <p>{tr(locale,'We’ll add more verified attendee stories after the next Mingles.','다음 Mingle이 끝나면 실제 참가자들의 이야기를 계속 소개할게요.')}</p>
+      <small>{tr(locale,'Roundy Mingle','Roundy Mingle')}</small>
      </article>
     </div>
    </div>
