@@ -377,20 +377,31 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
  if(id==='settings'&&req.method==='PUT'){
   const body=await req.json().catch(()=>null);
   const timePattern=/^([01]\d|2[0-3]):[0-5]\d(:00)?$/;
-  if(!body||typeof body.daily_instagram_enabled!=='boolean'||typeof body.auto_reply_enabled!=='boolean'||typeof body.optimization_enabled!=='boolean'||typeof body.daily_time_kst!=='string'||typeof body.draft_generation_time_kst!=='string'||!['prelaunch','live_event'].includes(body.content_mode)||!timePattern.test(body.daily_time_kst)||!timePattern.test(body.draft_generation_time_kst))return json({error:'Invalid automation settings'},400);
+  const growthDays=Array.isArray(body?.growth_days)?body.growth_days.map(Number):[];
+  const growthCount=Number(body?.growth_posts_per_week);
+  if(!body||typeof body.daily_instagram_enabled!=='boolean'||typeof body.auto_reply_enabled!=='boolean'||typeof body.optimization_enabled!=='boolean'||typeof body.growth_carousel_enabled!=='boolean'||typeof body.daily_time_kst!=='string'||typeof body.draft_generation_time_kst!=='string'||!['prelaunch','live_event'].includes(body.content_mode)||!timePattern.test(body.daily_time_kst)||!timePattern.test(body.draft_generation_time_kst)||!Number.isInteger(growthCount)||growthCount<0||growthCount>7||growthDays.some(day=>!Number.isInteger(day)||day<0||day>6)||new Set(growthDays).size!==growthDays.length||growthDays.length!==growthCount)return json({error:'Invalid automation settings'},400);
   const {data,error}=await db.from('marketing_automation_settings').update({
    daily_instagram_enabled:body.daily_instagram_enabled,
    daily_time_kst:body.daily_time_kst.slice(0,5),
    draft_generation_time_kst:body.draft_generation_time_kst.slice(0,5),
    optimization_enabled:body.optimization_enabled,
    auto_reply_enabled:body.auto_reply_enabled,
-   content_mode:body.content_mode
+   content_mode:body.content_mode,
+   growth_carousel_enabled:body.growth_carousel_enabled,
+   growth_posts_per_week:growthCount,
+   growth_days:growthDays
   }).eq('singleton',true).select('*').single();
   if(error)throw error;return json({settings:data});
  }
  if(id==='draft'&&path[1]==='generate'&&req.method==='POST'){
   const result=await invokeMarketingWorker(db,{action:'generate_draft_now'});
   return json(result);
+ }
+ if(id==='draft'&&path[1]&&path[2]==='growth-generate'&&req.method==='POST'){
+  if(!/^[0-9a-f-]{36}$/i.test(path[1]))return json({error:'Invalid draft'},400);
+  const requestBody=await req.json().catch(()=>({}));
+  const draft=await generateGrowthCarousel(db,path[1],requestBody&&typeof requestBody==='object'?requestBody as Record<string,unknown>:{});
+  return json({draft});
  }
  if(id==='draft'&&path[1]&&path[2]==='regenerate'&&req.method==='POST'){
   if(!/^[0-9a-f-]{36}$/i.test(path[1]))return json({error:'Invalid draft'},400);
@@ -404,7 +415,13 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
   const body=await req.json().catch(()=>null);
   if(!body||typeof body.caption!=='string'||!body.caption.trim()||body.caption.length>2000||typeof body.cta!=='string'||body.cta.length>80||typeof body.destination_url!=='string')return json({error:'Invalid draft content'},400);
   if(body.destination_url){const destination=new URL(body.destination_url);if(destination.protocol!=='https:'||destination.username||destination.password)return json({error:'Use an HTTPS destination URL.'},400);}
-  const {data,error}=await db.from('instagram_post_drafts').update({caption:body.caption.trim(),cta:body.cta.trim(),destination_url:body.destination_url.trim()}).eq('id',path[1]).eq('status','needs_approval').select('*').maybeSingle();
+  const update:Record<string,unknown>={caption:body.caption.trim(),cta:body.cta.trim(),destination_url:body.destination_url.trim()};
+  if(body.images!==undefined){
+   const base=process.env.NEXT_PUBLIC_SUPABASE_URL+'/storage/v1/object/public/wis-event-images/';
+   if(!Array.isArray(body.images)||body.images.length>10||body.images.some((src:unknown)=>typeof src!=='string'||!src.startsWith(base)||!/^[-a-f0-9]+\/[-a-f0-9]+\.jpg$/.test(src.slice(base.length))))return json({error:'Invalid draft images'},400);
+   update.images=body.images;
+  }
+  const {data,error}=await db.from('instagram_post_drafts').update(update).eq('id',path[1]).eq('status','needs_approval').select('*').maybeSingle();
   if(error)throw error;if(!data)return json({error:'Only a draft waiting for approval can be edited.'},409);return json({draft:data});
  }
  if(id==='draft'&&path[1]&&path[2]==='skip'&&req.method==='POST'){
@@ -425,7 +442,7 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
   const eligible=!missedWindow;
   const snapshot={
    channel:'instagram',name:'Daily Instagram · '+draft.draft_date,title:'',caption:draft.caption,cta:draft.cta,destination_url:draft.destination_url,
-   images:draft.images,draft_id:draft.id,event_id:draft.event_id,content_mode:draft.content_mode,content_pillar:draft.content_pillar,eligible_for_optimization:eligible,auto_generated:true
+   images:draft.images,draft_id:draft.id,event_id:draft.event_id,content_mode:draft.content_mode,draft_kind:draft.draft_kind,growth_topic_type:draft.growth_topic_type,content_pillar:draft.content_pillar,eligible_for_optimization:eligible,auto_generated:true
   };
   const requestKey='draft:'+draft.id+':'+draft.revision;
   const {data:run,error:runError}=await service.from('marketing_runs').insert({channel:'instagram',snapshot,request_key:requestKey,scheduled_for:scheduledFor}).select('*').single();
