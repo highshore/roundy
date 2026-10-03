@@ -9,7 +9,7 @@ import { Children, cloneElement, createContext, isValidElement, useContext, useE
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowUpRight, ArrowRight, ArrowLeft, CalendarDays, Clock3, MapPin, Compass, Heart, UserRound, UsersRound, Ticket, ShieldCheck, Check, CircleCheck, Plus, X, ChevronRight, Search, LockKeyhole, Copy, LogOut, Trash2, Share2, MessageCircle } from 'lucide-react';
+import { ArrowUpRight, ArrowRight, ArrowLeft, CalendarDays, Clock3, MapPin, Compass, Heart, UserRound, UsersRound, Ticket, ShieldCheck, Check, CircleCheck, Plus, X, ChevronRight, Search, LockKeyhole, Copy, LogOut, Trash2, Share2, MessageCircle, Star } from 'lucide-react';
 import QRCode from 'qrcode';
 import { createClient } from '@/lib/supabase/client';
 import { AccountConsent } from '@/components/legal-consent';
@@ -168,12 +168,17 @@ function LandingPage({events,locale,attendeesByEvent,publicRosters}:{events:Even
    <div className="landing-review-viewport">
     <div className="landing-review-track">
      <article className="landing-review-card">
-      <span>{tr(locale,'Verified attendee','참가자 인증')}</span>
+      <div className="landing-review-card-top">
+       <span className="landing-review-badge">{tr(locale,'Verified attendee','참가자 인증')}</span>
+       <span className="landing-review-rating" aria-label={tr(locale,'5 out of 5 stars','별점 5점 만점에 5점')}><Star size={13} fill="currentColor" aria-hidden="true"/><b>5.0</b></span>
+      </div>
       <p>{tr(locale,'Everything was really well prepared, and I had such a great time. It was perfect!','준비가 정말 잘 되어 있어서 너무 즐거운 시간이었어요. 완벽했습니다!')}</p>
       <small>{tr(locale,'1:1 Speed Mingle · Verified attendee','1:1 Speed Mingle · 참가자 인증')}</small>
      </article>
      <article className="landing-review-card landing-review-card-coming">
-      <span>{tr(locale,'More stories soon','다음 후기도 곧')}</span>
+      <div className="landing-review-card-top">
+       <span className="landing-review-badge">{tr(locale,'More stories soon','다음 후기도 곧')}</span>
+      </div>
       <p>{tr(locale,'We’ll add more verified attendee stories after the next Mingles.','다음 Mingle이 끝나면 실제 참가자들의 이야기를 계속 소개할게요.')}</p>
       <small>{tr(locale,'Roundy Mingle','Roundy Mingle')}</small>
      </article>
