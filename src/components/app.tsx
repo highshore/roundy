@@ -194,18 +194,20 @@ function LandingPage({events,locale,attendeesByEvent,publicRosters}:{events:Even
   </section>
 
   <Link className="landing-host-story" href="/about" aria-label={tr(locale,'Meet the people behind Roundy','Roundy를 만드는 사람들 만나기')}>
-   <div className="landing-host-story-media" aria-hidden="true">
-    <div><Image src="/images/about/kyle.webp" alt="" fill sizes="171px"/></div>
-    <div><Image src="/images/about/joey.webp" alt="" fill sizes="171px"/></div>
-   </div>
-   <div className="landing-host-story-copy">
-    <span className="eyebrow">{tr(locale,'THE PEOPLE BEHIND ROUNDY','라운디를 만드는 사람들')}</span>
-    <Heading level={2}>{tr(locale,'Built by people who actually host.','직접 모임을 운영해온 사람들이 만들어요.')}</Heading>
-    <p>{tr(locale,'Before Roundy, we hosted 80+ offline gatherings in Seoul. That experience shapes how every Mingle is run today.','Roundy 이전부터 서울에서 80회 넘게 오프라인 모임을 운영해왔어요. 그 현장 경험을 지금의 모든 Mingle에 담고 있습니다.')}</p>
-    <div className="landing-host-story-footer">
-     <span>{tr(locale,'80+ gatherings hosted','80회+ 모임 운영')}</span>
-     <span>{tr(locale,'Meet Kyle & Joey','카일과 조이 만나기')}<ArrowRight size={16} aria-hidden="true"/></span>
+   <div className="landing-host-story-top">
+    <div className="landing-host-story-avatars" aria-hidden="true">
+     <div><Image src="/images/about/kyle.webp" alt="" fill sizes="58px"/></div>
+     <div><Image src="/images/about/joey.webp" alt="" fill sizes="58px"/></div>
     </div>
+    <div className="landing-host-story-intro">
+     <span className="eyebrow">{tr(locale,'THE PEOPLE BEHIND ROUNDY','라운디를 만드는 사람들')}</span>
+     <Heading level={2}>{tr(locale,'Built by people who actually host.','모임을 직접 운영해온 팀.')}</Heading>
+    </div>
+   </div>
+   <p>{tr(locale,'80+ offline gatherings in Seoul before Roundy. That experience shapes every Mingle today.','Roundy 이전부터 서울에서 80회 넘게 오프라인 모임을 운영해왔어요.')}</p>
+   <div className="landing-host-story-footer">
+    <span>{tr(locale,'80+ gatherings hosted','80회+ 모임 운영')}</span>
+    <span>{tr(locale,'About Roundy','Roundy 소개')}<ArrowRight size={16} aria-hidden="true"/></span>
    </div>
   </Link>
  </div>;
