@@ -380,6 +380,33 @@ function publishableImages(event:EventRow|null){
 }
 async function buildDraft(dateKey:string,dow:number,revision:number){
  const settings=await automationSettings(),timing=await recommendationFor(dow,dateKey,settings),scheduledFor=kstIso(dateKey,timing.recommended);
+ if(settings.content_mode==='live_event'){
+  const event=await nextLiveEvent();
+  if(event){
+   const snapshot=await liveEventSnapshot(event,dateKey),recent=await recentLiveMarketingTypes(),type=chooseLiveMarketingType(snapshot,recent);
+   if(isGrowthDay(settings,dow)&&!liveTypeIsUrgent(type)){
+    const topic=growthTopicFor(dateKey,dow,settings);
+    return {
+     contentMode:'prelaunch' as const,event:null,pillar:'concept' as const,caption:'',images:[],timing,scheduledFor,
+     cta:'Follow for launch updates',destinationUrl:'https://roundy.team',draftKind:'growth_carousel' as const,growthTopicType:topic,
+     carouselSlides:[],researchSources:[],researchStatus:'pending' as const,
+     reason:'Weekly Growth Carousel slot: '+growthTopicLabel(topic)+'. No urgent live-event recruitment condition overrides today\'s growth slot.'
+    };
+   }
+   const images=publishableImages(event);
+   return {
+    contentMode:'live_event' as const,event,pillar:type==='countdown'||type==='almost_full'||type==='recruitment_gap'?'urgency' as const:'trust' as const,
+    caption:liveEventCaption(event,snapshot,type),images,timing,scheduledFor,cta:'See event details',destinationUrl:'https://roundy.team/events/'+event.slug,
+    draftKind:'brand' as const,growthTopicType:null,carouselSlides:liveEventSlides(event,snapshot,type),researchSources:[],researchStatus:'not_required' as const,
+    reason:'Live monitor: '+type+' · D-'+snapshot.days_left+' · Gents '+snapshot.gents+' / Ladies '+snapshot.ladies+' · '+snapshot.total+'/'+snapshot.capacity+' confirmed. '+(snapshot.target_gender&&snapshot.recruit_count?'Recruit '+(snapshot.target_gender==='male'?'gents':'ladies')+' +'+snapshot.recruit_count+'. ':'')+(snapshot.participant_teasers.length?'Anonymous participant teaser available. ':'')+(snapshot.feedback?'Reviewed feedback aggregate available. ':'')+'Timing: '+timing.rationale
+   };
+  }
+  if(isGrowthDay(settings,dow)){
+   const topic=growthTopicFor(dateKey,dow,settings);
+   return {contentMode:'prelaunch' as const,event:null,pillar:'concept' as const,caption:'',images:[],timing,scheduledFor,cta:'Follow for launch updates',destinationUrl:'https://roundy.team',draftKind:'growth_carousel' as const,growthTopicType:topic,carouselSlides:[],researchSources:[],researchStatus:'pending' as const,reason:'No upcoming live event exists, so today falls back to the scheduled Growth Carousel slot.'};
+  }
+  return {contentMode:'live_event' as const,event:null,pillar:'event' as const,caption:'',images:[],timing,scheduledFor,cta:'See event details',destinationUrl:'https://roundy.team/events',draftKind:'brand' as const,growthTopicType:null,carouselSlides:[],researchSources:[],researchStatus:'not_required' as const,reason:'No upcoming live event is available, so the live-event draft is skipped.'};
+ }
  if(isGrowthDay(settings,dow)){
   const topic=growthTopicFor(dateKey,dow,settings);
   return {
@@ -389,31 +416,12 @@ async function buildDraft(dateKey:string,dow:number,revision:number){
    reason:'Weekly Growth Carousel slot: '+growthTopicLabel(topic)+'. Research and original carousel slides are generated in Admin before approval. Test event data is not used.'
   };
  }
- if(settings.content_mode==='prelaunch'){
-  const pillar=await choosePrelaunchPillar(revision);
-  const images=await latestPrelaunchImages();
-  return {
-   contentMode:'prelaunch' as const,event:null,pillar,caption:prelaunchCaption(pillar,dateKey,revision),images,timing,scheduledFor,
-   cta:'Follow for launch updates',destinationUrl:'https://roundy.team',draftKind:'brand' as const,growthTopicType:null,
-   carouselSlides:[],researchSources:[],researchStatus:'not_required' as const,
-   reason:'Pre-launch promotion mode. Test event data is intentionally ignored. Selected '+pillar+' to rotate brand-building topics. Timing: '+timing.rationale
-  };
- }
- const event=await nextLiveEvent(),images=publishableImages(event);
- if(!event||!images.length){
-  return {
-   contentMode:'live_event' as const,event:null,pillar:'event' as const,caption:'',images:[],timing,scheduledFor,
-   cta:'See event details',destinationUrl:'https://roundy.team/events',draftKind:'brand' as const,growthTopicType:null,
-   carouselSlides:[],researchSources:[],researchStatus:'not_required' as const,
-   reason:'No upcoming live event with a publishable image is available, so the day is skipped rather than publishing stale information.'
-  };
- }
- const choice=await choosePillar(event,revision);
+ const pillar=await choosePrelaunchPillar(revision),images=await latestPrelaunchImages();
  return {
-  contentMode:'live_event' as const,event,pillar:choice.pillar,caption:draftCaption(event,choice.pillar,dateKey,revision),images,timing,scheduledFor,
-  cta:'See event details',destinationUrl:'https://roundy.team/events/'+event.slug,draftKind:'brand' as const,growthTopicType:null,
+  contentMode:'prelaunch' as const,event:null,pillar,caption:prelaunchCaption(pillar,dateKey,revision),images,timing,scheduledFor,
+  cta:'Follow for launch updates',destinationUrl:'https://roundy.team',draftKind:'brand' as const,growthTopicType:null,
   carouselSlides:[],researchSources:[],researchStatus:'not_required' as const,
-  reason:choice.reason+' Timing: '+timing.rationale
+  reason:'Pre-launch promotion mode. Test event data is intentionally ignored. Selected '+pillar+' to rotate brand-building topics. Timing: '+timing.rationale
  };
 }
 async function ensureDailyDraft(force=false){
