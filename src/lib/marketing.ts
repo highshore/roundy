@@ -161,10 +161,8 @@ async function generateGrowthCarousel(db:Client,draftId:string,body:Record<strin
   body:JSON.stringify({
    model:process.env.MARKETING_RESEARCH_MODEL||'gpt-5',
    tools:[{type:'web_search'}],
-   input:[
-    {role:'system',content:[{type:'input_text',text:growthSystemPrompt(topic)}]},
-    {role:'user',content:[{type:'input_text',text:prompt}]}
-   ],
+   instructions:growthSystemPrompt(topic),
+   input:prompt,
    max_output_tokens:5000
   }),
   signal:AbortSignal.timeout(90000)
