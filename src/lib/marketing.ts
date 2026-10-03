@@ -145,7 +145,6 @@ async function generateGrowthCarousel(db:Client,draftId:string,body:Record<strin
  const {data:draft,error:draftError}=await db.from('instagram_post_drafts').select('*').eq('id',draftId).eq('status','needs_approval').maybeSingle();
  if(draftError)throw draftError;if(!draft)throw new Error('Only a draft waiting for approval can be generated.');
  const current=draft as DraftRow;
- if(current.draft_kind!=='growth_carousel')throw new Error('This draft is not a Growth Carousel.');
  const topic=growthTopics.includes(requested)?requested:(current.growth_topic_type&&growthTopics.includes(current.growth_topic_type)?current.growth_topic_type:'mbti');
  if(!process.env.OPENAI_API_KEY)throw new Error('AI growth research is not configured.');
  const prompt=[
@@ -175,6 +174,7 @@ async function generateGrowthCarousel(db:Client,draftId:string,body:Record<strin
  if(cta.length>80)throw new Error('Generated Growth Carousel CTA was invalid.');
  const generationReason=String(generated.generation_reason??'Original Growth Carousel generated with current web research.').slice(0,1000);
  const {data:updated,error:updateError}=await db.from('instagram_post_drafts').update({
+  draft_kind:'growth_carousel',
   growth_topic_type:topic,
   carousel_slides:slides,
   research_sources:sources,
@@ -327,6 +327,11 @@ async function regenerateDraftAI(db:Client,draftId:string,body:Record<string,unk
  const {data:updated,error:updateError}=await db.from('instagram_post_drafts').update({
   event_id:event?.id??null,
   content_mode:contentMode,
+  draft_kind:'brand',
+  growth_topic_type:null,
+  carousel_slides:[],
+  research_sources:[],
+  research_status:'not_required',
   content_pillar:pillar,
   caption,
   cta,
