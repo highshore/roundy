@@ -1,6 +1,7 @@
 'use client';
 import { Heading } from '@/components/heading';
 import { EventStatusStrip } from './event-status-strip';
+import { EventImageCarousel } from './event-image-carousel';
 import { headingText as headline } from '@/lib/heading';
 import { EventCategoryBadges, NationalityBadges, NationalityFact, VenueFact } from './event-detail-meta';
 import { isRoundyEvent } from '@/lib/event-scope';
@@ -331,8 +332,7 @@ export function App({path}:{path:string}){
    {key:'men',label:tr(locale,'Gents','남성'),entries:rosterInfo.men,count:rosterInfo.men_count,tone:'men'}
   ] as const;
   content=<>
-   <div className="detail-photo"><Image src={event.image||'/images/yeouido.webp'} alt={event.title} fill sizes="(max-width: 640px) 100vw, 800px" priority/></div>
-   {(event.images?.length??0)>1&&<div className="event-gallery">{event.images?.slice(1).map(src=><Image key={src} src={src} alt={event.title} width={360} height={240} unoptimized/>)}</div>}
+   <EventImageCarousel coverImage={event.image} images={event.images} title={event.title} locale={locale}/>
    <section className="event-detail-copy"><EventCategoryBadges category={categoryLabel(event,locale)} requirements={event.nationality_requirements} locale={locale}/><Heading level={1}>{headline(item.title)}</Heading></section>
    <div className="detail-facts">
     <div className="event-fact"><span className="fact-icon"><UsersRound size={20}/></span><span className="fact-copy"><b>{tr(locale,'Age range','연령')}</b><span>{event.age_min}–{event.age_max}</span></span></div>
