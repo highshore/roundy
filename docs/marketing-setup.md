@@ -54,6 +54,20 @@ Instagram feed posts need at least one image. Uploads are converted to JPEG, up 
 - Growth content avoids engagement bait, fake urgency, sexual content, body shaming, hostile gender framing, mental-health diagnosis, political content and manipulative pickup tactics.
 
 
+### Live-event monitoring
+
+- When `Daily content mode` is **Live Event**, the daily worker reads the next real live event directly from Roundy's production database instead of relying on fixed promo copy.
+- Recruitment counts use completed event payments. The planner tracks confirmed gents, confirmed ladies, total capacity, D-day and gender imbalance every morning.
+- Recommendation priority is: **almost full (70%+) → D-1 → gender imbalance → D-7 countdown → anonymous participant teaser → reviewed feedback → event introduction**.
+- If a gender imbalance exists, the recruitment hook asks for the number required to rebalance the room, for example `Gents +3`, instead of claiming all remaining capacity must be filled by that gender.
+- Participant teaser content is enabled only with at least four paid participants. It may show only birth year plus a broad work category such as employee, public organization, freelancer, self-employed, education/research or healthcare. Names, photos, phone numbers, company names, exact workplace and exact job titles are excluded.
+- Participant teaser order is rotated deterministically so the same small subset is not always surfaced first.
+- Feedback content is enabled only when at least three feedback responses have been reviewed by an admin. Posts use aggregate 1–5 scores for overall satisfaction, connection, return intent and recommendation. Individual written responses are not quoted publicly by this automation.
+- Live-event drafts include a recommended carousel outline in Admin. The admin can keep event photography or replace it with rendered Roundy cards using **Use recommended carousel cards**.
+- Scheduled Growth Carousel days remain active during live-event mode, but an urgent live-event condition (gender imbalance, D-1 or almost-full status) overrides the Growth Carousel for that day.
+- Every live-event recommendation still stays in **Needs approval** until an admin approves and schedules it.
+
+
 Official references:
 - https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/
 - https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/get-started/
