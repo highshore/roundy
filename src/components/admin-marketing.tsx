@@ -18,6 +18,7 @@ type AutomationSettings={daily_instagram_enabled:boolean;daily_time_kst:string;d
 type Draft={id:string;draft_date:string;event_id:string|null;content_mode:'prelaunch'|'live_event';draft_kind:'brand'|'growth_carousel';growth_topic_type:GrowthTopic|null;carousel_slides:CarouselSlide[];research_sources:ResearchSource[];research_status:'not_required'|'pending'|'generated'|'failed';content_pillar:string;caption:string;cta:string;destination_url:string;images:string[];status:string;generation_reason:string;recommended_time_kst:string;window_start_kst:string;window_end_kst:string;scheduled_for:string|null;revision:number;eligible_for_optimization:boolean;last_regeneration_mode?:'text'|'image'|'both'|null;last_regeneration_instruction?:string;regenerated_at?:string|null};
 type Recommendation={dow:number;recommended_time_kst:string;window_start_kst:string;window_end_kst:string;sample_size:number;score:number;source:string;rationale:string};
 type WebhookSetup={callback_url:string;verify_token:string;verified_at:string|null;last_received_at:string|null};
+type GenerationProgress={state:'active'|'success'|'error';step:number;total:number;title:string;detail:string;error?:string};
 const defaultAutomation:AutomationSettings={daily_instagram_enabled:true,daily_time_kst:'20:00',draft_generation_time_kst:'10:00',optimization_enabled:true,auto_reply_enabled:true,content_mode:'prelaunch',growth_carousel_enabled:true,growth_posts_per_week:3,growth_days:[0,2,4]};
 const blank=(channel:Channel):Template=>({channel,name:'',title:'',caption:'',cta:'Join us',destination_url:'https://roundy.team',images:[],days:[],time_kst:'10:00',enabled:false});
 async function request(path='',body?:unknown,method='POST'){const r=await fetch('/api/admin/marketing'+path,body?{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:undefined);const d=await r.json();if(!r.ok)throw new Error(d.error||'Request failed');return d;}
@@ -58,9 +59,13 @@ async function renderCarouselCard(slide:CarouselSlide,index:number,total:number)
  const blob=await new Promise<Blob>((resolve,reject)=>canvas.toBlob(value=>value?resolve(value):reject(new Error('Could not export carousel slide.')),'image/jpeg',.92));
  return new File([blob],'roundy-growth-'+String(index+1)+'.jpg',{type:'image/jpeg'});
 }
-async function uploadCarouselSlides(slides:CarouselSlide[]){
+async function uploadCarouselSlides(slides:CarouselSlide[],onProgress?:(current:number,total:number)=>void){
  const urls:string[]=[];
- for(let index=0;index<slides.length;index++)urls.push(await uploadFile(await renderCarouselCard(slides[index],index,slides.length),'wis-event-images'));
+ for(let index=0;index<slides.length;index++){
+  const file=await renderCarouselCard(slides[index],index,slides.length);
+  urls.push(await uploadFile(file,'wis-event-images'));
+  onProgress?.(index+1,slides.length);
+ }
  return urls;
 }
 function growthTopicLabel(topic:GrowthTopic|null,locale:Locale){
@@ -83,7 +88,7 @@ function runStatusLabel(status:string,locale:Locale){
  return tr(locale,label[0],label[1]);
 }
 export function AdminMarketing({locale}:{locale:Locale}){
- const [channel,setChannel]=useState<Channel>('instagram'),[templates,setTemplates]=useState<Template[]>([]),[runs,setRuns]=useState<Run[]>([]),[form,setForm]=useState<Template>(blank('instagram')),[events,setEvents]=useState<Event[]>([]),[connection,setConnection]=useState<{instagram:boolean;koreapas:boolean;unavailable?:boolean}>({instagram:false,koreapas:false}),[automation,setAutomation]=useState<AutomationSettings>(defaultAutomation),[recommendations,setRecommendations]=useState<Recommendation[]>([]),[draftEdit,setDraftEdit]=useState<Draft|null>(null),[growthTopic,setGrowthTopic]=useState<GrowthTopic>('mbti'),[regenMode,setRegenMode]=useState<'text'|'image'|'both'>('both'),[regenInstruction,setRegenInstruction]=useState(''),[regenContentMode,setRegenContentMode]=useState<'prelaunch'|'live_event'|'growth_carousel'>('prelaunch'),[webhook,setWebhook]=useState<WebhookSetup>({callback_url:'',verify_token:'',verified_at:null,last_received_at:null}),[busy,setBusy]=useState(false),[error,setError]=useState(''),[dirty,setDirty]=useState(false);const {showToast}=useToast();
+ const [channel,setChannel]=useState<Channel>('instagram'),[templates,setTemplates]=useState<Template[]>([]),[runs,setRuns]=useState<Run[]>([]),[form,setForm]=useState<Template>(blank('instagram')),[events,setEvents]=useState<Event[]>([]),[connection,setConnection]=useState<{instagram:boolean;koreapas:boolean;unavailable?:boolean}>({instagram:false,koreapas:false}),[automation,setAutomation]=useState<AutomationSettings>(defaultAutomation),[recommendations,setRecommendations]=useState<Recommendation[]>([]),[draftEdit,setDraftEdit]=useState<Draft|null>(null),[growthTopic,setGrowthTopic]=useState<GrowthTopic>('mbti'),[regenMode,setRegenMode]=useState<'text'|'image'|'both'>('both'),[regenInstruction,setRegenInstruction]=useState(''),[regenContentMode,setRegenContentMode]=useState<'prelaunch'|'live_event'|'growth_carousel'>('prelaunch'),[webhook,setWebhook]=useState<WebhookSetup>({callback_url:'',verify_token:'',verified_at:null,last_received_at:null}),[generationProgress,setGenerationProgress]=useState<GenerationProgress|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[dirty,setDirty]=useState(false);const {showToast}=useToast();
  function applyData(d:{templates?:Template[];runs?:Run[];connection?:{instagram:boolean;koreapas:boolean;unavailable?:boolean};settings?:AutomationSettings;drafts?:Draft[];recommendations?:Recommendation[];webhook?:WebhookSetup}){
   setTemplates(d.templates??[]);setRuns(d.runs??[]);if(d.connection)setConnection(d.connection);
   if(d.settings)setAutomation({...d.settings,daily_time_kst:d.settings.daily_time_kst.slice(0,5),draft_generation_time_kst:d.settings.draft_generation_time_kst.slice(0,5)});
@@ -100,7 +105,37 @@ export function AdminMarketing({locale}:{locale:Locale}){
  async function save(copy=false){await work(async()=>{const payload=copy?{...form,name:form.name+' (copy)',enabled:false}:form;const result=await request(!copy&&form.id?'/'+form.id:'',payload,!copy&&form.id?'PUT':'POST');setForm(result.template);setDirty(false);await load();showToast(tr(locale,'Template saved','템플릿 저장 완료'),'success');});}
  async function saveAutomation(){await work(async()=>{const result=await request('/settings',automation,'PUT');setAutomation({...result.settings,daily_time_kst:result.settings.daily_time_kst.slice(0,5)});showToast(tr(locale,'Automation settings saved','자동화 설정 저장 완료'),'success');});}
  async function saveDraft(){if(!draftEdit)return;await work(async()=>{await request('/draft/'+draftEdit.id,{caption:draftEdit.caption,cta:draftEdit.cta,destination_url:draftEdit.destination_url},'PUT');await load();showToast(tr(locale,'Draft saved','초안 저장 완료'),'success');});}
- async function regenerateDraft(){if(!draftEdit)return;await work(async()=>{if(regenContentMode==='growth_carousel'){const result=await request('/draft/'+draftEdit.id+'/growth-generate',{topic_type:growthTopic,instruction:regenInstruction.trim()});const generated=result.draft as Draft;const urls=await uploadCarouselSlides(generated.carousel_slides??[]);await request('/draft/'+draftEdit.id,{caption:generated.caption,cta:generated.cta,destination_url:generated.destination_url,images:urls},'PUT');}else{await request('/draft/'+draftEdit.id+'/regenerate',{mode:regenMode,instruction:regenInstruction.trim(),content_mode:regenContentMode});}setRegenInstruction('');await load();showToast(tr(locale,'Draft regenerated','초안을 다시 만들었습니다'),'success');});}
+ async function regenerateDraft(){
+  if(!draftEdit)return;
+  setBusy(true);setError('');
+  try{
+   if(regenContentMode==='growth_carousel'){
+    setGenerationProgress({state:'active',step:1,total:4,title:tr(locale,'Researching Growth Carousel','Growth Carousel 조사 중'),detail:tr(locale,'OpenAI is researching the topic and writing six original cards. This is usually the slowest step.','OpenAI가 주제를 조사하고 6장의 원본 카드를 작성하고 있습니다. 보통 이 단계가 가장 오래 걸립니다.')});
+    const result=await request('/draft/'+draftEdit.id+'/growth-generate',{topic_type:growthTopic,instruction:regenInstruction.trim()});
+    const generated=result.draft as Draft;
+    setDraftEdit(structuredClone(generated));
+    setGenerationProgress({state:'active',step:2,total:4,title:tr(locale,'Rendering carousel cards','캐러셀 카드 생성 중'),detail:tr(locale,'Preparing the six 4:5 cards for Instagram.','Instagram용 4:5 카드 6장을 만들고 있습니다.')});
+    const urls=await uploadCarouselSlides(generated.carousel_slides??[],(current,total)=>setGenerationProgress({state:'active',step:2,total:4,title:tr(locale,'Rendering and uploading cards','카드 생성 및 업로드 중'),detail:tr(locale,'Card '+current+' of '+total+' is ready.','카드 '+current+'/'+total+' 업로드 완료')}));
+    setGenerationProgress({state:'active',step:3,total:4,title:tr(locale,'Saving generated carousel','생성된 캐러셀 저장 중'),detail:tr(locale,'Saving the caption, sources and generated card images.','캡션, 출처, 생성된 카드 이미지를 저장하고 있습니다.')});
+    await request('/draft/'+draftEdit.id,{caption:generated.caption,cta:generated.cta,destination_url:generated.destination_url,images:urls},'PUT');
+    setGenerationProgress({state:'active',step:4,total:4,title:tr(locale,'Refreshing preview','미리보기 갱신 중'),detail:tr(locale,'Loading the finished draft into the admin preview.','완성된 초안을 관리자 미리보기에 불러오고 있습니다.')});
+   }else{
+    const title=regenMode==='text'?tr(locale,'Generating marketing copy','마케팅 문구 생성 중'):regenMode==='image'?tr(locale,'Generating marketing image','마케팅 이미지 생성 중'):tr(locale,'Generating copy and image','문구와 이미지 생성 중');
+    const detail=regenMode==='text'?tr(locale,'OpenAI is rewriting the caption from your creative direction.','OpenAI가 입력한 방향에 맞춰 캡션을 다시 작성하고 있습니다.'):regenMode==='image'?tr(locale,'OpenAI is creating a new square marketing image. Image generation can take a little longer.','OpenAI가 새로운 정사각형 마케팅 이미지를 만들고 있습니다. 이미지 생성은 조금 더 오래 걸릴 수 있습니다.'):tr(locale,'OpenAI is writing the copy first and then generating the image.','OpenAI가 먼저 문구를 작성한 뒤 이미지를 생성합니다.');
+    setGenerationProgress({state:'active',step:1,total:2,title,detail});
+    await request('/draft/'+draftEdit.id+'/regenerate',{mode:regenMode,instruction:regenInstruction.trim(),content_mode:regenContentMode});
+    setGenerationProgress({state:'active',step:2,total:2,title:tr(locale,'Refreshing preview','미리보기 갱신 중'),detail:tr(locale,'Loading the finished draft into the admin preview.','완성된 초안을 관리자 미리보기에 불러오고 있습니다.')});
+   }
+   setRegenInstruction('');
+   await load();
+   setGenerationProgress({state:'success',step:1,total:1,title:tr(locale,'Generation complete','생성 완료'),detail:tr(locale,'The new draft is ready for review. Nothing has been published.','새 초안이 검토할 수 있는 상태로 준비되었습니다. 아직 게시되지는 않았습니다.')});
+   showToast(tr(locale,'Draft regenerated','초안을 다시 만들었습니다'),'success');
+  }catch(e){
+   const message=e instanceof Error?e.message:'Generation failed';
+   setError(message);
+   setGenerationProgress({state:'error',step:1,total:1,title:tr(locale,'Generation failed','생성 실패'),detail:tr(locale,'The draft was not published or approved.','초안은 게시되거나 승인되지 않았습니다.'),error:message});
+  }finally{setBusy(false);}
+ }
  async function approveDraft(){if(!draftEdit)return;await work(async()=>{await request('/draft/'+draftEdit.id+'/approve',{});await load();showToast(tr(locale,'Approved and scheduled','승인 및 예약 완료'),'success');});}
  async function skipDraft(){if(!draftEdit)return;await work(async()=>{await request('/draft/'+draftEdit.id+'/skip',{});await load();});}
  async function generateDraftNow(){await work(async()=>{await request('/draft/generate',{});await load();});}
@@ -135,7 +170,13 @@ export function AdminMarketing({locale}:{locale:Locale}){
        [tr(locale,'More trust-focused','신뢰 강조'),'Make it more trust-focused and less salesy.'],
        [tr(locale,'More playful','더 가볍게'),'Make it more playful but still tasteful for a dating brand.']
       ].map(([label,prompt])=><button type="button" key={label} onClick={()=>setRegenInstruction(current=>current?current+' '+prompt:prompt)}>{label}</button>)}</div>
-      <button type="button" className="admin-primary" disabled={busy} onClick={()=>void regenerateDraft()}>{regenContentMode==='growth_carousel'?tr(locale,draftEdit.draft_kind==='growth_carousel'?'Regenerate Growth Carousel':'Generate Growth Carousel',draftEdit.draft_kind==='growth_carousel'?'Growth Carousel 다시 생성':'Growth Carousel 생성'):tr(locale,regenMode==='text'?'Regenerate text':regenMode==='image'?'Regenerate image':'Regenerate text + image',regenMode==='text'?'텍스트 다시 생성':regenMode==='image'?'이미지 다시 생성':'텍스트 + 이미지 다시 생성')}</button>
+      <button type="button" className="admin-primary" disabled={busy} aria-busy={generationProgress?.state==='active'} onClick={()=>void regenerateDraft()}>{generationProgress?.state==='active'?tr(locale,'Generating…','생성 중…'):regenContentMode==='growth_carousel'?tr(locale,draftEdit.draft_kind==='growth_carousel'?'Regenerate Growth Carousel':'Generate Growth Carousel',draftEdit.draft_kind==='growth_carousel'?'Growth Carousel 다시 생성':'Growth Carousel 생성'):tr(locale,regenMode==='text'?'Regenerate text':regenMode==='image'?'Regenerate image':'Regenerate text + image',regenMode==='text'?'텍스트 다시 생성':regenMode==='image'?'이미지 다시 생성':'텍스트 + 이미지 다시 생성')}</button>
+      {generationProgress&&<div className={'generation-progress '+generationProgress.state} role={generationProgress.state==='error'?'alert':'status'} aria-live="polite">
+       <div className="generation-progress-head"><strong>{generationProgress.title}</strong><span>{generationProgress.state==='active'?tr(locale,'Step '+generationProgress.step+' of '+generationProgress.total,generationProgress.step+' / '+generationProgress.total+' 단계'):generationProgress.state==='success'?tr(locale,'Done','완료'):tr(locale,'Needs attention','확인 필요')}</span></div>
+       <div className="generation-progress-track" aria-hidden="true"><span style={{width:String(Math.max(8,Math.min(100,Math.round(generationProgress.step/generationProgress.total*100))))+'%'}}/></div>
+       <small>{generationProgress.detail}</small>
+       {generationProgress.error&&<p>{generationProgress.error}</p>}
+      </div>}
       {draftEdit.draft_kind==='growth_carousel'&&draftEdit.carousel_slides?.length>0&&<><div className="carousel-outline">{draftEdit.carousel_slides.map((slide,index)=><div key={index}><span>{index+1}</span><div><strong>{slide.title}</strong><small>{slide.body}</small></div></div>)}</div>{draftEdit.research_sources?.length>0&&<div className="growth-sources"><strong>{tr(locale,'Sources','출처')}</strong>{draftEdit.research_sources.map(source=><a key={source.url} href={source.url} target="_blank" rel="noreferrer">{source.publisher||source.title}{source.date?' · '+source.date:''}<ExternalLink size={12}/></a>)}</div>}</>}
      </div>
     </div>}
