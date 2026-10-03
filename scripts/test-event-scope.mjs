@@ -24,7 +24,7 @@ for (const dir of ['src/components', 'src/lib']) {
 }
 const app = await read('src/components/app.tsx');
 assert.doesNotMatch(app, /legacyTalks|event-category-filters|roundy-business-hero/);
-assert.match(app, /offline English meetups hosted in Seoul/);
+assert.match(app, /Built by people who actually host/);
 assert.match(app, /data\.events\.filter\(isRoundyEvent\)/);
 assert.match(app, /d\.events\.filter\(isRoundyEvent\)/);
 assert.match(app, /nativePast\.map/);

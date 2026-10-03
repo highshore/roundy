@@ -193,11 +193,21 @@ function LandingPage({events,locale,attendeesByEvent,publicRosters}:{events:Even
    </div>
   </section>
 
-  <section className="landing-hosting-proof">
-   <span className="eyebrow">{tr(locale,'HOSTING EXPERIENCE','운영 경험')}</span>
-   <div><strong>80+</strong><span>{tr(locale,'offline English meetups hosted in Seoul','서울에서 진행한 오프라인 영어 밋업')}</span></div>
-   <p>{tr(locale,'That hosting experience shapes how every Roundy Mingle is run.','80회 이상의 오프라인 밋업 운영 경험을 모든 Roundy 밍글에 반영합니다.')}</p>
-  </section>
+  <Link className="landing-host-story" href="/about" aria-label={tr(locale,'Meet the people behind Roundy','Roundy를 만드는 사람들 만나기')}>
+   <div className="landing-host-story-media" aria-hidden="true">
+    <div><Image src="/images/about/kyle.webp" alt="" fill sizes="171px"/></div>
+    <div><Image src="/images/about/joey.webp" alt="" fill sizes="171px"/></div>
+   </div>
+   <div className="landing-host-story-copy">
+    <span className="eyebrow">{tr(locale,'THE PEOPLE BEHIND ROUNDY','라운디를 만드는 사람들')}</span>
+    <Heading level={2}>{tr(locale,'Built by people who actually host.','직접 모임을 운영해온 사람들이 만들어요.')}</Heading>
+    <p>{tr(locale,'Before Roundy, we hosted 80+ offline gatherings in Seoul. That experience shapes how every Mingle is run today.','Roundy 이전부터 서울에서 80회 넘게 오프라인 모임을 운영해왔어요. 그 현장 경험을 지금의 모든 Mingle에 담고 있습니다.')}</p>
+    <div className="landing-host-story-footer">
+     <span>{tr(locale,'80+ gatherings hosted','80회+ 모임 운영')}</span>
+     <span>{tr(locale,'Meet Kyle & Joey','카일과 조이 만나기')}<ArrowRight size={16} aria-hidden="true"/></span>
+    </div>
+   </div>
+  </Link>
  </div>;
 }
 export function App({path}:{path:string}){
