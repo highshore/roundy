@@ -5,7 +5,8 @@ import { EventImageCarousel } from './event-image-carousel';
 import { headingText as headline } from '@/lib/heading';
 import { EventCategoryBadges, HeightFact, NationalityBadges, NationalityFact, SmokingFact, VenueFact } from './event-detail-meta';
 import { isRoundyEvent } from '@/lib/event-scope';
-import { lockdownNotice } from '@/lib/event-requirements';
+import { lockdownNotice, smokingValueLabel, type SmokingRequirementValue } from '@/lib/event-requirements';
+import { defaultParticipantDisclosures, eventLanguageLabel, eventLanguageRequirement, type ParticipantDisclosures } from '@/lib/event-presentation';
 import { Children, cloneElement, createContext, isValidElement, useContext, useEffect, useState, type ReactNode, type FormEvent } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -31,6 +32,7 @@ import { useToast } from '@/components/toast';
 import { AdminQrCheckIn } from '@/components/admin-qr-checkin';
 import { EventNight } from '@/components/event-night';
 import { NationalitySelect, InterestPicker } from '@/components/profile-options';
+import { flag } from '@/lib/profile-options';
 import { VerificationFields } from '@/components/verification-fields';
 import { NotoAnimatedEmoji } from '@/components/noto-animated-emoji';
 import { compressProfilePhoto, fileToDataUrl } from '@/lib/uploads';
@@ -44,8 +46,8 @@ type PriceQuote={event_id:string;gender:'male'|'female';original_amount:number;c
 type PendingPayment={order_number:string;status:string;amount:number};
 type AttendeePreview={photo:string|null};
 type EventAttendees={women:AttendeePreview[];men:AttendeePreview[];women_count:number;men_count:number;total:number};
-type PublicRosterEntry={age_band:string;job_group:string};
-type PublicRoster={women:PublicRosterEntry[];men:PublicRosterEntry[];women_count:number;men_count:number;total:number;updated_at:string|null};
+type PublicRosterEntry={age_band?:string;job_group?:string;nationality?:string;height_cm?:number;smoking_frequency?:SmokingRequirementValue};
+type PublicRoster={women:PublicRosterEntry[];men:PublicRosterEntry[];women_count:number;men_count:number;total:number;updated_at:string|null;disclosures?:ParticipantDisclosures};
 const initial:State={profile:emptyProfile,applications:{},booked:{},checked:{},choices:{},finished:false,verification:'Not started'};
 const RoundyLocaleContext=createContext<Locale>('en');
 function localizeNode(node:ReactNode,locale:Locale):ReactNode{
@@ -96,17 +98,33 @@ function jobGroupLabel(value:string,locale:Locale){
  const label=labels[value]??labels.office;
  return tr(locale,label[0],label[1]);
 }
+function nationalityRosterLabel(value:string,locale:Locale){
+ const emoji=flag(value);
+ let name=value;
+ try{name=new Intl.DisplayNames([locale],{type:'region'}).of(value)||value;}catch{/* Keep the stored ISO code if display names are unavailable. */}
+ return [emoji,name].filter(Boolean).join(' ');
+}
+function participantDetailLabels(entry:PublicRosterEntry,disclosures:ParticipantDisclosures,locale:Locale){
+ const labels:string[]=[];
+ if(disclosures.age&&entry.age_band)labels.push(ageBandLabel(entry.age_band,locale));
+ if(disclosures.job&&entry.job_group)labels.push(jobGroupLabel(entry.job_group,locale));
+ if(disclosures.nationality&&entry.nationality)labels.push(nationalityRosterLabel(entry.nationality,locale));
+ if(disclosures.height&&typeof entry.height_cm==='number'&&Number.isFinite(entry.height_cm))labels.push(entry.height_cm+' cm');
+ if(disclosures.smoking&&entry.smoking_frequency)labels.push(smokingValueLabel(entry.smoking_frequency,locale));
+ return labels;
+}
 function rosterUpdatedLabel(value:string|null,locale:Locale){
  if(!value)return '';
  const date=new Date(value);if(Number.isNaN(date.getTime()))return '';
  return new Intl.DateTimeFormat(locale==='ko'?'ko-KR':'en-US',{timeZone:'Asia/Seoul',month:'short',day:'numeric',weekday:'short',hour:'numeric',minute:'2-digit'}).format(date);
 }
-export function EventCard({e,locale,href,attendees,past=false}:{e:Event;locale:Locale;href?:string;attendees?:EventAttendees;past?:boolean}){const item=localizeEvent(e,locale);const confirmed=attendees?.total??0;const preview=attendees?[...attendees.women,...attendees.men]:[];return <Link href={href??'/events/'+e.slug} className={'event-card'+(past?' past-event':'')}><div className="event-photo"><Image src={e.image||'/images/yeouido.webp'} alt={e.title} fill sizes="(max-width: 640px) 100vw, 500px"/><span className="photo-arrow"><ArrowUpRight size={24}/></span></div><div className="event-copy"><div className="event-tags"><span>{categoryLabel(e,locale)}</span><span>{e.age_min}–{e.age_max}{tr(locale,' years','세')}</span><div className="nationality-chip-group"><NationalityBadges requirements={e.nationality_requirements} locale={locale}/></div></div><Heading level={2}>{headline(item.title)}</Heading><p className="event-time"><CalendarDays size={16}/>{dateLabelForLocale(e.starts_at,locale)} · {timeLabelForLocale(e.starts_at,locale)} KST</p><p className="event-location"><MapPin size={16}/>{item.venue}</p><div className="event-attendance">{past?<><div><span className="past-event-status">{tr(locale,'Ended','종료')}</span></div><span>{confirmed}/{e.capacity} {tr(locale,'attended','참여')}</span></>:<><div><AttendeeStack count={confirmed} kind={tr(locale,'Attendees','참가자')} locale={locale} attendees={preview}/></div></>}</div>{!past&&<EventStatusStrip event={e} attendees={attendees} locale={locale}/>}</div></Link>;}
+export function EventCard({e,locale,href,attendees,past=false}:{e:Event;locale:Locale;href?:string;attendees?:EventAttendees;past?:boolean}){const item=localizeEvent(e,locale);const confirmed=attendees?.total??0;const preview=attendees?[...attendees.women,...attendees.men]:[];return <Link href={href??'/events/'+e.slug} className={'event-card'+(past?' past-event':'')}><div className="event-photo"><Image src={e.image||'/images/yeouido.webp'} alt={e.title} fill sizes="(max-width: 640px) 100vw, 500px"/><span className="photo-arrow"><ArrowUpRight size={24}/></span></div><div className="event-copy"><div className="event-tags"><span>{categoryLabel(e,locale)}</span><span>{eventLanguageLabel(e.event_language,locale)}</span><span>{e.age_min}–{e.age_max}{tr(locale,' years','세')}</span><div className="nationality-chip-group"><NationalityBadges requirements={e.nationality_requirements} locale={locale}/></div></div><Heading level={2}>{headline(item.title)}</Heading><p className="event-time"><CalendarDays size={16}/>{dateLabelForLocale(e.starts_at,locale)} · {timeLabelForLocale(e.starts_at,locale)} KST</p><p className="event-location"><MapPin size={16}/>{item.venue}</p><div className="event-attendance">{past?<><div><span className="past-event-status">{tr(locale,'Ended','종료')}</span></div><span>{confirmed}/{e.capacity} {tr(locale,'attended','참여')}</span></>:<><div><AttendeeStack count={confirmed} kind={tr(locale,'Attendees','참가자')} locale={locale} attendees={preview}/></div></>}</div>{!past&&<EventStatusStrip event={e} attendees={attendees} locale={locale}/>}</div></Link>;}
 
 function landingRosterProfiles(roster:PublicRoster|undefined,locale:Locale){
  const profiles:string[]=[];
- for(const entry of roster?.women??[])profiles.push(tr(locale,'Woman','여성')+' · '+ageBandLabel(entry.age_band,locale)+' · '+jobGroupLabel(entry.job_group,locale));
- for(const entry of roster?.men??[])profiles.push(tr(locale,'Man','남성')+' · '+ageBandLabel(entry.age_band,locale)+' · '+jobGroupLabel(entry.job_group,locale));
+ const disclosures=roster?.disclosures??defaultParticipantDisclosures();
+ for(const entry of roster?.women??[]){const details=participantDetailLabels(entry,disclosures,locale);profiles.push([tr(locale,'Woman','여성'),...details].join(' · '));}
+ for(const entry of roster?.men??[]){const details=participantDetailLabels(entry,disclosures,locale);profiles.push([tr(locale,'Man','남성'),...details].join(' · '));}
  return profiles.slice(0,8);
 }
 function LandingParticipantTicker({roster,locale}:{roster?:PublicRoster;locale:Locale}){
@@ -123,7 +141,7 @@ function LandingMingleCard({e,locale,attendees,roster}:{e:Event;locale:Locale;at
  return <Link href={'/events/'+e.slug} className="landing-mingle-card">
   <div className="landing-mingle-media">
    <Image src={e.image||'/images/yeouido.webp'} alt={item.title} fill sizes="(max-width: 430px) calc(100vw - 48px), 382px"/>
-   <span className="landing-mingle-tag">{tr(locale,'1:1 Mingle','1:1 밍글')}</span>
+   <span className="landing-mingle-tag">{tr(locale,'1:1 Mingle','1:1 밍글')}</span><span className="landing-mingle-language">{eventLanguageLabel(e.event_language,locale)}</span>
   </div>
   <Heading level={3}>{headline(item.title)}</Heading>
   <p className="landing-mingle-date">{dateLabelForLocale(e.starts_at,locale)} · {timeLabelForLocale(e.starts_at,locale)} KST</p>
@@ -325,7 +343,8 @@ export function App({path}:{path:string}){
   const registrationClosed=Date.parse(event.starts_at)<=Date.now()||event.seats_remaining<1;
   const cancellationLocked=Date.now()>=Date.parse(event.starts_at)-((event.lockdown_minutes??0)*60000);
   const alreadyBooked=Boolean(state.booked[event.slug]);
-  const rosterInfo=publicRosters[event.id]??{women:[],men:[],women_count:0,men_count:0,total:0,updated_at:null};
+  const rosterInfo=publicRosters[event.id]??{women:[],men:[],women_count:0,men_count:0,total:0,updated_at:null,disclosures:event.participant_disclosures??defaultParticipantDisclosures()};
+  const rosterDisclosures=rosterInfo.disclosures??event.participant_disclosures??defaultParticipantDisclosures();
   const genderCapacity=Math.floor(event.capacity/2);
   const rosterGroups=[
    {key:'women',label:tr(locale,'Ladies','여성'),entries:rosterInfo.women,count:rosterInfo.women_count,tone:'women'},
@@ -333,7 +352,7 @@ export function App({path}:{path:string}){
   ] as const;
   content=<>
    <EventImageCarousel coverImage={event.image} images={event.images} title={event.title} locale={locale}/>
-   <section className="event-detail-copy"><EventCategoryBadges category={categoryLabel(event,locale)} requirements={event.nationality_requirements} locale={locale}/><Heading level={1}>{headline(item.title)}</Heading></section>
+   <section className="event-detail-copy"><EventCategoryBadges category={categoryLabel(event,locale)} requirements={event.nationality_requirements} language={event.event_language} locale={locale}/><Heading level={1}>{headline(item.title)}</Heading></section>
    <div className="detail-facts">
     <div className="event-fact"><span className="fact-icon"><UsersRound size={20}/></span><span className="fact-copy"><b>{tr(locale,'Age range','연령')}</b><span>{event.age_min}–{event.age_max}</span></span></div>
     <NationalityFact requirements={event.nationality_requirements} locale={locale}/>
@@ -344,7 +363,7 @@ export function App({path}:{path:string}){
     <VenueFact venue={item.venue} address={item.address} description={event.venue_description} locale={locale}/>
    </div>
    <VenueMap venue={item.venue} address={item.address} latitude={event.latitude} longitude={event.longitude} locale={locale}/>
-   <Card label={tr(locale,'BEFORE YOU APPLY','참여 전 확인')}><ul className="before-apply"><li className="lockdown-notice">{lockdownNotice(event.lockdown_minutes??0,locale)} <Link href="/refund-policy">{tr(locale,'Refund Policy','환불 규정')}</Link></li><li>{tr(locale,'Comfortable with short conversations in Korean or English','한국어 또는 영어로 짧은 대화를 편하게 나눌 수 있어야 해요')}</li><li>{tr(locale,'Bring photo ID and arrive 15 minutes early','사진이 있는 신분증을 지참하고 15분 일찍 도착해 주세요')}</li><li>{tr(locale,'Only mutual choices become a match','서로 선택해야 매칭돼요')}</li></ul></Card>
+   <Card label={tr(locale,'BEFORE YOU APPLY','참여 전 확인')}><ul className="before-apply"><li className="lockdown-notice">{lockdownNotice(event.lockdown_minutes??0,locale)} <Link href="/refund-policy">{tr(locale,'Refund Policy','환불 규정')}</Link></li><li>{eventLanguageRequirement(event.event_language,locale)}</li><li>{tr(locale,'Bring photo ID and arrive 15 minutes early','사진이 있는 신분증을 지참하고 15분 일찍 도착해 주세요')}</li><li>{tr(locale,'Only mutual choices become a match','서로 선택해야 매칭돼요')}</li></ul></Card>
    {item.description?.trim()&&<p className="event-description">{item.description}</p>}
    <section className="public-roster">
     <header className="public-roster-heading">
@@ -353,10 +372,10 @@ export function App({path}:{path:string}){
     <div className="public-roster-groups">
      {rosterGroups.map(group=><section className={'public-roster-group '+group.tone} key={group.key}>
       <div className="public-roster-group-head"><Heading level={3}>{group.label}</Heading><span className="public-roster-seat-tab">{group.count}/{genderCapacity} {tr(locale,'Seats Taken','좌석 확정')}</span></div>
-      {group.entries.length?<div className="public-roster-grid">{group.entries.map((entry,index)=><div className="public-roster-chip" key={group.key+'-'+index}><span className="public-roster-dot" aria-hidden="true"/><span className="public-roster-copy"><span>{ageBandLabel(entry.age_band,locale)}</span><span>{jobGroupLabel(entry.job_group,locale)}</span></span></div>)}</div>:<p className="public-roster-empty">{tr(locale,'No confirmed participants yet.','아직 확정된 참가자가 없어요.')}</p>}
+      {group.entries.length?(Object.values(rosterDisclosures).some(Boolean)?<div className="public-roster-grid">{group.entries.map((entry,index)=>{const details=participantDetailLabels(entry,rosterDisclosures,locale);return <div className="public-roster-chip" key={group.key+'-'+index}><span className="public-roster-dot" aria-hidden="true"/><span className="public-roster-copy">{details.length?details.map((label,line)=><span key={line}>{label}</span>):<span>{tr(locale,'Details unavailable','공개 정보 없음')}</span>}</span></div>;})}</div>:<p className="public-roster-empty">{tr(locale,'Participant details are hidden for this event.','이 이벤트는 참가자 상세 정보를 공개하지 않습니다.')}</p>):<p className="public-roster-empty">{tr(locale,'No confirmed participants yet.','아직 확정된 참가자가 없어요.')}</p>}
      </section>)}
     </div>
-    <div className="public-roster-privacy"><ShieldCheck size={18}/><span>{tr(locale,'Names, exact ages, workplaces, photos and contact information are never included in this public list.','이 공개 명단에는 이름, 정확한 나이, 직장명, 사진, 연락처를 표시하지 않습니다.')}</span></div>
+    <div className="public-roster-privacy"><ShieldCheck size={18}/><span>{tr(locale,'Only the participant details selected by the host are shown. Names, exact ages, workplaces, photos and contact information are never included.','호스트가 선택한 참가자 정보만 공개합니다. 이름, 정확한 나이, 직장명, 사진, 연락처는 표시하지 않습니다.')}</span></div>
     {rosterInfo.updated_at&&<p className="public-roster-updated">{tr(locale,'Last updated','최근 업데이트')} · {rosterUpdatedLabel(rosterInfo.updated_at,locale)}</p>}
    </section>
    <div className="sticky-action">{alreadyBooked?<Button secondary disabled={busy||cancellationLocked} onClick={()=>void cancelBooking(event)}>{cancellationLocked?tr(locale,'Cancellation locked','취소 마감'):tr(locale,'Cancel registration','등록 취소')}</Button>:<Button disabled={registrationClosed} onClick={()=>goApply(event)}>{registrationClosed?tr(locale,'Event closed','신청 마감'):!eligibleToApply?tr(locale,'Complete Profile to Join','프로필을 완성하고 참여하기'):tr(locale,'Apply for this event','이 모임 신청하기')}</Button>}</div>

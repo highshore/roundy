@@ -22,6 +22,17 @@ async function denied(n,sql,pattern){await assert.rejects(()=>as(n,sql),pattern)
 const e=uid(100);
 await as(4,`insert into events(id,title,starts_at,venue,address,capacity,status,age_min,age_max,lockdown_minutes) values('${e}','Late applications',now()+interval '30 minutes','Venue','Address',12,'live',18,100,60)`);
 assert.equal((await as(4,'select theme from events where id=$1',[e])).rows[0].theme,'1:1 Speed Mingle');
+const presentationDefaults=(await as(4,'select event_language,participant_disclosures from events where id=$1',[e])).rows[0];
+assert.equal(presentationDefaults.event_language,'either');
+assert.deepEqual(presentationDefaults.participant_disclosures,{age:true,job:true,nationality:false,height:false,smoking:false});
+await as(4,"update events set event_language='ko',participant_disclosures=$1 where id=$2",[{age:true,job:false,nationality:true,height:true,smoking:false},e]);
+const presentationUpdated=(await as(4,'select event_language,participant_disclosures from events where id=$1',[e])).rows[0];
+assert.equal(presentationUpdated.event_language,'ko');
+assert.equal(presentationUpdated.participant_disclosures.nationality,true);
+assert.equal(presentationUpdated.participant_disclosures.height,true);
+await assert.rejects(()=>as(4,"update events set event_language='fr' where id=$1",[e]),/events_event_language_valid/);
+await assert.rejects(()=>as(4,"update events set participant_disclosures='{\"age\":true,\"job\":true,\"nationality\":\"yes\",\"height\":false,\"smoking\":false}' where id=$1",[e]),/events_participant_disclosures_valid/);
+await as(4,"update events set event_language='either',participant_disclosures='{\"age\":true,\"job\":true,\"nationality\":false,\"height\":false,\"smoking\":false}' where id=$1",[e]);
 assert.ok((await as(1,'select apply($1) id',[e])).rows[0].id,'Apply during lockdown');
 const booking=(await as(1,'select redeem($1,true) id',[e])).rows[0].id;
 assert.ok(booking,'Redeem during lockdown');
