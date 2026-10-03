@@ -20,6 +20,10 @@ type GrowthTopic='mbti'|'dating_archetype'|'book_insight'|'trend_research'|'meme
 type AutomationSettings={daily_instagram_enabled:boolean;daily_time_kst:string;draft_generation_time_kst:string;optimization_enabled:boolean;content_mode:'prelaunch'|'live_event';growth_carousel_enabled:boolean;growth_posts_per_week:number;growth_days:number[]};
 type DraftRow={id:string;draft_date:string;event_id:string|null;content_mode:'prelaunch'|'live_event';draft_kind:'brand'|'growth_carousel';growth_topic_type:GrowthTopic|null;content_pillar:'event'|'urgency'|'problem'|'concept'|'seoul'|'trust';caption:string;cta:string;destination_url:string;images:string[];status:string;recommended_time_kst:string;window_start_kst:string;window_end_kst:string;scheduled_for:string|null;revision:number;eligible_for_optimization:boolean};
 type Recommendation={dow:number;recommended_time_kst:string;window_start_kst:string;window_end_kst:string;sample_size:number;score:number;source:string;rationale:string};
+type ParticipantTeaser={birth_year:number;job_category:string};
+type FeedbackSummary={responses:number;overall:number;connection:number;return_score:number;recommend:number;event_title:string};
+type LiveMarketingType='event_intro'|'recruitment_gap'|'countdown'|'almost_full'|'participant_teaser'|'feedback';
+type LiveEventSnapshot={days_left:number;total:number;gents:number;ladies:number;capacity:number;fill_rate:number;imbalance:number;target_gender:'male'|'female'|null;recruit_count:number;participant_teasers:ParticipantTeaser[];feedback:FeedbackSummary|null};
 
 async function graph(path:string,fields?:Record<string,string>){
  const root='https://graph.instagram.com/'+apiVersion()+'/';
@@ -237,7 +241,7 @@ function growthDays(settings:AutomationSettings){
  return (Array.isArray(settings.growth_days)?settings.growth_days:[]).slice(0,Math.max(0,Math.min(7,Number(settings.growth_posts_per_week||0))));
 }
 function isGrowthDay(settings:AutomationSettings,dow:number){
- return settings.content_mode==='prelaunch'&&settings.growth_carousel_enabled===true&&growthDays(settings).includes(dow);
+ return settings.growth_carousel_enabled===true&&growthDays(settings).includes(dow);
 }
 function growthTopicFor(dateKey:string,dow:number,settings:AutomationSettings):GrowthTopic{
  const week=Math.floor(new Date(dateKey+'T12:00:00Z').getTime()/604800000);
@@ -258,6 +262,105 @@ function growthTopicLabel(topic:GrowthTopic){
  };
  return labels[topic];
 }
+function broadJobCategory(profile:Record<string,unknown>){
+ const workplace=String(profile.public_workplace??'').toLowerCase(),job=String(profile.public_job??'').toLowerCase();
+ const combined=workplace+' '+job;
+ if(/freelance/.test(combined))return '프리랜서';
+ if(/self.?employ|business owner|entrepreneur/.test(combined))return '자영업';
+ if(/government|public organization|public corporation|public institution/.test(combined))return '공공기관/공기업';
+ if(/student|university/.test(combined))return '학생';
+ if(/education|research|academic/.test(combined))return '교육/연구';
+ if(/medical|health|hospital|doctor|nurse/.test(combined))return '의료/보건';
+ if(/startup/.test(combined))return '스타트업';
+ if(workplace)return '회사원';
+ if(job)return '전문직';
+ return '직장인';
+}
+async function reviewedFeedbackSummary(){
+ const {data:reports,error}=await service.from('reports').select('id,feedback_event_id,survey,created_at').eq('kind','feedback').not('survey','is',null).order('created_at',{ascending:false}).limit(100);
+ if(error)throw error;if(!reports?.length)return null;
+ const ids=reports.map(row=>row.id);
+ const {data:reviews,error:reviewsError}=await service.from('report_reviews').select('report_id').in('report_id',ids);
+ if(reviewsError)throw reviewsError;const reviewed=new Set((reviews??[]).map(row=>String(row.report_id)));
+ const usable=reports.filter(row=>reviewed.has(String(row.id))&&row.feedback_event_id&&row.survey&&typeof row.survey==='object');
+ const grouped=new Map<string,typeof usable>();
+ for(const row of usable){const key=String(row.feedback_event_id);grouped.set(key,[...(grouped.get(key)??[]),row]);}
+ const eventIds=[...grouped.keys()];if(!eventIds.length)return null;
+ const {data:events,error:eventError}=await service.from('events').select('id,title,ends_at').in('id',eventIds).lte('ends_at',new Date().toISOString()).order('ends_at',{ascending:false});
+ if(eventError)throw eventError;
+ for(const event of events??[]){
+  const rows=grouped.get(String(event.id))??[];if(rows.length<3)continue;
+  const score=(key:string)=>rows.reduce((sum,row)=>sum+Number((row.survey as Record<string,unknown>)[key]??0),0)/rows.length;
+  return {responses:rows.length,overall:score('overall'),connection:score('connection'),return_score:score('return'),recommend:score('recommend'),event_title:String(event.title)} as FeedbackSummary;
+ }
+ return null;
+}
+async function liveEventSnapshot(event:EventRow,dateKey:string){
+ const {data:orders,error:ordersError}=await service.from('event_payment_orders').select('user_id,gender').eq('event_id',event.id).eq('status','completed');
+ if(ordersError)throw ordersError;
+ const byUser=new Map<string,{user_id:string;gender:string}>();for(const row of orders??[])byUser.set(String(row.user_id),{user_id:String(row.user_id),gender:String(row.gender)});
+ const paid=[...byUser.values()],gents=paid.filter(row=>row.gender==='male').length,ladies=paid.filter(row=>row.gender==='female').length,total=paid.length;
+ let participant_teasers:ParticipantTeaser[]=[];
+ if(total>=4){
+  const userIds=paid.map(row=>row.user_id);
+  const {data:profiles,error:profileError}=await service.from('profiles').select('user_id,profile').in('user_id',userIds);
+  if(profileError)throw profileError;
+  participant_teasers=(profiles??[]).map(row=>{const profile=(row.profile&&typeof row.profile==='object'?row.profile:{}) as Record<string,unknown>;const year=Number(String(profile.birth_date??'').slice(0,4));return {key:hashText(dateKey+String(row.user_id)),birth_year:year,job_category:broadJobCategory(profile)};}).filter(row=>Number.isInteger(row.birth_year)&&row.birth_year>=1950&&row.birth_year<=2010).sort((a,b)=>a.key-b.key).slice(0,6).map(({birth_year,job_category})=>({birth_year,job_category}));
+ }
+ const days_left=Math.max(0,Math.ceil((new Date(event.starts_at).getTime()-Date.now())/86400000));
+ const imbalance=Math.abs(gents-ladies),target_gender=gents<ladies?'male':ladies<gents?'female':null;
+ return {days_left,total,gents,ladies,capacity:event.capacity,fill_rate:event.capacity?total/event.capacity:0,imbalance,target_gender,recruit_count:imbalance,participant_teasers,feedback:await reviewedFeedbackSummary()} as LiveEventSnapshot;
+}
+async function recentLiveMarketingTypes(){
+ const {data,error}=await service.from('instagram_post_drafts').select('generation_reason').eq('content_mode','live_event').order('draft_date',{ascending:false}).limit(7);
+ if(error)throw error;const result:string[]=[];
+ for(const row of data??[]){const match=String(row.generation_reason??'').match(/^Live monitor: ([a-z_]+)/);if(match)result.push(match[1]);}
+ return result;
+}
+function chooseLiveMarketingType(snapshot:LiveEventSnapshot,recent:string[]):LiveMarketingType{
+ const seatsLeft=Math.max(0,snapshot.capacity-snapshot.total);
+ if(snapshot.fill_rate>=.7&&seatsLeft>0)return 'almost_full';
+ if(snapshot.days_left<=1)return 'countdown';
+ if(snapshot.imbalance>=2&&snapshot.total>=4)return 'recruitment_gap';
+ if(snapshot.days_left<=7)return 'countdown';
+ if(snapshot.participant_teasers.length>=4&&!recent.includes('participant_teaser'))return 'participant_teaser';
+ if(snapshot.feedback&&!recent.includes('feedback'))return 'feedback';
+ if(snapshot.imbalance>=2)return 'recruitment_gap';
+ if(snapshot.feedback&&!recent.includes('feedback'))return 'feedback';
+ return 'event_intro';
+}
+function liveParticipantLines(snapshot:LiveEventSnapshot){return snapshot.participant_teasers.map(item=>String(item.birth_year)+'년생 / '+item.job_category);}
+function liveEventSlides(event:EventRow,snapshot:LiveEventSnapshot,type:LiveMarketingType){
+ const d=eventDetails(event),lines=liveParticipantLines(snapshot),genderKo=snapshot.target_gender==='male'?'남성':'여성',slides:Array<Record<string,string>>=[];
+ const count='현재 '+snapshot.total+'/'+snapshot.capacity+'명 · 남성 '+snapshot.gents+' / 여성 '+snapshot.ladies;
+ if(type==='recruitment_gap')slides.push({eyebrow:'ROUNDY RECRUITING',title:genderKo+' '+snapshot.recruit_count+'명 더 모집해요',body:'D-'+snapshot.days_left+' · '+count,source_label:'실시간 결제 완료 기준',variant:'hook'});
+ else if(type==='countdown')slides.push({eyebrow:'ROUNDY D-'+snapshot.days_left,title:'이제 '+snapshot.days_left+'일 남았습니다',body:count,source_label:'실시간 결제 완료 기준',variant:'hook'});
+ else if(type==='almost_full')slides.push({eyebrow:'ROUNDY UPDATE',title:'현재 '+snapshot.total+'/'+snapshot.capacity+'명 참여 확정',body:'자리가 얼마 남지 않았어요 · D-'+snapshot.days_left,source_label:'실시간 결제 완료 기준',variant:'hook'});
+ else if(type==='participant_teaser')slides.push({eyebrow:'WHO IS JOINING?',title:'현재 이런 분들이 함께해요',body:count+' · D-'+snapshot.days_left,source_label:'이름·회사명·직무명 비공개',variant:'hook'});
+ else if(type==='feedback')slides.push({eyebrow:'ROUNDY FEEDBACK',title:'지난 모임 참가자들의 평가',body:snapshot.feedback?String(snapshot.feedback.responses)+'명 응답 기준':'검토 완료 후기 기준',source_label:'개별 후기는 공개하지 않고 평균만 사용',variant:'hook'});
+ else slides.push({eyebrow:'ROUNDY '+d.koDate,title:event.title,body:'D-'+snapshot.days_left+' · '+count,source_label:event.neighborhood,variant:'hook'});
+ if(lines.length)slides.push({eyebrow:'CURRENT LINEUP',title:'익명 참가자 미리보기',body:lines.join('  ·  '),source_label:'결제 완료 4명 이상일 때만 표시',variant:'content'});
+ if(snapshot.feedback)slides.push({eyebrow:'PAST FEEDBACK',title:'만족도 '+snapshot.feedback.overall.toFixed(1)+'/5',body:'대화 연결감 '+snapshot.feedback.connection.toFixed(1)+' · 재참여 '+snapshot.feedback.return_score.toFixed(1)+' · 추천 '+snapshot.feedback.recommend.toFixed(1),source_label:snapshot.feedback.responses+'명 검토 완료 응답 평균',variant:'source'});
+ slides.push({eyebrow:d.koDate+' · '+d.koTime,title:event.venue,body:'1:1로 한 명씩 직접 만나고, 서로 다시 만나고 싶은 경우에만 매칭됩니다.',source_label:'roundy.team/events/'+event.slug,variant:'content'});
+ slides.push({eyebrow:'ROUNDY',title:'직접 만나야 알 수 있는 사이',body:'서울에서 진행하는 1:1 로테이션 소개팅. 현재 모집 현황은 roundy.team에서 확인하세요.',source_label:'@roundy.meet',variant:'roundy'});
+ return slides.slice(0,6);
+}
+function liveEventCaption(event:EventRow,snapshot:LiveEventSnapshot,type:LiveMarketingType){
+ const d=eventDetails(event),link='https://roundy.team/events/'+event.slug,lines=liveParticipantLines(snapshot),genderKo=snapshot.target_gender==='male'?'남성':'여성';
+ let hook='Roundy '+d.koDate+' 모집 중';
+ if(type==='recruitment_gap')hook=genderKo+' '+snapshot.recruit_count+'명 더 모집합니다';
+ else if(type==='countdown')hook='D-'+snapshot.days_left+' · Roundy가 얼마 남지 않았어요';
+ else if(type==='almost_full')hook='현재 '+snapshot.total+'/'+snapshot.capacity+'명 참여 확정';
+ else if(type==='participant_teaser')hook='현재 Roundy에는 이런 분들이 함께합니다';
+ else if(type==='feedback')hook='지난 Roundy 참가자 피드백';
+ const ko=[hook,'','📍 '+event.venue,'🗓 '+d.koDate+' · '+d.koTime,'현재 '+snapshot.total+'/'+snapshot.capacity+'명 · 남성 '+snapshot.gents+' / 여성 '+snapshot.ladies];
+ if(lines.length&&(type==='participant_teaser'||type==='recruitment_gap'))ko.push('','현재 참여자 일부','- '+lines.join('\n- '));
+ if(snapshot.feedback&&type==='feedback')ko.push('','지난 모임 평균','만족도 '+snapshot.feedback.overall.toFixed(1)+'/5 · 재참여 '+snapshot.feedback.return_score.toFixed(1)+'/5 · 추천 '+snapshot.feedback.recommend.toFixed(1)+'/5','※ 검토 완료된 익명 응답 '+snapshot.feedback.responses+'건의 평균입니다.');
+ ko.push('','한 명씩 직접 만나 대화하고, 서로 다시 만나고 싶은 경우에만 연결됩니다.','',link,'','#Roundy #서울소개팅 #로테이션소개팅 #SeoulDating');
+ const en=['','---','','Roundy · '+d.enDate+' · '+d.enTime,'Confirmed: '+snapshot.total+'/'+snapshot.capacity+' · Gents '+snapshot.gents+' / Ladies '+snapshot.ladies,'. Meet one person at a time and reconnect only when the interest is mutual.'];
+ return ko.concat(en).join('\n');
+}
+function liveTypeIsUrgent(type:LiveMarketingType){return ['recruitment_gap','countdown','almost_full'].includes(type);}
 async function latestPrelaunchImages(){
  const {data,error}=await service.from('instagram_post_drafts').select('images').eq('content_mode','prelaunch').order('updated_at',{ascending:false}).limit(10);
  if(error)return [] as string[];
