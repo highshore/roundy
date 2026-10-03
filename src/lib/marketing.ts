@@ -34,13 +34,21 @@ async function invokeMarketingWorker(db:Client,body:Record<string,unknown>,timeo
  return payload;
 }
 
+type AiTransport={base:string;key:string;gateway:boolean};
+function aiTransport():AiTransport{
+ const direct=process.env.OPENAI_API_KEY?.trim();
+ if(direct)return {base:'https://api.openai.com/v1',key:direct,gateway:false};
+ const gateway=(process.env.AI_GATEWAY_API_KEY||process.env.VERCEL_OIDC_TOKEN)?.trim();
+ if(gateway)return {base:'https://ai-gateway.vercel.sh/v1',key:gateway,gateway:true};
+ throw new Error('AI generation is not available in this deployment.');
+}
 async function openAIJson(system:string,input:Record<string,unknown>){
- if(!process.env.OPENAI_API_KEY)throw new Error('AI marketing generation is not configured.');
- const response=await fetch('https://api.openai.com/v1/chat/completions',{
+ const ai=aiTransport();
+ const response=await fetch(ai.base+'/chat/completions',{
   method:'POST',
-  headers:{Authorization:'Bearer '+process.env.OPENAI_API_KEY,'Content-Type':'application/json'},
+  headers:{Authorization:'Bearer '+ai.key,'Content-Type':'application/json'},
   body:JSON.stringify({
-   model:process.env.MARKETING_COPY_MODEL||'gpt-4.1-mini',
+   model:ai.gateway?(process.env.MARKETING_GATEWAY_COPY_MODEL||'openai/gpt-5.6-sol'):(process.env.MARKETING_COPY_MODEL||'gpt-4.1-mini'),
    temperature:.7,
    response_format:{type:'json_object'},
    messages:[
@@ -48,13 +56,17 @@ async function openAIJson(system:string,input:Record<string,unknown>){
     {role:'user',content:JSON.stringify(input)}
    ]
   }),
-  signal:AbortSignal.timeout(30000)
+  signal:AbortSignal.timeout(45000)
  });
- if(!response.ok)throw new Error('Could not generate marketing copy.');
+ if(!response.ok){const detail=await response.text().catch(()=> '');throw new Error('Could not generate marketing copy'+(detail?' ('+response.status+')':'')+'.');}
  const result=await response.json();
  const raw=result.choices?.[0]?.message?.content;
  if(typeof raw!=='string')throw new Error('AI returned an invalid marketing draft.');
- try{return JSON.parse(raw) as Record<string,unknown>;}catch{throw new Error('AI returned invalid JSON.');}
+ try{return JSON.parse(raw) as Record<string,unknown>;}catch{
+  const first=raw.indexOf('{'),last=raw.lastIndexOf('}');
+  if(first>=0&&last>first)return JSON.parse(raw.slice(first,last+1)) as Record<string,unknown>;
+  throw new Error('AI returned invalid JSON.');
+ }
 }
 
 
@@ -146,7 +158,7 @@ async function generateGrowthCarousel(db:Client,draftId:string,body:Record<strin
  if(draftError)throw draftError;if(!draft)throw new Error('Only a draft waiting for approval can be generated.');
  const current=draft as DraftRow;
  const topic=growthTopics.includes(requested)?requested:(current.growth_topic_type&&growthTopics.includes(current.growth_topic_type)?current.growth_topic_type:'mbti');
- if(!process.env.OPENAI_API_KEY)throw new Error('AI growth research is not configured.');
+ const ai=aiTransport();
  const prompt=[
   'Topic type: '+topic,
   instruction?'Admin direction: '+instruction:'Use the topic naturally and make it highly relevant to Seoul adults in their 20s and 30s.',
@@ -154,11 +166,11 @@ async function generateGrowthCarousel(db:Client,draftId:string,body:Record<strin
   'Do not use any Roundy test event information.',
   'Return JSON only.'
  ].join('\n');
- const response=await fetch('https://api.openai.com/v1/responses',{
+ const response=await fetch(ai.base+'/responses',{
   method:'POST',
-  headers:{Authorization:'Bearer '+process.env.OPENAI_API_KEY,'Content-Type':'application/json'},
+  headers:{Authorization:'Bearer '+ai.key,'Content-Type':'application/json'},
   body:JSON.stringify({
-   model:process.env.MARKETING_RESEARCH_MODEL||'gpt-5',
+   model:ai.gateway?(process.env.MARKETING_GATEWAY_RESEARCH_MODEL||'openai/gpt-5.6-sol'):(process.env.MARKETING_RESEARCH_MODEL||'gpt-5'),
    tools:[{type:'web_search'}],
    instructions:growthSystemPrompt(topic),
    input:prompt,
@@ -166,7 +178,7 @@ async function generateGrowthCarousel(db:Client,draftId:string,body:Record<strin
   }),
   signal:AbortSignal.timeout(90000)
  });
- if(!response.ok)throw new Error('Could not research the Growth Carousel.');
+ if(!response.ok){const detail=await response.text().catch(()=> '');throw new Error('Could not research the Growth Carousel'+(detail?' ('+response.status+')':'')+'.');}
  const result=await response.json(),generated=parseJsonObject(responseText(result));
  const slides=validateGrowthSlides(generated.slides),sources=validateResearchSources(generated.sources);
  const caption=String(generated.caption??'').trim(),cta=String(generated.cta??'Follow @roundy.meet for launch updates').trim();
@@ -196,28 +208,47 @@ async function generateGrowthCarousel(db:Client,draftId:string,body:Record<strin
 }
 
 async function generateMarketingImage(prompt:string,draftId:string){
- if(!process.env.OPENAI_API_KEY)throw new Error('AI image generation is not configured.');
- const response=await fetch('https://api.openai.com/v1/responses',{
-  method:'POST',
-  headers:{Authorization:'Bearer '+process.env.OPENAI_API_KEY,'Content-Type':'application/json'},
-  body:JSON.stringify({
-   model:process.env.MARKETING_IMAGE_ORCHESTRATOR_MODEL||'gpt-5.1',
-   input:[{role:'user',content:[{type:'input_text',text:prompt}]}],
-   tools:[{
-    type:'image_generation',
-    model:process.env.MARKETING_IMAGE_MODEL||'gpt-image-1',
+ const ai=aiTransport();
+ let encoded:string|undefined;
+ if(ai.gateway){
+  const response=await fetch(ai.base+'/images/generations',{
+   method:'POST',
+   headers:{Authorization:'Bearer '+ai.key,'Content-Type':'application/json'},
+   body:JSON.stringify({
+    model:process.env.MARKETING_GATEWAY_IMAGE_MODEL||'openai/gpt-image-2',
+    prompt,
+    n:1,
     size:'1024x1024',
-    quality:'medium',
-    output_format:'jpeg',
-    background:'opaque'
-   }]
-  }),
-  signal:AbortSignal.timeout(120000)
- });
- if(!response.ok)throw new Error('Could not generate the marketing image.');
- const result=await response.json();
- const imageCall=Array.isArray(result.output)?result.output.find((item:Record<string,unknown>)=>item?.type==='image_generation_call'&&typeof item.result==='string'):null;
- const encoded=imageCall?.result;
+    response_format:'b64_json'
+   }),
+   signal:AbortSignal.timeout(120000)
+  });
+  if(!response.ok){const detail=await response.text().catch(()=> '');throw new Error('Could not generate the marketing image'+(detail?' ('+response.status+')':'')+'.');}
+  const result=await response.json();
+  encoded=result.data?.[0]?.b64_json;
+ }else{
+  const response=await fetch(ai.base+'/responses',{
+   method:'POST',
+   headers:{Authorization:'Bearer '+ai.key,'Content-Type':'application/json'},
+   body:JSON.stringify({
+    model:process.env.MARKETING_IMAGE_ORCHESTRATOR_MODEL||'gpt-5.1',
+    input:[{role:'user',content:[{type:'input_text',text:prompt}]}],
+    tools:[{
+     type:'image_generation',
+     model:process.env.MARKETING_IMAGE_MODEL||'gpt-image-1',
+     size:'1024x1024',
+     quality:'medium',
+     output_format:'jpeg',
+     background:'opaque'
+    }]
+   }),
+   signal:AbortSignal.timeout(120000)
+  });
+  if(!response.ok)throw new Error('Could not generate the marketing image.');
+  const result=await response.json();
+  const imageCall=Array.isArray(result.output)?result.output.find((item:Record<string,unknown>)=>item?.type==='image_generation_call'&&typeof item.result==='string'):null;
+  encoded=typeof imageCall?.result==='string'?imageCall.result:undefined;
+ }
  if(typeof encoded!=='string'||encoded.length<100)throw new Error('AI did not return an image.');
  const bytes=Buffer.from(encoded,'base64');
  if(bytes.length>12*1024*1024)throw new Error('Generated image is too large.');
