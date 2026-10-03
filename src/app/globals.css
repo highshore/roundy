@@ -2364,14 +2364,18 @@ html:lang(ko) .landing-v1 .discovery-hero-overlay h1,html:lang(ko) .landing-v1 .
 .landing-v1-all-events-button{display:flex;align-items:center;justify-content:center;width:100%;height:52px;border-radius:999px;background:#0a0a0a;color:#fff;font-size:13px;font-weight:700;text-decoration:none}
 .landing-v1-empty{padding:18px;border:1px solid var(--border);border-radius:20px;background:var(--surface);font-size:13px;line-height:1.5;color:var(--muted)}
 
-/* Reviews. Real public quotes are not fabricated; this is a publish-ready empty state. */
+/* Reviews. Verified attendee feedback only; no fabricated social proof. */
 .landing-v1-reviews{display:flex;flex-direction:column;gap:14px}
 .landing-v1-reviews>p{font-size:13px;line-height:18px;color:var(--muted)}
 .landing-review-viewport{width:100%;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none}
 .landing-review-viewport::-webkit-scrollbar{display:none}
 .landing-review-track{display:flex;gap:12px;width:max-content}
 .landing-review-card{display:flex;flex:0 0 286px;flex-direction:column;gap:12px;height:156px;padding:18px;border:1px solid var(--border);border-radius:20px;background:#fff;color:var(--ink);scroll-snap-align:start}
-.landing-review-card>span{display:inline-flex;align-items:center;width:fit-content;min-height:26px;padding:5px 10px;border-radius:999px;background:color-mix(in srgb,var(--brand) 16%,var(--paper));font-size:10px;line-height:13px;font-weight:700}
+.landing-review-card-top{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;min-height:26px}
+.landing-review-badge{display:inline-flex;align-items:center;width:fit-content;min-height:26px;padding:5px 10px;border-radius:999px;background:color-mix(in srgb,var(--brand) 16%,var(--paper));font-size:10px;line-height:13px;font-weight:700}
+.landing-review-rating{display:inline-flex;align-items:center;gap:4px;flex:none;color:var(--brand);font-size:11px;line-height:14px}
+.landing-review-rating svg{width:13px;height:13px}
+.landing-review-rating b{color:var(--ink);font-size:11px;line-height:14px;font-weight:700}
 .landing-review-card>p{font-size:14px;line-height:20px}
 .landing-review-card>small{margin-top:auto;font-size:11px;line-height:15px;color:var(--muted)}
 .landing-review-position{display:flex;align-items:center;justify-content:center;gap:7px;height:18px}
