@@ -2299,7 +2299,7 @@ html:lang(ko) .eyebrow{
  gap:56px;
  color:var(--ink);
 }
-.landing-v1-hero,.landing-v1-meetups,.landing-v1-reviews,.landing-v1-safety,.landing-hosting-proof{
+.landing-v1-hero,.landing-v1-meetups,.landing-v1-reviews,.landing-v1-safety,.landing-host-story{
  width:100%;
  min-width:0;
 }
@@ -2390,13 +2390,23 @@ html:lang(ko) .landing-v1 .discovery-hero-overlay h1,html:lang(ko) .landing-v1 .
 .landing-safety-features strong{font-size:12px;line-height:16px;letter-spacing:-.01em}
 .landing-safety-features .contact strong{font-size:11px;line-height:15px}
 
-/* Compact proof, secondary to the Safety section. */
-.landing-hosting-proof{display:flex;flex-direction:column;gap:10px;padding:18px;border-radius:20px;background:#0a0a0a;color:#fff}
-.landing-hosting-proof .eyebrow{font-size:10px;line-height:14px;color:#fff}
-.landing-hosting-proof>div{display:flex;align-items:center;gap:12px;min-height:56px}
-.landing-hosting-proof>div strong{flex:none;font-size:30px;line-height:32px;letter-spacing:-.03em}
-.landing-hosting-proof>div span{font-size:12px;line-height:17px;color:#ffffffc7}
-.landing-hosting-proof>p{font-size:12px;line-height:18px;color:#fff}
+/* Host story: human proof of operating experience, linking to About Roundy. */
+.landing-host-story{display:block;overflow:hidden;border:1px solid var(--border);border-radius:22px;background:var(--paper);color:var(--ink);text-decoration:none;transition:transform .18s ease,box-shadow .18s ease}
+.landing-host-story:hover{transform:translateY(-2px);box-shadow:0 8px 24px #20211f12}
+.landing-host-story:active{transform:scale(.99)}
+.landing-host-story-media{display:grid;grid-template-columns:1fr 1fr;width:100%;height:164px;background:var(--surface);overflow:hidden}
+.landing-host-story-media>div{position:relative;min-width:0;height:164px;overflow:hidden}
+.landing-host-story-media>div+div{border-left:1px solid #ffffff55}
+.landing-host-story-media img{object-fit:cover;object-position:center}
+.landing-host-story-media>div:first-child img{object-position:center 38%}
+.landing-host-story-media>div:last-child img{object-position:center 42%}
+.landing-host-story-copy{display:flex;flex-direction:column;gap:12px;padding:20px}
+.landing-host-story-copy .eyebrow{font-size:10px;line-height:14px}
+.landing-host-story-copy h2{font-size:25px;line-height:29px!important;letter-spacing:-.035em}
+.landing-host-story-copy>p{font-size:13px;line-height:19px;color:var(--muted)}
+.landing-host-story-footer{display:flex;align-items:center;justify-content:space-between;gap:14px;padding-top:4px}
+.landing-host-story-footer>span:first-child{display:inline-flex;align-items:center;min-height:28px;padding:6px 10px;border-radius:999px;background:color-mix(in srgb,var(--brand) 16%,var(--paper));font-size:10px;line-height:14px;font-weight:700;white-space:nowrap}
+.landing-host-story-footer>span:last-child{display:inline-flex;align-items:center;gap:5px;font-size:11px;line-height:15px;font-weight:700;white-space:nowrap}
 
 html:lang(ko) .landing-v1{font-family:'DM Sans',var(--font-noto-sans-kr),"Apple SD Gothic Neo","Malgun Gothic",sans-serif;word-break:keep-all;overflow-wrap:break-word}
 html:lang(ko) .landing-v1 h1,html:lang(ko) .landing-v1 h2,html:lang(ko) .landing-v1 h3{font-family:inherit;word-break:keep-all;overflow-wrap:break-word}
