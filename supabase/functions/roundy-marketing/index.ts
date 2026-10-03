@@ -233,9 +233,10 @@ async function choosePrelaunchPillar(revision:number){
  return ranked[0];
 }
 async function latestPrelaunchImages(){
- const {data,error}=await service.from('instagram_post_drafts').select('images').eq('content_mode','prelaunch').not('images','eq','{}').order('updated_at',{ascending:false}).limit(1).maybeSingle();
+ const {data,error}=await service.from('instagram_post_drafts').select('images').eq('content_mode','prelaunch').order('updated_at',{ascending:false}).limit(10);
  if(error)return [] as string[];
- return Array.isArray(data?.images)?data.images.slice(0,1):[];
+ const row=(data??[]).find(item=>Array.isArray(item.images)&&item.images.length>0);
+ return Array.isArray(row?.images)?row.images.slice(0,1):[];
 }
 
 async function nextLiveEvent(){
