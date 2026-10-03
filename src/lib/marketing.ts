@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { createClient } from './supabase/server';
+import { createServiceRoleClient } from './supabase/service';
 
 type Client=Awaited<ReturnType<typeof createClient>>;
 const json=(value:unknown,status=200)=>NextResponse.json(value,{status,headers:{'Cache-Control':'private, no-store'}});
@@ -26,7 +27,7 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
    db.from('marketing_runs').select('*').order('created_at',{ascending:false}).limit(50),
    db.from('marketing_automation_settings').select('*').eq('singleton',true).single(),
    db.from('instagram_inbox').select('*').in('status',['new','needs_review','failed']).order('received_at',{ascending:false}).limit(100),
-   db.rpc('admin_instagram_webhook_setup')
+   createServiceRoleClient().rpc('instagram_webhook_setup_service')
   ]);
   for(const result of [templates,runs,settings,inbox,webhook])if(result.error)throw result.error;
   const {data:{session}}=await db.auth.getSession();
