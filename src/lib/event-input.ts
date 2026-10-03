@@ -5,6 +5,7 @@ import {
 } from './event-requirements';
 import { eventCategories } from './data';
 import { MINIMUM_AGE } from './age';
+import { validateEventLanguage, validateParticipantDisclosures } from './event-presentation';
 
 export function eventInput(body:unknown) {
  if(!body||typeof body!=='object')throw new Error('Invalid event.');
@@ -38,6 +39,8 @@ export function eventInput(body:unknown) {
   nationality_requirements:validateRequirements(v.nationality_requirements),
   height_requirements:validateHeightRequirements(v.height_requirements),
   smoking_requirements:validateSmokingRequirements(v.smoking_requirements),
+  participant_disclosures:validateParticipantDisclosures(v.participant_disclosures),
+  event_language:validateEventLanguage(v.event_language),
   title,
   title_ko,
   description,
