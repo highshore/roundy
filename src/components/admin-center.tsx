@@ -60,9 +60,9 @@ export function AdminCenter({ path }: { path: string[] }) {
     return()=>{active=false;window.clearInterval(timer);window.removeEventListener('roundy:admin-support-updated',refresh);};
   },[]);
   const links = [
-    { href: '/admin', label: tr(locale, 'Overview', '개요'), icon: LayoutDashboard, active: !path.length },
-    { href: '/admin/members', label: tr(locale, 'Members', '회원'), icon: UsersRound, active: path[0] === 'members' },
-    { href: '/admin/events', label: tr(locale, 'Events', '이벤트'), icon: CalendarDays, active: path[0] === 'events' },
+    { href: '/admin', label: tr(locale, 'Overview', '개요'), icon: LayoutDashboard, active: !path.length, badge: 0 },
+    { href: '/admin/members', label: tr(locale, 'Members', '회원'), icon: UsersRound, active: path[0] === 'members', badge: 0 },
+    { href: '/admin/events', label: tr(locale, 'Events', '이벤트'), icon: CalendarDays, active: path[0] === 'events', badge: 0 },
     { href: '/admin/marketing', label: tr(locale, 'Marketing', '마케팅'), icon: Megaphone, active: path[0] === 'marketing', badge: 0 },
     { href: '/admin/support', label: tr(locale, 'Customer Support', '고객지원'), icon: Headphones, active: path[0] === 'support', badge: supportAttention },
     { href: '/admin/promo-codes', label: tr(locale, 'Promo Codes', '프로모션 코드'), icon: TicketPercent, active: path[0] === 'promo-codes', badge: 0 },
