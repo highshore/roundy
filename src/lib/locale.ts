@@ -268,9 +268,16 @@ const koreanEvents: Record<string, EventCopy> = {
   },
 };
 
-export function localizeEvent<T extends { slug: string; title: string; theme: string; description: string; venue: string; address: string }>(event: T, locale: Locale) {
-  if (locale !== 'ko' || !koreanEvents[event.slug]) return event;
-  return { ...event, ...koreanEvents[event.slug] };
+export function localizeEvent<T extends { slug: string; title: string; theme: string; description: string; venue: string; address: string; title_ko?: string; description_ko?: string }>(event: T, locale: Locale) {
+  if (locale !== 'ko') return event;
+  const fallback = koreanEvents[event.slug];
+  return {
+    ...event,
+    title: event.title_ko?.trim() || fallback?.title || event.title,
+    description: event.description_ko?.trim() || fallback?.description || event.description,
+    venue: fallback?.venue || event.venue,
+    address: fallback?.address || event.address,
+  };
 }
 
 const koreanInterests: Record<string, string> = {

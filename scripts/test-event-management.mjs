@@ -15,7 +15,7 @@ for(const f of (await readdir('supabase/migrations')).sort()){
 }
 const uid=n=>`00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
 await db.exec(`insert into auth.users select ('00000000-0000-0000-0000-'||lpad(n::text,12,'0'))::uuid from generate_series(1,4)n;insert into user_roles(user_id,role) values('${uid(4)}','admin');`);
-for(let n=1;n<=4;n++)await db.query('insert into profiles(user_id,profile) values($1,$2)',[uid(n),{full_name:'Test member',birth_date:'1997-05-10',gender:n===3?'male':'female',nationality:n===2?'JP':'KR',height_cm:170,job_title:'Designer',workplace:'Studio',public_job:'Designer',public_workplace:'Studio',phone:'010-1234-5678',contact_consent:true,photos:['private/photo'],interests:['Coffee','Art','Travel']}]);
+for(let n=1;n<=4;n++)await db.query('insert into profiles(user_id,profile) values($1,$2)',[uid(n),{full_name:'Test member',birth_date:'1997-05-10',gender:n===3?'male':'female',nationality:n===2?'JP':'KR',height_cm:n===2?180:170,smoking_frequency:n===2?'daily':n===3?'socially':'never',job_title:'Designer',workplace:'Studio',public_job:'Designer',public_workplace:'Studio',phone:'010-1234-5678',contact_consent:true,photos:['private/photo'],interests:['Coffee','Art','Travel']}]);
 await db.exec(`insert into verifications(user_id,instagram,status) select id,'test','Verified' from auth.users;insert into credit_lots(user_id,quantity,remaining,payment_reference) select id,3,3,id::text from auth.users;`);
 async function as(n,sql,args=[]){await db.exec('set role authenticated');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[uid(n)]);try{return await db.query(sql,args);}finally{await db.exec('reset role');}}
 async function denied(n,sql,pattern){await assert.rejects(()=>as(n,sql),pattern);}
@@ -42,6 +42,16 @@ await assert.rejects(()=>as(4,`update events set nationality_requirements='{"fem
 await as(4,`update events set starts_at=now()-interval '1 minute' where id='${e}'`);
 await denied(3,`select apply('${e}')`,/not accepting|not available|available|closed/);
 console.log('PASS: apply/redeem during lockdown, cancellation cutoff/refund, nationality enforcement by gender, no ticket loss, invalid requirements, event default category');
+
+await as(4,`update events set starts_at=now()+interval '3 hours',nationality_requirements='{"female":{"mode":"all","countries":[]},"male":{"mode":"all","countries":[]}}',height_requirements='{"female":{"min_cm":175,"max_cm":null},"male":{"min_cm":null,"max_cm":null}}',smoking_requirements='{"female":{"mode":"all","values":[]},"male":{"mode":"all","values":[]}}' where id='${e}'`);
+await denied(1,`select redeem('${e}',true)`,/height/);
+await as(4,`update events set height_requirements='{"female":{"min_cm":null,"max_cm":null},"male":{"min_cm":null,"max_cm":null}}',smoking_requirements='{"female":{"mode":"selected","values":["never"]},"male":{"mode":"all","values":[]}}' where id='${e}'`);
+await denied(2,`select redeem('${e}',true)`,/smoking/);
+await assert.rejects(()=>as(4,`update events set height_requirements='{"female":{"min_cm":190,"max_cm":170},"male":{"min_cm":null,"max_cm":null}}' where id='${e}'`),/Minimum height/);
+await assert.rejects(()=>as(4,`update events set smoking_requirements='{"female":{"mode":"selected","values":[]},"male":{"mode":"all","values":[]}}' where id='${e}'`),/allowed smoking habit/);
+const ageBand=(await db.query("select roundy_private.public_age_band(jsonb_build_object('birth_date',(current_date-interval '32 years')::date::text)) band")).rows[0].band;
+assert.equal(ageBand,'30_early','Public roster reports current age bands rather than birth-year decades');
+console.log('PASS height/smoking eligibility enforcement and current-age public roster bands');
 await denied(1,"insert into marketing_templates(channel,name) values('instagram','Unauthorized')",/row-level/);
 const t=(await as(4,"insert into marketing_templates(channel,name,title,caption) values('koreapas','Test template','Test title','Test copy') returning id")).rows[0].id;
 assert.equal((await as(1,'select * from marketing_templates')).rows.length,0);

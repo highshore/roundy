@@ -3158,3 +3158,67 @@ html:lang(ko) .legal-intro h1{word-break:keep-all}
  .event-image-carousel-nav,
  .event-image-carousel-dots button{transition:none}
 }
+
+
+/* Localized event copy, eligibility requirements and participant wrapping (2026-10-03). */
+.localized-event-copy{align-items:start}
+.localized-event-copy textarea{min-height:132px}
+
+.eligibility-requirements{display:grid;gap:14px}
+.eligibility-requirements>.admin-help{margin:0}
+.eligibility-requirements>.admin-two{margin-top:4px;align-items:start}
+.requirement-editor{
+ display:grid;
+ gap:12px;
+ min-width:0;
+ padding:16px;
+ border:1px solid var(--border);
+ border-radius:16px;
+ background:var(--surface);
+}
+.requirement-editor>strong{font-size:14px}
+.compact-requirement-inputs{gap:10px}
+.smoking-checkboxes{
+ display:grid;
+ gap:6px;
+ max-height:220px;
+ overflow:auto;
+ padding:10px;
+ border:1px solid var(--border);
+ border-radius:12px;
+ background:var(--paper);
+}
+.smoking-checkboxes .check-row{margin:0;padding:7px 4px}
+
+.route-events .detail-facts .requirement-fact{grid-column:1/-1}
+.route-events .detail-facts .requirement-text{white-space:pre-line;line-height:1.55!important}
+
+.public-roster-chip{
+ grid-template-columns:10px minmax(0,1fr);
+ gap:11px;
+ min-height:66px;
+ white-space:normal;
+}
+.public-roster-chip>i{display:none}
+.public-roster-copy{
+ display:grid!important;
+ gap:4px!important;
+ min-width:0;
+ color:var(--ink)!important;
+}
+.public-roster-copy>span{
+ display:block!important;
+ min-width:0;
+ overflow:visible!important;
+ text-overflow:clip!important;
+ white-space:normal;
+ overflow-wrap:anywhere;
+}
+.public-roster-copy>span:first-child{font-weight:750}
+.public-roster-copy>span:last-child{color:var(--muted);font-size:12px;line-height:1.25!important}
+
+@media(max-width:700px){
+ .localized-event-copy,
+ .eligibility-requirements>.admin-two,
+ .compact-requirement-inputs{grid-template-columns:1fr}
+}

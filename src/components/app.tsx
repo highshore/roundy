@@ -3,7 +3,7 @@ import { Heading } from '@/components/heading';
 import { EventStatusStrip } from './event-status-strip';
 import { EventImageCarousel } from './event-image-carousel';
 import { headingText as headline } from '@/lib/heading';
-import { EventCategoryBadges, NationalityBadges, NationalityFact, VenueFact } from './event-detail-meta';
+import { EventCategoryBadges, HeightFact, NationalityBadges, NationalityFact, SmokingFact, VenueFact } from './event-detail-meta';
 import { isRoundyEvent } from '@/lib/event-scope';
 import { lockdownNotice } from '@/lib/event-requirements';
 import { Children, cloneElement, createContext, isValidElement, useContext, useEffect, useState, type ReactNode, type FormEvent } from 'react';
@@ -71,12 +71,12 @@ function Empty({title,body,href,label='Explore events'}:{title:string;body:strin
 function categoryLabel(event:Event,locale:Locale){return isRoundyEvent(event)?tr(locale,'1:1 Mingle','1:1 밍글'):tr(locale,'Archived event','보관된 모임');}
 function AttendeeStack({count,kind,locale,attendees=[]}:{count:number;kind:string;locale:Locale;attendees?:AttendeePreview[]}){const shown=Math.min(5,Math.max(0,count));const visible=attendees.slice(0,shown);return <div className="attendee-stack" aria-label={count+' '+ui(locale,kind)}>{Array.from({length:shown},(_,i)=>{const attendee=visible[i];return <span className={'attendee-avatar avatar-'+i} key={i} aria-hidden="true" style={attendee?.photo?{backgroundImage:`url("${attendee.photo}")`}:undefined}>{!attendee?.photo&&<UserRound size={13}/>}</span>;})}{count>shown&&<span className="attendee-avatar more" aria-hidden="true">+{count-shown}</span>}</div>;}
 function ageBandLabel(value:string,locale:Locale){
- const match=value.match(/^(\d{2})_(early|mid|late)$/);
+ const match=value.match(/^(\d{2,3})_(early|mid|late)$/);
  if(!match)return tr(locale,'Age undisclosed','연령대 비공개');
  const [,decade,band]=match;
  const en=band==='early'?'Early':band==='mid'?'Mid':'Late';
  const ko=band==='early'?'초반':band==='mid'?'중반':'후반';
- return locale==='ko'?decade+ko:en+' '+decade+'s';
+ return locale==='ko'?decade+'대 '+ko:en+' '+decade+'s';
 }
 function jobGroupLabel(value:string,locale:Locale){
  const labels:Record<string,[string,string]>={
@@ -337,6 +337,8 @@ export function App({path}:{path:string}){
    <div className="detail-facts">
     <div className="event-fact"><span className="fact-icon"><UsersRound size={20}/></span><span className="fact-copy"><b>{tr(locale,'Age range','연령')}</b><span>{event.age_min}–{event.age_max}</span></span></div>
     <NationalityFact requirements={event.nationality_requirements} locale={locale}/>
+    <HeightFact requirements={event.height_requirements} locale={locale}/>
+    <SmokingFact requirements={event.smoking_requirements} locale={locale}/>
     <div className="event-fact"><span className="fact-icon"><CalendarDays size={20}/></span><span className="fact-copy"><b>{tr(locale,'Time','시간')}</b><span>{dateLabelForLocale(event.starts_at,locale)} · {timeLabelForLocale(event.starts_at,locale)} – {timeLabelForLocale(event.ends_at,locale)} KST</span></span></div>
     <div className="event-fact"><span className="fact-icon"><Clock3 size={20}/></span><span className="fact-copy"><b>{tr(locale,'Duration','진행 시간')}</b><span>{duration}{tr(locale,' minutes','분')}</span></span></div>
     <VenueFact venue={item.venue} address={item.address} description={event.venue_description} locale={locale}/>
@@ -351,7 +353,7 @@ export function App({path}:{path:string}){
     <div className="public-roster-groups">
      {rosterGroups.map(group=><section className={'public-roster-group '+group.tone} key={group.key}>
       <div className="public-roster-group-head"><Heading level={3}>{group.label}</Heading><span className="public-roster-seat-tab">{group.count}/{genderCapacity} {tr(locale,'Seats Taken','좌석 확정')}</span></div>
-      {group.entries.length?<div className="public-roster-grid">{group.entries.map((entry,index)=><div className="public-roster-chip" key={group.key+'-'+index}><span className="public-roster-dot" aria-hidden="true"/><span>{ageBandLabel(entry.age_band,locale)}</span><i aria-hidden="true"/><span>{jobGroupLabel(entry.job_group,locale)}</span></div>)}</div>:<p className="public-roster-empty">{tr(locale,'No confirmed participants yet.','아직 확정된 참가자가 없어요.')}</p>}
+      {group.entries.length?<div className="public-roster-grid">{group.entries.map((entry,index)=><div className="public-roster-chip" key={group.key+'-'+index}><span className="public-roster-dot" aria-hidden="true"/><span className="public-roster-copy"><span>{ageBandLabel(entry.age_band,locale)}</span><span>{jobGroupLabel(entry.job_group,locale)}</span></span></div>)}</div>:<p className="public-roster-empty">{tr(locale,'No confirmed participants yet.','아직 확정된 참가자가 없어요.')}</p>}
      </section>)}
     </div>
     <div className="public-roster-privacy"><ShieldCheck size={18}/><span>{tr(locale,'Names, exact ages, workplaces, photos and contact information are never included in this public list.','이 공개 명단에는 이름, 정확한 나이, 직장명, 사진, 연락처를 표시하지 않습니다.')}</span></div>
