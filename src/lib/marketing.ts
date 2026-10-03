@@ -5,10 +5,14 @@ import { createServiceRoleClient } from './supabase/service';
 type Client=Awaited<ReturnType<typeof createClient>>;
 type ContentMode='prelaunch'|'live_event';
 type RegenerationMode='text'|'image'|'both';
+type GrowthTopic='mbti'|'dating_archetype'|'book_insight'|'trend_research'|'meme_remix'|'dating_myth'|'conversation_prompt'|'seoul_dating'|'mini_quiz';
+type CarouselSlide={eyebrow:string;title:string;body:string;source_label:string;variant:'hook'|'content'|'source'|'roundy'};
+type ResearchSource={title:string;publisher:string;url:string;date:string};
 type DraftRow={
  id:string;draft_date:string;event_id:string|null;content_pillar:string;caption:string;cta:string;destination_url:string;
  images:string[];status:string;generation_reason:string;recommended_time_kst:string;window_start_kst:string;window_end_kst:string;
- scheduled_for:string|null;revision:number;content_mode:ContentMode;
+ scheduled_for:string|null;revision:number;content_mode:ContentMode;draft_kind:'brand'|'growth_carousel';growth_topic_type:GrowthTopic|null;
+ carousel_slides:CarouselSlide[];research_sources:ResearchSource[];research_status:'not_required'|'pending'|'generated'|'failed';
 };
 type EventRow={
  id:string;slug:string;title:string;starts_at:string;venue:string;neighborhood:string;age_min:number;age_max:number;
@@ -51,6 +55,144 @@ async function openAIJson(system:string,input:Record<string,unknown>){
  const raw=result.choices?.[0]?.message?.content;
  if(typeof raw!=='string')throw new Error('AI returned an invalid marketing draft.');
  try{return JSON.parse(raw) as Record<string,unknown>;}catch{throw new Error('AI returned invalid JSON.');}
+}
+
+
+const growthTopics:GrowthTopic[]=['mbti','dating_archetype','book_insight','trend_research','meme_remix','dating_myth','conversation_prompt','seoul_dating','mini_quiz'];
+function growthTopicGuidance(topic:GrowthTopic){
+ const guides:Record<GrowthTopic,string>={
+  mbti:'Create a playful MBTI dating-archetype carousel. Clearly frame it as entertainment and not scientific compatibility prediction. Avoid negative stereotyping.',
+  dating_archetype:'Create original, relatable dating archetypes based on everyday behavior, not protected traits or mental-health labels.',
+  book_insight:'Use a relationship, communication or human-connection idea from a real book. Prefer paraphrase. Any direct copyrighted-book quote must be 15 words or fewer and verified. Attribute title and author. Never fabricate a quote.',
+  trend_research:'Find a recent, credible relationship, communication, social-connection or dating study or research result. Prefer peer-reviewed journals, universities or established research organizations. Distinguish correlation from causation.',
+  meme_remix:'Find a current harmless meme or social format relevant to dating or social life, then create an original Roundy interpretation. Do not reproduce the meme image, screenshot, creator text or punchline verbatim.',
+  dating_myth:'Take one common dating myth and replace it with a nuanced, non-manipulative perspective. Avoid pickup tactics or adversarial gender framing.',
+  conversation_prompt:'Create useful first-conversation prompts people may want to save. Avoid sexual, invasive, financial or discriminatory questions.',
+  seoul_dating:'Create a relatable Seoul social/dating observation without stereotyping Koreans or foreigners. If making factual claims, source them.',
+  mini_quiz:'Create a light self-reflection mini quiz about first-date or conversation style. It must not diagnose personality, compatibility or mental health.'
+ };
+ return guides[topic];
+}
+function growthSystemPrompt(topic:GrowthTopic){
+ return [
+  'You are an editorial strategist for Roundy, a pre-launch Seoul offline 1:1 rotation dating/mingle service for Korean and international adults.',
+  'Create ORIGINAL Instagram carousel editorial content designed to be useful, relatable and naturally shareable or saveable without engagement bait.',
+  'Instagram recommendation eligibility matters: do not use clickbait, fake urgency, engagement bait, copied posts, copied meme screenshots, sensational misinformation or low-value reposting.',
+  'Slides 1 through 5 must stand on their own as useful or entertaining content. Only slide 6 may bridge to Roundy and mention the pre-launch brand.',
+  'Roundy is NOT officially launched. Never mention test event dates, venue, ticket price, seats, attendees, reviews, launch date, booking availability or an active event.',
+  'Avoid manipulative dating advice, pickup tactics, gender hostility, sexual content, body shaming, mental-health diagnosis, substance use, political content and discriminatory stereotypes.',
+  'Use Korean-first carousel copy because the account is Seoul-focused, with brief English phrases only when natural. Keep slides clean enough to fit a 1080x1350 card.',
+  'Do not ask people to tag friends, spam comments, or perform artificial engagement actions.',
+  growthTopicGuidance(topic),
+  'Create exactly 6 slides. Slide 1 is the hook. Slides 2-4 deliver the core value. Slide 5 is a takeaway/source/context slide. Slide 6 is the only Roundy bridge and should softly say Roundy is preparing face-to-face 1:1 rotation meetings in Seoul and invite people to follow @roundy.meet for launch updates.',
+  'For research/book/trend factual claims, use web search and include up to 3 trustworthy source URLs. If a claim cannot be verified, omit it.',
+  'Return JSON only with keys: topic_type, headline, caption, cta, generation_reason, slides, sources.',
+  'Each slide object must contain eyebrow, title, body, source_label, variant. variant must be hook, content, source, or roundy.',
+  'Each source object must contain title, publisher, url, date. Keep caption under 1500 characters and CTA under 80 characters. No em dash.'
+ ].join(' ');
+}
+function responseText(result:any){
+ const parts:string[]=[];
+ for(const item of Array.isArray(result?.output)?result.output:[]){
+  if(item?.type!=='message'||!Array.isArray(item.content))continue;
+  for(const content of item.content)if(content?.type==='output_text'&&typeof content.text==='string')parts.push(content.text);
+ }
+ return parts.join('\n').trim();
+}
+function parseJsonObject(raw:string){
+ const clean=raw.trim();
+ try{return JSON.parse(clean) as Record<string,unknown>;}catch{
+  const start=clean.indexOf('{'),end=clean.lastIndexOf('}');
+  if(start>=0&&end>start)return JSON.parse(clean.slice(start,end+1)) as Record<string,unknown>;
+  throw new Error('AI returned invalid carousel JSON.');
+ }
+}
+function validateGrowthSlides(value:unknown){
+ if(!Array.isArray(value)||value.length!==6)throw new Error('Growth carousel must contain exactly 6 slides.');
+ return value.map((item,index)=>{
+  if(!item||typeof item!=='object')throw new Error('Invalid carousel slide.');
+  const row=item as Record<string,unknown>;
+  const eyebrow=String(row.eyebrow??'').trim().slice(0,60);
+  const title=String(row.title??'').trim().slice(0,120);
+  const body=String(row.body??'').trim().slice(0,420);
+  const source_label=String(row.source_label??'').trim().slice(0,140);
+  const variant=String(row.variant??(index===0?'hook':index===5?'roundy':'content'));
+  if(!title||!body||!['hook','content','source','roundy'].includes(variant))throw new Error('Invalid carousel slide content.');
+  if(index===5&&variant!=='roundy')throw new Error('The final slide must be the Roundy bridge.');
+  return {eyebrow,title,body,source_label,variant:variant as CarouselSlide['variant']};
+ });
+}
+function validateResearchSources(value:unknown){
+ if(!Array.isArray(value))return [] as ResearchSource[];
+ const rows:ResearchSource[]=[];
+ for(const item of value.slice(0,3)){
+  if(!item||typeof item!=='object')continue;
+  const row=item as Record<string,unknown>,sourceUrl=String(row.url??'').trim();
+  if(!sourceUrl.startsWith('https://'))continue;
+  rows.push({
+   title:String(row.title??'').trim().slice(0,180),
+   publisher:String(row.publisher??'').trim().slice(0,100),
+   url:sourceUrl.slice(0,1000),
+   date:String(row.date??'').trim().slice(0,40)
+  });
+ }
+ return rows;
+}
+async function generateGrowthCarousel(db:Client,draftId:string,body:Record<string,unknown>){
+ const instruction=typeof body.instruction==='string'?body.instruction.trim():'';
+ if(instruction.length>500)throw new Error('Growth instructions must be 500 characters or fewer.');
+ const requested=String(body.topic_type??'') as GrowthTopic;
+ const {data:draft,error:draftError}=await db.from('instagram_post_drafts').select('*').eq('id',draftId).eq('status','needs_approval').maybeSingle();
+ if(draftError)throw draftError;if(!draft)throw new Error('Only a draft waiting for approval can be generated.');
+ const current=draft as DraftRow;
+ if(current.draft_kind!=='growth_carousel')throw new Error('This draft is not a Growth Carousel.');
+ const topic=growthTopics.includes(requested)?requested:(current.growth_topic_type&&growthTopics.includes(current.growth_topic_type)?current.growth_topic_type:'mbti');
+ if(!process.env.OPENAI_API_KEY)throw new Error('AI growth research is not configured.');
+ const prompt=[
+  'Topic type: '+topic,
+  instruction?'Admin direction: '+instruction:'Use the topic naturally and make it highly relevant to Seoul adults in their 20s and 30s.',
+  'Today: '+new Date().toISOString().slice(0,10),
+  'Do not use any Roundy test event information.',
+  'Return JSON only.'
+ ].join('\n');
+ const response=await fetch('https://api.openai.com/v1/responses',{
+  method:'POST',
+  headers:{Authorization:'Bearer '+process.env.OPENAI_API_KEY,'Content-Type':'application/json'},
+  body:JSON.stringify({
+   model:process.env.MARKETING_RESEARCH_MODEL||'gpt-5',
+   tools:[{type:'web_search'}],
+   instructions:growthSystemPrompt(topic),
+   input:prompt,
+   max_output_tokens:5000
+  }),
+  signal:AbortSignal.timeout(90000)
+ });
+ if(!response.ok)throw new Error('Could not research the Growth Carousel.');
+ const result=await response.json(),generated=parseJsonObject(responseText(result));
+ const slides=validateGrowthSlides(generated.slides),sources=validateResearchSources(generated.sources);
+ const caption=String(generated.caption??'').trim(),cta=String(generated.cta??'Follow @roundy.meet for launch updates').trim();
+ if(!caption||caption.length>1500)throw new Error('Generated Growth Carousel caption was invalid.');
+ if(cta.length>80)throw new Error('Generated Growth Carousel CTA was invalid.');
+ const generationReason=String(generated.generation_reason??'Original Growth Carousel generated with current web research.').slice(0,1000);
+ const {data:updated,error:updateError}=await db.from('instagram_post_drafts').update({
+  growth_topic_type:topic,
+  carousel_slides:slides,
+  research_sources:sources,
+  research_status:'generated',
+  caption,
+  cta,
+  destination_url:'https://roundy.team',
+  content_mode:'prelaunch',
+  event_id:null,
+  generation_reason:generationReason,
+  images:[],
+  revision:Number(current.revision||1)+1,
+  last_regeneration_mode:'both',
+  last_regeneration_instruction:instruction,
+  regenerated_at:new Date().toISOString()
+ }).eq('id',draftId).eq('status','needs_approval').select('*').single();
+ if(updateError)throw updateError;
+ return updated;
 }
 
 async function generateMarketingImage(prompt:string,draftId:string){
@@ -233,20 +375,31 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
  if(id==='settings'&&req.method==='PUT'){
   const body=await req.json().catch(()=>null);
   const timePattern=/^([01]\d|2[0-3]):[0-5]\d(:00)?$/;
-  if(!body||typeof body.daily_instagram_enabled!=='boolean'||typeof body.auto_reply_enabled!=='boolean'||typeof body.optimization_enabled!=='boolean'||typeof body.daily_time_kst!=='string'||typeof body.draft_generation_time_kst!=='string'||!['prelaunch','live_event'].includes(body.content_mode)||!timePattern.test(body.daily_time_kst)||!timePattern.test(body.draft_generation_time_kst))return json({error:'Invalid automation settings'},400);
+  const growthDays:number[]=Array.isArray(body?.growth_days)?body.growth_days.map((value:unknown)=>Number(value)):[];
+  const growthCount=Number(body?.growth_posts_per_week);
+  if(!body||typeof body.daily_instagram_enabled!=='boolean'||typeof body.auto_reply_enabled!=='boolean'||typeof body.optimization_enabled!=='boolean'||typeof body.growth_carousel_enabled!=='boolean'||typeof body.daily_time_kst!=='string'||typeof body.draft_generation_time_kst!=='string'||!['prelaunch','live_event'].includes(body.content_mode)||!timePattern.test(body.daily_time_kst)||!timePattern.test(body.draft_generation_time_kst)||!Number.isInteger(growthCount)||growthCount<0||growthCount>7||growthDays.some(day=>!Number.isInteger(day)||day<0||day>6)||new Set(growthDays).size!==growthDays.length||growthDays.length!==growthCount)return json({error:'Invalid automation settings'},400);
   const {data,error}=await db.from('marketing_automation_settings').update({
    daily_instagram_enabled:body.daily_instagram_enabled,
    daily_time_kst:body.daily_time_kst.slice(0,5),
    draft_generation_time_kst:body.draft_generation_time_kst.slice(0,5),
    optimization_enabled:body.optimization_enabled,
    auto_reply_enabled:body.auto_reply_enabled,
-   content_mode:body.content_mode
+   content_mode:body.content_mode,
+   growth_carousel_enabled:body.growth_carousel_enabled,
+   growth_posts_per_week:growthCount,
+   growth_days:growthDays
   }).eq('singleton',true).select('*').single();
   if(error)throw error;return json({settings:data});
  }
  if(id==='draft'&&path[1]==='generate'&&req.method==='POST'){
   const result=await invokeMarketingWorker(db,{action:'generate_draft_now'});
   return json(result);
+ }
+ if(id==='draft'&&path[1]&&path[2]==='growth-generate'&&req.method==='POST'){
+  if(!/^[0-9a-f-]{36}$/i.test(path[1]))return json({error:'Invalid draft'},400);
+  const requestBody=await req.json().catch(()=>({}));
+  const draft=await generateGrowthCarousel(db,path[1],requestBody&&typeof requestBody==='object'?requestBody as Record<string,unknown>:{});
+  return json({draft});
  }
  if(id==='draft'&&path[1]&&path[2]==='regenerate'&&req.method==='POST'){
   if(!/^[0-9a-f-]{36}$/i.test(path[1]))return json({error:'Invalid draft'},400);
@@ -260,7 +413,13 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
   const body=await req.json().catch(()=>null);
   if(!body||typeof body.caption!=='string'||!body.caption.trim()||body.caption.length>2000||typeof body.cta!=='string'||body.cta.length>80||typeof body.destination_url!=='string')return json({error:'Invalid draft content'},400);
   if(body.destination_url){const destination=new URL(body.destination_url);if(destination.protocol!=='https:'||destination.username||destination.password)return json({error:'Use an HTTPS destination URL.'},400);}
-  const {data,error}=await db.from('instagram_post_drafts').update({caption:body.caption.trim(),cta:body.cta.trim(),destination_url:body.destination_url.trim()}).eq('id',path[1]).eq('status','needs_approval').select('*').maybeSingle();
+  const update:Record<string,unknown>={caption:body.caption.trim(),cta:body.cta.trim(),destination_url:body.destination_url.trim()};
+  if(body.images!==undefined){
+   const base=process.env.NEXT_PUBLIC_SUPABASE_URL+'/storage/v1/object/public/wis-event-images/';
+   if(!Array.isArray(body.images)||body.images.length>10||body.images.some((src:unknown)=>typeof src!=='string'||!src.startsWith(base)||!/^[-a-f0-9]+\/[-a-f0-9]+\.jpg$/.test(src.slice(base.length))))return json({error:'Invalid draft images'},400);
+   update.images=body.images;
+  }
+  const {data,error}=await db.from('instagram_post_drafts').update(update).eq('id',path[1]).eq('status','needs_approval').select('*').maybeSingle();
   if(error)throw error;if(!data)return json({error:'Only a draft waiting for approval can be edited.'},409);return json({draft:data});
  }
  if(id==='draft'&&path[1]&&path[2]==='skip'&&req.method==='POST'){
@@ -281,7 +440,7 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
   const eligible=!missedWindow;
   const snapshot={
    channel:'instagram',name:'Daily Instagram · '+draft.draft_date,title:'',caption:draft.caption,cta:draft.cta,destination_url:draft.destination_url,
-   images:draft.images,draft_id:draft.id,event_id:draft.event_id,content_mode:draft.content_mode,content_pillar:draft.content_pillar,eligible_for_optimization:eligible,auto_generated:true
+   images:draft.images,draft_id:draft.id,event_id:draft.event_id,content_mode:draft.content_mode,draft_kind:draft.draft_kind,growth_topic_type:draft.growth_topic_type,content_pillar:draft.content_pillar,eligible_for_optimization:eligible,auto_generated:true
   };
   const requestKey='draft:'+draft.id+':'+draft.revision;
   const {data:run,error:runError}=await service.from('marketing_runs').insert({channel:'instagram',snapshot,request_key:requestKey,scheduled_for:scheduledFor}).select('*').single();

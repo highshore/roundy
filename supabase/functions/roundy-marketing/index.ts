@@ -16,8 +16,9 @@ type EventRow={
  price_gents:number;price_ladies:number;
 };
 type InboxRow={id:string;external_id:string;kind:'comment'|'dm';sender_id:string;status:string};
-type AutomationSettings={daily_instagram_enabled:boolean;daily_time_kst:string;draft_generation_time_kst:string;optimization_enabled:boolean;content_mode:'prelaunch'|'live_event'};
-type DraftRow={id:string;draft_date:string;event_id:string|null;content_mode:'prelaunch'|'live_event';content_pillar:'event'|'urgency'|'problem'|'concept'|'seoul'|'trust';caption:string;cta:string;destination_url:string;images:string[];status:string;recommended_time_kst:string;window_start_kst:string;window_end_kst:string;scheduled_for:string|null;revision:number;eligible_for_optimization:boolean};
+type GrowthTopic='mbti'|'dating_archetype'|'book_insight'|'trend_research'|'meme_remix'|'dating_myth'|'conversation_prompt'|'seoul_dating'|'mini_quiz';
+type AutomationSettings={daily_instagram_enabled:boolean;daily_time_kst:string;draft_generation_time_kst:string;optimization_enabled:boolean;content_mode:'prelaunch'|'live_event';growth_carousel_enabled:boolean;growth_posts_per_week:number;growth_days:number[]};
+type DraftRow={id:string;draft_date:string;event_id:string|null;content_mode:'prelaunch'|'live_event';draft_kind:'brand'|'growth_carousel';growth_topic_type:GrowthTopic|null;content_pillar:'event'|'urgency'|'problem'|'concept'|'seoul'|'trust';caption:string;cta:string;destination_url:string;images:string[];status:string;recommended_time_kst:string;window_start_kst:string;window_end_kst:string;scheduled_for:string|null;revision:number;eligible_for_optimization:boolean};
 type Recommendation={dow:number;recommended_time_kst:string;window_start_kst:string;window_end_kst:string;sample_size:number;score:number;source:string;rationale:string};
 
 async function graph(path:string,fields?:Record<string,string>){
@@ -91,7 +92,7 @@ function jitteredTime(center:string,start:string,end:string,key:string){
  return minutesTime(Math.max(startMinute,Math.min(endMinute,target)));
 }
 async function automationSettings(){
- const {data,error}=await service.from('marketing_automation_settings').select('daily_instagram_enabled,daily_time_kst,draft_generation_time_kst,optimization_enabled,content_mode').eq('singleton',true).single();
+ const {data,error}=await service.from('marketing_automation_settings').select('daily_instagram_enabled,daily_time_kst,draft_generation_time_kst,optimization_enabled,content_mode,growth_carousel_enabled,growth_posts_per_week,growth_days').eq('singleton',true).single();
  if(error)throw error;return data as AutomationSettings;
 }
 async function recommendationFor(dow:number,dateKey:string,settings:AutomationSettings){
@@ -232,6 +233,31 @@ async function choosePrelaunchPillar(revision:number){
  });
  return ranked[0];
 }
+function growthDays(settings:AutomationSettings){
+ return (Array.isArray(settings.growth_days)?settings.growth_days:[]).slice(0,Math.max(0,Math.min(7,Number(settings.growth_posts_per_week||0))));
+}
+function isGrowthDay(settings:AutomationSettings,dow:number){
+ return settings.content_mode==='prelaunch'&&settings.growth_carousel_enabled===true&&growthDays(settings).includes(dow);
+}
+function growthTopicFor(dateKey:string,dow:number,settings:AutomationSettings):GrowthTopic{
+ const week=Math.floor(new Date(dateKey+'T12:00:00Z').getTime()/604800000);
+ const slot=Math.max(0,growthDays(settings).indexOf(dow));
+ const families:GrowthTopic[][]=[
+  ['mbti','dating_archetype','mini_quiz'],
+  ['book_insight','conversation_prompt','dating_myth'],
+  ['trend_research','meme_remix','seoul_dating']
+ ];
+ const family=families[slot%families.length];
+ return family[week%family.length];
+}
+function growthTopicLabel(topic:GrowthTopic){
+ const labels:Record<GrowthTopic,string>={
+  mbti:'MBTI dating archetypes',dating_archetype:'dating archetypes',book_insight:'book insight',
+  trend_research:'current relationship research',meme_remix:'current meme remix',dating_myth:'dating myth',
+  conversation_prompt:'first-conversation prompts',seoul_dating:'Seoul dating culture',mini_quiz:'dating mini quiz'
+ };
+ return labels[topic];
+}
 async function latestPrelaunchImages(){
  const {data,error}=await service.from('instagram_post_drafts').select('images').eq('content_mode','prelaunch').order('updated_at',{ascending:false}).limit(10);
  if(error)return [] as string[];
@@ -251,12 +277,22 @@ function publishableImages(event:EventRow|null){
 }
 async function buildDraft(dateKey:string,dow:number,revision:number){
  const settings=await automationSettings(),timing=await recommendationFor(dow,dateKey,settings),scheduledFor=kstIso(dateKey,timing.recommended);
+ if(isGrowthDay(settings,dow)){
+  const topic=growthTopicFor(dateKey,dow,settings);
+  return {
+   contentMode:'prelaunch' as const,event:null,pillar:'concept' as const,caption:'',images:[],timing,scheduledFor,
+   cta:'Follow for launch updates',destinationUrl:'https://roundy.team',draftKind:'growth_carousel' as const,growthTopicType:topic,
+   carouselSlides:[],researchSources:[],researchStatus:'pending' as const,
+   reason:'Weekly Growth Carousel slot: '+growthTopicLabel(topic)+'. Research and original carousel slides are generated in Admin before approval. Test event data is not used.'
+  };
+ }
  if(settings.content_mode==='prelaunch'){
   const pillar=await choosePrelaunchPillar(revision);
   const images=await latestPrelaunchImages();
   return {
    contentMode:'prelaunch' as const,event:null,pillar,caption:prelaunchCaption(pillar,dateKey,revision),images,timing,scheduledFor,
-   cta:'Follow for launch updates',destinationUrl:'https://roundy.team',
+   cta:'Follow for launch updates',destinationUrl:'https://roundy.team',draftKind:'brand' as const,growthTopicType:null,
+   carouselSlides:[],researchSources:[],researchStatus:'not_required' as const,
    reason:'Pre-launch promotion mode. Test event data is intentionally ignored. Selected '+pillar+' to rotate brand-building topics. Timing: '+timing.rationale
   };
  }
@@ -264,14 +300,16 @@ async function buildDraft(dateKey:string,dow:number,revision:number){
  if(!event||!images.length){
   return {
    contentMode:'live_event' as const,event:null,pillar:'event' as const,caption:'',images:[],timing,scheduledFor,
-   cta:'See event details',destinationUrl:'https://roundy.team/events',
+   cta:'See event details',destinationUrl:'https://roundy.team/events',draftKind:'brand' as const,growthTopicType:null,
+   carouselSlides:[],researchSources:[],researchStatus:'not_required' as const,
    reason:'No upcoming live event with a publishable image is available, so the day is skipped rather than publishing stale information.'
   };
  }
  const choice=await choosePillar(event,revision);
  return {
   contentMode:'live_event' as const,event,pillar:choice.pillar,caption:draftCaption(event,choice.pillar,dateKey,revision),images,timing,scheduledFor,
-  cta:'See event details',destinationUrl:'https://roundy.team/events/'+event.slug,
+  cta:'See event details',destinationUrl:'https://roundy.team/events/'+event.slug,draftKind:'brand' as const,growthTopicType:null,
+  carouselSlides:[],researchSources:[],researchStatus:'not_required' as const,
   reason:choice.reason+' Timing: '+timing.rationale
  };
 }
@@ -283,12 +321,13 @@ async function ensureDailyDraft(force=false){
  if(existingError)throw existingError;if(existing)return existing;
  const built=await buildDraft(now.date,now.dow,1);
  const base={
-  draft_date:now.date,event_id:built.event?.id??null,content_mode:built.contentMode,content_pillar:built.pillar,caption:built.caption,
-  cta:built.cta,destination_url:built.destinationUrl,images:built.images,generation_reason:built.reason,
+  draft_date:now.date,event_id:built.event?.id??null,content_mode:built.contentMode,draft_kind:built.draftKind,growth_topic_type:built.growthTopicType,
+  content_pillar:built.pillar,caption:built.caption,cta:built.cta,destination_url:built.destinationUrl,images:built.images,
+  carousel_slides:built.carouselSlides,research_sources:built.researchSources,research_status:built.researchStatus,generation_reason:built.reason,
   recommended_time_kst:built.timing.recommended,window_start_kst:built.timing.windowStart,window_end_kst:built.timing.windowEnd,
   scheduled_for:built.scheduledFor,revision:1
  };
- const readyForApproval=built.contentMode==='prelaunch'||Boolean(built.event&&built.images.length);
+ const readyForApproval=built.draftKind==='growth_carousel'||built.contentMode==='prelaunch'||Boolean(built.event&&built.images.length);
  const {data,error}=await service.from('instagram_post_drafts').insert({...base,status:readyForApproval?'needs_approval':'skipped'}).select('*').single();
  if(error)throw error;return data;
 }

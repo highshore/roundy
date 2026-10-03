@@ -9,13 +9,16 @@ import { tr, type Locale } from '@/lib/locale';
 import type { Event } from '@/lib/data';
 import { useToast } from './toast';
 type Channel='instagram'|'koreapas';
+type GrowthTopic='mbti'|'dating_archetype'|'book_insight'|'trend_research'|'meme_remix'|'dating_myth'|'conversation_prompt'|'seoul_dating'|'mini_quiz';
+type CarouselSlide={eyebrow:string;title:string;body:string;source_label:string;variant:'hook'|'content'|'source'|'roundy'};
+type ResearchSource={title:string;publisher:string;url:string;date:string};
 type Template={id?:string;channel:Channel;name:string;title:string;caption:string;cta:string;destination_url:string;images:string[];days:number[];time_kst:string;enabled:boolean};
 type Run={id:string;channel:Channel;snapshot:Template;status:string;message:string;external_url?:string;created_at:string};
-type AutomationSettings={daily_instagram_enabled:boolean;daily_time_kst:string;draft_generation_time_kst:string;optimization_enabled:boolean;auto_reply_enabled:boolean;content_mode:'prelaunch'|'live_event'};
-type Draft={id:string;draft_date:string;event_id:string|null;content_mode:'prelaunch'|'live_event';content_pillar:string;caption:string;cta:string;destination_url:string;images:string[];status:string;generation_reason:string;recommended_time_kst:string;window_start_kst:string;window_end_kst:string;scheduled_for:string|null;revision:number;eligible_for_optimization:boolean;last_regeneration_mode?:'text'|'image'|'both'|null;last_regeneration_instruction?:string;regenerated_at?:string|null};
+type AutomationSettings={daily_instagram_enabled:boolean;daily_time_kst:string;draft_generation_time_kst:string;optimization_enabled:boolean;auto_reply_enabled:boolean;content_mode:'prelaunch'|'live_event';growth_carousel_enabled:boolean;growth_posts_per_week:number;growth_days:number[]};
+type Draft={id:string;draft_date:string;event_id:string|null;content_mode:'prelaunch'|'live_event';draft_kind:'brand'|'growth_carousel';growth_topic_type:GrowthTopic|null;carousel_slides:CarouselSlide[];research_sources:ResearchSource[];research_status:'not_required'|'pending'|'generated'|'failed';content_pillar:string;caption:string;cta:string;destination_url:string;images:string[];status:string;generation_reason:string;recommended_time_kst:string;window_start_kst:string;window_end_kst:string;scheduled_for:string|null;revision:number;eligible_for_optimization:boolean;last_regeneration_mode?:'text'|'image'|'both'|null;last_regeneration_instruction?:string;regenerated_at?:string|null};
 type Recommendation={dow:number;recommended_time_kst:string;window_start_kst:string;window_end_kst:string;sample_size:number;score:number;source:string;rationale:string};
 type WebhookSetup={callback_url:string;verify_token:string;verified_at:string|null;last_received_at:string|null};
-const defaultAutomation:AutomationSettings={daily_instagram_enabled:true,daily_time_kst:'20:00',draft_generation_time_kst:'10:00',optimization_enabled:true,auto_reply_enabled:true,content_mode:'prelaunch'};
+const defaultAutomation:AutomationSettings={daily_instagram_enabled:true,daily_time_kst:'20:00',draft_generation_time_kst:'10:00',optimization_enabled:true,auto_reply_enabled:true,content_mode:'prelaunch',growth_carousel_enabled:true,growth_posts_per_week:3,growth_days:[0,2,4]};
 const blank=(channel:Channel):Template=>({channel,name:'',title:'',caption:'',cta:'Join us',destination_url:'https://roundy.team',images:[],days:[],time_kst:'10:00',enabled:false});
 async function request(path='',body?:unknown,method='POST'){const r=await fetch('/api/admin/marketing'+path,body?{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:undefined);const d=await r.json();if(!r.ok)throw new Error(d.error||'Request failed');return d;}
 async function prepareMarketingPhoto(file:File){
@@ -23,6 +26,53 @@ async function prepareMarketingPhoto(file:File){
  const bitmap=await createImageBitmap(file);const ratio=bitmap.width/bitmap.height;
  if(ratio<.8||ratio>1.91){bitmap.close();throw new Error('Use an image between 4:5 portrait and 1.91:1 landscape. Crop it before uploading.');}
  const canvas=document.createElement('canvas');canvas.width=Math.min(1080,bitmap.width);canvas.height=Math.round(canvas.width/ratio);const context=canvas.getContext('2d');if(!context)throw new Error('Image conversion unavailable');context.fillStyle='#fff';context.fillRect(0,0,canvas.width,canvas.height);context.drawImage(bitmap,0,0,canvas.width,canvas.height);bitmap.close();const blob=await new Promise<Blob>((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error('Image conversion failed')),'image/jpeg',.92));return new File([blob],'marketing.jpg',{type:'image/jpeg'});
+}
+function wrapCanvasText(ctx:CanvasRenderingContext2D,text:string,maxWidth:number,maxLines:number){
+ const words=text.replace(/\s+/g,' ').trim().split(' '),lines:string[]=[];let line='';
+ for(const word of words){
+  const test=line?line+' '+word:word;
+  if(ctx.measureText(test).width<=maxWidth){line=test;continue;}
+  if(line)lines.push(line);line=word;
+  if(lines.length>=maxLines)break;
+ }
+ if(lines.length<maxLines&&line)lines.push(line);
+ if(lines.length===maxLines&&words.join(' ').length>lines.join(' ').length)lines[maxLines-1]=lines[maxLines-1].replace(/[.,!?]?$/,'')+'…';
+ return lines;
+}
+async function renderCarouselCard(slide:CarouselSlide,index:number,total:number){
+ const canvas=document.createElement('canvas');canvas.width=1080;canvas.height=1350;
+ const ctx=canvas.getContext('2d');if(!ctx)throw new Error('Could not render carousel slide.');
+ const palette=slide.variant==='hook'?{bg:'#ff6666',fg:'#20211f',muted:'#4f2929'}:slide.variant==='roundy'?{bg:'#20211f',fg:'#fffefa',muted:'#c9c9bf'}:slide.variant==='source'?{bg:'#f3f3ee',fg:'#20211f',muted:'#6b6f65'}:{bg:'#fffefa',fg:'#20211f',muted:'#6b6f65'};
+ ctx.fillStyle=palette.bg;ctx.fillRect(0,0,1080,1350);
+ ctx.strokeStyle=slide.variant==='roundy'?'#ff6666':'#dedfd7';ctx.lineWidth=2;
+ ctx.beginPath();ctx.arc(920,160,92,0,Math.PI*2);ctx.stroke();
+ ctx.beginPath();ctx.arc(860,220,46,0,Math.PI*2);ctx.stroke();
+ ctx.fillStyle=palette.muted;ctx.font="700 26px 'DM Sans', 'Apple SD Gothic Neo', sans-serif";ctx.fillText(slide.eyebrow||'ROUNDY NOTES',72,96);
+ ctx.textAlign='right';ctx.fillText(String(index+1).padStart(2,'0')+' / '+String(total).padStart(2,'0'),1008,96);ctx.textAlign='left';
+ ctx.fillStyle=palette.fg;ctx.font="700 76px 'DM Sans', 'Apple SD Gothic Neo', sans-serif";
+ let y=270;for(const line of wrapCanvasText(ctx,slide.title,900,4)){ctx.fillText(line,72,y);y+=88;}
+ y+=34;ctx.fillStyle=palette.muted;ctx.font="500 38px 'DM Sans', 'Apple SD Gothic Neo', sans-serif";
+ for(const line of wrapCanvasText(ctx,slide.body,900,8)){ctx.fillText(line,72,y);y+=54;}
+ if(slide.source_label){ctx.fillStyle=palette.muted;ctx.font="600 24px 'DM Sans', 'Apple SD Gothic Neo', sans-serif";const sourceLines=wrapCanvasText(ctx,slide.source_label,900,2);let sy=1205;for(const line of sourceLines){ctx.fillText(line,72,sy);sy+=32;}}
+ if(slide.variant==='roundy'){ctx.fillStyle='#ff6666';ctx.fillRect(72,1255,122,8);ctx.fillStyle=palette.fg;ctx.font="700 26px 'DM Sans', sans-serif";ctx.fillText('@roundy.meet',216,1270);}
+ const blob=await new Promise<Blob>((resolve,reject)=>canvas.toBlob(value=>value?resolve(value):reject(new Error('Could not export carousel slide.')),'image/jpeg',.92));
+ return new File([blob],'roundy-growth-'+String(index+1)+'.jpg',{type:'image/jpeg'});
+}
+async function uploadCarouselSlides(slides:CarouselSlide[]){
+ const urls:string[]=[];
+ for(let index=0;index<slides.length;index++)urls.push(await uploadFile(await renderCarouselCard(slides[index],index,slides.length),'wis-event-images'));
+ return urls;
+}
+function growthTopicLabel(topic:GrowthTopic|null,locale:Locale){
+ const labels:Record<GrowthTopic,[string,string]>={
+  mbti:['MBTI Dating','MBTI 연애 유형'],dating_archetype:['Dating Archetypes','연애 유형'],
+  book_insight:['Book Insight','책 속 공감'],trend_research:['Current Research','최신 연구'],
+  meme_remix:['Meme Remix','밈 재해석'],dating_myth:['Dating Myth','연애 통념'],
+  conversation_prompt:['Conversation Prompts','첫 대화 질문'],seoul_dating:['Seoul Dating','서울 데이팅'],
+  mini_quiz:['Mini Quiz','미니 퀴즈']
+ };
+ if(!topic)return tr(locale,'Growth Carousel','성장형 캐러셀');
+ const label=labels[topic];return tr(locale,label[0],label[1]);
 }
 function runStatusLabel(status:string,locale:Locale){
  const labels:Record<string,[string,string]>={
@@ -33,13 +83,13 @@ function runStatusLabel(status:string,locale:Locale){
  return tr(locale,label[0],label[1]);
 }
 export function AdminMarketing({locale}:{locale:Locale}){
- const [channel,setChannel]=useState<Channel>('instagram'),[templates,setTemplates]=useState<Template[]>([]),[runs,setRuns]=useState<Run[]>([]),[form,setForm]=useState<Template>(blank('instagram')),[events,setEvents]=useState<Event[]>([]),[connection,setConnection]=useState<{instagram:boolean;koreapas:boolean;unavailable?:boolean}>({instagram:false,koreapas:false}),[automation,setAutomation]=useState<AutomationSettings>(defaultAutomation),[recommendations,setRecommendations]=useState<Recommendation[]>([]),[draftEdit,setDraftEdit]=useState<Draft|null>(null),[regenOpen,setRegenOpen]=useState(false),[regenMode,setRegenMode]=useState<'text'|'image'|'both'>('both'),[regenInstruction,setRegenInstruction]=useState(''),[regenContentMode,setRegenContentMode]=useState<'prelaunch'|'live_event'>('prelaunch'),[webhook,setWebhook]=useState<WebhookSetup>({callback_url:'',verify_token:'',verified_at:null,last_received_at:null}),[busy,setBusy]=useState(false),[error,setError]=useState(''),[dirty,setDirty]=useState(false);const {showToast}=useToast();
+ const [channel,setChannel]=useState<Channel>('instagram'),[templates,setTemplates]=useState<Template[]>([]),[runs,setRuns]=useState<Run[]>([]),[form,setForm]=useState<Template>(blank('instagram')),[events,setEvents]=useState<Event[]>([]),[connection,setConnection]=useState<{instagram:boolean;koreapas:boolean;unavailable?:boolean}>({instagram:false,koreapas:false}),[automation,setAutomation]=useState<AutomationSettings>(defaultAutomation),[recommendations,setRecommendations]=useState<Recommendation[]>([]),[draftEdit,setDraftEdit]=useState<Draft|null>(null),[growthTopic,setGrowthTopic]=useState<GrowthTopic>('mbti'),[growthInstruction,setGrowthInstruction]=useState(''),[regenOpen,setRegenOpen]=useState(false),[regenMode,setRegenMode]=useState<'text'|'image'|'both'>('both'),[regenInstruction,setRegenInstruction]=useState(''),[regenContentMode,setRegenContentMode]=useState<'prelaunch'|'live_event'>('prelaunch'),[webhook,setWebhook]=useState<WebhookSetup>({callback_url:'',verify_token:'',verified_at:null,last_received_at:null}),[busy,setBusy]=useState(false),[error,setError]=useState(''),[dirty,setDirty]=useState(false);const {showToast}=useToast();
  function applyData(d:{templates?:Template[];runs?:Run[];connection?:{instagram:boolean;koreapas:boolean;unavailable?:boolean};settings?:AutomationSettings;drafts?:Draft[];recommendations?:Recommendation[];webhook?:WebhookSetup}){
   setTemplates(d.templates??[]);setRuns(d.runs??[]);if(d.connection)setConnection(d.connection);
   if(d.settings)setAutomation({...d.settings,daily_time_kst:d.settings.daily_time_kst.slice(0,5),draft_generation_time_kst:d.settings.draft_generation_time_kst.slice(0,5)});
   const nextDrafts=d.drafts??[];setRecommendations(d.recommendations??[]);
   const editable=nextDrafts.find(item=>item.status==='needs_approval')??nextDrafts[0]??null;setDraftEdit(current=>current?.id===editable?.id?current:editable?structuredClone(editable):null);
-  if(editable)setRegenContentMode(editable.content_mode??'prelaunch');
+  if(editable){setRegenContentMode(editable.content_mode??'prelaunch');if(editable.growth_topic_type)setGrowthTopic(editable.growth_topic_type);}
   if(d.webhook)setWebhook(d.webhook);
  }
  async function load(){const d=await request();applyData(d);}
@@ -54,6 +104,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
  async function approveDraft(){if(!draftEdit)return;await work(async()=>{await request('/draft/'+draftEdit.id+'/approve',{});await load();showToast(tr(locale,'Approved and scheduled','승인 및 예약 완료'),'success');});}
  async function skipDraft(){if(!draftEdit)return;await work(async()=>{await request('/draft/'+draftEdit.id+'/skip',{});await load();});}
  async function generateDraftNow(){await work(async()=>{await request('/draft/generate',{});await load();});}
+ async function generateGrowthCarousel(){if(!draftEdit)return;await work(async()=>{const result=await request('/draft/'+draftEdit.id+'/growth-generate',{topic_type:growthTopic,instruction:growthInstruction.trim()});const generated=result.draft as Draft;const urls=await uploadCarouselSlides(generated.carousel_slides??[]);await request('/draft/'+draftEdit.id,{caption:generated.caption,cta:generated.cta,destination_url:generated.destination_url,images:urls},'PUT');setGrowthInstruction('');await load();showToast(tr(locale,'Growth Carousel generated','Growth Carousel 생성 완료'),'success');});}
  return <section className="admin-panel marketing-panel"><div className="admin-heading"><p className="admin-kicker">Roundy Admin</p><Heading level={1}>{tr(locale,'Marketing','마케팅')}</Heading><p>{tr(locale,'One workspace. Two channels. More people around the table.','하나의 공간에서 두 채널을 관리하고, 더 많은 만남을 만드세요.')}</p></div>
  <div className="marketing-channels" aria-label={tr(locale,'Marketing channel','마케팅 채널')}>{(['instagram','koreapas'] as const).map(c=><button key={c} type="button" aria-pressed={channel===c} onClick={()=>choose(templates.find(t=>t.channel===c)??blank(c))}>{c==='instagram'?<Instagram size={24}/>:<Megaphone size={24}/>}<span><strong>{c==='instagram'?'Instagram':'Koreapas'}</strong><small>{c==='instagram'?'@roundy.meet':tr(locale,'Free advertising board','홍보 게시판')}</small></span><span className={'connection-dot '+(connection[c]?'connected':'')}>{connection[c]?tr(locale,'Configured','설정됨'):tr(locale,'Setup needed','연결 필요')}</span></button>)}</div>
  {!connection[channel]&&<details className="marketing-setup" open><summary>{connection.unavailable?tr(locale,'Connection status unavailable','연결 상태 확인 불가'):channel==='instagram'?tr(locale,'Connect @roundy.meet','@roundy.meet 연결하기'):tr(locale,'Connect Koreapas','고려대 고파스 연결하기')}</summary>{channel==='instagram'?<><p>{tr(locale,'Create a Meta developer app and choose Instagram API with Instagram Login. Add roundy.meet as an account/tester and authorize basic access and content publishing.','Meta 개발자 앱에서 Instagram Login API를 선택하고 roundy.meet 계정을 추가한 후 기본 접근 및 콘텐츠 게시 권한을 승인하세요.')}</p><a href="https://developers.facebook.com/apps/" target="_blank" rel="noreferrer">{tr(locale,'Open Meta app dashboard','Meta 앱 대시보드 열기')} <ExternalLink size={14}/></a><p>{tr(locale,'Your developer stores the Instagram user ID and access token securely on the server. No passwords or tokens belong in a post template.','개발자가 Instagram 사용자 ID와 액세스 토큰을 서버에 안전하게 저장해야 합니다. 템플릿에 비밀번호나 토큰을 입력하지 마세요.')}</p></>:<p>{tr(locale,'Configure the Roundy publisher with your Koreapas account. Use credentials authorized for Roundy; credentials are never copied between projects.','Roundy 전용 발행기에 고파스 계정을 설정하세요. Roundy 전용 계정으로 연결하며 인증 정보는 프로젝트 간 복사되지 않습니다.')}</p>}<p>{tr(locale,'You can prepare and save templates now. Publishing requires a connected account.','지금 템플릿을 작성하고 저장할 수 있습니다. 게시는 계정 연결 후 가능합니다.')}</p></details>}
@@ -62,13 +113,35 @@ export function AdminMarketing({locale}:{locale:Locale}){
   <div className="admin-section-title"><Heading level={2}>{tr(locale,'Today’s Instagram draft','오늘의 Instagram 초안')}</Heading><button type="button" className="admin-secondary" disabled={busy} onClick={()=>void generateDraftNow()}>{tr(locale,'Generate now','지금 생성')}</button></div>
   {!draftEdit?<p className="admin-empty">{tr(locale,'Today’s draft will be generated automatically at the configured time.','설정된 시간에 오늘의 초안이 자동 생성됩니다.')}</p>:<div className="marketing-layout">
    <div className="admin-form marketing-editor">
-    <div className="draft-status-row"><span className={'admin-status '+(draftEdit.status==='needs_approval'?'needs_review':draftEdit.status)}>{draftEdit.status.replaceAll('_',' ')}</span><span className="content-mode-badge">{draftEdit.content_mode==='prelaunch'?tr(locale,'Pre-launch Promotion','오픈 전 홍보'):tr(locale,'Live Event','정식 이벤트')}</span><strong>{draftEdit.content_pillar}</strong></div>
+    <div className="draft-status-row"><span className={'admin-status '+(draftEdit.status==='needs_approval'?'needs_review':draftEdit.status)}>{draftEdit.status.replaceAll('_',' ')}</span><span className="content-mode-badge">{draftEdit.content_mode==='prelaunch'?tr(locale,'Pre-launch Promotion','오픈 전 홍보'):tr(locale,'Live Event','정식 이벤트')}</span>{draftEdit.draft_kind==='growth_carousel'?<span className="content-mode-badge growth">{growthTopicLabel(draftEdit.growth_topic_type,locale)}</span>:<strong>{draftEdit.content_pillar}</strong>}</div>
     <p className="admin-help">{draftEdit.generation_reason}</p>
     <p><strong>{tr(locale,'Recommended window','추천 게시 시간대')}:</strong> {draftEdit.window_start_kst.slice(0,5)}–{draftEdit.window_end_kst.slice(0,5)} KST · {tr(locale,'Target','목표')} {draftEdit.recommended_time_kst.slice(0,5)}</p>
     {draftEdit.scheduled_for&&draftEdit.status!=='needs_approval'&&<p><strong>{tr(locale,'Scheduled','예약')}:</strong> {new Date(draftEdit.scheduled_for).toLocaleString(locale,{timeZone:'Asia/Seoul'})} KST</p>}
+    {draftEdit.draft_kind==='growth_carousel'&&draftEdit.status==='needs_approval'&&<div className="growth-generator">
+     <div className="growth-generator-head"><div><strong>{tr(locale,'Growth Carousel','성장형 캐러셀')}</strong><small>{tr(locale,'Five value-first slides, then one soft Roundy bridge.','정보/공감 5장 뒤에 마지막 1장만 Roundy로 연결합니다.')}</small></div><span className={'research-state '+draftEdit.research_status}>{draftEdit.research_status}</span></div>
+     <div className="admin-two">
+      <label><span>{tr(locale,'Topic type','주제 유형')}</span><select value={growthTopic} onChange={e=>setGrowthTopic(e.target.value as GrowthTopic)}>
+       <option value="mbti">{tr(locale,'MBTI dating archetypes','MBTI 연애 유형')}</option>
+       <option value="dating_archetype">{tr(locale,'Dating archetypes','연애 유형')}</option>
+       <option value="book_insight">{tr(locale,'Book insight','책 속 공감')}</option>
+       <option value="trend_research">{tr(locale,'Current research','최신 연구')}</option>
+       <option value="meme_remix">{tr(locale,'Current meme remix','밈 재해석')}</option>
+       <option value="dating_myth">{tr(locale,'Dating myth','연애 통념')}</option>
+       <option value="conversation_prompt">{tr(locale,'Conversation prompts','첫 대화 질문')}</option>
+       <option value="seoul_dating">{tr(locale,'Seoul dating','서울 데이팅')}</option>
+       <option value="mini_quiz">{tr(locale,'Mini quiz','미니 퀴즈')}</option>
+      </select></label>
+      <label><span>{tr(locale,'Research rule','소스 규칙')}</span><input readOnly value={tr(locale,'Original rewrite · verified sources · no engagement bait','원본 재구성 · 출처 확인 · 참여 유도 낚시 금지')}/></label>
+     </div>
+     <label><span>{tr(locale,'Optional creative direction','추가 지시문')}</span><textarea rows={3} maxLength={500} value={growthInstruction} onChange={e=>setGrowthInstruction(e.target.value)} placeholder={tr(locale,'e.g. Make it witty but not sarcastic. Keep the last slide very subtle.','예: 재치있되 비꼬지 말고, 마지막 Roundy 홍보는 최대한 자연스럽게 해줘.')}/><small>{growthInstruction.length} / 500</small></label>
+     <p className="admin-help">{tr(locale,'Book content uses a very short verified quote or a paraphrased idea. Research uses credible sources. Memes are recreated as original Roundy editorial cards rather than reposted screenshots.','책 콘텐츠는 아주 짧은 검증된 인용 또는 아이디어 요약만 사용합니다. 연구는 신뢰할 수 있는 출처를 사용하고, 밈은 스크린샷을 퍼오지 않고 Roundy 카드로 새로 만듭니다.')}</p>
+     <button type="button" className="admin-primary" disabled={busy} onClick={()=>void generateGrowthCarousel()}>{draftEdit.research_status==='generated'?tr(locale,'Regenerate carousel','캐러셀 다시 생성'):tr(locale,'Research & generate carousel','조사 후 캐러셀 생성')}</button>
+     {draftEdit.carousel_slides?.length>0&&<div className="carousel-outline">{draftEdit.carousel_slides.map((slide,index)=><div key={index}><span>{index+1}</span><div><strong>{slide.title}</strong><small>{slide.body}</small></div></div>)}</div>}
+     {draftEdit.research_sources?.length>0&&<div className="growth-sources"><strong>{tr(locale,'Sources','출처')}</strong>{draftEdit.research_sources.map(source=><a key={source.url} href={source.url} target="_blank" rel="noreferrer">{source.publisher||source.title}{source.date?' · '+source.date:''}<ExternalLink size={12}/></a>)}</div>}
+    </div>}
     <label><span>{tr(locale,'Caption','캡션')}</span><textarea rows={12} maxLength={2000} value={draftEdit.caption} disabled={draftEdit.status!=='needs_approval'} onChange={e=>setDraftEdit(current=>current?{...current,caption:e.target.value}:current)}/><small>{draftEdit.caption.length} / 2000</small></label>
     <div className="admin-two"><label><span>{tr(locale,'Call to action','참여 안내 문구')}</span><input maxLength={80} value={draftEdit.cta} disabled={draftEdit.status!=='needs_approval'} onChange={e=>setDraftEdit(current=>current?{...current,cta:e.target.value}:current)}/></label><label><span>{tr(locale,'Destination URL','연결 URL')}</span><input type="url" value={draftEdit.destination_url} disabled={draftEdit.status!=='needs_approval'} onChange={e=>setDraftEdit(current=>current?{...current,destination_url:e.target.value}:current)}/></label></div>
-    {draftEdit.status==='needs_approval'&&<div className="regeneration-panel">
+    {draftEdit.status==='needs_approval'&&draftEdit.draft_kind==='brand'&&<div className="regeneration-panel">
      <div className="regeneration-head"><div><strong>{tr(locale,'Custom regeneration','커스텀 재생성')}</strong><small>{tr(locale,'Give AI a short creative direction and choose what to replace.','AI에게 원하는 방향을 적고 다시 만들 부분을 선택하세요.')}</small></div><button type="button" className="admin-secondary" onClick={()=>setRegenOpen(value=>!value)}>{regenOpen?tr(locale,'Close','닫기'):tr(locale,'Customize','커스텀')}</button></div>
      {regenOpen&&<div className="regeneration-body">
       <div className="admin-two">
@@ -88,10 +161,10 @@ export function AdminMarketing({locale}:{locale:Locale}){
      </div>}
     </div>}
     {draftEdit.status==='needs_approval'&&<div className="admin-form-actions"><button type="button" className="admin-primary" disabled={busy||!draftEdit.caption.trim()||!draftEdit.images.length} onClick={()=>void approveDraft()}><Send size={16}/>{tr(locale,'Approve & schedule','승인 후 예약')}</button><button type="button" className="admin-secondary" disabled={busy} onClick={()=>void saveDraft()}><Save size={16}/>{tr(locale,'Save edits','수정 저장')}</button><button type="button" className="admin-secondary" disabled={busy} onClick={()=>void skipDraft()}>{tr(locale,'Skip today','오늘 건너뛰기')}</button></div>}
-    {!draftEdit.images.length&&draftEdit.status==='needs_approval'&&<p className="admin-help">{tr(locale,'This draft has no image yet. Use Image only or Text + image regeneration before approving it.','아직 이미지가 없습니다. 승인 전에 이미지 다시 생성 또는 텍스트 + 이미지 다시 생성을 사용하세요.')}</p>}
+    {!draftEdit.images.length&&draftEdit.status==='needs_approval'&&<p className="admin-help">{draftEdit.draft_kind==='growth_carousel'?tr(locale,'Generate the Growth Carousel cards before approving this post.','승인 전에 Growth Carousel 카드를 먼저 생성하세요.'):tr(locale,'This draft has no image yet. Use Image only or Text + image regeneration before approving it.','아직 이미지가 없습니다. 승인 전에 이미지 다시 생성 또는 텍스트 + 이미지 다시 생성을 사용하세요.')}</p>}
     <p className="admin-help">{tr(locale,'Nothing is published until an admin approves the draft. If approval comes after the recommended window, the post is sent shortly after approval but excluded from timing optimization.','관리자가 초안을 승인하기 전에는 게시되지 않습니다. 추천 시간대를 지난 뒤 승인하면 곧 게시되지만 해당 게시물은 시간 최적화 학습에서 제외됩니다.')}</p>
    </div>
-   <aside className="marketing-preview"><p className="admin-kicker">{tr(locale,'DRAFT PREVIEW','초안 미리보기')}</p><div className="marketing-post"><header><Instagram/><strong>roundy.meet</strong></header>{draftEdit.images[0]?<img src={draftEdit.images[0]} alt={tr(locale,'Draft preview','초안 이미지 미리보기')}/>:<div className="marketing-preview-empty"><ImagePlus size={32}/></div>}<div className="marketing-preview-copy"><p>{draftEdit.caption}</p><strong>{draftEdit.cta}</strong></div></div></aside>
+   <aside className="marketing-preview"><p className="admin-kicker">{tr(locale,'DRAFT PREVIEW','초안 미리보기')}</p><div className="marketing-post"><header><Instagram/><strong>roundy.meet</strong></header>{draftEdit.images[0]?<><img src={draftEdit.images[0]} alt={tr(locale,'Draft preview','초안 이미지 미리보기')}/>{draftEdit.images.length>1&&<small>{draftEdit.images.length} {tr(locale,'slides · carousel','장 · 캐러셀')}</small>}</>:<div className="marketing-preview-empty"><ImagePlus size={32}/></div>}<div className="marketing-preview-copy"><p>{draftEdit.caption}</p><strong>{draftEdit.cta}</strong></div></div></aside>
   </div>}
 
   <div className="admin-section-title"><Heading level={2}>{tr(locale,'Posting time optimizer','게시 시간 최적화')}</Heading></div>
@@ -106,6 +179,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
    </div>
    <label><span>{tr(locale,'Daily content mode','매일 생성할 콘텐츠')}</span><select value={automation.content_mode} onChange={e=>setAutomation(current=>({...current,content_mode:e.target.value as 'prelaunch'|'live_event'}))} disabled={!automation.daily_instagram_enabled}><option value="prelaunch">{tr(locale,'Pre-launch Promotion','오픈 전 홍보')}</option><option value="live_event">{tr(locale,'Live Event','정식 이벤트')}</option></select></label>
    {automation.content_mode==='prelaunch'&&<p className="prelaunch-note">{tr(locale,'Recommended while Roundy is pre-launch. Daily drafts will not use the test events currently visible on the website.','현재 Roundy가 오픈 전인 동안 권장되는 모드입니다. 웹사이트에 보이는 테스트 이벤트 정보는 자동 게시물에 사용하지 않습니다.')}</p>}
+   {automation.content_mode==='prelaunch'&&<fieldset className="growth-settings"><legend>{tr(locale,'Growth Carousel cadence','Growth Carousel 주기')}</legend><label className="check-row"><input type="checkbox" checked={automation.growth_carousel_enabled} onChange={e=>setAutomation(current=>({...current,growth_carousel_enabled:e.target.checked}))}/><span>{tr(locale,'Replace selected daily drafts with algorithm-friendly original carousels','선택한 요일의 일일 초안을 알고리즘 친화적인 원본 캐러셀로 대체')}</span></label><div className="marketing-days">{['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((day,i)=><label key={day}><input type="checkbox" checked={automation.growth_days.includes(i)} disabled={!automation.growth_carousel_enabled} onChange={e=>setAutomation(current=>{const next=e.target.checked?[...current.growth_days,i]:current.growth_days.filter(value=>value!==i);const unique=[...new Set(next)].sort((a,b)=>a-b);return {...current,growth_days:unique,growth_posts_per_week:unique.length};})}/><span>{tr(locale,day,['일','월','화','수','목','금','토'][i])}</span></label>)}</div><p className="admin-help">{tr(locale,String(automation.growth_posts_per_week)+' of 7 weekly drafts become Growth Carousels. Default is Sun, Tue and Thu.','주 7개 초안 중 '+String(automation.growth_posts_per_week)+'개를 Growth Carousel로 만듭니다. 기본은 일·화·목입니다.')}</p></fieldset>}
    <div className="admin-two">
     <label className="check-row"><input type="checkbox" checked={automation.optimization_enabled} onChange={e=>setAutomation(current=>({...current,optimization_enabled:e.target.checked}))}/><span>{tr(locale,'Optimize publish time automatically','게시 시간 자동 최적화')}</span></label>
     <label><span>{tr(locale,'Fallback time · KST','최적화 해제 시 시간 · KST')}</span><input type="time" value={automation.daily_time_kst.slice(0,5)} onChange={e=>setAutomation(current=>({...current,daily_time_kst:e.target.value}))} disabled={automation.optimization_enabled||!automation.daily_instagram_enabled}/></label>
