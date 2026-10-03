@@ -187,15 +187,19 @@ begin
 end;
 $$;
 
-drop trigger if exists applications_lifestyle_requirements on public.applications;
-create trigger applications_lifestyle_requirements
-before insert or update of event_id,user_id on public.applications
-for each row execute function roundy_private.enforce_event_lifestyle_requirements();
+do $triggers$
+begin
+  if to_regclass('public.applications') is not null then
+    execute 'drop trigger if exists applications_lifestyle_requirements on public.applications';
+    execute 'create trigger applications_lifestyle_requirements before insert or update of event_id,user_id on public.applications for each row execute function roundy_private.enforce_event_lifestyle_requirements()';
+  end if;
 
-drop trigger if exists bookings_lifestyle_requirements on public.bookings;
-create trigger bookings_lifestyle_requirements
-before insert or update of event_id,user_id on public.bookings
-for each row execute function roundy_private.enforce_event_lifestyle_requirements();
+  if to_regclass('public.bookings') is not null then
+    execute 'drop trigger if exists bookings_lifestyle_requirements on public.bookings';
+    execute 'create trigger bookings_lifestyle_requirements before insert or update of event_id,user_id on public.bookings for each row execute function roundy_private.enforce_event_lifestyle_requirements()';
+  end if;
+end;
+$triggers$;
 
 create or replace function public.event_checkout_quote(
   p_event uuid,
