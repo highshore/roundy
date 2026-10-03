@@ -1864,7 +1864,7 @@ body:not(:has(.route-admin)) .global-toast{border-radius:16px;padding:13px 14px 
 .admin-nav-badge{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;margin-left:auto;padding:0 7px;border-radius:999px;background:#e34b57;color:#fff;font-size:11px;font-weight:800;line-height:1}
 .admin-sidebar nav a[aria-current=page] .admin-nav-badge{background:#ff6670;color:#fff}
 
-.admin-sidebar>p{position:sticky;top:292px;margin-top:40px;font-size:11px;color:var(--muted);text-align:center}
+.admin-sidebar>p{position:static;margin-top:40px;font-size:11px;color:var(--muted);text-align:center}
 .admin-main{min-width:0;width:100%;max-width:1440px;margin-inline:auto;padding:40px;}
 .admin-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
 .admin-metric{position:relative;display:grid;gap:16px;border-radius:20px;background:var(--surface);padding:24px}
