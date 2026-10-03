@@ -57,6 +57,146 @@ async function openAIJson(system:string,input:Record<string,unknown>){
  try{return JSON.parse(raw) as Record<string,unknown>;}catch{throw new Error('AI returned invalid JSON.');}
 }
 
+
+const growthTopics:GrowthTopic[]=['mbti','dating_archetype','book_insight','trend_research','meme_remix','dating_myth','conversation_prompt','seoul_dating','mini_quiz'];
+function growthTopicGuidance(topic:GrowthTopic){
+ const guides:Record<GrowthTopic,string>={
+  mbti:'Create a playful MBTI dating-archetype carousel. Clearly frame it as entertainment and not scientific compatibility prediction. Avoid negative stereotyping.',
+  dating_archetype:'Create original, relatable dating archetypes based on everyday behavior, not protected traits or mental-health labels.',
+  book_insight:'Use a relationship, communication or human-connection idea from a real book. Prefer paraphrase. Any direct copyrighted-book quote must be 15 words or fewer and verified. Attribute title and author. Never fabricate a quote.',
+  trend_research:'Find a recent, credible relationship, communication, social-connection or dating study or research result. Prefer peer-reviewed journals, universities or established research organizations. Distinguish correlation from causation.',
+  meme_remix:'Find a current harmless meme or social format relevant to dating or social life, then create an original Roundy interpretation. Do not reproduce the meme image, screenshot, creator text or punchline verbatim.',
+  dating_myth:'Take one common dating myth and replace it with a nuanced, non-manipulative perspective. Avoid pickup tactics or adversarial gender framing.',
+  conversation_prompt:'Create useful first-conversation prompts people may want to save. Avoid sexual, invasive, financial or discriminatory questions.',
+  seoul_dating:'Create a relatable Seoul social/dating observation without stereotyping Koreans or foreigners. If making factual claims, source them.',
+  mini_quiz:'Create a light self-reflection mini quiz about first-date or conversation style. It must not diagnose personality, compatibility or mental health.'
+ };
+ return guides[topic];
+}
+function growthSystemPrompt(topic:GrowthTopic){
+ return [
+  'You are an editorial strategist for Roundy, a pre-launch Seoul offline 1:1 rotation dating/mingle service for Korean and international adults.',
+  'Create ORIGINAL Instagram carousel editorial content designed to be useful, relatable and naturally shareable or saveable without engagement bait.',
+  'Instagram recommendation eligibility matters: do not use clickbait, fake urgency, engagement bait, copied posts, copied meme screenshots, sensational misinformation or low-value reposting.',
+  'Slides 1 through 5 must stand on their own as useful or entertaining content. Only slide 6 may bridge to Roundy and mention the pre-launch brand.',
+  'Roundy is NOT officially launched. Never mention test event dates, venue, ticket price, seats, attendees, reviews, launch date, booking availability or an active event.',
+  'Avoid manipulative dating advice, pickup tactics, gender hostility, sexual content, body shaming, mental-health diagnosis, substance use, political content and discriminatory stereotypes.',
+  'Use Korean-first carousel copy because the account is Seoul-focused, with brief English phrases only when natural. Keep slides clean enough to fit a 1080x1350 card.',
+  'Do not ask people to tag friends, spam comments, or perform artificial engagement actions.',
+  growthTopicGuidance(topic),
+  'Create exactly 6 slides. Slide 1 is the hook. Slides 2-4 deliver the core value. Slide 5 is a takeaway/source/context slide. Slide 6 is the only Roundy bridge and should softly say Roundy is preparing face-to-face 1:1 rotation meetings in Seoul and invite people to follow @roundy.meet for launch updates.',
+  'For research/book/trend factual claims, use web search and include up to 3 trustworthy source URLs. If a claim cannot be verified, omit it.',
+  'Return JSON only with keys: topic_type, headline, caption, cta, generation_reason, slides, sources.',
+  'Each slide object must contain eyebrow, title, body, source_label, variant. variant must be hook, content, source, or roundy.',
+  'Each source object must contain title, publisher, url, date. Keep caption under 1500 characters and CTA under 80 characters. No em dash.'
+ ].join(' ');
+}
+function responseText(result:any){
+ const parts:string[]=[];
+ for(const item of Array.isArray(result?.output)?result.output:[]){
+  if(item?.type!=='message'||!Array.isArray(item.content))continue;
+  for(const content of item.content)if(content?.type==='output_text'&&typeof content.text==='string')parts.push(content.text);
+ }
+ return parts.join('\n').trim();
+}
+function parseJsonObject(raw:string){
+ const clean=raw.trim();
+ try{return JSON.parse(clean) as Record<string,unknown>;}catch{
+  const start=clean.indexOf('{'),end=clean.lastIndexOf('}');
+  if(start>=0&&end>start)return JSON.parse(clean.slice(start,end+1)) as Record<string,unknown>;
+  throw new Error('AI returned invalid carousel JSON.');
+ }
+}
+function validateGrowthSlides(value:unknown){
+ if(!Array.isArray(value)||value.length!==6)throw new Error('Growth carousel must contain exactly 6 slides.');
+ return value.map((item,index)=>{
+  if(!item||typeof item!=='object')throw new Error('Invalid carousel slide.');
+  const row=item as Record<string,unknown>;
+  const eyebrow=String(row.eyebrow??'').trim().slice(0,60);
+  const title=String(row.title??'').trim().slice(0,120);
+  const body=String(row.body??'').trim().slice(0,420);
+  const source_label=String(row.source_label??'').trim().slice(0,140);
+  const variant=String(row.variant??(index===0?'hook':index===5?'roundy':'content'));
+  if(!title||!body||!['hook','content','source','roundy'].includes(variant))throw new Error('Invalid carousel slide content.');
+  if(index===5&&variant!=='roundy')throw new Error('The final slide must be the Roundy bridge.');
+  return {eyebrow,title,body,source_label,variant:variant as CarouselSlide['variant']};
+ });
+}
+function validateResearchSources(value:unknown){
+ if(!Array.isArray(value))return [] as ResearchSource[];
+ const rows:ResearchSource[]=[];
+ for(const item of value.slice(0,3)){
+  if(!item||typeof item!=='object')continue;
+  const row=item as Record<string,unknown>,sourceUrl=String(row.url??'').trim();
+  if(!sourceUrl.startsWith('https://'))continue;
+  rows.push({
+   title:String(row.title??'').trim().slice(0,180),
+   publisher:String(row.publisher??'').trim().slice(0,100),
+   url:sourceUrl.slice(0,1000),
+   date:String(row.date??'').trim().slice(0,40)
+  });
+ }
+ return rows;
+}
+async function generateGrowthCarousel(db:Client,draftId:string,body:Record<string,unknown>){
+ const instruction=typeof body.instruction==='string'?body.instruction.trim():'';
+ if(instruction.length>500)throw new Error('Growth instructions must be 500 characters or fewer.');
+ const requested=String(body.topic_type??'') as GrowthTopic;
+ const {data:draft,error:draftError}=await db.from('instagram_post_drafts').select('*').eq('id',draftId).eq('status','needs_approval').maybeSingle();
+ if(draftError)throw draftError;if(!draft)throw new Error('Only a draft waiting for approval can be generated.');
+ const current=draft as DraftRow;
+ if(current.draft_kind!=='growth_carousel')throw new Error('This draft is not a Growth Carousel.');
+ const topic=growthTopics.includes(requested)?requested:(current.growth_topic_type&&growthTopics.includes(current.growth_topic_type)?current.growth_topic_type:'mbti');
+ if(!process.env.OPENAI_API_KEY)throw new Error('AI growth research is not configured.');
+ const prompt=[
+  'Topic type: '+topic,
+  instruction?'Admin direction: '+instruction:'Use the topic naturally and make it highly relevant to Seoul adults in their 20s and 30s.',
+  'Today: '+new Date().toISOString().slice(0,10),
+  'Do not use any Roundy test event information.',
+  'Return JSON only.'
+ ].join('\n');
+ const response=await fetch('https://api.openai.com/v1/responses',{
+  method:'POST',
+  headers:{Authorization:'Bearer '+process.env.OPENAI_API_KEY,'Content-Type':'application/json'},
+  body:JSON.stringify({
+   model:process.env.MARKETING_RESEARCH_MODEL||'gpt-5',
+   tools:[{type:'web_search'}],
+   input:[
+    {role:'system',content:[{type:'input_text',text:growthSystemPrompt(topic)}]},
+    {role:'user',content:[{type:'input_text',text:prompt}]}
+   ],
+   max_output_tokens:5000
+  }),
+  signal:AbortSignal.timeout(90000)
+ });
+ if(!response.ok)throw new Error('Could not research the Growth Carousel.');
+ const result=await response.json(),generated=parseJsonObject(responseText(result));
+ const slides=validateGrowthSlides(generated.slides),sources=validateResearchSources(generated.sources);
+ const caption=String(generated.caption??'').trim(),cta=String(generated.cta??'Follow @roundy.meet for launch updates').trim();
+ if(!caption||caption.length>1500)throw new Error('Generated Growth Carousel caption was invalid.');
+ if(cta.length>80)throw new Error('Generated Growth Carousel CTA was invalid.');
+ const generationReason=String(generated.generation_reason??'Original Growth Carousel generated with current web research.').slice(0,1000);
+ const {data:updated,error:updateError}=await db.from('instagram_post_drafts').update({
+  growth_topic_type:topic,
+  carousel_slides:slides,
+  research_sources:sources,
+  research_status:'generated',
+  caption,
+  cta,
+  destination_url:'https://roundy.team',
+  content_mode:'prelaunch',
+  event_id:null,
+  generation_reason:generationReason,
+  images:[],
+  revision:Number(current.revision||1)+1,
+  last_regeneration_mode:'both',
+  last_regeneration_instruction:instruction,
+  regenerated_at:new Date().toISOString()
+ }).eq('id',draftId).eq('status','needs_approval').select('*').single();
+ if(updateError)throw updateError;
+ return updated;
+}
+
 async function generateMarketingImage(prompt:string,draftId:string){
  if(!process.env.OPENAI_API_KEY)throw new Error('AI image generation is not configured.');
  const response=await fetch('https://api.openai.com/v1/responses',{
