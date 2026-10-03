@@ -88,7 +88,7 @@ export function AdminCustomerSupport({locale}:{locale:Locale}){
 
   <div className="admin-metrics admin-support-metrics">
    <div className="admin-metric"><span>{tr(locale,'Instagram needs review','Instagram 확인 필요')}</span><strong>{summary.instagram}</strong><Instagram size={18}/></div>
-   <div className="admin-metric"><span>{tr(locale,'Open reports & feedback','미처리 신고 및 피드백')}</span><strong>{summary.reports}</strong><CheckCircle2 size={18}/></div>
+   <div className="admin-metric"><span>{tr(locale,'New reports & feedback','새 신고 및 피드백')}</span><strong>{summary.reports}</strong><CheckCircle2 size={18}/></div>
   </div>
 
   {error&&<p className="admin-error" role="alert">{error}</p>}
