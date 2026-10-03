@@ -63,6 +63,17 @@ async function uploadCarouselSlides(slides:CarouselSlide[]){
  for(let index=0;index<slides.length;index++)urls.push(await uploadFile(await renderCarouselCard(slides[index],index,slides.length),'wis-event-images'));
  return urls;
 }
+function growthTopicLabel(topic:GrowthTopic|null,locale:Locale){
+ const labels:Record<GrowthTopic,[string,string]>={
+  mbti:['MBTI Dating','MBTI 연애 유형'],dating_archetype:['Dating Archetypes','연애 유형'],
+  book_insight:['Book Insight','책 속 공감'],trend_research:['Current Research','최신 연구'],
+  meme_remix:['Meme Remix','밈 재해석'],dating_myth:['Dating Myth','연애 통념'],
+  conversation_prompt:['Conversation Prompts','첫 대화 질문'],seoul_dating:['Seoul Dating','서울 데이팅'],
+  mini_quiz:['Mini Quiz','미니 퀴즈']
+ };
+ if(!topic)return tr(locale,'Growth Carousel','성장형 캐러셀');
+ const label=labels[topic];return tr(locale,label[0],label[1]);
+}
 function runStatusLabel(status:string,locale:Locale){
  const labels:Record<string,[string,string]>={
   queued:['Queued','대기 중'],publishing:['Publishing','게시 중'],sent:['Published','게시 완료'],published:['Published','게시 완료'],
@@ -102,13 +113,35 @@ export function AdminMarketing({locale}:{locale:Locale}){
   <div className="admin-section-title"><Heading level={2}>{tr(locale,'Today’s Instagram draft','오늘의 Instagram 초안')}</Heading><button type="button" className="admin-secondary" disabled={busy} onClick={()=>void generateDraftNow()}>{tr(locale,'Generate now','지금 생성')}</button></div>
   {!draftEdit?<p className="admin-empty">{tr(locale,'Today’s draft will be generated automatically at the configured time.','설정된 시간에 오늘의 초안이 자동 생성됩니다.')}</p>:<div className="marketing-layout">
    <div className="admin-form marketing-editor">
-    <div className="draft-status-row"><span className={'admin-status '+(draftEdit.status==='needs_approval'?'needs_review':draftEdit.status)}>{draftEdit.status.replaceAll('_',' ')}</span><span className="content-mode-badge">{draftEdit.content_mode==='prelaunch'?tr(locale,'Pre-launch Promotion','오픈 전 홍보'):tr(locale,'Live Event','정식 이벤트')}</span><strong>{draftEdit.content_pillar}</strong></div>
+    <div className="draft-status-row"><span className={'admin-status '+(draftEdit.status==='needs_approval'?'needs_review':draftEdit.status)}>{draftEdit.status.replaceAll('_',' ')}</span><span className="content-mode-badge">{draftEdit.content_mode==='prelaunch'?tr(locale,'Pre-launch Promotion','오픈 전 홍보'):tr(locale,'Live Event','정식 이벤트')}</span>{draftEdit.draft_kind==='growth_carousel'?<span className="content-mode-badge growth">{growthTopicLabel(draftEdit.growth_topic_type,locale)}</span>:<strong>{draftEdit.content_pillar}</strong>}</div>
     <p className="admin-help">{draftEdit.generation_reason}</p>
     <p><strong>{tr(locale,'Recommended window','추천 게시 시간대')}:</strong> {draftEdit.window_start_kst.slice(0,5)}–{draftEdit.window_end_kst.slice(0,5)} KST · {tr(locale,'Target','목표')} {draftEdit.recommended_time_kst.slice(0,5)}</p>
     {draftEdit.scheduled_for&&draftEdit.status!=='needs_approval'&&<p><strong>{tr(locale,'Scheduled','예약')}:</strong> {new Date(draftEdit.scheduled_for).toLocaleString(locale,{timeZone:'Asia/Seoul'})} KST</p>}
+    {draftEdit.draft_kind==='growth_carousel'&&draftEdit.status==='needs_approval'&&<div className="growth-generator">
+     <div className="growth-generator-head"><div><strong>{tr(locale,'Growth Carousel','성장형 캐러셀')}</strong><small>{tr(locale,'Five value-first slides, then one soft Roundy bridge.','정보/공감 5장 뒤에 마지막 1장만 Roundy로 연결합니다.')}</small></div><span className={'research-state '+draftEdit.research_status}>{draftEdit.research_status}</span></div>
+     <div className="admin-two">
+      <label><span>{tr(locale,'Topic type','주제 유형')}</span><select value={growthTopic} onChange={e=>setGrowthTopic(e.target.value as GrowthTopic)}>
+       <option value="mbti">{tr(locale,'MBTI dating archetypes','MBTI 연애 유형')}</option>
+       <option value="dating_archetype">{tr(locale,'Dating archetypes','연애 유형')}</option>
+       <option value="book_insight">{tr(locale,'Book insight','책 속 공감')}</option>
+       <option value="trend_research">{tr(locale,'Current research','최신 연구')}</option>
+       <option value="meme_remix">{tr(locale,'Current meme remix','밈 재해석')}</option>
+       <option value="dating_myth">{tr(locale,'Dating myth','연애 통념')}</option>
+       <option value="conversation_prompt">{tr(locale,'Conversation prompts','첫 대화 질문')}</option>
+       <option value="seoul_dating">{tr(locale,'Seoul dating','서울 데이팅')}</option>
+       <option value="mini_quiz">{tr(locale,'Mini quiz','미니 퀴즈')}</option>
+      </select></label>
+      <label><span>{tr(locale,'Research rule','소스 규칙')}</span><input readOnly value={tr(locale,'Original rewrite · verified sources · no engagement bait','원본 재구성 · 출처 확인 · 참여 유도 낚시 금지')}/></label>
+     </div>
+     <label><span>{tr(locale,'Optional creative direction','추가 지시문')}</span><textarea rows={3} maxLength={500} value={growthInstruction} onChange={e=>setGrowthInstruction(e.target.value)} placeholder={tr(locale,'e.g. Make it witty but not sarcastic. Keep the last slide very subtle.','예: 재치있되 비꼬지 말고, 마지막 Roundy 홍보는 최대한 자연스럽게 해줘.')}/><small>{growthInstruction.length} / 500</small></label>
+     <p className="admin-help">{tr(locale,'Book content uses a very short verified quote or a paraphrased idea. Research uses credible sources. Memes are recreated as original Roundy editorial cards rather than reposted screenshots.','책 콘텐츠는 아주 짧은 검증된 인용 또는 아이디어 요약만 사용합니다. 연구는 신뢰할 수 있는 출처를 사용하고, 밈은 스크린샷을 퍼오지 않고 Roundy 카드로 새로 만듭니다.')}</p>
+     <button type="button" className="admin-primary" disabled={busy} onClick={()=>void generateGrowthCarousel()}>{draftEdit.research_status==='generated'?tr(locale,'Regenerate carousel','캐러셀 다시 생성'):tr(locale,'Research & generate carousel','조사 후 캐러셀 생성')}</button>
+     {draftEdit.carousel_slides?.length>0&&<div className="carousel-outline">{draftEdit.carousel_slides.map((slide,index)=><div key={index}><span>{index+1}</span><div><strong>{slide.title}</strong><small>{slide.body}</small></div></div>)}</div>}
+     {draftEdit.research_sources?.length>0&&<div className="growth-sources"><strong>{tr(locale,'Sources','출처')}</strong>{draftEdit.research_sources.map(source=><a key={source.url} href={source.url} target="_blank" rel="noreferrer">{source.publisher||source.title}{source.date?' · '+source.date:''}<ExternalLink size={12}/></a>)}</div>}
+    </div>}
     <label><span>{tr(locale,'Caption','캡션')}</span><textarea rows={12} maxLength={2000} value={draftEdit.caption} disabled={draftEdit.status!=='needs_approval'} onChange={e=>setDraftEdit(current=>current?{...current,caption:e.target.value}:current)}/><small>{draftEdit.caption.length} / 2000</small></label>
     <div className="admin-two"><label><span>{tr(locale,'Call to action','참여 안내 문구')}</span><input maxLength={80} value={draftEdit.cta} disabled={draftEdit.status!=='needs_approval'} onChange={e=>setDraftEdit(current=>current?{...current,cta:e.target.value}:current)}/></label><label><span>{tr(locale,'Destination URL','연결 URL')}</span><input type="url" value={draftEdit.destination_url} disabled={draftEdit.status!=='needs_approval'} onChange={e=>setDraftEdit(current=>current?{...current,destination_url:e.target.value}:current)}/></label></div>
-    {draftEdit.status==='needs_approval'&&<div className="regeneration-panel">
+    {draftEdit.status==='needs_approval'&&draftEdit.draft_kind==='brand'&&<div className="regeneration-panel">
      <div className="regeneration-head"><div><strong>{tr(locale,'Custom regeneration','커스텀 재생성')}</strong><small>{tr(locale,'Give AI a short creative direction and choose what to replace.','AI에게 원하는 방향을 적고 다시 만들 부분을 선택하세요.')}</small></div><button type="button" className="admin-secondary" onClick={()=>setRegenOpen(value=>!value)}>{regenOpen?tr(locale,'Close','닫기'):tr(locale,'Customize','커스텀')}</button></div>
      {regenOpen&&<div className="regeneration-body">
       <div className="admin-two">
@@ -128,10 +161,10 @@ export function AdminMarketing({locale}:{locale:Locale}){
      </div>}
     </div>}
     {draftEdit.status==='needs_approval'&&<div className="admin-form-actions"><button type="button" className="admin-primary" disabled={busy||!draftEdit.caption.trim()||!draftEdit.images.length} onClick={()=>void approveDraft()}><Send size={16}/>{tr(locale,'Approve & schedule','승인 후 예약')}</button><button type="button" className="admin-secondary" disabled={busy} onClick={()=>void saveDraft()}><Save size={16}/>{tr(locale,'Save edits','수정 저장')}</button><button type="button" className="admin-secondary" disabled={busy} onClick={()=>void skipDraft()}>{tr(locale,'Skip today','오늘 건너뛰기')}</button></div>}
-    {!draftEdit.images.length&&draftEdit.status==='needs_approval'&&<p className="admin-help">{tr(locale,'This draft has no image yet. Use Image only or Text + image regeneration before approving it.','아직 이미지가 없습니다. 승인 전에 이미지 다시 생성 또는 텍스트 + 이미지 다시 생성을 사용하세요.')}</p>}
+    {!draftEdit.images.length&&draftEdit.status==='needs_approval'&&<p className="admin-help">{draftEdit.draft_kind==='growth_carousel'?tr(locale,'Generate the Growth Carousel cards before approving this post.','승인 전에 Growth Carousel 카드를 먼저 생성하세요.'):tr(locale,'This draft has no image yet. Use Image only or Text + image regeneration before approving it.','아직 이미지가 없습니다. 승인 전에 이미지 다시 생성 또는 텍스트 + 이미지 다시 생성을 사용하세요.')}</p>}
     <p className="admin-help">{tr(locale,'Nothing is published until an admin approves the draft. If approval comes after the recommended window, the post is sent shortly after approval but excluded from timing optimization.','관리자가 초안을 승인하기 전에는 게시되지 않습니다. 추천 시간대를 지난 뒤 승인하면 곧 게시되지만 해당 게시물은 시간 최적화 학습에서 제외됩니다.')}</p>
    </div>
-   <aside className="marketing-preview"><p className="admin-kicker">{tr(locale,'DRAFT PREVIEW','초안 미리보기')}</p><div className="marketing-post"><header><Instagram/><strong>roundy.meet</strong></header>{draftEdit.images[0]?<img src={draftEdit.images[0]} alt={tr(locale,'Draft preview','초안 이미지 미리보기')}/>:<div className="marketing-preview-empty"><ImagePlus size={32}/></div>}<div className="marketing-preview-copy"><p>{draftEdit.caption}</p><strong>{draftEdit.cta}</strong></div></div></aside>
+   <aside className="marketing-preview"><p className="admin-kicker">{tr(locale,'DRAFT PREVIEW','초안 미리보기')}</p><div className="marketing-post"><header><Instagram/><strong>roundy.meet</strong></header>{draftEdit.images[0]?<><img src={draftEdit.images[0]} alt={tr(locale,'Draft preview','초안 이미지 미리보기')}/>{draftEdit.images.length>1&&<small>{draftEdit.images.length} {tr(locale,'slides · carousel','장 · 캐러셀')}</small>}</>:<div className="marketing-preview-empty"><ImagePlus size={32}/></div>}<div className="marketing-preview-copy"><p>{draftEdit.caption}</p><strong>{draftEdit.cta}</strong></div></div></aside>
   </div>}
 
   <div className="admin-section-title"><Heading level={2}>{tr(locale,'Posting time optimizer','게시 시간 최적화')}</Heading></div>
