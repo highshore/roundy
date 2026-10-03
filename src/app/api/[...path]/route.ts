@@ -60,12 +60,20 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
    if(path[1]==='role'&&req.method==='GET')return json({isAdmin:admin});
    if(!admin)return json({error:'Administrator access required'},403);
    if(path[1]==='support'&&path.length===3&&path[2]==='summary'&&req.method==='GET'){
-    const [instagram,reports]=await Promise.all([
+    const [instagram,openReports]=await Promise.all([
      supabase.from('instagram_inbox').select('id',{count:'exact',head:true}).in('status',['new','needs_review','failed']),
-     supabase.from('reports').select('id',{count:'exact',head:true}).in('status',['new','reviewing'])
+     supabase.from('reports').select('id').in('status',['new','reviewing'])
     ]);
-    if(instagram.error||reports.error)throw instagram.error||reports.error;
-    const instagramCount=instagram.count??0,reportsCount=reports.count??0;
+    if(instagram.error||openReports.error)throw instagram.error||openReports.error;
+    const openIds=(openReports.data??[]).map(row=>String(row.id));
+    let reviewedIds=new Set<string>();
+    if(openIds.length){
+     const {data:reviews,error:reviewsError}=await supabase.from('report_reviews').select('report_id').in('report_id',openIds);
+     if(reviewsError)throw reviewsError;
+     reviewedIds=new Set((reviews??[]).map(row=>String(row.report_id)));
+    }
+    const instagramCount=instagram.count??0;
+    const reportsCount=openIds.filter(id=>!reviewedIds.has(id)).length;
     return json({instagram:instagramCount,reports:reportsCount,total:instagramCount+reportsCount});
    }
    if(path[1]==='support'&&path.length===3&&path[2]==='instagram'&&req.method==='GET'){
