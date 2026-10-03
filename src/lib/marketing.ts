@@ -22,14 +22,17 @@ async function invokeMarketingWorker(db:Client,body:Record<string,unknown>,timeo
 export async function marketingApi(req:NextRequest,db:Client,path:string[]){
  const id=path[0];
  if(!id&&req.method==='GET'){
-  const [templates,runs,settings,inbox,webhook]=await Promise.all([
+  const [templates,runs,settings,inbox,webhook,drafts,recommendations,insights]=await Promise.all([
    db.from('marketing_templates').select('*').order('updated_at',{ascending:false}),
    db.from('marketing_runs').select('*').order('created_at',{ascending:false}).limit(50),
    db.from('marketing_automation_settings').select('*').eq('singleton',true).single(),
    db.from('instagram_inbox').select('*').in('status',['new','needs_review','failed']).order('received_at',{ascending:false}).limit(100),
-   createServiceRoleClient().rpc('instagram_webhook_setup_service')
+   createServiceRoleClient().rpc('instagram_webhook_setup_service'),
+   db.from('instagram_post_drafts').select('*').order('draft_date',{ascending:false}).limit(14),
+   db.from('instagram_posting_time_recommendations').select('*').order('dow'),
+   db.from('instagram_post_insights').select('*').order('captured_at',{ascending:false}).limit(30)
   ]);
-  for(const result of [templates,runs,settings,inbox,webhook])if(result.error)throw result.error;
+  for(const result of [templates,runs,settings,inbox,webhook,drafts,recommendations,insights])if(result.error)throw result.error;
   const {data:{session}}=await db.auth.getSession();
   const connection=await fetch(process.env.NEXT_PUBLIC_SUPABASE_URL+'/functions/v1/roundy-marketing',{headers:{Authorization:'Bearer '+session?.access_token,apikey:process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!},signal:AbortSignal.timeout(8000)}).then(r=>r.ok?r.json():null).catch(()=>null);
   const setup=webhook.data as {callback_key?:string;verify_token?:string;verified_at?:string|null;last_received_at?:string|null}|null;
@@ -38,6 +41,9 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
    templates:templates.data,
    runs:runs.data,
    settings:settings.data,
+   drafts:drafts.data,
+   recommendations:recommendations.data,
+   insights:insights.data,
    inbox:inbox.data,
    webhook:{callback_url:callbackUrl,verify_token:setup?.verify_token??'',verified_at:setup?.verified_at??null,last_received_at:setup?.last_received_at??null},
    connection:connection??{instagram:false,koreapas:false,unavailable:true}
@@ -45,9 +51,62 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
  }
  if(id==='settings'&&req.method==='PUT'){
   const body=await req.json().catch(()=>null);
-  if(!body||typeof body.daily_instagram_enabled!=='boolean'||typeof body.auto_reply_enabled!=='boolean'||typeof body.daily_time_kst!=='string'||!/^([01]\d|2[0-3]):[0-5]\d(:00)?$/.test(body.daily_time_kst))return json({error:'Invalid automation settings'},400);
-  const {data,error}=await db.from('marketing_automation_settings').update({daily_instagram_enabled:body.daily_instagram_enabled,daily_time_kst:body.daily_time_kst.slice(0,5),auto_reply_enabled:body.auto_reply_enabled}).eq('singleton',true).select('*').single();
+  const timePattern=/^([01]\d|2[0-3]):[0-5]\d(:00)?$/;
+  if(!body||typeof body.daily_instagram_enabled!=='boolean'||typeof body.auto_reply_enabled!=='boolean'||typeof body.optimization_enabled!=='boolean'||typeof body.daily_time_kst!=='string'||typeof body.draft_generation_time_kst!=='string'||!timePattern.test(body.daily_time_kst)||!timePattern.test(body.draft_generation_time_kst))return json({error:'Invalid automation settings'},400);
+  const {data,error}=await db.from('marketing_automation_settings').update({
+   daily_instagram_enabled:body.daily_instagram_enabled,
+   daily_time_kst:body.daily_time_kst.slice(0,5),
+   draft_generation_time_kst:body.draft_generation_time_kst.slice(0,5),
+   optimization_enabled:body.optimization_enabled,
+   auto_reply_enabled:body.auto_reply_enabled
+  }).eq('singleton',true).select('*').single();
   if(error)throw error;return json({settings:data});
+ }
+ if(id==='draft'&&path[1]==='generate'&&req.method==='POST'){
+  const result=await invokeMarketingWorker(db,{action:'generate_draft_now'});
+  return json(result);
+ }
+ if(id==='draft'&&path[1]&&path[2]==='regenerate'&&req.method==='POST'){
+  if(!/^[0-9a-f-]{36}$/i.test(path[1]))return json({error:'Invalid draft'},400);
+  const result=await invokeMarketingWorker(db,{action:'regenerate_draft',draft_id:path[1]});
+  return json(result);
+ }
+ if(id==='draft'&&path[1]&&req.method==='PUT'){
+  if(!/^[0-9a-f-]{36}$/i.test(path[1]))return json({error:'Invalid draft'},400);
+  const body=await req.json().catch(()=>null);
+  if(!body||typeof body.caption!=='string'||!body.caption.trim()||body.caption.length>2000||typeof body.cta!=='string'||body.cta.length>80||typeof body.destination_url!=='string')return json({error:'Invalid draft content'},400);
+  if(body.destination_url){const destination=new URL(body.destination_url);if(destination.protocol!=='https:'||destination.username||destination.password)return json({error:'Use an HTTPS destination URL.'},400);}
+  const {data,error}=await db.from('instagram_post_drafts').update({caption:body.caption.trim(),cta:body.cta.trim(),destination_url:body.destination_url.trim()}).eq('id',path[1]).eq('status','needs_approval').select('*').maybeSingle();
+  if(error)throw error;if(!data)return json({error:'Only a draft waiting for approval can be edited.'},409);return json({draft:data});
+ }
+ if(id==='draft'&&path[1]&&path[2]==='skip'&&req.method==='POST'){
+  if(!/^[0-9a-f-]{36}$/i.test(path[1]))return json({error:'Invalid draft'},400);
+  const {data,error}=await db.from('instagram_post_drafts').update({status:'skipped',eligible_for_optimization:false}).eq('id',path[1]).eq('status','needs_approval').select('*').maybeSingle();
+  if(error)throw error;if(!data)return json({error:'Only a draft waiting for approval can be skipped.'},409);return json({draft:data});
+ }
+ if(id==='draft'&&path[1]&&path[2]==='approve'&&req.method==='POST'){
+  if(!/^[0-9a-f-]{36}$/i.test(path[1]))return json({error:'Invalid draft'},400);
+  const service=createServiceRoleClient();
+  const {data:draft,error:draftError}=await db.from('instagram_post_drafts').select('*').eq('id',path[1]).eq('status','needs_approval').maybeSingle();
+  if(draftError)throw draftError;if(!draft)return json({error:'Only a draft waiting for approval can be approved.'},409);
+  if(!Array.isArray(draft.images)||!draft.images.length||!draft.caption?.trim())return json({error:'Complete the draft before approving it.'},400);
+  const now=Date.now(),recommended=draft.scheduled_for?new Date(draft.scheduled_for).getTime():now;
+  const windowEnd=new Date(String(draft.draft_date)+'T'+String(draft.window_end_kst).slice(0,5)+':00+09:00').getTime();
+  const missedWindow=now>windowEnd;
+  const scheduledFor=new Date(recommended>now+60000?recommended:now+(missedWindow?10:5)*60000).toISOString();
+  const eligible=!missedWindow;
+  const snapshot={
+   channel:'instagram',name:'Daily Instagram · '+draft.draft_date,title:'',caption:draft.caption,cta:draft.cta,destination_url:draft.destination_url,
+   images:draft.images,draft_id:draft.id,event_id:draft.event_id,content_pillar:draft.content_pillar,eligible_for_optimization:eligible,auto_generated:true
+  };
+  const requestKey='draft:'+draft.id+':'+draft.revision;
+  const {data:run,error:runError}=await service.from('marketing_runs').insert({channel:'instagram',snapshot,request_key:requestKey,scheduled_for:scheduledFor}).select('*').single();
+  if(runError){if(runError.code==='23505')return json({error:'This draft is already scheduled.'},409);throw runError;}
+  const {data:updated,error:updateError}=await db.from('instagram_post_drafts').update({
+   status:'scheduled',approved_at:new Date().toISOString(),approved_by:(await db.auth.getUser()).data.user?.id??null,
+   marketing_run_id:run.id,scheduled_for:scheduledFor,eligible_for_optimization:eligible
+  }).eq('id',draft.id).eq('status','needs_approval').select('*').single();
+  if(updateError)throw updateError;return json({draft:updated,run,missed_window:missedWindow});
  }
  if(id==='inbox'&&path[1]==='reply'&&req.method==='POST'){
   const body=await req.json().catch(()=>null);
