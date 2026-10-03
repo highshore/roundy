@@ -11,6 +11,10 @@ import { useToast } from './toast';
 type Channel='instagram'|'koreapas';
 type Template={id?:string;channel:Channel;name:string;title:string;caption:string;cta:string;destination_url:string;images:string[];days:number[];time_kst:string;enabled:boolean};
 type Run={id:string;channel:Channel;snapshot:Template;status:string;message:string;external_url?:string;created_at:string};
+type AutomationSettings={daily_instagram_enabled:boolean;daily_time_kst:string;auto_reply_enabled:boolean};
+type InboxItem={id:string;kind:'comment'|'dm';sender_id:string;sender_username:string;text:string;status:string;decision_reason:string;suggested_reply:string;reply_text:string;received_at:string};
+type WebhookSetup={callback_url:string;verify_token:string;verified_at:string|null;last_received_at:string|null};
+const defaultAutomation:AutomationSettings={daily_instagram_enabled:true,daily_time_kst:'20:00',auto_reply_enabled:true};
 const blank=(channel:Channel):Template=>({channel,name:'',title:'',caption:'',cta:'Join us',destination_url:'https://roundy.team',images:[],days:[],time_kst:'10:00',enabled:false});
 async function request(path='',body?:unknown,method='POST'){const r=await fetch('/api/admin/marketing'+path,body?{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:undefined);const d=await r.json();if(!r.ok)throw new Error(d.error||'Request failed');return d;}
 async function prepareMarketingPhoto(file:File){
@@ -21,24 +25,68 @@ async function prepareMarketingPhoto(file:File){
 }
 function runStatusLabel(status:string,locale:Locale){
  const labels:Record<string,[string,string]>={
-  queued:['Queued','대기 중'],publishing:['Publishing','게시 중'],published:['Published','게시 완료'],
+  queued:['Queued','대기 중'],publishing:['Publishing','게시 중'],sent:['Published','게시 완료'],published:['Published','게시 완료'],
   needs_review:['Needs review','확인 필요'],failed:['Failed','실패'],skipped:['Skipped','건너뜀']
  };
  const label=labels[status]??[status.replaceAll('_',' '),status.replaceAll('_',' ')];
  return tr(locale,label[0],label[1]);
 }
 export function AdminMarketing({locale}:{locale:Locale}){
- const [channel,setChannel]=useState<Channel>('instagram'),[templates,setTemplates]=useState<Template[]>([]),[runs,setRuns]=useState<Run[]>([]),[form,setForm]=useState<Template>(blank('instagram')),[events,setEvents]=useState<Event[]>([]),[connection,setConnection]=useState<{instagram:boolean;koreapas:boolean;unavailable?:boolean}>({instagram:false,koreapas:false}),[busy,setBusy]=useState(false),[error,setError]=useState(''),[dirty,setDirty]=useState(false);const {showToast}=useToast();
- async function load(){const d=await request();setTemplates(d.templates);setRuns(d.runs);setConnection(d.connection);}
- useEffect(()=>{let active=true;setBusy(true);Promise.all([request(),fetch('/api/admin/events').then(r=>r.json())]).then(([d,e])=>{if(active){setTemplates(d.templates);setRuns(d.runs);setConnection(d.connection);setEvents(e.events??[]);}}).catch(e=>{if(active)setError(e.message);}).finally(()=>{if(active)setBusy(false);});return()=>{active=false;};},[]);
+ const [channel,setChannel]=useState<Channel>('instagram'),[templates,setTemplates]=useState<Template[]>([]),[runs,setRuns]=useState<Run[]>([]),[form,setForm]=useState<Template>(blank('instagram')),[events,setEvents]=useState<Event[]>([]),[connection,setConnection]=useState<{instagram:boolean;koreapas:boolean;unavailable?:boolean}>({instagram:false,koreapas:false}),[automation,setAutomation]=useState<AutomationSettings>(defaultAutomation),[inbox,setInbox]=useState<InboxItem[]>([]),[webhook,setWebhook]=useState<WebhookSetup>({callback_url:'',verify_token:'',verified_at:null,last_received_at:null}),[replies,setReplies]=useState<Record<string,string>>({}),[busy,setBusy]=useState(false),[error,setError]=useState(''),[dirty,setDirty]=useState(false);const {showToast}=useToast();
+ function applyData(d:{templates?:Template[];runs?:Run[];connection?:{instagram:boolean;koreapas:boolean;unavailable?:boolean};settings?:AutomationSettings;inbox?:InboxItem[];webhook?:WebhookSetup}){
+  setTemplates(d.templates??[]);setRuns(d.runs??[]);if(d.connection)setConnection(d.connection);
+  if(d.settings)setAutomation({...d.settings,daily_time_kst:d.settings.daily_time_kst.slice(0,5)});
+  const nextInbox=d.inbox??[];setInbox(nextInbox);if(d.webhook)setWebhook(d.webhook);
+  setReplies(current=>{const next={...current};for(const item of nextInbox)if(!(item.id in next))next[item.id]=item.reply_text?'':item.suggested_reply;return next;});
+ }
+ async function load(){const d=await request();applyData(d);}
+ useEffect(()=>{let active=true;setBusy(true);Promise.all([request(),fetch('/api/admin/events').then(r=>r.json())]).then(([d,e])=>{if(active){applyData(d);setEvents(e.events??[]);}}).catch(e=>{if(active)setError(e.message);}).finally(()=>{if(active)setBusy(false);});return()=>{active=false;};},[]);
  function update<K extends keyof Template>(key:K,value:Template[K]){setForm(f=>({...f,[key]:value}));setDirty(true);}
  function choose(next:Template){if(dirty&&!window.confirm(tr(locale,'Discard unsaved changes?','저장하지 않은 변경 사항을 버릴까요?')))return;setForm(structuredClone(next));setChannel(next.channel);setDirty(false);setError('');}
  async function work(fn:()=>Promise<void>){setBusy(true);setError('');try{await fn();}catch(e){setError(e instanceof Error?e.message:'Request failed');}finally{setBusy(false);}}
  async function save(copy=false){await work(async()=>{const payload=copy?{...form,name:form.name+' (copy)',enabled:false}:form;const result=await request(!copy&&form.id?'/'+form.id:'',payload,!copy&&form.id?'PUT':'POST');setForm(result.template);setDirty(false);await load();showToast(tr(locale,'Template saved','템플릿 저장 완료'),'success');});}
+ async function saveAutomation(){await work(async()=>{const result=await request('/settings',automation,'PUT');setAutomation({...result.settings,daily_time_kst:result.settings.daily_time_kst.slice(0,5)});showToast(tr(locale,'Automation settings saved','자동화 설정 저장 완료'),'success');});}
+ async function replyToInbox(item:InboxItem){const reply=(replies[item.id]??'').trim();if(!reply){setError(tr(locale,'Write a reply first.','답변을 먼저 입력하세요.'));return;}await work(async()=>{await request('/inbox/reply',{inbox_id:item.id,reply});await load();showToast(tr(locale,'Reply sent','답변을 보냈습니다'),'success');});}
+ async function ignoreInbox(item:InboxItem){await work(async()=>{await request('/inbox/ignore',{inbox_id:item.id});await load();});}
  return <section className="admin-panel marketing-panel"><div className="admin-heading"><p className="admin-kicker">Roundy Admin</p><Heading level={1}>{tr(locale,'Marketing','마케팅')}</Heading><p>{tr(locale,'One workspace. Two channels. More people around the table.','하나의 공간에서 두 채널을 관리하고, 더 많은 만남을 만드세요.')}</p></div>
  <div className="marketing-channels" aria-label={tr(locale,'Marketing channel','마케팅 채널')}>{(['instagram','koreapas'] as const).map(c=><button key={c} type="button" aria-pressed={channel===c} onClick={()=>choose(templates.find(t=>t.channel===c)??blank(c))}>{c==='instagram'?<Instagram size={24}/>:<Megaphone size={24}/>}<span><strong>{c==='instagram'?'Instagram':'Koreapas'}</strong><small>{c==='instagram'?'@roundy.meet':tr(locale,'Free advertising board','홍보 게시판')}</small></span><span className={'connection-dot '+(connection[c]?'connected':'')}>{connection[c]?tr(locale,'Configured','설정됨'):tr(locale,'Setup needed','연결 필요')}</span></button>)}</div>
  {!connection[channel]&&<details className="marketing-setup" open><summary>{connection.unavailable?tr(locale,'Connection status unavailable','연결 상태 확인 불가'):channel==='instagram'?tr(locale,'Connect @roundy.meet','@roundy.meet 연결하기'):tr(locale,'Connect Koreapas','고려대 고파스 연결하기')}</summary>{channel==='instagram'?<><p>{tr(locale,'Create a Meta developer app and choose Instagram API with Instagram Login. Add roundy.meet as an account/tester and authorize basic access and content publishing.','Meta 개발자 앱에서 Instagram Login API를 선택하고 roundy.meet 계정을 추가한 후 기본 접근 및 콘텐츠 게시 권한을 승인하세요.')}</p><a href="https://developers.facebook.com/apps/" target="_blank" rel="noreferrer">{tr(locale,'Open Meta app dashboard','Meta 앱 대시보드 열기')} <ExternalLink size={14}/></a><p>{tr(locale,'Your developer stores the Instagram user ID and access token securely on the server. No passwords or tokens belong in a post template.','개발자가 Instagram 사용자 ID와 액세스 토큰을 서버에 안전하게 저장해야 합니다. 템플릿에 비밀번호나 토큰을 입력하지 마세요.')}</p></>:<p>{tr(locale,'Configure the Roundy publisher with your Koreapas account. Use credentials authorized for Roundy; credentials are never copied between projects.','Roundy 전용 발행기에 고파스 계정을 설정하세요. Roundy 전용 계정으로 연결하며 인증 정보는 프로젝트 간 복사되지 않습니다.')}</p>}<p>{tr(locale,'You can prepare and save templates now. Publishing requires a connected account.','지금 템플릿을 작성하고 저장할 수 있습니다. 게시는 계정 연결 후 가능합니다.')}</p></details>}
  {error&&<p role="alert" className="admin-error">{error}</p>}
+ {channel==='instagram'&&<>
+  <div className="admin-section-title"><Heading level={2}>{tr(locale,'Instagram automation','Instagram 자동화')}</Heading></div>
+  <form className="admin-form" onSubmit={e=>{e.preventDefault();void saveAutomation();}}>
+   <div className="admin-two">
+    <label className="check-row"><input type="checkbox" checked={automation.daily_instagram_enabled} onChange={e=>setAutomation(current=>({...current,daily_instagram_enabled:e.target.checked}))}/><span>{tr(locale,'Post one new event post every day','매일 새로운 이벤트 게시물 1개 자동 게시')}</span></label>
+    <label><span>{tr(locale,'Daily publish time · KST','매일 게시 시간 · KST')}</span><input type="time" value={automation.daily_time_kst.slice(0,5)} onChange={e=>setAutomation(current=>({...current,daily_time_kst:e.target.value}))} disabled={!automation.daily_instagram_enabled}/></label>
+   </div>
+   <label className="check-row"><input type="checkbox" checked={automation.auto_reply_enabled} onChange={e=>setAutomation(current=>({...current,auto_reply_enabled:e.target.checked}))}/><span>{tr(locale,'Automatically answer clear Instagram comments and DMs','명확한 Instagram 댓글과 DM 자동 응답')}</span></label>
+   <p className="admin-help">{tr(locale,'Daily posts use the next live Roundy event and rotate the copy. If there is no upcoming event with a publishable image, the post is skipped instead of using stale information. Sensitive, account/payment-related or unclear messages are sent to Human review.','매일 다음 공개 Roundy 이벤트를 기준으로 문구를 바꿔 게시합니다. 게시 가능한 이미지가 있는 예정 이벤트가 없으면 오래된 정보를 올리지 않고 건너뜁니다. 민감한 문의, 계정/결제 문의, 애매한 메시지는 사람 확인함으로 보냅니다.')}</p>
+   <div className="admin-form-actions"><button className="admin-primary" disabled={busy}><Save size={16}/>{tr(locale,'Save automation','자동화 저장')}</button></div>
+  </form>
+
+  <details className="marketing-setup" open={!webhook.verified_at}>
+   <summary>{webhook.verified_at?tr(locale,'Instagram comments & DMs webhook connected','Instagram 댓글 및 DM Webhook 연결됨'):tr(locale,'One-time Meta setup for comments & DMs','댓글 및 DM용 Meta 1회 설정')}</summary>
+   {webhook.verified_at?<><p>{tr(locale,'Meta verified the callback. New supported comments and DMs can now enter the Roundy review flow.','Meta에서 Callback을 인증했습니다. 이제 지원되는 댓글과 DM이 Roundy 검토 흐름으로 들어옵니다.')}</p>{webhook.last_received_at&&<p>{tr(locale,'Last webhook received:','마지막 Webhook 수신:')} {new Date(webhook.last_received_at).toLocaleString(locale,{timeZone:'Asia/Seoul'})} KST</p>}</>:<>
+    <p>{tr(locale,'In the Meta app for @roundy.meet, authorize instagram_business_manage_comments and instagram_business_manage_messages, then subscribe the Instagram comments and messages webhook fields using the values below.','@roundy.meet Meta 앱에서 instagram_business_manage_comments 및 instagram_business_manage_messages 권한을 승인한 뒤 아래 값으로 Instagram comments, messages Webhook 필드를 구독하세요.')}</p>
+    <div className="admin-form">
+     <label><span>{tr(locale,'Callback URL','Callback URL')}</span><input readOnly value={webhook.callback_url}/></label>
+     <label><span>{tr(locale,'Verify token','Verify token')}</span><input readOnly value={webhook.verify_token}/></label>
+    </div>
+    <a href="https://developers.facebook.com/apps/" target="_blank" rel="noreferrer">{tr(locale,'Open Meta app dashboard','Meta 앱 대시보드 열기')} <ExternalLink size={14}/></a>
+   </>}
+  </details>
+
+  <div className="admin-section-title"><Heading level={2}>{tr(locale,'Human review','사람 확인')}</Heading><button type="button" className="admin-secondary" disabled={busy} onClick={()=>void work(load)}>{tr(locale,'Refresh','새로고침')}</button></div>
+  <div className="marketing-history">{inbox.length===0?<p className="admin-empty">{tr(locale,'Nothing needs a human reply right now.','지금 사람이 직접 확인할 댓글이나 DM이 없습니다.')}</p>:inbox.map(item=><article key={item.id}>
+   <div><strong>{item.kind==='dm'?'DM':'Comment'} · {item.sender_username?'@'+item.sender_username:tr(locale,'Instagram user','Instagram 사용자')+' '+item.sender_id}</strong><span className="admin-status needs_review">{tr(locale,'Needs review','확인 필요')}</span></div>
+   <small>{new Date(item.received_at).toLocaleString(locale,{timeZone:'Asia/Seoul'})} KST · {item.decision_reason}</small>
+   <p>{item.text}</p>
+   {item.reply_text&&<p className="admin-help">{tr(locale,'Automatic acknowledgement already sent:','자동 안내 발송됨:')} {item.reply_text}</p>}
+   <label><span>{tr(locale,'Your reply','답변')}</span><textarea rows={3} maxLength={2000} value={replies[item.id]??''} onChange={e=>setReplies(current=>({...current,[item.id]:e.target.value}))} placeholder={tr(locale,'Write the human follow-up here…','직접 보낼 답변을 입력하세요…')}/></label>
+   <div className="admin-form-actions"><button type="button" className="admin-primary" disabled={busy||!(replies[item.id]??'').trim()} onClick={()=>void replyToInbox(item)}><Send size={16}/>{tr(locale,'Reply','답변 보내기')}</button><button type="button" className="admin-secondary" disabled={busy} onClick={()=>void ignoreInbox(item)}>{tr(locale,'Dismiss','확인 완료')}</button></div>
+  </article>)}</div>
+ </>}
+
  <div className="marketing-layout"><form className="admin-form marketing-editor" onSubmit={e=>{e.preventDefault();void save();}}><div className="marketing-template-picker"><label><span>{tr(locale,'Saved template','저장된 템플릿')}</span><select value={form.id??''} onChange={e=>choose(templates.find(t=>t.id===e.target.value)??blank(channel))}><option value="">{tr(locale,'New template','새 템플릿')}</option>{templates.filter(t=>t.channel===channel).map(t=><option value={t.id} key={t.id}>{t.name}</option>)}</select></label><button type="button" className="admin-secondary" onClick={()=>choose(blank(channel))}><Plus size={16}/>{tr(locale,'New','새로 만들기')}</button></div>
  <label><span>{tr(locale,'Template name','템플릿 이름')}</span><input required maxLength={100} value={form.name} onChange={e=>update('name',e.target.value)} placeholder={tr(locale,'e.g. Weekend mingle','예: 주말 밍글')}/></label>
  <label><span>{tr(locale,'Start from an event (optional)','이벤트에서 가져오기 (선택)')}</span><select value="" onChange={e=>{const event=events.find(item=>item.id===e.target.value);if(event){setForm(f=>({...f,title:event.title,caption:event.description,destination_url:window.location.origin+'/events/'+event.slug}));setDirty(true);}}}><option value="">{tr(locale,'Choose an event','이벤트 선택')}</option>{events.map(event=><option key={event.id} value={event.id}>{event.title}</option>)}</select></label>
