@@ -47,7 +47,7 @@ type PendingPayment={order_number:string;status:string;amount:number};
 type AttendeePreview={photo:string|null};
 type EventAttendees={women:AttendeePreview[];men:AttendeePreview[];women_count:number;men_count:number;total:number};
 type PublicRosterEntry={age_band?:string;job_group?:string;nationality?:string;height_cm?:number;smoking_frequency?:SmokingRequirementValue};
-type PublicRoster={women:PublicRosterEntry[];men:PublicRosterEntry[];women_count:number;men_count:number;total:number;updated_at:string|null;disclosures:ParticipantDisclosures};
+type PublicRoster={women:PublicRosterEntry[];men:PublicRosterEntry[];women_count:number;men_count:number;total:number;updated_at:string|null;disclosures?:ParticipantDisclosures};
 const initial:State={profile:emptyProfile,applications:{},booked:{},checked:{},choices:{},finished:false,verification:'Not started'};
 const RoundyLocaleContext=createContext<Locale>('en');
 function localizeNode(node:ReactNode,locale:Locale):ReactNode{
@@ -109,7 +109,7 @@ function participantDetailLabels(entry:PublicRosterEntry,disclosures:Participant
  if(disclosures.age&&entry.age_band)labels.push(ageBandLabel(entry.age_band,locale));
  if(disclosures.job&&entry.job_group)labels.push(jobGroupLabel(entry.job_group,locale));
  if(disclosures.nationality&&entry.nationality)labels.push(nationalityRosterLabel(entry.nationality,locale));
- if(disclosures.height&&Number.isFinite(entry.height_cm))labels.push(entry.height_cm+' cm');
+ if(disclosures.height&&typeof entry.height_cm==='number'&&Number.isFinite(entry.height_cm))labels.push(entry.height_cm+' cm');
  if(disclosures.smoking&&entry.smoking_frequency)labels.push(smokingValueLabel(entry.smoking_frequency,locale));
  return labels;
 }
@@ -344,6 +344,7 @@ export function App({path}:{path:string}){
   const cancellationLocked=Date.now()>=Date.parse(event.starts_at)-((event.lockdown_minutes??0)*60000);
   const alreadyBooked=Boolean(state.booked[event.slug]);
   const rosterInfo=publicRosters[event.id]??{women:[],men:[],women_count:0,men_count:0,total:0,updated_at:null,disclosures:event.participant_disclosures??defaultParticipantDisclosures()};
+  const rosterDisclosures=rosterInfo.disclosures??event.participant_disclosures??defaultParticipantDisclosures();
   const genderCapacity=Math.floor(event.capacity/2);
   const rosterGroups=[
    {key:'women',label:tr(locale,'Ladies','여성'),entries:rosterInfo.women,count:rosterInfo.women_count,tone:'women'},
@@ -371,7 +372,7 @@ export function App({path}:{path:string}){
     <div className="public-roster-groups">
      {rosterGroups.map(group=><section className={'public-roster-group '+group.tone} key={group.key}>
       <div className="public-roster-group-head"><Heading level={3}>{group.label}</Heading><span className="public-roster-seat-tab">{group.count}/{genderCapacity} {tr(locale,'Seats Taken','좌석 확정')}</span></div>
-      {group.entries.length?(Object.values(rosterInfo.disclosures).some(Boolean)?<div className="public-roster-grid">{group.entries.map((entry,index)=>{const details=participantDetailLabels(entry,rosterInfo.disclosures,locale);return <div className="public-roster-chip" key={group.key+'-'+index}><span className="public-roster-dot" aria-hidden="true"/><span className="public-roster-copy">{details.length?details.map((label,line)=><span key={line}>{label}</span>):<span>{tr(locale,'Details unavailable','공개 정보 없음')}</span>}</span></div>;})}</div>:<p className="public-roster-empty">{tr(locale,'Participant details are hidden for this event.','이 이벤트는 참가자 상세 정보를 공개하지 않습니다.')}</p>):<p className="public-roster-empty">{tr(locale,'No confirmed participants yet.','아직 확정된 참가자가 없어요.')}</p>}
+      {group.entries.length?(Object.values(rosterDisclosures).some(Boolean)?<div className="public-roster-grid">{group.entries.map((entry,index)=>{const details=participantDetailLabels(entry,rosterDisclosures,locale);return <div className="public-roster-chip" key={group.key+'-'+index}><span className="public-roster-dot" aria-hidden="true"/><span className="public-roster-copy">{details.length?details.map((label,line)=><span key={line}>{label}</span>):<span>{tr(locale,'Details unavailable','공개 정보 없음')}</span>}</span></div>;})}</div>:<p className="public-roster-empty">{tr(locale,'Participant details are hidden for this event.','이 이벤트는 참가자 상세 정보를 공개하지 않습니다.')}</p>):<p className="public-roster-empty">{tr(locale,'No confirmed participants yet.','아직 확정된 참가자가 없어요.')}</p>}
      </section>)}
     </div>
     <div className="public-roster-privacy"><ShieldCheck size={18}/><span>{tr(locale,'Only the participant details selected by the host are shown. Names, exact ages, workplaces, photos and contact information are never included.','호스트가 선택한 참가자 정보만 공개합니다. 이름, 정확한 나이, 직장명, 사진, 연락처는 표시하지 않습니다.')}</span></div>
