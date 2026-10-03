@@ -5,10 +5,14 @@ import { createServiceRoleClient } from './supabase/service';
 type Client=Awaited<ReturnType<typeof createClient>>;
 type ContentMode='prelaunch'|'live_event';
 type RegenerationMode='text'|'image'|'both';
+type GrowthTopic='mbti'|'dating_archetype'|'book_insight'|'trend_research'|'meme_remix'|'dating_myth'|'conversation_prompt'|'seoul_dating'|'mini_quiz';
+type CarouselSlide={eyebrow:string;title:string;body:string;source_label:string;variant:'hook'|'content'|'source'|'roundy'};
+type ResearchSource={title:string;publisher:string;url:string;date:string};
 type DraftRow={
  id:string;draft_date:string;event_id:string|null;content_pillar:string;caption:string;cta:string;destination_url:string;
  images:string[];status:string;generation_reason:string;recommended_time_kst:string;window_start_kst:string;window_end_kst:string;
- scheduled_for:string|null;revision:number;content_mode:ContentMode;
+ scheduled_for:string|null;revision:number;content_mode:ContentMode;draft_kind:'brand'|'growth_carousel';growth_topic_type:GrowthTopic|null;
+ carousel_slides:CarouselSlide[];research_sources:ResearchSource[];research_status:'not_required'|'pending'|'generated'|'failed';
 };
 type EventRow={
  id:string;slug:string;title:string;starts_at:string;venue:string;neighborhood:string;age_min:number;age_max:number;
