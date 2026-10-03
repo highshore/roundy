@@ -169,7 +169,7 @@ function LandingPage({events,locale,attendeesByEvent,publicRosters}:{events:Even
     <div className="landing-review-track">
      <article className="landing-review-card">
       <span>{tr(locale,'Verified attendee','참가자 인증')}</span>
-      <p>{tr(locale,'Everything was really well prepared, and I had such a great time. I honestly couldn’t think of anything to improve.','준비가 잘 되어 있어서 정말 즐거운 시간을 보냈어요. 아쉬운 점 없이 만족스러웠습니다.')}</p>
+      <p>{tr(locale,'Everything was really well prepared, and I had such a great time. It was perfect!','준비가 정말 잘 되어 있어서 너무 즐거운 시간이었어요. 완벽했습니다!')}</p>
       <small>{tr(locale,'1:1 Speed Mingle · Verified attendee','1:1 Speed Mingle · 참가자 인증')}</small>
      </article>
      <article className="landing-review-card landing-review-card-coming">
