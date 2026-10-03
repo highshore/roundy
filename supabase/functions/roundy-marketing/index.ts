@@ -204,10 +204,10 @@ async function buildDraft(dateKey:string,dow:number,revision:number){
  const choice=await choosePillar(event,revision);
  return {event,pillar:choice.pillar,caption:draftCaption(event,choice.pillar,dateKey,revision),images,timing,scheduledFor,reason:choice.reason+' Timing: '+timing.rationale};
 }
-async function ensureDailyDraft(){
+async function ensureDailyDraft(force=false){
  const settings=await automationSettings();if(!settings.daily_instagram_enabled||!connection().instagram)return null;
  const now=kstNow(),due=timeMinutes(String(settings.draft_generation_time_kst||'10:00'));
- if(now.hour*60+now.minute<due)return null;
+ if(!force&&now.hour*60+now.minute<due)return null;
  const {data:existing,error:existingError}=await service.from('instagram_post_drafts').select('*').eq('draft_date',now.date).maybeSingle();
  if(existingError)throw existingError;if(existing)return existing;
  const built=await buildDraft(now.date,now.dow,1);
@@ -343,7 +343,7 @@ Deno.serve(async req=>{
     return json({draft:await regenerateDraft(body.draft_id)});
    }
    if(body.action==='generate_draft_now'){
-    return json({draft:await ensureDailyDraft()});
+    return json({draft:await ensureDailyDraft(true)});
    }
    const {data:template,error}=await adminClient.from('marketing_templates').select('*').eq('id',body.template_id).single();if(error||!template)return json({error:'Template not found'},404);validate(template);const result=await adminClient.rpc('enqueue_marketing',{p_template:body.template_id,p_request_key:body.request_key});if(result.error)throw result.error;
   }
