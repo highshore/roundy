@@ -39,6 +39,21 @@ Instagram feed posts need at least one image. Uploads are converted to JPEG, up 
 - Instagram only permits DM replies within conversations initiated by the Instagram user; this integration never sends cold DMs.
 
 
+### Growth Carousels
+
+- Three pre-launch daily slots are Growth Carousels by default: **Sunday, Tuesday and Thursday**. These replace the normal daily brand draft on those days rather than adding extra posting volume.
+- A Growth Carousel is six 4:5 JPEG cards: slide 1 hook, slides 2–4 value, slide 5 context/source, slide 6 soft Roundy pre-launch bridge.
+- The default topic families rotate between MBTI/dating archetypes, book/conversation/myth content, and current research/meme/Seoul topics. Admins can change the topic before generation.
+- Growth Carousel research uses the OpenAI Responses API with web search. The result is rewritten into original Roundy editorial content; source screenshots or copied meme assets are not reused.
+- MBTI content must be framed as entertainment rather than scientific compatibility prediction.
+- Book content prefers paraphrase. Direct excerpts from copyrighted books are capped at a very short verified quote and include title/author attribution.
+- Research content prefers peer-reviewed journals, universities or established research organizations, and must not turn correlation into causation.
+- Meme content may use a current format as inspiration but must rebuild the concept as an original Roundy card instead of copying the original image, screenshot or punchline.
+- Other safe growth formats include dating myths, first-conversation prompts, Seoul dating observations and light self-reflection quizzes.
+- The cards are rendered client-side in Roundy's design system and uploaded as JPEGs so Korean/English typography remains exact. The final Instagram publish continues to use the existing approval gate and carousel publisher.
+- Growth content avoids engagement bait, fake urgency, sexual content, body shaming, hostile gender framing, mental-health diagnosis, political content and manipulative pickup tactics.
+
+
 Official references:
 - https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/
 - https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/get-started/
