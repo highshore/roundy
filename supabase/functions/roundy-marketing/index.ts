@@ -16,8 +16,8 @@ type EventRow={
  price_gents:number;price_ladies:number;
 };
 type InboxRow={id:string;external_id:string;kind:'comment'|'dm';sender_id:string;status:string};
-type AutomationSettings={daily_instagram_enabled:boolean;daily_time_kst:string;draft_generation_time_kst:string;optimization_enabled:boolean};
-type DraftRow={id:string;draft_date:string;event_id:string|null;content_pillar:'event'|'urgency'|'problem'|'concept'|'seoul'|'trust';caption:string;cta:string;destination_url:string;images:string[];status:string;recommended_time_kst:string;window_start_kst:string;window_end_kst:string;scheduled_for:string|null;revision:number;eligible_for_optimization:boolean};
+type AutomationSettings={daily_instagram_enabled:boolean;daily_time_kst:string;draft_generation_time_kst:string;optimization_enabled:boolean;content_mode:'prelaunch'|'live_event'};
+type DraftRow={id:string;draft_date:string;event_id:string|null;content_mode:'prelaunch'|'live_event';content_pillar:'event'|'urgency'|'problem'|'concept'|'seoul'|'trust';caption:string;cta:string;destination_url:string;images:string[];status:string;recommended_time_kst:string;window_start_kst:string;window_end_kst:string;scheduled_for:string|null;revision:number;eligible_for_optimization:boolean};
 type Recommendation={dow:number;recommended_time_kst:string;window_start_kst:string;window_end_kst:string;sample_size:number;score:number;source:string;rationale:string};
 
 async function graph(path:string,fields?:Record<string,string>){
@@ -91,7 +91,7 @@ function jitteredTime(center:string,start:string,end:string,key:string){
  return minutesTime(Math.max(startMinute,Math.min(endMinute,target)));
 }
 async function automationSettings(){
- const {data,error}=await service.from('marketing_automation_settings').select('daily_instagram_enabled,daily_time_kst,draft_generation_time_kst,optimization_enabled').eq('singleton',true).single();
+ const {data,error}=await service.from('marketing_automation_settings').select('daily_instagram_enabled,daily_time_kst,draft_generation_time_kst,optimization_enabled,content_mode').eq('singleton',true).single();
  if(error)throw error;return data as AutomationSettings;
 }
 async function recommendationFor(dow:number,dateKey:string,settings:AutomationSettings){
@@ -185,6 +185,59 @@ function draftCaption(event:EventRow,pillar:DraftRow['content_pillar'],dateKey:s
   'See the next Roundy: '+link,'','#Roundy #SeoulDating #MeetInSeoul #서울소개팅 #로테이션소개팅'
  ].join('\n');
 }
+function prelaunchCaption(pillar:'problem'|'concept'|'seoul'|'trust',dateKey:string,revision:number){
+ const hooks:Record<typeof pillar,Array<[string,string]>>={
+  problem:[
+   ['Dating apps show profiles. Chemistry still happens face to face.','데이트 앱은 프로필을 보여주지만, 케미는 결국 직접 만나야 알 수 있으니까요.'],
+   ['Less swiping. More real conversation.','스와이프는 줄이고, 실제 대화는 늘리고.']
+  ],
+  concept:[
+   ['One person at a time. One real conversation at a time.','한 번에 한 사람씩, 실제 대화를 나누는 방식.'],
+   ['Meet first. Reconnect only when it is mutual.','먼저 직접 만나고, 서로 원할 때만 다시 연결됩니다.']
+  ],
+  seoul:[
+   ['A new way to meet people in Seoul is coming.','서울에서 사람을 만나는 새로운 방식이 곧 시작됩니다.'],
+   ['Seoul is full of people you would never meet through your usual circle.','평소 생활 반경에서는 만나지 못했을 사람들을 서울에서 직접 만나보세요.']
+  ],
+  trust:[
+   ['Roundy is being built for better first conversations, not longer swiping sessions.','Roundy는 더 오래 스와이프하게 만드는 대신, 더 좋은 첫 대화를 만들기 위해 준비하고 있습니다.'],
+   ['We are building the room before we ask you to enter it.','사람을 모으기 전에, 먼저 좋은 만남이 가능한 공간과 방식을 준비하고 있습니다.']
+  ]
+ };
+ const bodies:Record<typeof pillar,[string,string]>={
+  problem:['Roundy is preparing an offline 1:1 rotation dating experience in Seoul for Korean and international people who would rather meet than endlessly message.','Roundy는 끝없는 채팅보다 직접 만남을 원하는 한국인과 외국인을 위해 서울에서 오프라인 1:1 로테이션 소개팅을 준비하고 있습니다.'],
+  concept:['Short face-to-face conversations, private choices, and reconnection only when the feeling is mutual. That is the experience Roundy is building.','짧은 대면 1:1 대화, 비공개 선택, 그리고 서로 마음이 맞을 때만 다시 연결되는 방식. Roundy가 준비하는 만남입니다.'],
+  seoul:['Roundy is preparing a Seoul-based offline mingle where Korean and international participants can meet one person at a time in real life.','Roundy는 서울에서 한국인과 외국인이 한 명씩 직접 대화하며 만날 수 있는 오프라인 밍글을 준비하고 있습니다.'],
+  trust:['Roundy is still pre-launch. We are focusing on the format, hosting flow, safety and the quality of real conversations before opening officially.','Roundy는 아직 정식 오픈 전입니다. 공식 오픈에 앞서 진행 방식, 운영 동선, 안전, 실제 대화의 질을 먼저 다듬고 있습니다.']
+ };
+ const options=hooks[pillar],hook=options[hashText(dateKey+String(revision)+pillar)%options.length];
+ return [
+  hook[0],'',bodies[pillar][0],'',
+  'Follow @roundy.meet and visit roundy.team for launch updates.','','---','',
+  hook[1],'',bodies[pillar][1],'',
+  '정식 오픈 소식은 @roundy.meet 과 roundy.team 에서 가장 먼저 확인하세요.','',
+  '#Roundy #SeoulDating #MeetInSeoul #서울소개팅 #로테이션소개팅'
+ ].join('\n');
+}
+async function choosePrelaunchPillar(revision:number){
+ const {data,error}=await service.from('instagram_post_drafts').select('content_pillar').eq('content_mode','prelaunch').in('status',['needs_approval','scheduled','published']).order('draft_date',{ascending:false}).limit(7);
+ if(error)throw error;
+ const recent=(data??[]).map(row=>String(row.content_pillar));
+ const candidates=['problem','concept','seoul','trust'] as const;
+ const ranked=[...candidates].sort((a,b)=>{
+  const ac=recent.filter(item=>item===a).length+(recent[0]===a?2:0);
+  const bc=recent.filter(item=>item===b).length+(recent[0]===b?2:0);
+  if(ac!==bc)return ac-bc;
+  return (hashText(a+String(revision))%17)-(hashText(b+String(revision))%17);
+ });
+ return ranked[0];
+}
+async function latestPrelaunchImages(){
+ const {data,error}=await service.from('instagram_post_drafts').select('images').eq('content_mode','prelaunch').not('images','eq','{}').order('updated_at',{ascending:false}).limit(1).maybeSingle();
+ if(error)return [] as string[];
+ return Array.isArray(data?.images)?data.images.slice(0,1):[];
+}
+
 async function nextLiveEvent(){
  const {data,error}=await service.from('events')
   .select('id,slug,title,starts_at,venue,neighborhood,age_min,age_max,capacity,seats_remaining,images,price_gents,price_ladies')
@@ -196,13 +249,30 @@ function publishableImages(event:EventRow|null){
  return ((event?.images??[]) as string[]).filter(image=>image.startsWith(prefix)&&/^[-a-f0-9]+\/[-a-f0-9]+\.jpg$/.test(image.slice(prefix.length))).slice(0,10);
 }
 async function buildDraft(dateKey:string,dow:number,revision:number){
- const settings=await automationSettings(),timing=await recommendationFor(dow,dateKey,settings),event=await nextLiveEvent(),images=publishableImages(event);
- const scheduledFor=kstIso(dateKey,timing.recommended);
+ const settings=await automationSettings(),timing=await recommendationFor(dow,dateKey,settings),scheduledFor=kstIso(dateKey,timing.recommended);
+ if(settings.content_mode==='prelaunch'){
+  const pillar=await choosePrelaunchPillar(revision);
+  const images=await latestPrelaunchImages();
+  return {
+   contentMode:'prelaunch' as const,event:null,pillar,caption:prelaunchCaption(pillar,dateKey,revision),images,timing,scheduledFor,
+   cta:'Follow for launch updates',destinationUrl:'https://roundy.team',
+   reason:'Pre-launch promotion mode. Test event data is intentionally ignored. Selected '+pillar+' to rotate brand-building topics. Timing: '+timing.rationale
+  };
+ }
+ const event=await nextLiveEvent(),images=publishableImages(event);
  if(!event||!images.length){
-  return {event:null,pillar:'event' as const,caption:'',images:[],timing,scheduledFor,reason:'No upcoming live event with a publishable image is available, so the day is skipped rather than publishing stale content.'};
+  return {
+   contentMode:'live_event' as const,event:null,pillar:'event' as const,caption:'',images:[],timing,scheduledFor,
+   cta:'See event details',destinationUrl:'https://roundy.team/events',
+   reason:'No upcoming live event with a publishable image is available, so the day is skipped rather than publishing stale information.'
+  };
  }
  const choice=await choosePillar(event,revision);
- return {event,pillar:choice.pillar,caption:draftCaption(event,choice.pillar,dateKey,revision),images,timing,scheduledFor,reason:choice.reason+' Timing: '+timing.rationale};
+ return {
+  contentMode:'live_event' as const,event,pillar:choice.pillar,caption:draftCaption(event,choice.pillar,dateKey,revision),images,timing,scheduledFor,
+  cta:'See event details',destinationUrl:'https://roundy.team/events/'+event.slug,
+  reason:choice.reason+' Timing: '+timing.rationale
+ };
 }
 async function ensureDailyDraft(force=false){
  const settings=await automationSettings();if(!settings.daily_instagram_enabled||!connection().instagram)return null;
@@ -212,12 +282,13 @@ async function ensureDailyDraft(force=false){
  if(existingError)throw existingError;if(existing)return existing;
  const built=await buildDraft(now.date,now.dow,1);
  const base={
-  draft_date:now.date,event_id:built.event?.id??null,content_pillar:built.pillar,caption:built.caption,cta:'See event details',
-  destination_url:built.event?'https://roundy.team/events/'+built.event.slug:'https://roundy.team/events',images:built.images,
-  generation_reason:built.reason,recommended_time_kst:built.timing.recommended,window_start_kst:built.timing.windowStart,
-  window_end_kst:built.timing.windowEnd,scheduled_for:built.scheduledFor,revision:1
+  draft_date:now.date,event_id:built.event?.id??null,content_mode:built.contentMode,content_pillar:built.pillar,caption:built.caption,
+  cta:built.cta,destination_url:built.destinationUrl,images:built.images,generation_reason:built.reason,
+  recommended_time_kst:built.timing.recommended,window_start_kst:built.timing.windowStart,window_end_kst:built.timing.windowEnd,
+  scheduled_for:built.scheduledFor,revision:1
  };
- const {data,error}=await service.from('instagram_post_drafts').insert({...base,status:built.event&&built.images.length?'needs_approval':'skipped'}).select('*').single();
+ const readyForApproval=built.contentMode==='prelaunch'||Boolean(built.event&&built.images.length);
+ const {data,error}=await service.from('instagram_post_drafts').insert({...base,status:readyForApproval?'needs_approval':'skipped'}).select('*').single();
  if(error)throw error;return data;
 }
 async function regenerateDraft(draftId:string){
@@ -227,10 +298,11 @@ async function regenerateDraft(draftId:string){
  const local=kstNow(new Date(String(current.draft_date)+'T12:00:00+09:00')),revision=Number(current.revision||1)+1;
  const built=await buildDraft(String(current.draft_date),local.dow,revision);
  const {data,error}=await service.from('instagram_post_drafts').update({
-  event_id:built.event?.id??null,content_pillar:built.pillar,caption:built.caption,images:built.images,
-  destination_url:built.event?'https://roundy.team/events/'+built.event.slug:'https://roundy.team/events',
-  generation_reason:built.reason,recommended_time_kst:built.timing.recommended,window_start_kst:built.timing.windowStart,
-  window_end_kst:built.timing.windowEnd,scheduled_for:built.scheduledFor,revision,status:built.event&&built.images.length?'needs_approval':'skipped'
+  event_id:built.event?.id??null,content_mode:built.contentMode,content_pillar:built.pillar,caption:built.caption,images:built.images,
+  cta:built.cta,destination_url:built.destinationUrl,generation_reason:built.reason,
+  recommended_time_kst:built.timing.recommended,window_start_kst:built.timing.windowStart,
+  window_end_kst:built.timing.windowEnd,scheduled_for:built.scheduledFor,revision,
+  status:built.contentMode==='prelaunch'||(built.event&&built.images.length)?'needs_approval':'skipped'
  }).eq('id',draftId).select('*').single();
  if(error)throw error;return data;
 }
