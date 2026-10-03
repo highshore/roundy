@@ -3069,7 +3069,7 @@ html:lang(ko) .legal-intro h1{word-break:keep-all}
 
 /* Automated event image carousel (2026-10-03). */
 .event-image-carousel{position:relative;min-width:0}
-.event-image-carousel .detail-photo{margin:0}
+.event-image-carousel .detail-photo{margin:0;aspect-ratio:8/5}
 .event-image-carousel-viewport{background:#ebe9e1;isolation:isolate}
 .event-image-carousel-image{animation:event-image-carousel-fade .32s ease}
 .event-image-carousel-nav{
