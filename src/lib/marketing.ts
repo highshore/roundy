@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { randomUUID } from 'node:crypto';
 import type { createClient } from './supabase/server';
 import { createServiceRoleClient } from './supabase/service';
 import { marketingApi as legacyMarketingApi } from './marketing-legacy';
@@ -35,6 +36,24 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
   if(typeof body.enabled!=='boolean'||body.enabled&&body.confirm_resume!==true)return json({error:'Confirm the account/configuration has been checked before resuming.'},400);
   const patch=body.enabled?{enabled:true,blocked_reason:null,updated_at:new Date().toISOString()}:{enabled:false,updated_at:new Date().toISOString()};
   checked(await service.from('marketing_ai_control').update(patch).eq('singleton',true));return json(await generationOverview());
+ }
+ if(id==='generation'&&path[1]==='jobs'&&path.length===4&&uuid(path[2])&&path[3]==='retry'&&req.method==='POST'){
+  const confirmation=await req.json().catch(()=>({}));
+  if(confirmation.confirm_retry!==true)return json({error:'RETRY_CONFIRMATION_REQUIRED'},400);
+  const original=checked(await service.from('marketing_generation_jobs').select('*').eq('id',path[2]).maybeSingle());
+  if(!original)return json({error:'Generation job not found'},404);
+  if(original.status!=='failed'||original.automatic)return json({error:'RETRY_ONLY_FAILED_MANUAL'},400);
+  if(!original.request_payload||typeof original.request_payload!=='object')return json({error:'RETRY_PAYLOAD_UNAVAILABLE'},400);
+  const isPhoto=['photo','copy_photo'].includes(original.operation);
+  if(isPhoto&&confirmation.confirm_paid_photo!==true)return json({error:'CONFIRM_PAID_PHOTO_FIRST'},400);
+  const currentDraft=checked(await service.from('instagram_post_drafts').select('id,status,revision').eq('id',original.draft_id).maybeSingle());
+  if(!currentDraft)return json({error:'Draft not found'},404);
+  if(currentDraft.status!=='needs_approval')return json({error:'DRAFT_NOT_EDITABLE'},409);
+  const user=(await db.auth.getUser()).data.user;if(!user)return json({error:'Sign in required'},401);
+  const retryPayload={...original.request_payload,request_key:'retry:'+randomUUID(),revision:currentDraft.revision,confirm_photo:isPhoto};
+  const result=await runGeneration(currentDraft.id,retryPayload,user.id);
+  if(result.job?.id)await service.from('marketing_generation_jobs').update({retry_of_job_id:original.id}).eq('id',result.job.id);
+  return json({...result,retry_of_job_id:original.id},result.error?400:200);
  }
  if(id==='draft'&&path[1]==='generate'&&path.length===2&&req.method==='POST'){
   const body=await req.json().catch(()=>null);
