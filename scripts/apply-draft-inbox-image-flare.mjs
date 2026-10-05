@@ -198,3 +198,4 @@ console.log('PASS '+checks+' draft inbox/source contract assertions.');`;
 }
 
 console.log('draft inbox + Flare patch applied');
+// trigger verification
