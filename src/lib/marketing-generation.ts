@@ -49,6 +49,23 @@ function slide(value:Row,index:number,total:number){
  return {eyebrow:String(value.eyebrow||'ROUNDY NOTES').slice(0,40),title:value.title.trim().slice(0,90),body:value.body.trim().slice(0,320),source_label:String(value.source_label||'').slice(0,100),variant:index===0?'hook':index===total-1?'roundy':'content'};
 }
 function sourceRows(value:unknown){if(!Array.isArray(value))return [];return value.slice(0,3).filter((x:Row)=>{try{return new URL(x.url).protocol==='https:';}catch{return false;}}).map((x:Row)=>({title:String(x.title||'').slice(0,160),publisher:String(x.publisher||'').slice(0,80),url:String(x.url).slice(0,1000),date:String(x.date||'').slice(0,40)}));}
+function researchSourcesFromResponse(result:Row):Row[]{
+ const found=new Map<string,Row>();
+ const add=(item:Row)=>{
+  const raw=String(item?.url||'').trim();if(!raw)return;
+  let parsed:URL;try{parsed=new URL(raw);if(parsed.protocol!=='https:')return;}catch{return;}
+  const url=(parsed.origin+parsed.pathname+parsed.search).slice(0,1000);
+  const publisher=String(item?.publisher||'').trim()||parsed.hostname.replace(/^www\./,'');
+  const title=String(item?.title||'').trim()||publisher;
+  const previous=found.get(url);
+  if(!previous||previous.title===previous.publisher)found.set(url,{title:title.slice(0,160),publisher:publisher.slice(0,80),url,date:String(item?.date||'').slice(0,40)});
+ };
+ for(const output of Array.isArray(result.output)?result.output:[]){
+  if(output?.type==='web_search_call'&&Array.isArray(output.action?.sources))for(const item of output.action.sources)add(item);
+  if(output?.type==='message')for(const part of Array.isArray(output.content)?output.content:[])for(const annotation of Array.isArray(part.annotations)?part.annotations:[])if(annotation?.type==='url_citation')add(annotation);
+ }
+ return [...found.values()].slice(0,5);
+}
 function parseGeneratedJson(raw:string):Row{
  const trimmed=raw.trim();
  const unfenced=trimmed.replace(/^\`\`\`(?:json)?\s*/i,'').replace(/\s*\`\`\`$/,'').trim();
@@ -122,9 +139,9 @@ async function generateCopy(db:DB,draft:Row,input:GenerationInput,job:Row,resear
   'No copied posts, fake urgency, engagement bait, invented reviews or demographics, sexual content, gender hostility, discriminatory stereotypes or manipulative pickup advice. MBTI is entertainment, not scientific compatibility.',
   facts?'Use only the supplied live-event facts. Never invent discounts or booking numbers.':'Roundy is PRE-LAUNCH. All website events are test data. Never mention event dates, seats, prices, venue, attendees, testimonials or booking. Invite follows of @roundy.meet for launch updates.',
   growth?'Return 4 to 6 slides. All slides except the final slide are useful original editorial content; ONLY the final slide connects to Roundy. Prefer 6 when the topic supports it, but never pad with repetitive filler.':'Return 2 to 3 brand-awareness cards with a clear hook, one useful concept and a soft Roundy CTA.',
-  research?'Use at most ONE web search. Verify any book, study or current-trend claim. Paraphrase, never invent quotations. Provide sources matching verified claims.':'Do NOT make research, statistic, book-quote or current-trend claims. No web search is available. sources must be empty.',
-  'Return only a JSON object: caption (nonempty <=1500 characters), cta (<=80 characters), content_pillar (problem, concept, seoul, trust, event or urgency), generation_reason, slides, sources.',
-  'Each slide: eyebrow, title (<=70 characters), body (<=260 characters), source_label. Each source: title, publisher, url (https), date. No markdown fences.'
+  research?'Use at most ONE web search. Ground any book, study or current-trend claim in the search results. Paraphrase, never invent quotations. The server records sources directly from the web-search tool metadata, so do not invent URLs or a sources field.':'Do NOT make research, statistic, book-quote or current-trend claims. No web search is available.',
+  'Return only a JSON object: caption (nonempty <=1500 characters), cta (<=80 characters), content_pillar (problem, concept, seoul, trust, event or urgency), generation_reason, slides.',
+  'Each slide: eyebrow, title (<=70 characters), body (<=260 characters), source_label. source_label may be a short publisher or study label, never a URL. No markdown fences.'
  ].join(' ');
  const payload={content_mode:input.content_mode,content_language:language,topic:input.topic_type||'conversation_prompt',direction:input.instruction||'',event:facts,previous_caption:String(draft.caption||'').slice(0,1500),date:kstDate()};
  if(Buffer.byteLength(instructions+JSON.stringify(payload),'utf8')>MAX_INPUT_BYTES)throw new Error('PROMPT_SIZE_LIMIT');
@@ -144,13 +161,8 @@ async function generateCopy(db:DB,draft:Row,input:GenerationInput,job:Row,resear
  if(typeof content.caption!=='string'||!content.caption.trim()||content.caption.length>1500||typeof content.cta!=='string'||content.cta.length>80)throw new Error('INVALID_GENERATED_COPY');
  const normalizedSlides=normalizeCarouselSlides(content.slides,growth),count=normalizedSlides.length;
  content.slides=normalizedSlides;
- const sources=research?sourceRows(content.sources):[];if(research&&!sources.length)throw new Error('RESEARCH_SOURCES_MISSING');
- if(research){
-  const annotations=(result.output||[]).filter((x:Row)=>x.type==='message').flatMap((x:Row)=>x.content||[]).flatMap((x:Row)=>x.annotations||[]);
-  const searched=(result.output||[]).filter((x:Row)=>x.type==='web_search_call').flatMap((x:Row)=>x.action?.sources||[]);
-  const verified=new Set([...annotations.filter((x:Row)=>x.type==='url_citation'),...searched].map((x:Row)=>x.url));
-  if(sources.some((s:Row)=>!verified.has(s.url)))throw new Error('RESEARCH_SOURCE_NOT_VERIFIED');
- }
+ const sources=research?researchSourcesFromResponse(result):[];
+ if(research&&!sources.length)throw new Error('RESEARCH_TOOL_SOURCES_MISSING');
 
  return {caption:content.caption.trim(),cta:content.cta.trim(),content_language:language,content_pillar:['problem','concept','seoul','trust','event','urgency'].includes(content.content_pillar)?content.content_pillar:'concept',generation_reason:String(content.generation_reason||'AI copy with cost-controlled generation.').slice(0,1000),carousel_slides:content.slides.map((s:Row,i:number)=>slide(s,i,count)),research_sources:sources,research_status:research?'generated':growth?'generated':'not_required',draft_kind:growth?'growth_carousel':'brand',growth_topic_type:growth?input.topic_type||'conversation_prompt':null,content_mode:facts?'live_event':'prelaunch',event_id:facts?.id||null,destination_url:facts?'https://roundy.team/events/'+facts.slug:'https://roundy.team'};
 }

@@ -4,15 +4,15 @@ Generation and publishing remain separate. Generation never inserts publishing r
 
 ## Defaults and costs
 
-Automatic generation: one daily copy/research request, then 3 brand cards or 6 Growth Carousel cards rendered server-side. No paid photos automatically. Copy model: fixed gpt-4.1-mini, 4,096 output token cap, 16,000 supplied prompt byte cap. Book/research/meme topics allow at most one low-context web search. Other topics do not search. Paid photos require per-request confirmation and use gpt-image-2, low, 1024x1024, n=1, with 1/day and 10/month limits.
+Automatic generation: one daily copy/research request, then 2–3 brand cards or 4–6 Growth Carousel cards rendered server-side. No paid photos automatically. Copy model: fixed gpt-4.1-mini, 4,096 output token cap, 16,000 supplied prompt byte cap. Book/research/meme topics allow at most one low-context web search. Other topics do not search. Paid photos require per-request confirmation and use gpt-image-2, low, 1024x1024, n=1, with 1/day and 10/month limits.
 
-Application reservations are conservative estimates, not invoices: copy $0.02; research $0.10; photo $0.05; copy+photo $0.07; render saved cards $0. Paid work stops at $0.25/day, $3/calendar month, 5 paid jobs/day or 90/month. A copy+photo job can make two paid HTTP requests, so the maximum is six paid HTTP requests/day, with at most one photo request. Free render jobs are limited to 10/day. Day/month boundaries use Asia/Seoul. Limits are global, not per process or administrator.
+Application reservations are conservative estimates, not invoices: copy $0.02; research $0.02; photo $0.05; copy+photo $0.07; render saved cards $0. Paid work stops at $0.25/day, $3/calendar month, 5 paid jobs/day or 90/month. A copy+photo job can make two paid HTTP requests, so the maximum is six paid HTTP requests/day, with at most one photo request. Free render jobs are limited to 10/day. Day/month boundaries use Asia/Seoul. Limits are global, not per process or administrator.
 
 Provider pricing may change. Spending from other routes/projects/users or leaked keys is outside this ledger. Configure provider-side project/key limits independently. Never describe the application reservation budget as an unconditional invoice guarantee.
 
 ## No retry loop
 
-Every paid attempt first takes a PostgreSQL transaction advisory lock and inserts a unique request key. Duplicate keys return their existing job; changed payloads on the same key are rejected. A global running-job lock, 30-second cooldown, 10-minute fingerprint dedupe and draft revision checks cover double clicks, tabs and deployments. Failed or unknown attempts retain their reservation. No SDK retries or gateway fallback.
+Every paid attempt first takes a PostgreSQL transaction advisory lock and inserts a unique request key. Duplicate keys return their existing job; changed payloads on the same key are rejected. A global running-job lock, 30-second cooldown, 10-minute fingerprint dedupe and draft revision checks cover double clicks, tabs and deployments. Failed or unknown attempts retain their reservation. Clearly rejected pre-tool requests may have their reservation released after verification; successful research calls use the research reservation even if later app validation fails. No SDK retries or gateway fallback.
 
 401/403/404/429, a missing key and unknown network outcomes trip a persistent circuit breaker. Three consecutive failed paid jobs also pause AI. Only explicit admin resume clears it; it cannot reset budgets or replay old jobs. Pause prevents the next stage, not an already-billed in-flight request.
 
