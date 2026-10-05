@@ -78,7 +78,22 @@ export function AdminMarketing({locale}:{locale:Locale}){
   const sourceDraft=data.drafts.find((d:Row)=>d.id===job.draft_id);
   if(!sourceDraft||sourceDraft.status!=='needs_approval')throw new Error('DRAFT_NOT_EDITABLE');
   if(!job.request_payload)throw new Error('RETRY_PAYLOAD_UNAVAILABLE');
-  const cost=retryCost(job),photo=['photo','copy_photo'].includes(job.operation),budget='
+  const cost=retryCost(job),photo=['photo','copy_photo'].includes(job.operation),budget=cost.toFixed(2)+' USD';
+  const confirmMessage=t(
+   'Retry this failed generation with the same saved settings? This starts one new API request and reserves '+budget+'. It will not publish automatically.',
+   '이 실패 작업을 저장된 동일 설정으로 재시도할까요? 새 API 요청 1회를 시작하며 앱 예산 '+budget+'를 예약합니다. 자동 게시되지는 않습니다.'
+  );
+  if(!window.confirm(confirmMessage))return;
+  await work(async()=>{
+   const r=await request('/generation/jobs/'+job.id+'/retry',{confirm_retry:true,confirm_paid_photo:photo});
+   if(r.data.draft)selectDraft(r.data.draft);
+   await load(r.data.draft?.id||job.draft_id);
+   if(!r.ok||r.data.error)throw new Error(r.data.error||'Retry failed');
+   if(['failed','uncertain'].includes(r.data.job?.status))throw new Error(r.data.job?.error_message||'Retry stopped');
+   setNotice(t('Retry complete. Review the recovered draft, then approve or publish now.','재시도가 완료됐습니다. 복구된 초안을 검토한 뒤 승인 또는 바로 게시하세요.'));
+  });
+ }
+ const running=(generation?.jobs||[]).find((j:Row)=>j.status==='running'&&Date.now()-Date.parse(j.created_at)<300000),blocked=Boolean(generation?.control?.blocked_reason||generation?.control?.enabled===false);
  function stage(s:string){const labels:Record<string,string>={reserved:t('Reserved; duplicate checks passed','예산 예약 및 중복 검사 완료'),writing:t('Writing copy','문구 작성 중'),researching:t('One web search and copy','웹 검색 최대 1회 및 문구 작성 중'),saving_copy:t('Saving copy','문구 저장 중'),generating_photo:t('Generating one photo','사진 1장 생성 중'),saving_photo:t('Saving photo','사진 저장 중'),saving_images:t('Saving images','이미지 저장 중'),complete:t('Complete','완료'),stopped:t('Stopped','중지')};return labels[s]||s.replace('rendering_','카드 생성 ').replace('_of_',' / ');}
  function changeDraft(key:string,value:string){setDraft(d=>d?{...d,[key]:value}:d);setDirty(true);}
  if(loading)return <p role="status">{t('Loading marketing workspace…','마케팅 정보를 불러오는 중입니다…')}</p>;
