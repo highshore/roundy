@@ -20,6 +20,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
  const [channel,setChannel]=useState<'instagram'|'koreapas'>('instagram'),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[error,setError]=useState(''),[notice,setNotice]=useState('');
  const [basis,setBasis]=useState('prelaunch'),[mode,setMode]=useState('both'),[visual,setVisual]=useState('cards'),[topic,setTopic]=useState('conversation_prompt'),[contentLanguage,setContentLanguage]=useState<'ko'|'en'>('ko'),[direction,setDirection]=useState(''),[dirty,setDirty]=useState(false);
  const [template,setTemplate]=useState<Row>(blank());
+ const [resultPreview,setResultPreview]=useState<Row|null>(null);
  const [activeTab,setActiveTab]=useState<'draft'|'generation'|'publishing'|'automation'|'connection'>('draft');
  const [generationFilter,setGenerationFilter]=useState<'all'|'completed'|'failed'|'running'>('all');
  const [generationVisible,setGenerationVisible]=useState(20),[publishVisible,setPublishVisible]=useState(20);
@@ -55,7 +56,10 @@ export function AdminMarketing({locale}:{locale:Locale}){
    RETRY_ONLY_FAILED_MANUAL:['Only failed manual generation jobs can be retried from history.','생성 기록에서는 실패한 수동 작업만 재시도할 수 있습니다.'],
    RETRY_PAYLOAD_UNAVAILABLE:['This older failure does not have enough saved settings to retry exactly.','이전 실패 기록에 동일 설정을 복원할 정보가 부족합니다.'],
    CONFIRM_PAID_PHOTO_FIRST:['Paid photo retry requires explicit confirmation.','유료 사진 재시도는 별도 확인이 필요합니다.'],
-   GENERATION_THREAD_NOT_RETRYABLE:['Only the latest failed attempt in this generation thread can be retried. Refresh the history first.','이 생성 스레드의 가장 최근 실패 시도만 재시도할 수 있습니다. 생성 기록을 새로고침하세요.']
+   GENERATION_THREAD_NOT_RETRYABLE:['Only the latest failed attempt in this generation thread can be retried. Refresh the history first.','이 생성 스레드의 가장 최근 실패 시도만 재시도할 수 있습니다. 생성 기록을 새로고침하세요.'],
+   RESTORE_CONFIRMATION_REQUIRED:['Confirm before replacing the current draft with this saved result.','저장된 결과로 현재 초안을 교체하기 전에 확인하세요.'],
+   COMPLETED_GENERATION_REQUIRED:['Only a completed generation result can be restored.','완료된 생성 결과만 초안으로 불러올 수 있습니다.'],
+   RESULT_SNAPSHOT_UNAVAILABLE:['This older completed generation predates result snapshots, so its exact content is no longer available.','이 완료 작업은 결과 보존 기능 도입 이전에 생성되어 정확한 결과를 다시 불러올 수 없습니다.']
   };
   return map[message]?t(...map[message]):message;
  }
@@ -94,10 +98,29 @@ export function AdminMarketing({locale}:{locale:Locale}){
    await load(r.data.draft?.id||job.draft_id);
    if(!r.ok||r.data.error)throw new Error(r.data.error||'Retry failed');
    if(['failed','uncertain'].includes(r.data.job?.status))throw new Error(r.data.job?.error_message||'Retry stopped');
-   setNotice(t('Retry complete. Review the recovered draft, then approve or publish now.','재시도가 완료됐습니다. 복구된 초안을 검토한 뒤 승인 또는 바로 게시하세요.'));
+   setActiveTab('draft');
+   setNotice(t('Retry complete. The generated result is open in Draft.','재시도가 완료됐습니다. 생성 결과를 초안 탭에 열었습니다.'));
   });
  }
- const running=(generation?.jobs||[]).find((j:Row)=>j.status==='running'&&Date.now()-Date.parse(j.created_at)<300000),blocked=Boolean(generation?.control?.blocked_reason||generation?.control?.enabled===false);
+ function openThreadResult(thread:Row){
+  const attempts=[...(thread.attempts||[])].reverse();
+  const attempt=attempts.find((a:Row)=>a.status==='completed'&&a.result_snapshot);
+  if(!attempt){setError(friendlyError('RESULT_SNAPSHOT_UNAVAILABLE'));return;}
+  setResultPreview({thread,attempt,snapshot:attempt.result_snapshot});
+ }
+ async function restoreResultToDraft(){
+  if(!resultPreview?.attempt?.id)return;
+  if(!window.confirm(t('Replace the current editable draft with this saved generation result? This does not publish it.','현재 편집 가능한 초안을 이 저장된 생성 결과로 교체할까요? 게시되지는 않습니다.')))return;
+  await work(async()=>{
+   const r=await request('/generation/jobs/'+resultPreview.attempt.id+'/restore',{confirm_restore:true});
+   if(!r.ok||r.data.error)throw new Error(r.data.error||'Restore failed');
+   if(r.data.draft)selectDraft(r.data.draft);
+   await load(r.data.draft?.id);
+   setResultPreview(null);setActiveTab('draft');
+   setNotice(t('Saved generation result restored to Draft.','저장된 생성 결과를 초안으로 불러왔습니다.'));
+  });
+ }
+  const running=(generation?.jobs||[]).find((j:Row)=>j.status==='running'&&Date.now()-Date.parse(j.created_at)<300000),blocked=Boolean(generation?.control?.blocked_reason||generation?.control?.enabled===false);
  function stage(s:string){const labels:Record<string,string>={reserved:t('Reserved; duplicate checks passed','예산 예약 및 중복 검사 완료'),writing:t('Writing copy','문구 작성 중'),researching:t('One web search and copy','웹 검색 최대 1회 및 문구 작성 중'),saving_copy:t('Saving copy','문구 저장 중'),generating_photo:t('Generating one photo','사진 1장 생성 중'),saving_photo:t('Saving photo','사진 저장 중'),saving_images:t('Saving images','이미지 저장 중'),complete:t('Complete','완료'),stopped:t('Stopped','중지')};return labels[s]||s.replace('rendering_','카드 생성 ').replace('_of_',' / ');}
  function changeDraft(key:string,value:string){setDraft(d=>d?{...d,[key]:value}:d);setDirty(true);}
  const allGenerationJobs=((generation?.jobs||[]) as Row[]);
@@ -176,6 +199,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
        <div className="generation-attempt-copy"><div><strong>{t('Attempt','시도')} {Number(attempt.attempt_number||index+1)}</strong><span className={'marketing-status-pill '+attempt.status}>{statusText(attempt.status)}</span></div><small>{new Date(attempt.created_at).toLocaleString(locale,{timeZone:'Asia/Seoul'})} · {'$'+Number(attempt.reserved_usd||0).toFixed(2)} · {Number(attempt.input_tokens||0).toLocaleString()} in / {Number(attempt.output_tokens||0).toLocaleString()} out</small>{attempt.error_message&&<p className="admin-error">{friendlyError(attempt.error_message)}</p>}</div>
       </div>)}</div>
       <dl><div><dt>{t('Thread ID','스레드 ID')}</dt><dd>{thread.id}</dd></div><div><dt>{t('Attempts','시도 횟수')}</dt><dd>{attempts.length}</dd></div><div><dt>{t('Total reserved','총 예약액')}</dt><dd>{'$'+Number(thread.total_reserved_usd).toFixed(2)}</dd></div></dl>
+      {thread.status==='completed'&&<button type="button" className="admin-primary" onClick={e=>{e.preventDefault();openThreadResult(thread);}}>{t('View result','결과 보기')}</button>}
       {canRetry&&<button type="button" className="admin-secondary" disabled={busy||!!running} onClick={e=>{e.preventDefault();void retryJob(latest);}}>{t('Retry same settings','같은 설정으로 재시도')}</button>}
       {thread.status==='completed'&&<p className="marketing-thread-success">{t('This generation thread is complete. Earlier failed attempts are kept only for history.','이 생성 스레드는 완료됐습니다. 이전 실패 시도는 기록용으로만 보존됩니다.')}</p>}
      </div>
@@ -205,5 +229,15 @@ export function AdminMarketing({locale}:{locale:Locale}){
    }):<p className="admin-empty">{t('No publishing history yet.','아직 게시 기록이 없습니다.')}</p>}</div>
    {channelRuns.length>publishVisible&&<button type="button" className="marketing-load-more" onClick={()=>setPublishVisible(v=>v+20)}>{t('Load 20 more','20개 더 보기')}</button>}
   </section>}
+  {resultPreview&&<div className="marketing-result-backdrop" role="presentation" onClick={()=>setResultPreview(null)}>
+   <section className="marketing-result-modal" role="dialog" aria-modal="true" aria-labelledby="marketing-result-title" onClick={e=>e.stopPropagation()}>
+    <div className="marketing-result-head"><div><p className="admin-kicker">{t('Saved generation result','저장된 생성 결과')}</p><Heading level={2} id="marketing-result-title">{contentLabel(resultPreview.thread.root||resultPreview.attempt)}</Heading></div><button type="button" className="admin-secondary" onClick={()=>setResultPreview(null)}>{t('Close','닫기')}</button></div>
+    <p className="admin-help">{new Date(resultPreview.attempt.created_at).toLocaleString(locale,{timeZone:'Asia/Seoul'})} KST · {t('Attempt','시도')} {resultPreview.attempt.attempt_number}</p>
+    {Array.isArray(resultPreview.snapshot.images)&&resultPreview.snapshot.images.length>0&&<div className="marketing-result-images">{resultPreview.snapshot.images.map((url:string,i:number)=><img src={url} alt={t('Generated card ','생성 카드 ')+(i+1)} key={url}/>)}</div>}
+    <div className="marketing-result-copy"><strong>{t('Caption','캡션')}</strong><p>{resultPreview.snapshot.caption||''}</p></div>
+    {!!resultPreview.snapshot.research_sources?.length&&<div className="growth-sources">{resultPreview.snapshot.research_sources.map((s:Row)=><a key={s.url} href={s.url} target="_blank" rel="noreferrer">{s.publisher||s.title||s.url}</a>)}</div>}
+    <div className="admin-form-actions"><button type="button" className="admin-primary" disabled={busy} onClick={()=>void restoreResultToDraft()}>{t('Load this result into Draft','이 결과를 초안으로 불러오기')}</button><button type="button" className="admin-secondary" onClick={()=>setResultPreview(null)}>{t('Close','닫기')}</button></div>
+   </section>
+  </div>}
  </section>;
 }

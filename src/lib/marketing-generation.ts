@@ -232,8 +232,15 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
    const images=input.visual_mode==='photo'?await generatePhoto(db,draft,input,job):await renderCards(db,draft,job);await progress(db,job,'saving_images');
    draft=await savePartial(db,draft,{images,last_regeneration_mode:input.mode,last_regeneration_instruction:input.instruction});
   }
-  checked(await db.from('marketing_generation_jobs').update({status:'completed',stage:'complete',updated_at:new Date().toISOString()}).eq('id',job.id).eq('status','running'));
-  return {draft,job:{...job,status:'completed',stage:'complete'},deduplicated:false};
+  const resultSnapshot={
+   draft_id:draft.id,draft_date:draft.draft_date,caption:draft.caption,cta:draft.cta,destination_url:draft.destination_url,
+   images:draft.images||[],carousel_slides:draft.carousel_slides||[],research_sources:draft.research_sources||[],
+   research_status:draft.research_status,content_language:draft.content_language,draft_kind:draft.draft_kind,
+   growth_topic_type:draft.growth_topic_type,content_mode:draft.content_mode,content_pillar:draft.content_pillar,
+   generation_reason:draft.generation_reason,event_id:draft.event_id||null,revision:draft.revision,saved_at:new Date().toISOString()
+  };
+  checked(await db.from('marketing_generation_jobs').update({status:'completed',stage:'complete',result_snapshot:resultSnapshot,result_revision:draft.revision,updated_at:new Date().toISOString()}).eq('id',job.id).eq('status','running'));
+  return {draft,job:{...job,status:'completed',stage:'complete',result_snapshot:resultSnapshot,result_revision:draft.revision},deduplicated:false};
  }catch(error){
   const message=safeError(error),code=error instanceof GenerationError?error.code:'GENERATION_FAILED',unknown=code==='UPSTREAM_OUTCOME_UNKNOWN';
   await db.from('marketing_generation_jobs').update({status:unknown?'uncertain':'failed',stage:'stopped',error_code:code,error_message:message,updated_at:new Date().toISOString()}).eq('id',job.id).eq('status','running');

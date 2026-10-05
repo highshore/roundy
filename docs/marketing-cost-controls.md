@@ -52,3 +52,8 @@ Deterministic application-validation failures do not trip the global circuit bre
 ## Generation threads
 
 A user-visible generation task is a thread, not an individual provider attempt. The first request owns the thread ID and attempt 1. Explicit retries reuse that thread ID and increment the attempt number while retaining each attempt's error, token usage and reservation. Only the latest failed attempt can be retried. Once any attempt completes, the thread is presented as Completed and historical failures remain nested inside the thread for auditability. New manual generation requests still create new threads even when their settings happen to match an older completed task.
+
+
+## Immutable generated results
+
+Each completed generation attempt stores an immutable `result_snapshot` containing its caption, cards/images, sources, language, content mode and related draft metadata. Later generations may replace the current working draft, but they do not replace prior snapshots. Generation History exposes View result. An administrator may explicitly restore a completed snapshot into its still-editable draft; restoration increments the draft revision and never publishes automatically. Results generated before this snapshot feature can only be backfilled when the current draft still exactly corresponds to that completed attempt.
