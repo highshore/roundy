@@ -1,0 +1,47 @@
+name: Editorial repair verification
+on:
+  push:
+    branches: ['fix/marketing-editorial-quality-v2']
+    paths: ['scripts/apply-editorial-repair.mjs']
+permissions:
+  contents: write
+jobs:
+  patch-and-verify:
+    if: github.ref == 'refs/heads/fix/marketing-editorial-quality-v2'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/marketing-editorial-quality-v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node scripts/apply-editorial-repair.mjs
+      - run: npm run typecheck
+      - run: npm test
+      - run: node scripts/test-marketing-generation.mjs
+      - run: node scripts/test-marketing-renderer.mjs
+      - name: Preserve verification artifacts
+        if: always()
+        run: |
+          mkdir -p quality-artifacts
+          git diff > quality-artifacts/patch.diff
+          tar --exclude=node_modules --exclude=.git --exclude=.next --exclude=quality-artifacts -czf quality-artifacts/source.tgz src scripts package.json package-lock.json tsconfig.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: editorial-quality-verification
+          path: quality-artifacts
+          retention-days: 3
+      - name: Commit verified patch only to the repair branch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src scripts/test-marketing-generation.mjs scripts/test-marketing-renderer.mjs scripts/marketing-fixtures.cjs .github/workflows/ci.yml docs
+          if ! git diff --cached --quiet; then
+            git commit -m 'Integrate editorial quality gates and verified role-specific rendering'
+            git push origin HEAD:fix/marketing-editorial-quality-v2
+          fi
