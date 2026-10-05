@@ -158,7 +158,7 @@ export function evaluateContent(value:unknown,type:PostType,language:string,sour
  if(type==='book_insight'){
   const b=c.book||{},source=known.get(b.source_id),evidence=norm(source?.title+' '+source?.evidence);
   if(!str(b.title)||!str(b.author)||!str(b.source_context)||!source)add('책 제목, 저자, 재구성 설명과 출처가 필요합니다.');
-  else if(!evidence.includes(norm(b.title))||!evidence.includes(norm(b.author)))add('책 제목과 저자가 인용된 자료에서 확인되지 않습니다.');
+  else {const titleCore=norm(str(b.title).split(/[:—–-]/)[0]),authorParts=str(b.author).split(/\s+/).map((x:string)=>norm(x)).filter((x:string)=>x.length>1);const authorHits=authorParts.filter((x:string)=>evidence.includes(x)).length;if(!evidence.includes(titleCore)||authorHits<Math.min(2,authorParts.length))add('책 제목과 저자가 인용된 자료에서 확인되지 않습니다.');}
  }
  // RESEARCH_DOCUMENT_METADATA: fail closed on missing bibliographic context, not on arbitrary JSON decoration.
  if(['trend_research','dating_myth'].includes(type)){
