@@ -23,3 +23,4 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: node scripts/test-marketing-generation.mjs
+      - run: node scripts/test-marketing-renderer.mjs
