@@ -54,7 +54,8 @@ export function AdminMarketing({locale}:{locale:Locale}){
    RETRY_CONFIRMATION_REQUIRED:['Confirm the retry before starting a new API request.','새 API 요청을 시작하기 전에 재시도를 확인하세요.'],
    RETRY_ONLY_FAILED_MANUAL:['Only failed manual generation jobs can be retried from history.','생성 기록에서는 실패한 수동 작업만 재시도할 수 있습니다.'],
    RETRY_PAYLOAD_UNAVAILABLE:['This older failure does not have enough saved settings to retry exactly.','이전 실패 기록에 동일 설정을 복원할 정보가 부족합니다.'],
-   CONFIRM_PAID_PHOTO_FIRST:['Paid photo retry requires explicit confirmation.','유료 사진 재시도는 별도 확인이 필요합니다.']
+   CONFIRM_PAID_PHOTO_FIRST:['Paid photo retry requires explicit confirmation.','유료 사진 재시도는 별도 확인이 필요합니다.'],
+   GENERATION_THREAD_NOT_RETRYABLE:['Only the latest failed attempt in this generation thread can be retried. Refresh the history first.','이 생성 스레드의 가장 최근 실패 시도만 재시도할 수 있습니다. 생성 기록을 새로고침하세요.']
   };
   return map[message]?t(...map[message]):message;
  }
@@ -100,8 +101,19 @@ export function AdminMarketing({locale}:{locale:Locale}){
  function stage(s:string){const labels:Record<string,string>={reserved:t('Reserved; duplicate checks passed','예산 예약 및 중복 검사 완료'),writing:t('Writing copy','문구 작성 중'),researching:t('One web search and copy','웹 검색 최대 1회 및 문구 작성 중'),saving_copy:t('Saving copy','문구 저장 중'),generating_photo:t('Generating one photo','사진 1장 생성 중'),saving_photo:t('Saving photo','사진 저장 중'),saving_images:t('Saving images','이미지 저장 중'),complete:t('Complete','완료'),stopped:t('Stopped','중지')};return labels[s]||s.replace('rendering_','카드 생성 ').replace('_of_',' / ');}
  function changeDraft(key:string,value:string){setDraft(d=>d?{...d,[key]:value}:d);setDirty(true);}
  const allGenerationJobs=((generation?.jobs||[]) as Row[]);
- const filteredGenerationJobs=allGenerationJobs.filter((j:Row)=>generationFilter==='all'||generationFilter==='running'?generationFilter==='all'||j.status==='running':j.status===generationFilter);
- const visibleGenerationJobs=filteredGenerationJobs.slice(0,generationVisible);
+ const threadMap=new Map<string,Row[]>();
+ for(const job of [...allGenerationJobs].reverse()){
+  const threadId=String(job.generation_thread_id||job.id);
+  const attempts=threadMap.get(threadId)||[];attempts.push(job);threadMap.set(threadId,attempts);
+ }
+ const generationThreads=[...threadMap.entries()].map(([id,attempts])=>{
+  attempts.sort((a:Row,b:Row)=>Number(a.attempt_number||0)-Number(b.attempt_number||0)||Date.parse(a.created_at)-Date.parse(b.created_at));
+  const latest=attempts[attempts.length-1],root=attempts[0];
+  const status=attempts.some((a:Row)=>a.status==='completed')?'completed':latest.status;
+  return {id,attempts,latest,root,status,total_reserved_usd:attempts.reduce((sum:number,a:Row)=>sum+Number(a.reserved_usd||0),0),created_at:root.created_at,updated_at:latest.updated_at||latest.created_at};
+ }).sort((a:Row,b:Row)=>Date.parse(b.updated_at)-Date.parse(a.updated_at));
+ const filteredGenerationThreads=generationThreads.filter((thread:Row)=>generationFilter==='all'||thread.status===generationFilter);
+ const visibleGenerationThreads=filteredGenerationThreads.slice(0,generationVisible);
  const channelRuns=((data.runs||[]) as Row[]).filter((r:Row)=>r.channel===channel);
  const visibleRuns=channelRuns.slice(0,publishVisible);
  const tabItems=[
@@ -118,7 +130,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
   <div className="admin-heading"><p className="admin-kicker">ROUNDY ADMIN</p><Heading level={1}>{t('Marketing','마케팅')}</Heading><p>{t('Generate safely. Review once. Publish only after approval.','안전하게 생성하고 검토한 뒤, 승인한 콘텐츠만 게시합니다.')}</p></div>
   <div className="admin-form-actions">{(['instagram','koreapas'] as const).map(c=><button type="button" key={c} className={channel===c?'admin-primary':'admin-secondary'} onClick={()=>setChannel(c)}>{c==='instagram'?'Instagram @roundy.meet':'Koreapas'}</button>)}<button type="button" className="admin-secondary" disabled={busy} onClick={()=>void work(()=>load(draft?.id))}>{t('Refresh status','상태 새로고침')}</button></div>
   {error&&<p className="admin-error" role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}
-  {channel==='instagram'&&<nav className="marketing-subtabs" aria-label={t('Marketing sections','마케팅 메뉴')} role="tablist">{tabItems.map(([value,label])=><button key={value} type="button" role="tab" aria-selected={activeTab===value} className={activeTab===value?'active':''} onClick={()=>setActiveTab(value)}>{label}{value==='generation'&&allGenerationJobs.some((j:Row)=>j.status==='failed')&&<span className="marketing-tab-dot" aria-label={t('Failed generation exists','실패한 생성 있음')}/>}</button>)}</nav>}
+  {channel==='instagram'&&<nav className="marketing-subtabs" aria-label={t('Marketing sections','마케팅 메뉴')} role="tablist">{tabItems.map(([value,label])=><button key={value} type="button" role="tab" aria-selected={activeTab===value} className={activeTab===value?'active':''} onClick={()=>setActiveTab(value)}>{label}{value==='generation'&&generationThreads.some((thread:Row)=>thread.status==='failed')&&<span className="marketing-tab-dot" aria-label={t('Failed generation exists','실패한 생성 있음')}/>}</button>)}</nav>}
   {channel==='instagram'&&activeTab==='draft'&&<>
    <div className="marketing-setup"><strong>{t('API cost guard','API 비용 안전장치')}</strong><p>{t('Reserved today','오늘 예약액')} ${Number(generation?.usage?.daily_reserved_usd||0).toFixed(2)} / $0.25. {t('This month','이번 달')} ${Number(generation?.usage?.monthly_reserved_usd||0).toFixed(2)} / $3.00. {t('API attempts today','오늘 API 요청')} {generation?.usage?.daily_attempts||0}. {t('Safety-counted jobs','안전 카운트')} {generation?.usage?.daily_calls||0}/5.</p><p className="admin-help">{t('No automatic retries or paid-provider fallback. Failed/unknown attempts retain reservations. Automatic posts use cards, not paid photos. Photos: 1/day, 10/month. External account spending is separate.','자동 재시도와 다른 유료 API로의 전환은 없습니다. 실패하거나 응답이 불명확한 작업도 예약액을 유지합니다. 자동 생성은 카드 이미지이며 유료 사진은 하루 1장, 월 10장까지만 가능합니다. 다른 서비스의 API 사용액은 이 한도에 포함되지 않습니다.')}</p>
     {!generation?.provider?.configured&&<p className="admin-error">{t('OPENAI_API_KEY is missing from this deployment. Configure Vercel Production and redeploy.','이 배포에 OPENAI_API_KEY가 없습니다. Vercel Production 설정 후 재배포가 필요합니다.')}</p>}
@@ -151,19 +163,25 @@ export function AdminMarketing({locale}:{locale:Locale}){
   {channel==='instagram'&&activeTab==='generation'&&<section className="marketing-tab-panel">
    <div className="admin-section-title"><div><p className="admin-kicker">{t('Activity','활동')}</p><Heading level={2}>{t('Generation history','생성 기록')}</Heading></div><button type="button" className="admin-secondary" disabled={busy} onClick={()=>void work(()=>load(draft?.id))}>{t('Refresh','새로고침')}</button></div>
    <div className="marketing-filter-chips" role="group" aria-label={t('Generation status filter','생성 상태 필터')}>{([['all',t('All','전체')],['completed',t('Completed','완료')],['failed',t('Failed','실패')],['running',t('Running','진행 중')]] as const).map(([value,label])=><button type="button" key={value} aria-pressed={generationFilter===value} onClick={()=>{setGenerationFilter(value);setGenerationVisible(20);}}>{label}</button>)}</div>
-   <div className="marketing-log-list">{visibleGenerationJobs.length?visibleGenerationJobs.map((j:Row)=>{
-    const sourceDraft=data.drafts.find((d:Row)=>d.id===j.draft_id),canRetry=j.status==='failed'&&!j.automatic&&!!j.request_payload&&sourceDraft?.status==='needs_approval';
-    const language=j.request_payload?.language==='en'?'EN':j.request_payload?.language==='ko'?'KO':'';
-    return <details className={'marketing-log-row '+j.status} key={j.id}>
-     <summary><div className="marketing-log-main"><span className={'marketing-status-dot '+j.status}/><div><strong>{new Date(j.created_at).toLocaleString(locale,{timeZone:'Asia/Seoul'})}</strong><small>{contentLabel(j)}{language?' · '+language:''} · {j.operation}</small></div></div><div className="marketing-log-end"><span className={'marketing-status-pill '+j.status}>{statusText(j.status)}</span><small>{'$'+Number(j.reserved_usd).toFixed(2)}</small></div></summary>
-     <div className="marketing-log-detail">
-      {j.error_message&&<p className="admin-error">{friendlyError(j.error_message)}</p>}
-      <dl><div><dt>{t('Job ID','작업 ID')}</dt><dd>{j.id}</dd></div><div><dt>{t('Tokens','토큰')}</dt><dd>{Number(j.input_tokens||0).toLocaleString()} in / {Number(j.output_tokens||0).toLocaleString()} out</dd></div>{j.retry_of_job_id&&<div><dt>{t('Retry of','재시도 원본')}</dt><dd>{j.retry_of_job_id}</dd></div>}</dl>
-      {canRetry&&<button type="button" className="admin-secondary" disabled={busy||!!running} onClick={e=>{e.preventDefault();void retryJob(j);}}>{t('Retry same settings','같은 설정으로 재시도')}</button>}
+   <div className="marketing-log-list">{visibleGenerationThreads.length?visibleGenerationThreads.map((thread:Row)=>{
+    const latest=thread.latest as Row,root=thread.root as Row,attempts=thread.attempts as Row[];
+    const sourceDraft=data.drafts.find((d:Row)=>d.id===latest.draft_id);
+    const canRetry=thread.status==='failed'&&!latest.automatic&&!!latest.request_payload&&sourceDraft?.status==='needs_approval';
+    const language=root.request_payload?.language==='en'?'EN':root.request_payload?.language==='ko'?'KO':'';
+    return <details className={'marketing-log-row generation-thread '+thread.status} key={thread.id}>
+     <summary><div className="marketing-log-main"><span className={'marketing-status-dot '+thread.status}/><div><strong>{contentLabel(root)}{language?' · '+language:''}</strong><small>{new Date(root.created_at).toLocaleString(locale,{timeZone:'Asia/Seoul'})} · {attempts.length} {t('attempts','회 시도')} · {root.operation}</small></div></div><div className="marketing-log-end"><span className={'marketing-status-pill '+thread.status}>{statusText(thread.status)}</span><small>{'$'+Number(thread.total_reserved_usd).toFixed(2)}</small></div></summary>
+     <div className="marketing-log-detail generation-thread-detail">
+      <div className="generation-attempts">{attempts.map((attempt:Row,index:number)=><div className={'generation-attempt '+attempt.status} key={attempt.id}>
+       <span className={'marketing-status-dot '+attempt.status}/>
+       <div className="generation-attempt-copy"><div><strong>{t('Attempt','시도')} {Number(attempt.attempt_number||index+1)}</strong><span className={'marketing-status-pill '+attempt.status}>{statusText(attempt.status)}</span></div><small>{new Date(attempt.created_at).toLocaleString(locale,{timeZone:'Asia/Seoul'})} · {'$'+Number(attempt.reserved_usd||0).toFixed(2)} · {Number(attempt.input_tokens||0).toLocaleString()} in / {Number(attempt.output_tokens||0).toLocaleString()} out</small>{attempt.error_message&&<p className="admin-error">{friendlyError(attempt.error_message)}</p>}</div>
+      </div>)}</div>
+      <dl><div><dt>{t('Thread ID','스레드 ID')}</dt><dd>{thread.id}</dd></div><div><dt>{t('Attempts','시도 횟수')}</dt><dd>{attempts.length}</dd></div><div><dt>{t('Total reserved','총 예약액')}</dt><dd>{'$'+Number(thread.total_reserved_usd).toFixed(2)}</dd></div></dl>
+      {canRetry&&<button type="button" className="admin-secondary" disabled={busy||!!running} onClick={e=>{e.preventDefault();void retryJob(latest);}}>{t('Retry same settings','같은 설정으로 재시도')}</button>}
+      {thread.status==='completed'&&<p className="marketing-thread-success">{t('This generation thread is complete. Earlier failed attempts are kept only for history.','이 생성 스레드는 완료됐습니다. 이전 실패 시도는 기록용으로만 보존됩니다.')}</p>}
      </div>
     </details>;
-   }):<p className="admin-empty">{t('No generation jobs match this filter.','해당 조건의 생성 기록이 없습니다.')}</p>}</div>
-   {filteredGenerationJobs.length>generationVisible&&<button type="button" className="marketing-load-more" onClick={()=>setGenerationVisible(v=>v+20)}>{t('Load 20 more','20개 더 보기')}</button>}
+   }):<p className="admin-empty">{t('No generation threads match this filter.','해당 조건의 생성 스레드가 없습니다.')}</p>}</div>
+   {filteredGenerationThreads.length>generationVisible&&<button type="button" className="marketing-load-more" onClick={()=>setGenerationVisible(v=>v+20)}>{t('Load 20 more','20개 더 보기')}</button>}
   </section>}
   {channel==='instagram'&&activeTab==='automation'&&<section className="marketing-tab-panel">   {settings&&<div className="marketing-settings-card"><div className="admin-section-title"><div><p className="admin-kicker">{t('Schedule','스케줄')}</p><Heading level={2}>{t('Automation settings','자동화 설정')}</Heading></div></div><form className="admin-form" onSubmit={e=>{e.preventDefault();void work(async()=>{await mutate('/settings',settings,'PUT');await load(draft?.id);setNotice(t('Automation saved.','자동화 설정을 저장했습니다.'));});}}>
     <label className="check-row"><input type="checkbox" checked={settings.daily_instagram_enabled} onChange={e=>setSettings({...settings,daily_instagram_enabled:e.target.checked})}/>{t('One automatic draft per day','매일 완성된 초안 1개 자동 생성')}</label><label>{t('Generation time KST','생성 시간 KST')}<input type="time" value={settings.draft_generation_time_kst.slice(0,5)} onChange={e=>setSettings({...settings,draft_generation_time_kst:e.target.value})}/></label><p className="admin-help">{t('Checked every 15 minutes after this time. One dispatch per date, even on failure.','이 시간 이후 15분 간격으로 확인합니다. 실패해도 해당 날짜에는 자동 호출을 반복하지 않습니다.')}</p>

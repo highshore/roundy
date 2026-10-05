@@ -46,15 +46,17 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
   if(!original.request_payload||typeof original.request_payload!=='object')return json({error:'RETRY_PAYLOAD_UNAVAILABLE'},400);
   const isPhoto=['photo','copy_photo'].includes(original.operation);
   if(isPhoto&&confirmation.confirm_paid_photo!==true)return json({error:'CONFIRM_PAID_PHOTO_FIRST'},400);
+  const threadId=original.generation_thread_id||original.id;
+  const latest=checked(await service.from('marketing_generation_jobs').select('*').eq('generation_thread_id',threadId).order('attempt_number',{ascending:false}).order('created_at',{ascending:false}).limit(1).maybeSingle())||original;
+  if(latest.id!==original.id||latest.status!=='failed')return json({error:'GENERATION_THREAD_NOT_RETRYABLE'},409);
   const currentDraft=checked(await service.from('instagram_post_drafts').select('id,status,revision').eq('id',original.draft_id).maybeSingle());
   if(!currentDraft)return json({error:'Draft not found'},404);
   if(currentDraft.status!=='needs_approval')return json({error:'DRAFT_NOT_EDITABLE'},409);
   const user=(await db.auth.getUser()).data.user;if(!user)return json({error:'Sign in required'},401);
-  const retryPayload={...original.request_payload,request_key:'retry:'+randomUUID(),revision:currentDraft.revision,confirm_photo:isPhoto};
-  const result=await runGeneration(currentDraft.id,retryPayload,user.id);
-  const retriedJob=result.job as Record<string,unknown>|undefined;
-  if(typeof retriedJob?.id==='string')await service.from('marketing_generation_jobs').update({retry_of_job_id:original.id}).eq('id',retriedJob.id);
-  return json({...result,retry_of_job_id:original.id},result.error?400:200);
+  const retryPayload={...latest.request_payload,request_key:'retry:'+randomUUID(),revision:currentDraft.revision,confirm_photo:isPhoto};
+  const nextAttempt=Math.max(1,Number(latest.attempt_number||1))+1;
+  const result=await runGeneration(currentDraft.id,retryPayload,user.id,false,{threadId,attemptNumber:nextAttempt,retryOfJobId:latest.id});
+  return json({...result,generation_thread_id:threadId,attempt_number:nextAttempt,retry_of_job_id:latest.id},result.error?400:200);
  }
  if(id==='draft'&&path[1]==='generate'&&path.length===2&&req.method==='POST'){
   const body=await req.json().catch(()=>null);

@@ -3380,3 +3380,16 @@ html:lang(ko) .legal-intro h1{word-break:keep-all}
  .marketing-log-detail{padding:13px}
  .marketing-log-detail dl>div{grid-template-columns:72px minmax(0,1fr)}
 }
+
+/* Generation retry threads (2026-10-05). */
+.generation-thread-detail{gap:16px}
+.generation-attempts{display:grid;gap:0;border-left:1px solid var(--border);margin-left:6px}
+.generation-attempt{position:relative;display:grid;grid-template-columns:16px minmax(0,1fr);gap:8px;padding:0 0 16px 0;margin-left:-8px}
+.generation-attempt:last-child{padding-bottom:0}
+.generation-attempt>.marketing-status-dot{margin-top:5px;background-clip:padding-box;box-shadow:0 0 0 4px var(--paper)}
+.generation-attempt-copy{display:grid;gap:5px;min-width:0}
+.generation-attempt-copy>div{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.generation-attempt-copy strong{font-size:12px}
+.generation-attempt-copy>small{font-size:10px;color:var(--muted);line-height:1.45}
+.generation-attempt-copy .admin-error{margin:2px 0 0;padding:9px 10px;font-size:11px;line-height:1.45}
+.marketing-thread-success{padding:10px 12px;border-radius:12px;background:#e9f3e8;color:#35673b;font-size:11px;line-height:1.5}
