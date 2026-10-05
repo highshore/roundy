@@ -49,6 +49,17 @@ function slide(value:Row,index:number,total:number){
  return {eyebrow:String(value.eyebrow||'ROUNDY NOTES').slice(0,40),title:value.title.trim().slice(0,90),body:value.body.trim().slice(0,320),source_label:String(value.source_label||'').slice(0,100),variant:index===0?'hook':index===total-1?'roundy':'content'};
 }
 function sourceRows(value:unknown){if(!Array.isArray(value))return [];return value.slice(0,3).filter((x:Row)=>{try{return new URL(x.url).protocol==='https:';}catch{return false;}}).map((x:Row)=>({title:String(x.title||'').slice(0,160),publisher:String(x.publisher||'').slice(0,80),url:String(x.url).slice(0,1000),date:String(x.date||'').slice(0,40)}));}
+function parseGeneratedJson(raw:string):Row{
+ const trimmed=raw.trim();
+ const unfenced=trimmed.replace(/^\`\`\`(?:json)?\s*/i,'').replace(/\s*\`\`\`$/,'').trim();
+ try{return JSON.parse(unfenced) as Row;}catch{
+  const first=unfenced.indexOf('{'),last=unfenced.lastIndexOf('}');
+  if(first>=0&&last>first){
+   try{return JSON.parse(unfenced.slice(first,last+1)) as Row;}catch{}
+  }
+  throw new Error('AI_RETURNED_INVALID_JSON');
+ }
+}
 async function nextContentLanguage(db:DB,excludeId?:string):Promise<ContentLanguage>{
  const history=checked(await db.from('instagram_post_drafts').select('id,content_language,draft_date,caption').order('draft_date',{ascending:false}).limit(30)).data as Row[];
  const previous=(history||[]).find(row=>row.id!==excludeId&&['ko','en'].includes(row.content_language)&&String(row.caption||'').trim());
@@ -106,14 +117,14 @@ async function generateCopy(db:DB,draft:Row,input:GenerationInput,job:Row,resear
  await progress(db,job,research?'researching':'writing');
  let raw:string,result:Row;
  if(research){
-  result=await upstream('responses',{model:COPY_MODEL,instructions,input:JSON.stringify(payload),tools:[{type:'web_search',search_context_size:'low'}],max_tool_calls:1,include:['web_search_call.action.sources'],max_output_tokens:4096,text:{format:{type:'json_object'}},store:false},65000);
+  result=await upstream('responses',{model:COPY_MODEL,instructions,input:JSON.stringify(payload),tools:[{type:'web_search',search_context_size:'low',external_web_access:true}],tool_choice:'required',max_tool_calls:1,include:['web_search_call.action.sources'],max_output_tokens:4096,store:false},65000);
   if(result.status&&result.status!=='completed')throw new Error('RESEARCH_OUTPUT_INCOMPLETE');
   raw=(result.output||[]).filter((x:Row)=>x.type==='message').flatMap((x:Row)=>x.content||[]).filter((x:Row)=>x.type==='output_text').map((x:Row)=>String(x.text)).join('\n');
  }else{
   result=await upstream('chat/completions',{model:COPY_MODEL,temperature:.6,max_completion_tokens:4096,response_format:{type:'json_object'},messages:[{role:'system',content:instructions},{role:'user',content:JSON.stringify(payload)}]},45000);
   if(result.choices?.[0]?.finish_reason!=='stop')throw new Error('COPY_OUTPUT_INCOMPLETE');raw=result.choices[0].message.content;
  }
- const content=normalizePositioning(JSON.parse(raw) as Row,language);
+ const content=normalizePositioning(parseGeneratedJson(raw),language);
  if(typeof content.caption!=='string'||!content.caption.trim()||content.caption.length>1500||typeof content.cta!=='string'||content.cta.length>80)throw new Error('INVALID_GENERATED_COPY');
  const count=growth?6:3;if(!Array.isArray(content.slides)||content.slides.length!==count)throw new Error('INVALID_SLIDE_COUNT');
  const sources=research?sourceRows(content.sources):[];if(research&&!sources.length)throw new Error('RESEARCH_SOURCES_MISSING');
