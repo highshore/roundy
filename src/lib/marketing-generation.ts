@@ -49,22 +49,29 @@ function slide(value:Row,index:number,total:number){
  return {eyebrow:String(value.eyebrow||'ROUNDY NOTES').slice(0,40),title:value.title.trim().slice(0,90),body:value.body.trim().slice(0,320),source_label:String(value.source_label||'').slice(0,100),variant:index===0?'hook':index===total-1?'roundy':'content'};
 }
 function sourceRows(value:unknown){if(!Array.isArray(value))return [];return value.slice(0,3).filter((x:Row)=>{try{return new URL(x.url).protocol==='https:';}catch{return false;}}).map((x:Row)=>({title:String(x.title||'').slice(0,160),publisher:String(x.publisher||'').slice(0,80),url:String(x.url).slice(0,1000),date:String(x.date||'').slice(0,40)}));}
-function researchSourcesFromResponse(result:Row):Row[]{
- const found=new Map<string,Row>();
+function researchEvidenceFromResponse(result:Row):{sources:Row[];searchCompleted:boolean}{
+ const found=new Map<string,Row>();let searchCompleted=false;
  const add=(item:Row)=>{
-  const raw=String(item?.url||'').trim();if(!raw)return;
+  const nested=item?.url_citation&&typeof item.url_citation==='object'?item.url_citation:item;
+  const raw=String(nested?.url||item?.source_website_url||'').trim();if(!raw)return;
   let parsed:URL;try{parsed=new URL(raw);if(parsed.protocol!=='https:')return;}catch{return;}
   const url=(parsed.origin+parsed.pathname+parsed.search).slice(0,1000);
-  const publisher=String(item?.publisher||'').trim()||parsed.hostname.replace(/^www\./,'');
-  const title=String(item?.title||'').trim()||publisher;
+  const publisher=String(nested?.publisher||'').trim()||parsed.hostname.replace(/^www\./,'');
+  const title=String(nested?.title||item?.caption||'').trim()||publisher;
   const previous=found.get(url);
-  if(!previous||previous.title===previous.publisher)found.set(url,{title:title.slice(0,160),publisher:publisher.slice(0,80),url,date:String(item?.date||'').slice(0,40)});
+  if(!previous||previous.title===previous.publisher)found.set(url,{title:title.slice(0,160),publisher:publisher.slice(0,80),url,date:String(nested?.date||'').slice(0,40)});
  };
  for(const output of Array.isArray(result.output)?result.output:[]){
-  if(output?.type==='web_search_call'&&Array.isArray(output.action?.sources))for(const item of output.action.sources)add(item);
+  if(output?.type==='web_search_call'){
+   if(output.status==='completed')searchCompleted=true;
+   if(Array.isArray(output.action?.sources))for(const item of output.action.sources)add(item);
+   if(typeof output.action?.url==='string')add({url:output.action.url});
+   if(Array.isArray(output.results))for(const item of output.results)add(item);
+  }
   if(output?.type==='message')for(const part of Array.isArray(output.content)?output.content:[])for(const annotation of Array.isArray(part.annotations)?part.annotations:[])if(annotation?.type==='url_citation')add(annotation);
  }
- return [...found.values()].slice(0,5);
+ if(Array.isArray(result.sources))for(const item of result.sources)add(item);
+ return {sources:[...found.values()].slice(0,5),searchCompleted};
 }
 function parseGeneratedJson(raw:string):Row{
  const trimmed=raw.trim();
@@ -161,10 +168,11 @@ async function generateCopy(db:DB,draft:Row,input:GenerationInput,job:Row,resear
  if(typeof content.caption!=='string'||!content.caption.trim()||content.caption.length>1500||typeof content.cta!=='string'||content.cta.length>80)throw new Error('INVALID_GENERATED_COPY');
  const normalizedSlides=normalizeCarouselSlides(content.slides,growth),count=normalizedSlides.length;
  content.slides=normalizedSlides;
- const sources=research?researchSourcesFromResponse(result):[];
- if(research&&!sources.length)throw new Error('RESEARCH_TOOL_SOURCES_MISSING');
-
- return {caption:content.caption.trim(),cta:content.cta.trim(),content_language:language,content_pillar:['problem','concept','seoul','trust','event','urgency'].includes(content.content_pillar)?content.content_pillar:'concept',generation_reason:String(content.generation_reason||'AI copy with cost-controlled generation.').slice(0,1000),carousel_slides:content.slides.map((s:Row,i:number)=>slide(s,i,count)),research_sources:sources,research_status:research?'generated':growth?'generated':'not_required',draft_kind:growth?'growth_carousel':'brand',growth_topic_type:growth?input.topic_type||'conversation_prompt':null,content_mode:facts?'live_event':'prelaunch',event_id:facts?.id||null,destination_url:facts?'https://roundy.team/events/'+facts.slug:'https://roundy.team'};
+ const evidence=research?researchEvidenceFromResponse(result):{sources:[] as Row[],searchCompleted:false};
+ if(research&&!evidence.searchCompleted)throw new Error('RESEARCH_SEARCH_NOT_EXECUTED');
+ const researchStatus=research?(evidence.sources.length?'generated':'generated_without_sources'):growth?'generated':'not_required';
+ const reason=String(content.generation_reason||'AI copy with cost-controlled generation.')+(research&&!evidence.sources.length?' Web Search completed, but source metadata was unavailable; manual fact-check required before publishing.':'');
+ return {caption:content.caption.trim(),cta:content.cta.trim(),content_language:language,content_pillar:['problem','concept','seoul','trust','event','urgency'].includes(content.content_pillar)?content.content_pillar:'concept',generation_reason:reason.slice(0,1000),carousel_slides:content.slides.map((s:Row,i:number)=>slide(s,i,count)),research_sources:evidence.sources,research_status:researchStatus,draft_kind:growth?'growth_carousel':'brand',growth_topic_type:growth?input.topic_type||'conversation_prompt':null,content_mode:facts?'live_event':'prelaunch',event_id:facts?.id||null,destination_url:facts?'https://roundy.team/events/'+facts.slug:'https://roundy.team'};
 }
 async function savePartial(db:DB,draft:Row,patch:Row){
  const r=checked(await db.from('instagram_post_drafts').update({...patch,revision:draft.revision+1,regenerated_at:new Date().toISOString()}).eq('id',draft.id).eq('status','needs_approval').eq('revision',draft.revision).select('*').maybeSingle());if(!r.data)throw new Error('DRAFT_CHANGED_DURING_GENERATION');return r.data as Row;
@@ -222,16 +230,16 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
   const message=safeError(error),code=error instanceof GenerationError?error.code:'GENERATION_FAILED',unknown=code==='UPSTREAM_OUTCOME_UNKNOWN';
   await db.from('marketing_generation_jobs').update({status:unknown?'uncertain':'failed',stage:'stopped',error_code:code,error_message:message,updated_at:new Date().toISOString()}).eq('id',job.id).eq('status','running');
   if(error instanceof GenerationError&&error.block)await db.from('marketing_ai_control').update({blocked_reason:message,updated_at:new Date().toISOString()}).eq('singleton',true);
-  const recent=await db.from('marketing_generation_jobs').select('status').gt('reserved_usd',0).order('created_at',{ascending:false}).limit(3);
-  if(recent.data?.length===3&&recent.data.every((j:Row)=>['failed','uncertain'].includes(j.status)))await db.from('marketing_ai_control').update({blocked_reason:'최근 유료 생성 3회가 실패했습니다. 설정 확인 후 명시적으로 재개하세요.'}).eq('singleton',true);
+  // Only upstream/configuration errors and unknown network outcomes trip the circuit breaker.
+  // Deterministic app validation failures remain manual-retryable and never pause all AI work.
   return {draft:await readDraft(db,draftId),job:{...job,status:unknown?'uncertain':'failed',error_code:code,error_message:message},error:message};
  }
 }
 export async function generationOverview(){
  const db=createServiceRoleClient(),date=kstDate(),month=date.slice(0,7)+'-01';
- const [control,jobs,usage,dispatch]=await Promise.all([readControl(db),db.from('marketing_generation_jobs').select('*').order('created_at',{ascending:false}).limit(20),db.from('marketing_generation_jobs').select('reserved_usd,created_at,operation').gte('created_at',month+'T00:00:00+09:00'),db.from('marketing_generation_dispatches').select('dispatch_date,requested_at').eq('dispatch_date',date).maybeSingle()]);
- checked(jobs);checked(usage);checked(dispatch);const rows=usage.data||[],dayStart=Date.parse(date+'T00:00:00+09:00');
- return {control,jobs:jobs.data,dispatch:dispatch.data,usage:{daily_reserved_usd:rows.filter(r=>Date.parse(r.created_at)>=dayStart).reduce((sum,r)=>sum+Number(r.reserved_usd),0),monthly_reserved_usd:rows.reduce((sum,r)=>sum+Number(r.reserved_usd),0),daily_calls:rows.filter(r=>Date.parse(r.created_at)>=dayStart&&Number(r.reserved_usd)>0).length,daily_call_limit:5,monthly_call_limit:90,photo_daily_limit:1,photo_monthly_limit:10},provider:{configured:!!process.env.OPENAI_API_KEY?.trim(),copy_model:COPY_MODEL,image_model:IMAGE_MODEL,automatic_photos:false,retries:0}};
+ const [control,jobs,usage,dispatch]=await Promise.all([readControl(db),db.from('marketing_generation_jobs').select('*').order('created_at',{ascending:false}).limit(20),db.from('marketing_generation_jobs').select('reserved_usd,created_at,operation,status').gte('created_at',month+'T00:00:00+09:00'),db.from('marketing_generation_dispatches').select('dispatch_date,requested_at').eq('dispatch_date',date).maybeSingle()]);
+ checked(jobs);checked(usage);checked(dispatch);const rows=usage.data||[],dayStart=Date.parse(date+'T00:00:00+09:00'),todayRows=rows.filter(r=>Date.parse(r.created_at)>=dayStart);
+ return {control,jobs:jobs.data,dispatch:dispatch.data,usage:{daily_reserved_usd:todayRows.reduce((sum,r)=>sum+Number(r.reserved_usd),0),monthly_reserved_usd:rows.reduce((sum,r)=>sum+Number(r.reserved_usd),0),daily_attempts:todayRows.filter(r=>Number(r.reserved_usd)>0).length,daily_calls:todayRows.filter(r=>Number(r.reserved_usd)>0&&['running','completed','uncertain'].includes(r.status)).length,daily_call_limit:5,monthly_call_limit:90,photo_daily_limit:1,photo_monthly_limit:10},provider:{configured:!!process.env.OPENAI_API_KEY?.trim(),copy_model:COPY_MODEL,image_model:IMAGE_MODEL,automatic_photos:false,retries:0}};
 }
 export async function todayDraft(){
  const db=createServiceRoleClient(),today=kstDate();const draft=checked(await db.from('instagram_post_drafts').select('*').eq('draft_date',today).maybeSingle()).data as Row|null;if(draft)return draft;
