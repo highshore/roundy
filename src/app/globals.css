@@ -3427,3 +3427,24 @@ html:lang(ko) .legal-intro h1{word-break:keep-all}
  .marketing-draft-card>img,.marketing-draft-thumb{width:54px;height:68px}
  .marketing-draft-card>button{grid-column:1/-1;width:100%}
 }
+
+/* Marketing automation mobile containment + weekday controls */
+.marketing-tab-panel,.marketing-settings-card,.marketing-settings-card .admin-form,.marketing-settings-card .admin-form>*{min-width:0;max-width:100%}
+.marketing-tab-panel{width:100%;overflow-x:clip}
+.marketing-settings-card{width:100%;overflow:hidden;box-sizing:border-box}
+.marketing-settings-card .admin-form input,.marketing-settings-card .admin-form select,.marketing-settings-card .admin-form textarea{min-width:0;max-width:100%;box-sizing:border-box}
+.admin-field-label{display:block;margin-bottom:8px;font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.04em;text-transform:uppercase}
+.marketing-days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;width:100%;max-width:100%;margin:8px 0 10px}
+.marketing-days button{min-width:0;height:44px;padding:0;border:1px solid var(--border);border-radius:12px;background:var(--paper);font-size:13px;font-weight:750}
+.marketing-days button[aria-pressed=true],.marketing-days button.active{background:var(--ink);border-color:var(--ink);color:var(--paper)}
+.marketing-day-presets{display:flex;gap:7px;flex-wrap:wrap}
+.marketing-day-presets button{min-height:34px;padding:6px 11px;border:1px solid var(--border);border-radius:999px;background:var(--paper);font-size:11px;font-weight:700}
+@media(max-width:600px){
+ .marketing-tab-panel{padding-inline:0}
+ .marketing-settings-card{padding:18px;width:100%;max-width:100%;margin:0}
+ .marketing-settings-card .admin-form{width:100%}
+ .marketing-days{gap:5px}
+ .marketing-days button{height:42px;border-radius:10px;font-size:12px}
+ .marketing-day-presets{gap:6px}
+ .marketing-day-presets button{flex:1 1 auto}
+}
