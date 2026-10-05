@@ -66,11 +66,12 @@ export function normalizeCompactDocument(raw: PresentationRow, language: string)
   if (!isCompactDocument(raw)) return raw; // Legacy snapshots remain readable, not silently rewritten.
   const ko = language !== 'en';
   const caption_ko = clean(raw.caption_ko), caption_en = clean(raw.caption_en);
-  const slides = Array.isArray(raw.slides) ? raw.slides.map((s: PresentationRow) => {
-    const main = clean(s.body), secondary = clean(s.secondary_body);
-    if (s.role !== 'cta') return {...s, title:clean(s.title), body:main, secondary_body:secondary, highlight:clean(s.highlight), body_ko:ko?main:secondary, body_en:ko?secondary:main};
+  const inputSlides = Array.isArray(raw.slides) ? raw.slides : [];
+  const slides = inputSlides.map((s: PresentationRow, index: number) => {
+    const main = clean(s.body), secondary = clean(s.secondary_body), final=index===inputSlides.length-1;
+    if (s.role !== 'cta' && !final) return {...s, title:clean(s.title), body:main, secondary_body:secondary, highlight:clean(s.highlight), body_ko:ko?main:secondary, body_en:ko?secondary:main};
     const bodyKo='한 사람씩 만나고, 대화해보세요.', bodyEn='Meet face to face, one conversation at a time.';
-    return {...s, title:ko?ROUNDY_IDENTITY.ko:ROUNDY_IDENTITY.en,
+    return {...s, role:'cta', title:ko?ROUNDY_IDENTITY.ko:ROUNDY_IDENTITY.en,
       body:ko?bodyKo:bodyEn, secondary_body:ko?bodyEn:bodyKo, body_ko:bodyKo, body_en:bodyEn,
       highlight:'', options:[], source_ids:[],
       instagram:ROUNDY_IDENTITY.instagram, website:ROUNDY_IDENTITY.website};
