@@ -204,7 +204,8 @@ async function generatePhoto(db:DB,draft:Row,input:GenerationInput,job:Row){
  if(typeof encoded!=='string'||encoded.length<100||encoded.length>8*1024*1024)throw new Error('INVALID_GENERATED_PHOTO');
  await progress(db,job,'saving_photo');return [await storeImage(db,job,Buffer.from(encoded,'base64'),0)];
 }
-export async function runGeneration(draftId:string,value:unknown,actor:string|null,automatic=false){
+type GenerationThreadContext={threadId:string;attemptNumber:number;retryOfJobId:string};
+export async function runGeneration(draftId:string,value:unknown,actor:string|null,automatic=false,thread?:GenerationThreadContext){
  const input=validateGenerationInput(value),db=createServiceRoleClient();if(automatic&&input.visual_mode==='photo')throw new Error('AUTOMATIC_PAID_PHOTOS_DISABLED');
  let draft=await readDraft(db,draftId);
  input.language=input.mode==='image'?(draft.content_language==='en'?'en':draft.content_language==='ko'?'ko':await nextContentLanguage(db,draft.id)):await resolveContentLanguage(db,draft,input.language);
@@ -215,7 +216,14 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
  if(!reservation.accepted)return {draft,job,deduplicated:true};
  try{
   const requestPayload={mode:input.mode,content_mode:input.content_mode,language:input.language,visual_mode:input.visual_mode,topic_type:input.topic_type||null,instruction:input.instruction||'',confirm_photo:input.confirm_photo===true,render_only:input.render_only===true};
-  checked(await db.from('marketing_generation_jobs').update({request_payload:requestPayload,updated_at:new Date().toISOString()}).eq('id',job.id));
+  const threadId=thread?.threadId||job.id,attemptNumber=thread?.attemptNumber||1;
+  checked(await db.from('marketing_generation_jobs').update({
+   request_payload:requestPayload,
+   generation_thread_id:threadId,
+   attempt_number:attemptNumber,
+   retry_of_job_id:thread?.retryOfJobId||null,
+   updated_at:new Date().toISOString()
+  }).eq('id',job.id));
   if(operation!=='render'&&operation!=='photo'){
    const copy=await generateCopy(db,draft,input,job,research);await progress(db,job,'saving_copy');
    draft=await savePartial(db,draft,{...copy,last_regeneration_mode:input.mode,last_regeneration_instruction:input.instruction,images:[]});
