@@ -166,7 +166,7 @@ export function evaluateContent(value:unknown,type:PostType,language:string,sour
   if(!str(study.title)||!/^\d{4}$/.test(str(study.publication_year))||!str(study.sample_context)||!str(study.limitation)||!source)add('연구 제목, 발표 연도, 조사 대상과 한계, 출처가 필요합니다.');
   else if(!evidence.includes(norm(study.title))||!evidence.includes(norm(study.publication_year)))add('연구 제목과 발표 연도가 인용된 자료와 일치하지 않습니다.');
  }
- if(language==='ko')for(const s of slides){if(s&&(!/[가-힣]/.test(str(s.title))||(!['opener','followup','example'].includes(s.role)&&!/[가-힣]/.test(str(s.body)))))add('한국어 카드의 제목과 설명을 한국어로 작성해야 합니다.');}
+ if(language==='ko')for(const s of slides){if(!s)continue;const titleNeedsKorean=s.role!=='book',bodyNeedsKorean=!['opener','followup','example'].includes(s.role);if(titleNeedsKorean&&!/[가-힣]/.test(str(s.title)))add('한국어 카드 제목은 한국어로 작성해야 합니다. 원서 제목은 책 소개 카드에서만 영문을 허용합니다.');if(bodyNeedsKorean&&!/[가-힣]/.test(str(s.body)))add('한국어 카드 설명은 한국어로 작성해야 합니다.');}
  if(type==='conversation_prompt')for(const role of ['opener','followup']){const s=slides.find((v:Row)=>v.role===role);if(!s||!/\?/.test(s.body+' '+s.highlight)||!/[A-Za-z]{3}/.test(s.body+' '+s.highlight))add('실제로 사용할 영어 질문과 후속 질문이 필요합니다.');}
  return {version:2,status:issues.length?'rejected':'passed',issues,review_required:true};
 }
