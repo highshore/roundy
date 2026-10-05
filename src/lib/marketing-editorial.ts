@@ -15,7 +15,7 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
  }
  let sources:Evidence[]=[],notes='',inputTokens=0,outputTokens=0;
  const record=async(result:Row)=>{inputTokens+=Number(result.usage?.input_tokens||result.usage?.prompt_tokens||0);outputTokens+=Number(result.usage?.output_tokens||result.usage?.completion_tokens||0);ok(await db.from('marketing_generation_jobs').update({input_tokens:inputTokens,output_tokens:outputTokens}).eq('id',job.id));};
- const cacheKey=createHash('sha256').update(JSON.stringify([3,type,language,input.instruction||''])).digest('hex');
+ const cacheKey=createHash('sha256').update(JSON.stringify([CONTENT_POLICY_VERSION,type,language,input.instruction||''])).digest('hex');
  if(profile.research){
   // Only the explicitly retried, identical request can reuse research. No silent new searches.
   const own=ok(await db.from('marketing_generation_jobs').select('retry_of_job_id').eq('id',job.id).single());
@@ -24,7 +24,7 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
   if(cache?.key===cacheKey&&Array.isArray(cache.sources)&&cache.sources.length&&Date.now()-Date.parse(cache.saved_at)<(type==='book_insight'?7:1)*86400000){sources=cache.sources;notes=cache.notes;}
   else{
    ok(await db.from('marketing_generation_jobs').update({stage:'researching'}).eq('id',job.id));
-   const research=await call('responses',{model:MODEL,instructions:researchInstructions(type,language,input.instruction||''),input:'Build a source-grounded research brief for '+type+'. Use multiple targeted searches when needed to verify identity, evidence and limitations before writing the brief.',tools:[{type:'web_search',search_context_size:'high',external_web_access:true}],tool_choice:'required',max_tool_calls:2,include:['web_search_call.action.sources'],max_output_tokens:2400,store:false},90000);
+   const research=await call('responses',{model:MODEL,instructions:researchInstructions(type,language,input.instruction||''),input:type==='book_insight'?'Find one real published book about listening, conversation, communication, or adult relationships. Do not search for BookInsight software or products. Verify exact title and author first, then verify one specific idea from that book with separate evidence.':'Find the strongest primary evidence for this relationship or conversation topic. Verify paper or dataset identity, then sample/context and limitations.',tools:[{type:'web_search',search_context_size:'high',external_web_access:true}],tool_choice:'required',max_tool_calls:3,include:['web_search_call.action.sources'],max_output_tokens:2600,store:false},95000);
    await record(research);const evidence=extractResearchEvidence(research);sources=evidence.sources;notes=evidence.notes;
    const cached={key:cacheKey,saved_at:new Date().toISOString(),sources,notes,search_completed:evidence.completed};
    ok(await db.from('marketing_generation_jobs').update({research_cache:cached}).eq('id',job.id));
