@@ -4,7 +4,7 @@ export const EDITORIAL_PRESET = 'roundy_compact_editorial_v1';
 export const ROUNDY_IDENTITY = {
   accent: '#ff6666', ink: '#20211f', paper: '#fffefa', muted: '#6b6f65',
   instagram: '@roundy.meet', website: 'roundy.team',
-  ko: '서울에서 만나는 1:1 밍글', en: 'Meet one person at a time in Seoul',
+  ko: '서울에서 만나는 로테이션 소개팅', en: 'Rotation Dating in Seoul',
 } as const;
 export const MAX_MARKETING_CTA_LENGTH=70;
 export const generatedCta=(language:string)=>language==='en'?'Explore Roundy':'Roundy 둘러보기';
@@ -17,7 +17,7 @@ export function captionCtaIssues(caption:unknown,cta:unknown):string[]{
 const clean = (v: unknown) => typeof v === 'string' ? v.replace(/\r\n?/g, '\n').trim() : '';
 export function isCompactDocument(v: PresentationRow) { return v?.design_preset === EDITORIAL_PRESET; }
 export function hasObsoletePositioning(text: string) {
-  return /english[\s\u2010-\u2015-]*only|영어\s*(?:온리|전용|로만|만\s*(?:사용|진행))|영어로\s*진행되는\s*1\s*:\s*1/i.test(text);
+  return /english[\s\u2010-\u2015-]*only|영어\s*(?:온리|전용|로만|만\s*(?:사용|진행))|영어로\s*진행되는\s*1\s*:\s*1|1\s*:\s*1\s*밍글|1\s*:\s*1\s*mingle/i.test(text);
 }
 
 // Extend the existing research/role schema rather than replacing its provenance fields.
@@ -49,7 +49,7 @@ export function compactContentSchema(schema: PresentationRow, language: string) 
 export function compactWritingInstructions(language: string) {
   return [
     'APPROVED VISUAL PRESET: '+EDITORIAL_PRESET+'. Bold Gothic/sans-serif type, coral #ff6666, a photo-led hook, uncluttered content, and a fixed Roundy introduction outro. No sidebar, UI screenshot, fake logo, or decorative chart.',
-    'Roundy is a Seoul-based 1:1 mingle service for Korean and international adults. Korean-Korean meetings are also part of the service. Do not describe the whole service as English-only or as a language class/exchange. Do not invent a particular event language.',
+    'Roundy is a Seoul-based Rotation Dating service for Korean and international adults. Korean-Korean meetings are also part of the service. In Korean, always call the format 로테이션 소개팅. In English, call it Rotation Dating. Never label the service 1:1 Mingle. Do not describe the whole service as English-only or as a language class/exchange. Do not invent a particular event language.',
     'Write compact, complete sentences on the FIRST writing call. There is no automatic paid compression/rewrite call. Do not fill the available maximum length. One card = one useful point, one short example, and at most one takeaway.',
     'COVER: aim for a short headline (Korean 8-22 characters / English 3-9 words), plus one short subtitle. Aim for 2-3 striking title lines. No hashtags or source bibliography in the title. Put nuance in the caption rather than repeating the hook.',
     'CONTENT: aim for Korean body 40-90 characters and English body 8-20 words, no more than two short paragraphs. highlight is optional: use one concrete takeaway, or an empty string; never repeat the body verbatim. No generic headings such as 핵심 정리 or 알아보기.',
@@ -82,8 +82,8 @@ export function normalizeCompactDocument(raw: PresentationRow, language: string)
     content_language:ko?'ko':'en'};
 }
 const TOPIC_TAGS: Record<string, string[]> = {
-  prelaunch:['소개팅','서울데이트','서울모임','SeoulDating','첫만남'],
-  live_event:['소개팅','서울모임','서울데이트','SeoulEvents','첫만남'],
+  prelaunch:['로테이션소개팅','소개팅','서울데이트','SeoulDating','첫만남'],
+  live_event:['로테이션소개팅','소개팅','서울데이트','SeoulEvents','첫만남'],
   book_insight:['독서','책추천','대화법','북스타그램','Bookstagram'],
   trend_research:['심리학','인간관계','대화법','소통','Psychology'],
   dating_myth:['연애','인간관계','소개팅','연애심리','Relationships'],

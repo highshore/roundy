@@ -75,7 +75,7 @@ export const aboutCopy = {
       [
         "PRIVACY",
         "Mutual matches only",
-        "For 1:1 Mingle, names and phone numbers are shared only with mutual matches."
+        "For Rotation Dating, names and phone numbers are shared only with mutual matches."
       ],
       [
         "SAFETY",
@@ -163,7 +163,7 @@ export const aboutCopy = {
       [
         "개인정보",
         "서로 선택했을 때만",
-        "1:1 밍글 후 서로 선택한 상대에게만 이름과 전화번호를 공개해요."
+        "로테이션 소개팅 후 서로 선택한 상대에게만 이름과 전화번호를 공개해요."
       ],
       [
         "안전",

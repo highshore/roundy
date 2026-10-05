@@ -1,0 +1,32 @@
+import fs from 'node:fs';import assert from 'node:assert/strict';
+let checks=0;const check=f=>{f();checks++;};
+const read=p=>fs.readFileSync(p,'utf8');
+const app=read('src/components/app.tsx'),hero=read('src/components/discovery-hero.tsx'),about=read('src/lib/about-copy.ts'),presentation=read('src/lib/marketing-presentation.ts'),visuals=read('src/lib/marketing-visuals.ts'),policy=read('src/lib/marketing-content-policy.ts'),generation=read('src/lib/marketing-generation.ts'),data=read('src/lib/data.ts'),copy=read('COPY.md');
+check(()=>assert.ok(app.includes("tr(locale,'Rotation Dating','로테이션 소개팅')")));
+check(()=>assert.ok(!app.includes("tr(locale,'1:1 Mingle','1:1 밍글')")));
+check(()=>assert.ok(!app.includes('1:1 Speed Mingle · Verified attendee')));
+check(()=>assert.ok(app.includes('ROTATION DATING / MUTUAL MATCH')&&app.includes('로테이션 소개팅 / 상호 매칭')));
+check(()=>assert.ok(app.includes('See Rotation Dating events')&&app.includes('로테이션 소개팅 보기')));
+check(()=>assert.ok(hero.includes('Meet through Rotation Dating')&&hero.includes('대면으로 만나고 매칭되는 로테이션 소개팅')));
+check(()=>assert.ok(!hero.includes('국제 로테이션 소개팅')));
+check(()=>assert.ok(about.includes('For Rotation Dating')&&about.includes('로테이션 소개팅 후')));
+check(()=>assert.ok(presentation.includes("ko: '서울에서 만나는 로테이션 소개팅', en: 'Rotation Dating in Seoul'")));
+check(()=>assert.ok(presentation.includes('Never label the service 1:1 Mingle')));
+check(()=>assert.ok(visuals.includes("text(ko?'로테이션 소개팅':'Rotation Dating'")));
+check(()=>assert.ok(!visuals.includes("'1:1 밍글'")&&!visuals.includes("'1:1 로테이션'")));
+check(()=>assert.ok(policy.includes('Roundy is a Rotation Dating service in Seoul')));
+check(()=>assert.ok(policy.includes("서울에서 만나는 로테이션 소개팅, Roundy.")));
+check(()=>assert.ok(generation.includes('Seoul-based Rotation Dating service')));
+check(()=>assert.ok(!generation.includes('Seoul-based 1:1 mingle')));
+check(()=>assert.ok(!data.includes('entirely in English')));
+check(()=>assert.ok(data.includes('hosted Rotation Dating in Seoul')));
+check(()=>assert.ok(copy.includes('Roundy offers Rotation Dating only.')));
+check(()=>assert.ok(copy.includes('**Rotation Dating / 로테이션 소개팅**')));
+// Internal DB/category identifiers remain intentionally backward-compatible.
+check(()=>assert.ok(data.includes("eventCategories=['1:1 Speed Mingle']")));
+check(()=>assert.ok(app.includes("eventCategory(e)==='1:1 Speed Mingle'")));
+function walk(dir){return fs.readdirSync(dir,{withFileTypes:true}).flatMap(e=>e.isDirectory()?walk(dir+'/'+e.name):[dir+'/'+e.name]);}
+const publicText=[...walk('src/components').filter(p=>/\.(ts|tsx)$/.test(p)),'src/lib/about-copy.ts','src/lib/data.ts'].map(p=>fs.readFileSync(p,'utf8')).join('\n');
+check(()=>assert.ok(!/1:1 Mingle|1:1 밍글|1:1 mingle/.test(publicText)));
+check(()=>assert.ok(!/entirely in English/i.test(publicText)));
+console.log('PASS '+checks+' Rotation Dating public-copy assertions; internal category identifiers preserved.');

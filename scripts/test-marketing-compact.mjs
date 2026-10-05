@@ -17,7 +17,7 @@ let n=0;const check=f=>{f();n++;};
 const {fixture}=require('./marketing-fixtures.cjs');
 const evidence=[{id:'S1',url:'https://publisher.example/listening',title:'Listening Across Difference by Alex Lee',evidence:'TEST FIXTURE ONLY: Listening Across Difference by Alex Lee discusses attentive listening. This is not a real bibliographic citation.'}];
 const koBodies={cover:'다음 질문보다, 방금 들은 말에 집중해보세요.',book:'이 예시 책은 상대의 말을 끝까지 듣는 태도를 다룹니다.',insight:'답을 준비하는 동안 상대의 말을 놓치고 있지는 않나요?',example:'“산책했어요.”라고 하면 “어디를 걸었어요?”라고 물어보세요.',practice:'상대가 쓴 단어 하나를 골라 후속 질문을 해보세요.',concept:'큰 모임 대신 한 사람씩 마주 앉아 대화하는 방식이에요.',cta:'서울에서 한 사람씩 만나보세요.'};
-const enBodies={cover:'Stay with their answer before preparing the next question.',book:'This fixture book explores the practice of attentive listening.',insight:'Notice when planning your reply takes your attention away.',example:'They mention a walk. Ask which part of the route they liked.',practice:'Choose one detail from their answer for your next question.',concept:'Meet face to face, one person at a time, instead of joining a large group.',cta:'Meet one person at a time in Seoul.'};
+const enBodies={cover:'Stay with their answer before preparing the next question.',book:'This fixture book explores the practice of attentive listening.',insight:'Notice when planning your reply takes your attention away.',example:'They mention a walk. Ask which part of the route they liked.',practice:'Choose one detail from their answer for your next question.',concept:'Rotation Dating gives each conversation its own turn instead of putting everyone into one group.',cta:'Join Rotation Dating in Seoul.'};
 function compactFixture(type='book_insight',lang='ko'){
  const d=fixture(type,lang,policy.CONTENT_PROFILES);
  d.design_preset=p.EDITORIAL_PRESET;d.caption_ko='다음 질문을 찾기 전에, 상대가 방금 한 말에 답해보세요.';d.caption_en='Before searching for another question, respond to what they just said.';
@@ -46,7 +46,7 @@ for(const lang of ['ko','en'])for(const type of ['prelaunch','book_insight']){
 }
 check(()=>assert.equal(p.curateHashtags('conversation_prompt',['#1:1밍글','#nonsense','#대화법']).length,5));
 check(()=>assert.ok(!p.curateHashtags('conversation_prompt',['#nonsense']).includes('#nonsense')));
-check(()=>assert.equal(p.hasObsoletePositioning('서울에서 만나는 1:1 밍글'),false));
+check(()=>assert.equal(p.hasObsoletePositioning('서울에서 만나는 1:1 밍글'),true));check(()=>assert.equal(p.hasObsoletePositioning('서울에서 만나는 로테이션 소개팅'),false));
 check(()=>assert.equal(p.hasObsoletePositioning('영어로만 진행합니다'),true));
 check(()=>assert.equal(p.bilingualCaptionIssues('English-only').length>0,true));
 const actual=fs.readFileSync('src/components/roundy-brand.tsx','utf8');
@@ -55,7 +55,7 @@ check(()=>assert.deepEqual(Array.from(v.OFFICIAL_ROUNDY_PATHS),paths));
 const css=fs.readFileSync('src/app/globals.css','utf8');check(()=>assert.ok(css.includes('--brand:'+p.ROUNDY_IDENTITY.accent)));
 const g=fs.readFileSync('src/lib/marketing-generation.ts','utf8');
 check(()=>assert.ok(g.includes('return renderCards(db,draft,job,\'data:image/jpeg;base64,\'+encoded)')));
-check(()=>assert.ok(!g.includes('English-only 1:1 mingle')));
+check(()=>assert.ok(!g.includes('English-only 1:1 mingle')));check(()=>assert.ok(g.includes('Rotation Dating service')));
 const design=fs.readFileSync('src/lib/marketing-visuals.ts','utf8');
 check(()=>assert.ok(!design.includes('borderLeft')&&!design.includes('visualMotif')));
 check(()=>assert.ok(design.includes("fontFamily:assets.fonts?.length?'Roundy Gothic, sans-serif':'sans-serif'")));
