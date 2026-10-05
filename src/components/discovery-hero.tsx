@@ -18,7 +18,7 @@ export function DiscoveryHero({ locale }: { locale: Locale }) {
  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
  const cards = [
-  {title:tr(locale,'Skip the Swipe\nMeet in Real Life','직접 만나야\n알 수 있는 사이'),body:tr(locale,'Meet through Rotation Dating, then reconnect when the feeling is mutual','대면으로 만나고 매칭되는 로테이션 소개팅'),image:null,href:'/events',action:tr(locale,"See this week's events",'이번 주 모임 보기')},
+  {title:tr(locale,'Skip the Swipe\nMeet in Real Life','직접 만나야\n알 수 있는 사이'),body:tr(locale,'Meet 1:1, get to know each other, and reconnect when the feeling is mutual','대면으로 만나고 매칭되는 국제 로테이션 소개팅'),image:null,href:'/events',action:tr(locale,"See this week's events",'이번 주 모임 보기')},
   {title:tr(locale,"No Luck on Dating Apps?\nIt’s NOT on You.",'소개팅 앱에서 잘 안 풀려도,\n당신 탓이 아니에요.'),body:tr(locale,'Skip endless swiping. Meet profile-reviewed people face to face.','끝없는 스와이프 대신, 프로필 검토를 마친 사람들과 직접 만나요.'),image:'/images/discovery-offline.webp',href:'/events',action:tr(locale,'Explore events','모임 둘러보기')},
   {title:tr(locale,'A Safer Community\nStarts With All of Us.','안심할 수 있는 만남,\n모두의 인증에서 시작돼요.'),body:tr(locale,'Everyone completes the same verification before joining. A shared standard for safer, more comfortable connections.','모두가 같은 인증 과정을 거쳐 참여해요. 서로 안심하고 만날 수 있도록요.'),image:'/images/discovery-verification.webp',href:'/how-it-works',action:tr(locale,'How verification works','참여 과정 알아보기')}
  ];
