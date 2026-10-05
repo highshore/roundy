@@ -40,3 +40,10 @@ Production SQL guard tests run in a rolled-back transaction and verify idempoten
 ## Manual retry from history
 
 Failed manual jobs persist their normalized generation settings in `request_payload`. The admin history can retry the same settings without re-entering the prompt, language, topic, mode, or visual choice. A retry always creates a new guarded job and therefore a new explicit provider request; it never replays automatically. The new job links back through `retry_of_job_id`. Completed, running, and uncertain jobs are not retryable from this control. After a retry succeeds, the recovered draft still requires normal review before Approve & schedule or Publish now.
+
+
+## Research metadata fallback
+
+A completed Web Search no longer fails the draft solely because source metadata is absent. The server collects sources from search-action sources, open-page/find-in-page URLs, result items, and URL citations. If a completed search still has no source metadata, the draft is saved as `generated_without_sources` and the admin UI requires manual fact-checking before publication. This fallback makes no extra provider call.
+
+Deterministic application-validation failures do not trip the global circuit breaker or consume the 5-job safety counter, but their conservative dollar reservation remains in the daily/monthly budget because a provider request may already have incurred cost. Running, completed, and uncertain jobs still count toward the 5-job limit; all paid attempts remain bounded by the dollar budget.
