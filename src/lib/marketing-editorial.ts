@@ -1,4 +1,5 @@
-import {isCompactDocument,bilingualCaptionIssues} from './marketing-presentation';
+import {buildMarketingResearchTask,RESEARCH_TASK_VERSION} from './marketing-research-task';
+import {captionCtaIssues,isCompactDocument,bilingualCaptionIssues} from './marketing-presentation';
 import {renderCompactEditorial,type EditorialAssets} from './marketing-visuals';
 import {createHash} from 'node:crypto';
 import {createElement as h} from 'react';
@@ -17,18 +18,19 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
  }
  let sources:Evidence[]=[],notes='',inputTokens=0,outputTokens=0;
  const record=async(result:Row)=>{inputTokens+=Number(result.usage?.input_tokens||result.usage?.prompt_tokens||0);outputTokens+=Number(result.usage?.output_tokens||result.usage?.completion_tokens||0);ok(await db.from('marketing_generation_jobs').update({input_tokens:inputTokens,output_tokens:outputTokens}).eq('id',job.id));};
- const cacheKey=createHash('sha256').update(JSON.stringify(['research-v2',CONTENT_POLICY_VERSION,type,language,input.instruction||''])).digest('hex');
+ const researchTask=profile.research?buildMarketingResearchTask(type,input.instruction||'',language):'';
+ const cacheKey=createHash('sha256').update(JSON.stringify([RESEARCH_TASK_VERSION,CONTENT_POLICY_VERSION,type,language,input.instruction||''])).digest('hex');
  if(profile.research){
   // Only the explicitly retried, identical request can reuse research. No silent new searches.
   const own=ok(await db.from('marketing_generation_jobs').select('retry_of_job_id').eq('id',job.id).single());
   const prior=own?.retry_of_job_id?ok(await db.from('marketing_generation_jobs').select('research_cache').eq('id',own.retry_of_job_id).maybeSingle()):null;
   const cache=prior?.research_cache;
-  if(cache?.key===cacheKey&&Array.isArray(cache.sources)&&cache.sources.length&&Date.now()-Date.parse(cache.saved_at)<(type==='book_insight'?7:1)*86400000){sources=cache.sources;notes=cache.notes;}
+  if(cache?.key===cacheKey&&cache.search_completed===true&&Array.isArray(cache.sources)&&cache.sources.length&&Date.now()-Date.parse(cache.saved_at)<(type==='book_insight'?7:1)*86400000){sources=cache.sources;notes=cache.notes;}
   else{
    ok(await db.from('marketing_generation_jobs').update({stage:'researching'}).eq('id',job.id));
-   const research=await call('responses',{model:MODEL,instructions:researchInstructions(type,language,input.instruction||''),input:type==='book_insight'?'Find one real published book about listening, conversation, communication, or adult relationships. Do not search for BookInsight software or products. Verify exact title and author first, then verify one specific idea from that book with separate evidence.':'Find the strongest primary evidence for this relationship or conversation topic. Verify paper or dataset identity, then sample/context and limitations.',tools:[{type:'web_search',search_context_size:'high',external_web_access:true}],tool_choice:'required',max_tool_calls:2,include:['web_search_call.action.sources'],max_output_tokens:2600,store:false},95000);
+   const research=await call('responses',{model:MODEL,instructions:researchInstructions(type,language,input.instruction||''),input:researchTask,tools:[{type:'web_search',search_context_size:'high',external_web_access:true}],tool_choice:'required',max_tool_calls:2,include:['web_search_call.action.sources'],max_output_tokens:2600,store:false},95000);
    await record(research);const evidence=extractResearchEvidence(research);sources=evidence.sources;notes=evidence.notes;
-   const cached={key:cacheKey,saved_at:new Date().toISOString(),sources,notes,search_completed:evidence.completed};
+   const cached={key:cacheKey,saved_at:new Date().toISOString(),sources,notes,subject:researchTask,search_completed:evidence.completed&&sources.length>0};
    ok(await db.from('marketing_generation_jobs').update({research_cache:cached}).eq('id',job.id));
    if(!evidence.completed||!sources.length){
     const report={version:2,status:'rejected',issues:['실제 인용된 연구/책 출처를 확보하지 못했습니다. 출처 없는 게시물을 만들지 않고 중지했습니다.'],review_required:true};
@@ -67,7 +69,7 @@ export function draftQuality(draft:Row){
  const input={content_mode:draft.draft_kind==='growth_carousel'?'growth_carousel':draft.content_mode,topic_type:draft.growth_topic_type};
  const type=postType(input),document=draft.content_document;
  if(!document)return {version:2,status:'rejected' as const,issues:['이전 생성본에는 유형별 콘텐츠 구조가 없습니다. 같은 스레드에서 품질 재작업하세요.'],review_required:true};
- const report=evaluateContent({...document,caption:isCompactDocument(document)?document.caption:draft.caption,cta:draft.cta},type,draft.content_language||'ko',draft.research_sources||[]);if(isCompactDocument(document)){const issues=bilingualCaptionIssues(String(draft.caption||''));report.issues.push(...issues);if(issues.length)report.status='rejected';}return report;
+ const report=evaluateContent({...document,caption:isCompactDocument(document)?document.caption:draft.caption,cta:draft.cta},type,draft.content_language||'ko',draft.research_sources||[]);if(isCompactDocument(document)){const issues=[...bilingualCaptionIssues(String(draft.caption||'')),...captionCtaIssues(document.caption,draft.cta)];report.issues.push(...issues);if(issues.length)report.status='rejected';}return report;
 }
 
 // All typography, official logo paths, source footnotes and contact details are server rendered.

@@ -6,6 +6,14 @@ export const ROUNDY_IDENTITY = {
   instagram: '@roundy.meet', website: 'roundy.team',
   ko: '서울에서 만나는 1:1 밍글', en: 'Meet one person at a time in Seoul',
 } as const;
+export const MAX_MARKETING_CTA_LENGTH=70;
+export const generatedCta=(language:string)=>language==='en'?'Explore Roundy':'Roundy 둘러보기';
+export function captionCtaIssues(caption:unknown,cta:unknown):string[]{
+ const a=typeof caption==='string'?caption.trim():'',b=typeof cta==='string'?cta.trim():'';const issues:string[]=[];
+ if(!a)issues.push('캡션이 비어 있습니다.');else if(a.length>2000)issues.push('캡션이 '+a.length+'자로 2,000자 제한을 초과했습니다.');
+ if(!b)issues.push('CTA 안내 문구가 비어 있습니다.');else if(b.length>MAX_MARKETING_CTA_LENGTH)issues.push('CTA 안내 문구가 '+b.length+'자로 '+MAX_MARKETING_CTA_LENGTH+'자 제한을 초과했습니다.');
+ return issues;
+}
 const clean = (v: unknown) => typeof v === 'string' ? v.replace(/\r\n?/g, '\n').trim() : '';
 export function isCompactDocument(v: PresentationRow) { return v?.design_preset === EDITORIAL_PRESET; }
 export function hasObsoletePositioning(text: string) {
@@ -21,6 +29,8 @@ export function compactContentSchema(schema: PresentationRow, language: string) 
     properties: {
       ...schema.properties,
       design_preset: {type:'string', enum:[EDITORIAL_PRESET]},
+      caption:text(ko?400:520),
+      cta:{type:'string',enum:[generatedCta(language)],minLength:1,maxLength:MAX_MARKETING_CTA_LENGTH},
       caption_ko: text(400), caption_en: text(520), tagline: text(64),
       hashtags: {type:'array', maxItems:8, items:text(40)},
       slides: {...schema.properties.slides, items: {
@@ -48,6 +58,7 @@ export function compactWritingInstructions(language: string) {
       : 'title/body/highlight are Korean. secondary_body is a short, faithful English rendering of the same idea. Only original book titles/authors may remain English on the book card. Use Korean conversation examples for Korean content, not mandatory English lessons.',
     'caption_ko and caption_en are equivalent, concise post captions without source URLs, hashtag lists or section labels. caption is the primary-language caption for compatibility. tagline is one short topic-specific closing line. Suggest relevant hashtags only; do not invent popularity, rankings or search volumes.',
     'Source IDs must stay linked to each sourced idea. Bibliographic facts, limitations and uncertainty must survive compression. Sources will be printed as small footnotes and full links in the caption by the server. Never fabricate a citation or copy a test/example book.',
+    'Top-level cta is ONLY the exact short action label '+JSON.stringify(generatedCta(language))+'. It is NOT a paragraph, caption or URL field. The server renders contact details separately.',
     'The final CTA uses server-owned Roundy introduction copy and prints BOTH @roundy.meet and roundy.team. Do not repeat the same brand paragraph on the earlier cards.',
   ].join('\n');
 }
@@ -64,7 +75,7 @@ export function normalizeCompactDocument(raw: PresentationRow, language: string)
       highlight:'', options:[], source_ids:[],
       instagram:ROUNDY_IDENTITY.instagram, website:ROUNDY_IDENTITY.website};
   }) : [];
-  return {...raw, caption_ko, caption_en, caption:ko?caption_ko:caption_en, slides,
+  return {...raw, cta:generatedCta(language), caption_ko, caption_en, caption:ko?caption_ko:caption_en, slides,
     tagline:clean(raw.tagline), hashtags:curateHashtags(raw.post_type, raw.hashtags, raw),
     hashtag_selection:{basis:'topic_relevance_catalog',search_volume_verified:false},
     content_language:ko?'ko':'en'};

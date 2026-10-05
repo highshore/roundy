@@ -25,6 +25,7 @@ jobs:
       - run: node scripts/test-marketing-generation.mjs
       - run: node scripts/test-marketing-compact.mjs
       - run: node scripts/test-marketing-compact-runtime.mjs
+      - run: node scripts/test-marketing-output-recovery.mjs
       - run: node scripts/test-marketing-renderer.mjs
       - run: node scripts/test-marketing-draft-inbox.mjs
       - run: node scripts/test-marketing-compact.mjs --render

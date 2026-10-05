@@ -1,4 +1,4 @@
-import {EDITORIAL_PRESET, compactContentSchema, compactWritingInstructions, normalizeCompactDocument, compactQualityIssues, buildBilingualCaption, isCompactDocument, hasObsoletePositioning} from './marketing-presentation';
+import {captionCtaIssues,EDITORIAL_PRESET, compactContentSchema, compactWritingInstructions, normalizeCompactDocument, compactQualityIssues, buildBilingualCaption, isCompactDocument, hasObsoletePositioning} from './marketing-presentation';
 // Shared deterministic content contracts. This module never calls a paid API.
 export type Row = Record<string, any>;
 export const CONTENT_POLICY_VERSION = 4;
@@ -125,7 +125,7 @@ export function evaluateContent(value:unknown,type:PostType,language:string,sour
  const c=normalizeCompactDocument(value as Row,language),slides=Array.isArray(c.slides)?c.slides:[],profile=CONTENT_PROFILES[type];for(const issue of compactQualityIssues(c,language))add(issue);
  if(c.schema_version!==2||c.post_type!==type)add('콘텐츠 유형 또는 버전이 맞지 않습니다.');
  if(slides.length!==profile.roles.length)add('유형별 카드 구성이 완성되지 않았습니다.');
- if(!str(c.caption)||str(c.caption).length>2000||!str(c.cta)||str(c.cta).length>70)add('캡션 또는 CTA가 비어 있거나 너무 깁니다.');
+ for(const issue of captionCtaIssues(c.caption,c.cta))add(issue);
  const known=new Map(sources.map(s=>[s.id,s]));
  slides.forEach((s:Row,i:number)=>{
   if(!s||typeof s!=='object'){add('빈 카드가 있습니다.');return;}
