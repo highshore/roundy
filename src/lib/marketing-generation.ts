@@ -225,14 +225,14 @@ export async function generationOverview(){
 }
 export async function todayDraft(){
  const db=createServiceRoleClient(),today=kstDate();
- const existing=checked(await db.from('instagram_post_drafts').select('*').eq('draft_date',today).eq('draft_role','workspace').maybeSingle()).data as Row|null;
+ const existing=checked(await db.from('instagram_post_drafts').select('*').eq('draft_date',today).eq('draft_role','workspace').eq('status','needs_approval').maybeSingle()).data as Row|null;
  if(existing)return existing;
  const settings=checked(await db.from('marketing_automation_settings').select('*').eq('singleton',true).single()).data as Row,dow=new Date(today+'T12:00:00+09:00').getUTCDay();
  const rec=checked(await db.from('instagram_posting_time_recommendations').select('*').eq('dow',dow).maybeSingle()).data as Row|null,isGrowth=Boolean(settings.growth_carousel_enabled&&settings.growth_days.includes(dow)),topic=topics[Math.floor(Date.parse(today+'T00:00:00Z')/86400000)%topics.length],language=await nextContentLanguage(db);
  const base={draft_date:today,draft_role:'workspace',status:'needs_approval',content_language:language,content_mode:settings.content_mode,draft_kind:isGrowth?'growth_carousel':'brand',growth_topic_type:isGrowth?topic:null,content_pillar:'concept',caption:'',cta:'Follow @roundy.meet',destination_url:'https://roundy.team',images:[],carousel_slides:[],research_sources:[],research_status:isGrowth?'pending':'not_required',generation_reason:'Hidden generation workspace. Results are imported into independent drafts.',recommended_time_kst:rec?.recommended_time_kst||'21:00',window_start_kst:rec?.window_start_kst||'20:30',window_end_kst:rec?.window_end_kst||'21:30',scheduled_for:today+'T'+String(rec?.recommended_time_kst||'21:00').slice(0,5)+':00+09:00',revision:1};
  const inserted=await db.from('instagram_post_drafts').insert(base).select('id').maybeSingle();
  if(inserted.error&&String((inserted.error as any).code||'')!=='23505')throw inserted.error;
- const id=inserted.data?.id||checked(await db.from('instagram_post_drafts').select('id').eq('draft_date',today).eq('draft_role','workspace').single()).data!.id;
+ const id=inserted.data?.id||checked(await db.from('instagram_post_drafts').select('id').eq('draft_date',today).eq('draft_role','workspace').eq('status','needs_approval').single()).data!.id;
  return readDraft(db,id);
 }
 export async function automaticGeneration(){
