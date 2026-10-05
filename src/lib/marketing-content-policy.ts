@@ -140,7 +140,7 @@ export function evaluateContent(value:unknown,type:PostType,language:string,sour
   if(similarity(str(slides[i]?.title),str(slides[j]?.title))>=.8)add('카드 제목이 중복되거나 지나치게 유사합니다.');
   if(similarity(str(slides[i]?.body),str(slides[j]?.body))>=.78)add('카드 본문이 중복되거나 지나치게 유사합니다.');
  }
- const cover=slides[0];if(!cover||str(cover.title).length<6||str(cover.body).length>110)add('첫 장에 짧고 구체적인 훅과 부제가 필요합니다.');
+ const cover=slides[0],coverBodyLimit=isCompactDocument(c)?(language==='en'?170:120):110;if(!cover||str(cover.title).length<6||str(cover.body).length>coverBodyLimit)add('첫 장에 짧고 구체적인 훅과 부제가 필요합니다.');
  const all=[c.caption,c.cta,...slides.flatMap((s:Row)=>[s?.title,s?.body,s?.highlight,...(Array.isArray(s?.options)?s.options:[])])].map(str).join(' ');
  const aiish=(language==='en'?AIISH_PHRASES.en:AIISH_PHRASES.ko).filter(phrase=>all.toLowerCase().includes(phrase.toLowerCase()));
  if(aiish.length)add('AI 광고체로 자주 쓰이는 추상 표현이 있습니다: '+aiish.slice(0,3).join(', '));
