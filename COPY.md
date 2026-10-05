@@ -4,14 +4,14 @@ This file is the source of truth for product terminology and UI copy across Roun
 
 ## 1. Canonical Product Terms
 
-Roundy offers 1:1 Mingle only. Do not reintroduce retired discussion events, external event feeds, or another community’s photos and member counts.
+Roundy offers Rotation Dating only. Do not reintroduce retired discussion events, external event feeds, or another community’s photos and member counts.
 
 Use these terms consistently.
 
 | Meaning | Use | Avoid |
 | --- | --- | --- |
 | A scheduled Roundy gathering | **Event** | night, room, experience, session |
-| Dating-format event | **1:1 Mingle** | speed dating, dating night, dating room |
+| Dating-format event | **Rotation Dating / 로테이션 소개팅** | speed dating, dating night, dating room |
 | Physical location | **Venue** | room, spot |
 | People attending | **Attendees** or **Participants** | guests, crowd |
 | Available capacity | **Places Left** | spots left, seats left when avoidable |
@@ -79,7 +79,7 @@ Buttons and text links use concise sentence case unless a platform convention re
 Examples:
 - Explore events
 - See all events
-- How 1:1 Mingle works
+- How Rotation Dating works
 - Complete profile to join
 
 Do not add terminal punctuation.
@@ -90,7 +90,7 @@ Always write:
 - Roundy
 - Discover
 - Events
-- 1:1 Mingle
+- Rotation Dating
 - My Events
 - Matches
 - Profile
