@@ -15,6 +15,28 @@ export function captionCtaIssues(caption:unknown,cta:unknown):string[]{
  return issues;
 }
 const clean = (v: unknown) => typeof v === 'string' ? v.replace(/\r\n?/g, '\n').trim() : '';
+const CAPTION_ACTION_TYPES=new Set(['mbti','dating_archetype','mini_quiz']);
+export function captionAction(postType:string,language:string){
+  const ko=language!=='en';
+  if(postType==='live_event')return ko?'프로필 링크에서 참가 신청 ↓':'Book through the link in bio ↓';
+  if(postType==='prelaunch')return ko?'오픈 소식은 프로필에서 확인하세요.':'Follow the profile for launch updates.';
+  if(CAPTION_ACTION_TYPES.has(postType))return ko?'여러분은 어떤 쪽인가요? 댓글로 알려주세요.':'Which one are you? Tell us in the comments.';
+  if(postType==='meme_remix')return ko?'떠오르는 친구에게 보내주세요.':'Send this to the friend who came to mind.';
+  if(postType==='conversation_prompt')return ko?'저장해두고 다음 대화에서 써보세요.':'Save this for your next conversation.';
+  if(postType==='seoul_dating')return ko?'저장해두고 다음 약속 잡을 때 확인하세요.':'Save this for the next time you make plans.';
+  return ko?'저장해두고 천천히 다시 읽어보세요.':'Save this and come back to it later.';
+}
+export function captionCoreIssues(value:unknown,language:string):string[]{
+  const text=clean(value),issues:string[]=[];if(!text)return ['캡션 본문이 비어 있습니다.'];
+  const parts=text.split(/\n\s*\n|\n+/).map(x=>x.trim()).filter(Boolean),first=parts[0]||'';
+  if(parts.length<2||parts.length>4)issues.push('캡션 본문은 훅을 포함해 2~4개의 짧은 문단으로 작성하세요.');
+  if(language==='en'){if(first.split(/\s+/).filter(Boolean).length>12)issues.push('영문 캡션 첫 문장은 12단어 이하의 짧은 훅이어야 합니다.');}
+  else if(first.length>30)issues.push('국문 캡션 첫 문장은 30자 이하의 짧은 훅이어야 합니다.');
+  const emojiCount=(text.match(/\p{Extended_Pictographic}/gu)||[]).length;if(emojiCount>2)issues.push('캡션 이모지는 최대 2개까지만 사용하세요.');
+  if(/https?:\/\/|www\.|roundy\.team|@roundy|#[\p{L}\p{N}_]+/iu.test(text))issues.push('캡션 본문에는 URL, 계정명, 해시태그를 넣지 마세요. 서버가 마지막에 자동으로 추가합니다.');
+  if(/저장(?:해|하고|하세요|해두)|공유(?:해|하세요)|댓글(?:로|에)|팔로우|참가\s*신청|프로필\s*링크|링크에서\s*신청|라운디\s*둘러보기|save\s+(?:this|it)|share\s+(?:this|it)|tell\s+us\s+in\s+the\s+comments|comment\s+below|follow\s+(?:@?roundy|the\s+profile)|book\s+(?:now|through)|sign\s*up|link\s+in\s+bio|visit\s+roundy/i.test(text))issues.push('캡션 본문에는 CTA를 직접 넣지 마세요. 콘텐츠 유형에 맞는 CTA를 서버가 하나만 자동으로 추가합니다.');
+  return [...new Set(issues)];
+}
 export function isCompactDocument(v: PresentationRow) { return v?.design_preset === EDITORIAL_PRESET; }
 export function hasObsoletePositioning(text: string) {
   return /english[\s\u2010-\u2015-]*only|영어\s*(?:온리|전용|로만|만\s*(?:사용|진행))|영어로\s*진행되는\s*1\s*:\s*1|1\s*:\s*1\s*밍글|1\s*:\s*1\s*mingle/i.test(text);
@@ -56,7 +78,7 @@ export function compactWritingInstructions(language: string) {
     language==='en'
       ? 'title/body/highlight are English. secondary_body is a short, faithful Korean rendering of the same idea. The Korean and English must preserve the same uncertainty and limitations.'
       : 'title/body/highlight are Korean. secondary_body is a short, faithful English rendering of the same idea. Only original book titles/authors may remain English on the book card. Use Korean conversation examples for Korean content, not mandatory English lessons.',
-    'caption_ko and caption_en are equivalent, concise post captions without source URLs, hashtag lists or section labels. caption is the primary-language caption for compatibility. tagline is one short topic-specific closing line. Suggest relevant hashtags only; do not invent popularity, rankings or search volumes.',
+    'caption_ko and caption_en are equivalent, concise Instagram caption CORES, not card-by-card summaries. Use 2-4 short paragraphs: first a hook (Korean <=30 characters / English <=12 words), then 1-3 compact context paragraphs. Do not copy a slide title/body verbatim. Do NOT include CTA language, Roundy handles, URLs, hashtags, source labels or a brand footer in these fields; the server appends exactly one content-type CTA and the fixed @roundy.meet | roundy.team footer after validation. Use at most two informative emoji, preferably none. caption is the primary-language caption for compatibility. tagline is metadata only and is not printed in the final caption. Suggest relevant hashtags only; do not invent popularity, rankings or search volumes.',
     'Source IDs must stay linked to each sourced idea. Bibliographic facts, limitations and uncertainty must survive compression. Sources will be printed as small footnotes and full links in the caption by the server. Never fabricate a citation or copy a test/example book.',
     'Top-level cta is ONLY the exact short action label '+JSON.stringify(generatedCta(language))+'. It is NOT a paragraph, caption or URL field. The server renders contact details separately.',
     'The final CTA uses server-owned Roundy introduction copy and prints BOTH @roundy.meet and roundy.team. Do not repeat the same brand paragraph on the earlier cards.',
@@ -106,6 +128,9 @@ export function compactQualityIssues(c: PresentationRow, language: string): stri
   const issues: string[]=[];
   if (!/[가-힣]/.test(clean(c.caption_ko)) || !/[A-Za-z]/.test(clean(c.caption_en))) issues.push('국문 캡션과 영어 캡션이 모두 필요합니다.');
   if (clean(c.caption_ko).length>400 || clean(c.caption_en).length>520) issues.push('한영 캡션을 더 짧게 작성해야 합니다.');
+  for(const issue of captionCoreIssues(c.caption_ko,'ko'))issues.push(issue);
+  for(const issue of captionCoreIssues(c.caption_en,'en'))issues.push(issue);
+  if(!['prelaunch','live_event'].includes(String(c.post_type))&&/roundy|라운디|@roundy/i.test(clean(c.caption_ko)+' '+clean(c.caption_en)))issues.push('에디토리얼 캡션 본문에서는 브랜드 홍보를 반복하지 마세요. 서버 푸터가 Roundy를 연결합니다.');
   for(const s of c.slides||[]) {
     if (!clean(s.secondary_body)) issues.push('카드의 짧은 번역 문장이 없습니다.');
     const ko=language==='en'?clean(s.secondary_body):clean(s.body),en=language==='en'?clean(s.body):clean(s.secondary_body);
@@ -119,17 +144,20 @@ export function compactQualityIssues(c: PresentationRow, language: string): stri
 }
 export function buildBilingualCaption(c: PresentationRow, sources: PresentationRow[], disclaimerKo='', disclaimerEn='') {
   const bibliography=sources.map((s, i)=>'['+(i+1)+'] '+clean(s.title)+'\n'+clean(s.url)).join('\n');
+  const ko=[clean(c.caption_ko),disclaimerKo,captionAction(String(c.post_type),'ko')].filter(Boolean).join('\n\n');
+  const en=[clean(c.caption_en),disclaimerEn,captionAction(String(c.post_type),'en')].filter(Boolean).join('\n\n');
   return [
-    clean(c.caption_ko)+(disclaimerKo?'\n'+disclaimerKo:''),
-    clean(c.caption_en)+(disclaimerEn?'\n'+disclaimerEn:''),
-    '출처 / Sources\n'+(bibliography||'Roundy 자체 작성 / Original editorial, not a research citation'),
-    [clean(c.tagline), ROUNDY_IDENTITY.instagram+' | '+ROUNDY_IDENTITY.website, curateHashtags(c.post_type,c.hashtags,c).join(' ')].filter(Boolean).join('\n'),
-  ].join('\n\n');
+    ko,
+    en,
+    bibliography?'출처 / Sources\n'+bibliography:'',
+    [ROUNDY_IDENTITY.instagram+' | '+ROUNDY_IDENTITY.website, curateHashtags(c.post_type,c.hashtags,c).join(' ')].filter(Boolean).join('\n'),
+  ].filter(Boolean).join('\n\n');
 }
 export function bilingualCaptionIssues(caption: string) {
   const issues: string[]=[];
   if(caption.length>2000)issues.push('출처를 포함한 캡션이 2,000자를 넘습니다.');
   if(hasObsoletePositioning(caption))issues.push('캡션에서 English-only 포지셔닝을 삭제하세요.');
-  if(!/[가-힣]/.test(caption)||!/[A-Za-z]/.test(caption)||!caption.includes('출처 / Sources'))issues.push('국문본문, 영어본문, 출처 순서의 캡션이 필요합니다.');
+  if(!/[가-힣]/.test(caption)||!/[A-Za-z]/.test(caption))issues.push('국문 본문과 영어 본문이 모두 필요합니다.');
+  if(!caption.includes(ROUNDY_IDENTITY.instagram)||!caption.includes(ROUNDY_IDENTITY.website))issues.push('캡션에 Roundy 공식 계정과 웹사이트가 필요합니다.');
   return issues;
 }
