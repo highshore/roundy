@@ -59,7 +59,7 @@ async function resolveContentLanguage(db:DB,draft:Row,requested?:ContentLanguage
  if(draft.content_language==='ko'||draft.content_language==='en')return draft.content_language;
  return nextContentLanguage(db,draft.id);
 }
-function normalizePositioning(content:Row,language:ContentLanguage){
+function normalizePositioning(content:Row,language:ContentLanguage):Row{
  const serviceLine=language==='ko'?'Roundy는 서울에서 영어로 진행되는 1:1 밍글입니다.':'Roundy is an English-only 1:1 mingle in Seoul.';
  const mentionsEnglish=language==='ko'?/(영어|English-only)/i:/(English-only|in English)/i;
  let caption=String(content.caption||'').trim();
