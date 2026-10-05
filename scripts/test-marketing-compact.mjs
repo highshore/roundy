@@ -20,7 +20,7 @@ const koBodies={cover:'다음 질문보다, 방금 들은 말에 집중해보세
 const enBodies={cover:'Stay with their answer before preparing the next question.',book:'This fixture book explores the practice of attentive listening.',insight:'Notice when planning your reply takes your attention away.',example:'They mention a walk. Ask which part of the route they liked.',practice:'Choose one detail from their answer for your next question.',concept:'Rotation Dating gives each conversation its own turn instead of putting everyone into one group.',cta:'Join Rotation Dating in Seoul.'};
 function compactFixture(type='book_insight',lang='ko'){
  const d=fixture(type,lang,policy.CONTENT_PROFILES);
- d.design_preset=p.EDITORIAL_PRESET;d.caption_ko='다음 질문을 찾기 전에, 상대가 방금 한 말에 답해보세요.';d.caption_en='Before searching for another question, respond to what they just said.';
+ d.design_preset=p.EDITORIAL_PRESET;d.caption_ko='다음 질문보다 중요한 것\n상대가 방금 한 말에 잠깐 더 머물러보세요.\n완벽한 질문보다 듣고 이어가는 반응이 대화를 바꿀 수 있어요.';d.caption_en='Before the next question\nStay with what they just said for a little longer.\nA thoughtful follow-up can matter more than a perfect opener.';
  d.caption=lang==='ko'?d.caption_ko:d.caption_en;d.tagline=lang==='ko'?'첫 대화에서 써볼 한 가지':'One thing to try in a first conversation';d.hashtags=['#독서','#대화법','#unrelated'];
  d.slides=d.slides.map(s=>({...s,title:s.title,body:(lang==='ko'?koBodies:enBodies)[s.role]||s.body,secondary_body:(lang==='ko'?enBodies:koBodies)[s.role]||'A short test example.',highlight:'',options:[]}));
  return d;
@@ -32,7 +32,8 @@ for(const lang of ['ko','en'])for(const type of ['prelaunch','book_insight']){
  const prepared=policy.prepareContent(d,type,lang,type==='book_insight'?evidence:[]);
  check(()=>assert.equal(prepared.report.status,'passed',JSON.stringify(prepared.report)));
  check(()=>assert.ok(prepared.caption.indexOf(d.caption_ko)<prepared.caption.indexOf(d.caption_en)));
- check(()=>assert.ok(prepared.caption.indexOf(d.caption_en)<prepared.caption.indexOf('출처 / Sources')));
+ if(type==='book_insight')check(()=>assert.ok(prepared.caption.indexOf(d.caption_en)<prepared.caption.indexOf('출처 / Sources')));
+ else check(()=>assert.equal(prepared.caption.includes('출처 / Sources'),false));
  check(()=>assert.ok(prepared.caption.includes('@roundy.meet')&&prepared.caption.includes('roundy.team')));
  check(()=>assert.equal(prepared.document.hashtag_selection.search_volume_verified,false));
  check(()=>assert.equal(prepared.document.hashtags.length,5));
@@ -49,6 +50,10 @@ check(()=>assert.ok(!p.curateHashtags('conversation_prompt',['#nonsense']).inclu
 check(()=>assert.equal(p.hasObsoletePositioning('서울에서 만나는 1:1 밍글'),true));check(()=>assert.equal(p.hasObsoletePositioning('서울에서 만나는 로테이션 소개팅'),false));
 check(()=>assert.equal(p.hasObsoletePositioning('영어로만 진행합니다'),true));
 check(()=>assert.equal(p.bilingualCaptionIssues('English-only').length>0,true));
+check(()=>assert.equal(p.captionCoreIssues('한 줄뿐인 캡션','ko').length>0,true));
+check(()=>assert.equal(p.captionCoreIssues('짧은 훅\n프로필 링크에서 신청하세요.','ko').some(x=>x.includes('CTA')),true));
+check(()=>assert.equal(p.captionAction('live_event','ko'),'프로필 링크에서 참가 신청 ↓'));
+check(()=>assert.match(p.captionAction('mini_quiz','en'),/comments/));
 const actual=fs.readFileSync('src/components/roundy-brand.tsx','utf8');
 const paths=[...actual.matchAll(/<path d="([^"]+)"/g)].map(m=>m[1]);
 check(()=>assert.deepEqual(Array.from(v.OFFICIAL_ROUNDY_PATHS),paths));

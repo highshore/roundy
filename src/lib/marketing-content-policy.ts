@@ -1,7 +1,7 @@
 import {captionCtaIssues,EDITORIAL_PRESET, compactContentSchema, compactWritingInstructions, normalizeCompactDocument, compactQualityIssues, buildBilingualCaption, isCompactDocument, hasObsoletePositioning} from './marketing-presentation';
 // Shared deterministic content contracts. This module never calls a paid API.
 export type Row = Record<string, any>;
-export const CONTENT_POLICY_VERSION = 4;
+export const CONTENT_POLICY_VERSION = 5;
 export const CONTENT_PROFILES = {
  prelaunch:{roles:['cover','concept','cta'],research:false,label:'오픈 전 홍보',brief:'A concrete social friction, the in-person Rotation Dating format, then launch-update CTA. No invented dates, bookings, testimonials, seats or discounts.'},
  live_event:{roles:['cover','event','cta'],research:false,label:'이벤트 모집',brief:'Invite around the actual supplied event. The event card uses only server-supplied date/location/prices. No fabricated participants, scarcity or discounts.'},
@@ -108,8 +108,8 @@ export function writingInstructions(type:PostType,language:string){
   'Do NOT use these generic AI/marketing phrases or close paraphrases: '+banned+'. Also avoid formulaic openings such as "혹시 ~ 하신가요?", "오늘은 ~ 알아볼게요", "함께 알아봅시다", "In today\'s fast-paced world", "Whether you\'re...", or "Here\'s the thing".',
   'Avoid stacked adjectives, motivational slogans, empty superlatives, excessive em dashes, and repeated "not X, but Y" constructions. Do not add emoji unless it carries actual information.',
   'COVER: short specific tension/question or useful promise. Aim for Korean 8-22 characters or English 3-9 words. Short subhead, no dense paragraph. No fake urgency or algorithm promises.',
-  'Body cards: one concrete point, Korean 40-90 characters / English 8-20 words. One optional highlight, not a repeated paragraph. options only for contrast/options/checklist. Captions are short bilingual summaries; CTA <=70.',
-  'For growth content, mention Roundy ONLY on the final CTA card and caption. First five slides must stand alone as useful editorial content.',
+  'Body cards: one concrete point, Korean 40-90 characters / English 8-20 words. One optional highlight, not a repeated paragraph. options only for contrast/options/checklist. CAPTION: do not narrate the carousel card-by-card. Start with a short hook, then 1-3 compact context paragraphs. caption_ko and caption_en must not contain CTA language, handles, URLs, hashtags, source labels or the Roundy footer; the server appends one content-type action and the fixed brand footer after validation.',
+  'For growth content, the MODEL must mention Roundy only on the final CTA card, never inside caption_ko/caption_en. The server adds the Roundy caption footer after validation. Earlier slides must stand alone as useful editorial content.',
   'Roundy is a Rotation Dating service in Seoul for Korean and international adults, including Korean-Korean meetings, NOT a language class or language exchange. In Korean, call the service 로테이션 소개팅; in English, call it Rotation Dating. Do not label it 1:1 Mingle. Convey thoughtful, respectful conversation subtly; never claim screened/qualified/elite people, selection by income/employer/appearance/nationality, or fake reviews.',
   language==='en'?'Primary title/body/highlight are English; secondary_body is Korean.':'Primary title/body/highlight are Korean; secondary_body is English. Original book titles/authors may remain English on the book card.',
   (['trend_research','dating_myth'].includes(type)?'Fill study.title, publication_year, sample_context, limitation and source_id from the cited evidence. Preserve the original study title and year, never guess missing metadata.':''),
@@ -140,8 +140,13 @@ export function evaluateContent(value:unknown,type:PostType,language:string,sour
   if(similarity(str(slides[i]?.title),str(slides[j]?.title))>=.8)add('카드 제목이 중복되거나 지나치게 유사합니다.');
   if(similarity(str(slides[i]?.body),str(slides[j]?.body))>=.78)add('카드 본문이 중복되거나 지나치게 유사합니다.');
  }
+ if(isCompactDocument(c)){
+  const captionParts=[str(c.caption_ko),str(c.caption_en)].flatMap(text=>text.split(/\n\s*\n|\n+/).map(x=>x.trim()).filter(x=>x.length>=6));
+  const slideParts=slides.slice(0,-1).flatMap((slide:Row)=>[slide?.title,slide?.body,slide?.secondary_body,slide?.highlight]).map(str).filter(x=>x.length>=6);
+  if(captionParts.some(part=>slideParts.some(card=>similarity(part,card)>=.84)))add('캡션이 카드 문구를 그대로 반복합니다.');
+ }
  const cover=slides[0],coverBodyLimit=isCompactDocument(c)?(language==='en'?170:120):110;if(!cover||str(cover.title).length<6||str(cover.body).length>coverBodyLimit)add('첫 장에 짧고 구체적인 훅과 부제가 필요합니다.');
- const all=[c.caption,c.cta,...slides.flatMap((s:Row)=>[s?.title,s?.body,s?.highlight,...(Array.isArray(s?.options)?s.options:[])])].map(str).join(' ');
+ const all=[c.caption,c.caption_ko,c.caption_en,c.cta,...slides.flatMap((s:Row)=>[s?.title,s?.body,s?.highlight,...(Array.isArray(s?.options)?s.options:[])])].map(str).join(' ');
  const aiish=(language==='en'?AIISH_PHRASES.en:AIISH_PHRASES.ko).filter(phrase=>all.toLowerCase().includes(phrase.toLowerCase()));
  if(aiish.length)add('AI 광고체로 자주 쓰이는 추상 표현이 있습니다: '+aiish.slice(0,3).join(', '));
  if(/혹시.{0,20}(?:하신가요|인가요)|오늘은.{0,20}알아볼게요|함께 알아봅시다|in today'?s fast-paced world|whether you'?re|here'?s the thing/i.test(all))add('상투적인 AI식 도입 문장이 있습니다.');
