@@ -206,6 +206,8 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
  const reservation=checked(await db.rpc('reserve_marketing_generation',{p_key:input.request_key,p_fingerprint:fingerprint,p_draft:draftId,p_revision:input.revision,p_operation:operation,p_actor:actor,p_automatic:automatic})).data as Row,job=reservation.job as Row;
  if(!reservation.accepted)return {draft,job,deduplicated:true};
  try{
+  const requestPayload={mode:input.mode,content_mode:input.content_mode,language:input.language,visual_mode:input.visual_mode,topic_type:input.topic_type||null,instruction:input.instruction||'',confirm_photo:input.confirm_photo===true,render_only:input.render_only===true};
+  checked(await db.from('marketing_generation_jobs').update({request_payload:requestPayload,updated_at:new Date().toISOString()}).eq('id',job.id));
   if(operation!=='render'&&operation!=='photo'){
    const copy=await generateCopy(db,draft,input,job,research);await progress(db,job,'saving_copy');
    draft=await savePartial(db,draft,{...copy,last_regeneration_mode:input.mode,last_regeneration_instruction:input.instruction,images:[]});

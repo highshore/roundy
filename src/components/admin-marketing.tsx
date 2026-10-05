@@ -47,7 +47,11 @@ export function AdminMarketing({locale}:{locale:Locale}){
    RESEARCH_SOURCES_MISSING:['An older research run did not copy sources into its JSON result. Current versions read sources directly from Web Search.','이전 버전에서 검색 출처를 JSON에 복사하지 못해 중지된 작업입니다. 현재 버전은 Web Search 출처를 직접 읽습니다.'],
    RESEARCH_TOOL_SOURCES_MISSING:['Web Search returned no usable source metadata. No automatic retry was sent.','Web Search가 사용 가능한 출처 메타데이터를 반환하지 않아 중지했습니다. 자동 재시도는 하지 않았습니다.'],
    TOO_FEW_GROWTH_SLIDES:['The research result did not contain enough usable carousel cards. No automatic retry was sent.','검색 결과에 사용할 수 있는 캐러셀 카드가 너무 적어 중지했습니다. 자동 재시도는 하지 않았습니다.'],
-   AI_RETURNED_INVALID_JSON:['The generated response could not be parsed safely. No automatic retry was sent.','생성 결과를 안전하게 해석할 수 없어 중지했습니다. 자동 재시도는 하지 않았습니다.']
+   AI_RETURNED_INVALID_JSON:['The generated response could not be parsed safely. No automatic retry was sent.','생성 결과를 안전하게 해석할 수 없어 중지했습니다. 자동 재시도는 하지 않았습니다.'],
+   RETRY_CONFIRMATION_REQUIRED:['Confirm the retry before starting a new API request.','새 API 요청을 시작하기 전에 재시도를 확인하세요.'],
+   RETRY_ONLY_FAILED_MANUAL:['Only failed manual generation jobs can be retried from history.','생성 기록에서는 실패한 수동 작업만 재시도할 수 있습니다.'],
+   RETRY_PAYLOAD_UNAVAILABLE:['This older failure does not have enough saved settings to retry exactly.','이전 실패 기록에 동일 설정을 복원할 정보가 부족합니다.'],
+   CONFIRM_PAID_PHOTO_FIRST:['Paid photo retry requires explicit confirmation.','유료 사진 재시도는 별도 확인이 필요합니다.']
   };
   return map[message]?t(...map[message]):message;
  }
@@ -67,6 +71,26 @@ export function AdminMarketing({locale}:{locale:Locale}){
    if(r.data.job?.status==='running'){setNotice(t('This request already exists. Check its status; it was not billed again.','이미 접수된 요청입니다. 작업 기록을 확인하세요. 추가 호출하지 않았습니다.'));return;}
    if(['failed','uncertain'].includes(r.data.job?.status))throw new Error(r.data.job.error_message||'Previous attempt stopped; no retry was sent.');
    setNotice(t('Generation complete. Review the result before approving.','생성이 완료됐습니다. 결과를 검토한 뒤 승인하세요.'));setDirection('');
+  });
+ }
+ function retryCost(job:Row){return job.operation==='render'?0:job.operation==='photo'?0.05:job.operation==='copy_photo'?0.07:0.02;}
+ async function retryJob(job:Row){
+  const sourceDraft=data.drafts.find((d:Row)=>d.id===job.draft_id);
+  if(!sourceDraft||sourceDraft.status!=='needs_approval')throw new Error('DRAFT_NOT_EDITABLE');
+  if(!job.request_payload)throw new Error('RETRY_PAYLOAD_UNAVAILABLE');
+  const cost=retryCost(job),photo=['photo','copy_photo'].includes(job.operation),budget=cost.toFixed(2)+' USD';
+  const confirmMessage=t(
+   'Retry this failed generation with the same saved settings? This starts one new API request and reserves '+budget+'. It will not publish automatically.',
+   '이 실패 작업을 저장된 동일 설정으로 재시도할까요? 새 API 요청 1회를 시작하며 앱 예산 '+budget+'를 예약합니다. 자동 게시되지는 않습니다.'
+  );
+  if(!window.confirm(confirmMessage))return;
+  await work(async()=>{
+   const r=await request('/generation/jobs/'+job.id+'/retry',{confirm_retry:true,confirm_paid_photo:photo});
+   if(r.data.draft)selectDraft(r.data.draft);
+   await load(r.data.draft?.id||job.draft_id);
+   if(!r.ok||r.data.error)throw new Error(r.data.error||'Retry failed');
+   if(['failed','uncertain'].includes(r.data.job?.status))throw new Error(r.data.job?.error_message||'Retry stopped');
+   setNotice(t('Retry complete. Review the recovered draft, then approve or publish now.','재시도가 완료됐습니다. 복구된 초안을 검토한 뒤 승인 또는 바로 게시하세요.'));
   });
  }
  const running=(generation?.jobs||[]).find((j:Row)=>j.status==='running'&&Date.now()-Date.parse(j.created_at)<300000),blocked=Boolean(generation?.control?.blocked_reason||generation?.control?.enabled===false);
@@ -104,7 +128,19 @@ export function AdminMarketing({locale}:{locale:Locale}){
     {draft.status==='needs_approval'&&<div className="admin-form-actions"><button type="button" className="admin-secondary" disabled={busy||!!running||!dirty} onClick={()=>void work(async()=>{await mutate('/draft/'+draft.id,{revision:draft.revision,caption:draft.caption,cta:draft.cta,destination_url:draft.destination_url},'PUT');await load(draft.id);})}>{t('Save edits','수정 저장')}</button><button type="button" className="admin-primary" disabled={busy||!!running||dirty||!draft.caption?.trim()||!draft.images?.length} onClick={()=>{if(window.confirm(t('Approve this exact revision and schedule it for Instagram?','현재 버전의 문구와 이미지를 승인하고 Instagram 게시를 예약할까요?')))void work(async()=>{await mutate('/draft/'+draft.id+'/approve',{revision:draft.revision});await load(draft.id);setNotice(t('Approved and scheduled.','승인 후 게시 예약했습니다.'));});}}>{t('Approve & schedule','승인 후 예약')}</button><button type="button" className="admin-secondary" disabled={busy||!!running||dirty||!draft.caption?.trim()||!draft.images?.length} onClick={()=>{if(window.confirm(t('Publish this exact saved revision to @roundy.meet NOW? This bypasses the recommended posting time and cannot be undone here.','현재 저장된 버전을 @roundy.meet에 지금 바로 게시할까요? 추천 게시 시간을 무시하며 여기서 게시를 되돌릴 수 없습니다.')))void work(async()=>{const result=await mutate('/draft/'+draft.id+'/publish-now',{revision:draft.revision});await load(draft.id);setNotice(result.published?t('Published to @roundy.meet.','@roundy.meet에 바로 게시했습니다.'):result.needs_review?t('Publish attempt needs review. Check Instagram before resolving it.','게시 결과 확인이 필요합니다. 처리 전에 Instagram에서 실제 게시 여부를 확인하세요.'):t('Queued for immediate publishing. Refresh status before trying again.','즉시 게시 큐에 넣었습니다. 다시 누르기 전에 상태를 새로고침하세요.'));});}}>{t('Publish now','바로 게시')}</button><button type="button" className="admin-secondary" disabled={busy||!!running} onClick={()=>void work(async()=>{await mutate('/draft/'+draft.id+'/skip',{});await load();})}>{t('Skip','건너뛰기')}</button></div>}
     <p className="admin-help">{t('Generation never publishes. Copy is saved before images, so an image failure does not lose it.','생성만으로는 게시되지 않습니다. 이미지를 만들기 전에 문구부터 저장하므로 이미지 생성이 실패해도 문구는 남습니다.')}</p>
    </div><aside className="marketing-preview"><strong>{t('Saved preview','저장된 미리보기')}</strong>{draft.images?.length?draft.images.map((url:string,i:number)=><img key={url} src={url} alt={'Roundy card '+(i+1)} style={{width:'100%',height:'auto',marginTop:12}}/>):<p>{t('No saved image. Generate cards or a photo.','저장된 이미지가 없습니다. 카드나 사진을 생성하세요.')}</p>}</aside></div>}
-   <div className="admin-section-title"><Heading level={2}>{t('Generation history','생성 기록')}</Heading></div><div className="marketing-history">{generation?.jobs?.length?generation.jobs.map((j:Row)=><article key={j.id}><strong>{new Date(j.created_at).toLocaleString(locale,{timeZone:'Asia/Seoul'})} KST</strong><p>{j.automatic?t('Automatic','자동'):t('Manual','수동')} / {j.operation} / {j.status} / {stage(j.stage)}</p><small>{t('Reserved','예약액')} ${Number(j.reserved_usd).toFixed(2)} / {j.id.slice(0,8)}</small>{j.error_message&&<p className="admin-error">{friendlyError(j.error_message)}</p>}</article>):<p>{t('No generation jobs yet.','아직 생성 기록이 없습니다.')}</p>}</div>
+   <div className="admin-section-title"><Heading level={2}>{t('Generation history','생성 기록')}</Heading></div>
+   <div className="marketing-history">{generation?.jobs?.length?generation.jobs.map((j:Row)=>{
+    const sourceDraft=data.drafts.find((d:Row)=>d.id===j.draft_id);
+    const canRetry=j.status==='failed'&&!j.automatic&&!!j.request_payload&&sourceDraft?.status==='needs_approval';
+    return <article key={j.id}>
+     <strong>{new Date(j.created_at).toLocaleString(locale,{timeZone:'Asia/Seoul'})} KST</strong>
+     <p>{j.automatic?t('Automatic','자동'):t('Manual','수동')} / {j.operation} / {j.status} / {stage(j.stage)}</p>
+     <small>{t('Reserved','예약액')} {'$'+Number(j.reserved_usd).toFixed(2)} / {j.id.slice(0,8)}</small>
+     {j.retry_of_job_id&&<p className="admin-help">{t('Retry of','재시도 원본')} {String(j.retry_of_job_id).slice(0,8)}</p>}
+     {j.error_message&&<p className="admin-error">{friendlyError(j.error_message)}</p>}
+     {canRetry&&<button type="button" className="admin-secondary" disabled={busy||!!running} onClick={()=>void retryJob(j)}>{t('Retry same settings','같은 설정으로 재시도')}</button>}
+    </article>;
+   }):<p>{t('No generation jobs yet.','아직 생성 기록이 없습니다.')}</p>}</div>
    {settings&&<details className="marketing-setup"><summary>{t('Automation settings','자동화 설정')}</summary><form className="admin-form" onSubmit={e=>{e.preventDefault();void work(async()=>{await mutate('/settings',settings,'PUT');await load(draft?.id);setNotice(t('Automation saved.','자동화 설정을 저장했습니다.'));});}}>
     <label className="check-row"><input type="checkbox" checked={settings.daily_instagram_enabled} onChange={e=>setSettings({...settings,daily_instagram_enabled:e.target.checked})}/>{t('One automatic draft per day','매일 완성된 초안 1개 자동 생성')}</label><label>{t('Generation time KST','생성 시간 KST')}<input type="time" value={settings.draft_generation_time_kst.slice(0,5)} onChange={e=>setSettings({...settings,draft_generation_time_kst:e.target.value})}/></label><p className="admin-help">{t('Checked every 15 minutes after this time. One dispatch per date, even on failure.','이 시간 이후 15분 간격으로 확인합니다. 실패해도 해당 날짜에는 자동 호출을 반복하지 않습니다.')}</p>
     <label>{t('Daily basis','일일 콘텐츠 기준')}<select value={settings.content_mode} onChange={e=>setSettings({...settings,content_mode:e.target.value})}><option value="prelaunch">{t('Pre-launch','오픈 전 홍보')}</option><option value="live_event">{t('Live event','정식 이벤트')}</option></select></label>

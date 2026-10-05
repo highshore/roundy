@@ -35,3 +35,8 @@ RLS exposes job/control tables only to administrators for reading. Reservation/e
 `node scripts/test-marketing-generation.mjs`: 29 assertions with a mocked provider, zero live API calls. Covers input/consent, normal cards, dedupe, reservation denial, partial copy survival, 403 circuit breaking, unknown outcomes, free recovery, call/output limits.
 
 Production SQL guard tests run in a rolled-back transaction and verify idempotency, key conflicts, concurrency, retained failed reservations, budgets, free rendering, pause and permissions. Actual provider access and JPEG rendering still require a bounded production smoke test; mocks do not verify them.
+
+
+## Manual retry from history
+
+Failed manual jobs persist their normalized generation settings in `request_payload`. The admin history can retry the same settings without re-entering the prompt, language, topic, mode, or visual choice. A retry always creates a new guarded job and therefore a new explicit provider request; it never replays automatically. The new job links back through `retry_of_job_id`. Completed, running, and uncertain jobs are not retryable from this control. After a retry succeeds, the recovered draft still requires normal review before Approve & schedule or Publish now.
