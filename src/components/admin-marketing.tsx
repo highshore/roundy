@@ -1,4 +1,5 @@
 'use client';
+import {canOfferSavedCtaRecovery} from '@/lib/marketing-output-recovery';
 import { useEffect, useRef, useState } from 'react';
 import { Heading } from './heading';
 import { tr, type Locale } from '@/lib/locale';
@@ -62,6 +63,8 @@ export function AdminMarketing({locale}:{locale:Locale}){
    COMPLETED_GENERATION_REQUIRED:['Only a completed generation result can be restored.','완료된 생성 결과만 초안으로 불러올 수 있습니다.'],
    RESULT_SNAPSHOT_UNAVAILABLE:['This older completed generation predates result snapshots, so its exact content is no longer available.','이 완료 작업은 결과 보존 기능 도입 이전에 생성되어 정확한 결과를 다시 불러올 수 없습니다.'],
    IMPORT_CONFIRMATION_REQUIRED:['Confirm before adding this generated result to Drafts.','생성 결과를 초안으로 가져오기 전에 확인하세요.'],
+   SAVED_RESULT_RECOVERY_UNAVAILABLE:['This saved result cannot be recovered automatically. No paid retry was started.','이 저장 결과는 자동 복구할 수 없습니다. 유료 재시도는 시작하지 않았습니다.'],
+   SAVED_RESULT_RECOVERY_MISMATCH:['The saved result does not match this thread. Refresh before retrying.','저장 결과와 스레드가 일치하지 않습니다. 새로고침 후 확인하세요.'],
    RESULT_ALREADY_USED:['This generated result has already moved beyond the editable Drafts inbox.','이 생성 결과는 이미 초안으로 사용되어 편집 가능한 초안 목록을 벗어났습니다.']
   };
   return map[message]?t(...map[message]):message;
@@ -89,22 +92,22 @@ export function AdminMarketing({locale}:{locale:Locale}){
    setDirection('');
   });
  }
- function retryCost(job:Row){return job.operation==='render'?0:job.operation==='photo'?0.05:job.operation==='copy_photo'?0.07:job.operation==='research'?0.05:0.02;}
+ function retryCost(job:Row){if(canOfferSavedCtaRecovery(job))return 0;return job.operation==='render'?0:job.operation==='photo'?0.05:job.operation==='copy_photo'?0.07:job.operation==='research'?0.05:0.02;}
  async function retryJob(job:Row){
   if(!job.request_payload)throw new Error('RETRY_PAYLOAD_UNAVAILABLE');
-  const cost=retryCost(job),photo=['photo','copy_photo'].includes(job.operation),budget=cost.toFixed(2)+' USD';
-  const confirmMessage=t(
+  const freeRecovery=canOfferSavedCtaRecovery(job),cost=retryCost(job),photo=['photo','copy_photo'].includes(job.operation),budget=cost.toFixed(2)+' USD';
+  const confirmMessage=freeRecovery?t('Recover the saved content and render cards without calling any AI? No additional AI charge; it will not publish automatically.','저장된 본문을 재사용해 카드만 복구할까요? AI를 호출하지 않아 추가 AI 비용이 없으며 자동 게시하지 않습니다.'):t(
    'Retry this failed generation with the same saved settings? This starts one generation attempt (research uses up to two targeted searches and one writing request) and reserves '+budget+'. It will not publish automatically.',
    '이 실패 작업을 저장된 동일 설정으로 재시도할까요? 생성 시도 1회를 시작합니다. 검색형은 목적별 검색 최대 2회와 문구 작성 1회까지 사용하며, 앱 예산 '+budget+'를 예약합니다. 자동 게시되지는 않습니다.'
   );
   if(!window.confirm(confirmMessage))return;
   await work(async()=>{
-   const r=await request('/generation/jobs/'+job.id+'/retry',{confirm_retry:true,confirm_paid_photo:photo});
+   const r=await request('/generation/jobs/'+job.id+'/retry',{confirm_retry:true,confirm_paid_photo:photo,recover_saved_result:freeRecovery});
    await load();
    if(!r.ok||r.data.error)throw new Error(r.data.error||'Retry failed');
    if(['failed','uncertain'].includes(r.data.job?.status))throw new Error(r.data.job?.error_message||'Retry stopped');
    setActiveTab('generation');
-   setNotice(t('Retry complete. Open the result and choose Add to Drafts.','재시도가 완료됐습니다. 결과를 확인한 뒤 초안으로 가져오세요.'));
+   setNotice(r.data.recovered_without_ai?t('Recovered the saved result without any AI request. Review it, then add it to Drafts.','AI를 호출하지 않고 저장된 결과를 복구했습니다. 결과를 검토한 뒤 초안으로 가져오세요.'):t('Retry complete. Open the result and choose Add to Drafts.','재시도가 완료됐습니다. 결과를 확인한 뒤 초안으로 가져오세요.'));
   });
  }
  function openThreadResult(thread:Row){
@@ -189,7 +192,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
      {draft.status==='needs_approval'&&<button type="button" className="admin-secondary" disabled={busy||!!running||dirty} onClick={()=>void work(async()=>{const r=await request('/quality/recheck',{draft_id:draft.id,revision:draft.revision});if(!r.ok)throw new Error(r.data.error);selectDraft(r.data.draft);setNotice(t('Quality check finished. No AI request was made.','품질 검사를 마쳤습니다. AI를 호출하지 않았습니다.'));})}>{t('Recheck saved edits — no AI charge','저장한 내용 품질 검사 — AI 비용 없음')}</button>}
     </div>
     <label><span>{t('Caption','캡션')}</span><textarea rows={10} value={draft.caption||''} maxLength={2000} disabled={busy||!!running||draft.status!=='needs_approval'} onChange={e=>changeDraft('caption',e.target.value)}/></label>
-    <label><span>CTA</span><input value={draft.cta||''} maxLength={80} disabled={busy||!!running||draft.status!=='needs_approval'} onChange={e=>changeDraft('cta',e.target.value)}/></label>
+    <label><span>CTA</span><input value={draft.cta||''} maxLength={70} disabled={busy||!!running||draft.status!=='needs_approval'} onChange={e=>changeDraft('cta',e.target.value)}/></label>
     <label><span>{t('Destination','연결 주소')}</span><input value={draft.destination_url||''} disabled={busy||!!running||draft.status!=='needs_approval'} onChange={e=>changeDraft('destination_url',e.target.value)}/></label>
     {draft.research_status==='generated_without_sources'&&<p className="admin-error" role="alert">{t('Web Search completed, but OpenAI did not return source metadata. Fact-check this draft manually before publishing.','Web Search는 완료됐지만 OpenAI가 출처 메타데이터를 반환하지 않았습니다. 게시 전에 내용의 사실관계를 직접 확인하세요.')}</p>}
     {!!draft.research_sources?.length&&<div className="growth-sources">{draft.research_sources.map((s:Row)=><a key={s.url} href={s.url} target="_blank" rel="noreferrer">{s.publisher||s.title}</a>)}</div>}
@@ -213,7 +216,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
       </div>)}</div>
       <dl><div><dt>{t('Thread ID','스레드 ID')}</dt><dd>{thread.id}</dd></div><div><dt>{t('Attempts','시도 횟수')}</dt><dd>{attempts.length}</dd></div><div><dt>{t('Total reserved','총 예약액')}</dt><dd>{'$'+Number(thread.total_reserved_usd).toFixed(2)}</dd></div></dl>
       {attempts.some((a:Row)=>a.result_snapshot)&&<button type="button" className="admin-primary" onClick={e=>{e.preventDefault();openThreadResult(thread);}}>{t('View result / review notes','결과 및 검토 내용 보기')}</button>}
-      {canRetry&&<button type="button" className="admin-secondary" disabled={busy||!!running} onClick={e=>{e.preventDefault();void retryJob(latest);}}>{t('Retry same settings','같은 설정으로 재시도')}</button>}
+      {canRetry&&<button type="button" className="admin-secondary" disabled={busy||!!running} onClick={e=>{e.preventDefault();void retryJob(latest);}}>{canOfferSavedCtaRecovery(latest)?t('Recover saved result — no AI charge','저장된 결과로 무료 복구'):t('Retry same settings','같은 설정으로 재시도')}</button>}
       {thread.status==='completed'&&<p className="marketing-thread-success">{t('This generation thread is complete. Earlier failed attempts are kept only for history.','이 생성 스레드는 완료됐습니다. 이전 실패 시도는 기록용으로만 보존됩니다.')}</p>}
      </div>
     </details>;

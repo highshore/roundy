@@ -33,3 +33,11 @@ export function prepareSavedCtaRecovery(job:Row):Row {
   event_id:null,destination_url:'https://roundy.team',images:[],
  };
 }
+
+// A failed local render can retry the same saved source, never silently switch to paid generation.
+export function savedCtaRecoverySource(job:Row|null|undefined):string|null {
+ if(canRecoverSavedCta(job))return job!.id;
+ if(job?.status==='failed'&&!job.automatic&&job.operation==='render'&&job.error_code==='GENERATION_FAILED'&&typeof job.request_payload?.saved_recovery_of==='string'&&/^[0-9a-f-]{36}$/i.test(job.request_payload.saved_recovery_of))return job.request_payload.saved_recovery_of;
+ return null;
+}
+export const canOfferSavedCtaRecovery=(job:Row|null|undefined)=>Boolean(savedCtaRecoverySource(job));

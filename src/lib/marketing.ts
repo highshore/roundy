@@ -1,3 +1,4 @@
+import {savedCtaRecoverySource} from './marketing-output-recovery';
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
 import {draftQuality} from './marketing-editorial';
@@ -67,10 +68,14 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
   if(!currentDraft)return json({error:'Draft not found'},404);
   if(currentDraft.status!=='needs_approval')return json({error:'DRAFT_NOT_EDITABLE'},409);
   const user=(await db.auth.getUser()).data.user;if(!user)return json({error:'Sign in required'},401);
-  const retryPayload={...latest.request_payload,request_key:'retry:'+randomUUID(),revision:currentDraft.revision,confirm_photo:isPhoto};
+  const recoverySourceJobId=savedCtaRecoverySource(latest);
+  if(confirmation.recover_saved_result===true&&!recoverySourceJobId)return json({error:'SAVED_RESULT_RECOVERY_UNAVAILABLE'},409);
+  const retryPayload={...latest.request_payload,request_key:(recoverySourceJobId?'recover:':'retry:')+randomUUID(),revision:currentDraft.revision,confirm_photo:isPhoto};
   const nextAttempt=Math.max(1,Number(latest.attempt_number||1))+1;
-  const result=await runGeneration(currentDraft.id,retryPayload,user.id,false,{threadId,attemptNumber:nextAttempt,retryOfJobId:latest.id});
-  return json({...result,generation_thread_id:threadId,attempt_number:nextAttempt,retry_of_job_id:latest.id},result.error?400:200);
+  try{
+   const result=await runGeneration(currentDraft.id,retryPayload,user.id,false,{threadId,attemptNumber:nextAttempt,retryOfJobId:latest.id,...(recoverySourceJobId?{recoverySourceJobId}:{})});
+   return json({...result,recovered_without_ai:!!recoverySourceJobId,generation_thread_id:threadId,attempt_number:nextAttempt,retry_of_job_id:latest.id},result.error?400:200);
+  }catch(error){return json({error:error instanceof Error?error.message:'Recovery or retry could not start'},400);}
  }
  if(id==='generation'&&path[1]==='jobs'&&path.length===4&&uuid(path[2])&&path[3]==='import'&&req.method==='POST'){
   const body=await req.json().catch(()=>({}));
@@ -111,7 +116,7 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
   }
   if(path.length===2&&req.method==='PUT'){
    const v=await req.json();
-   if(!Number.isInteger(v.revision)||typeof v.caption!=='string'||!v.caption.trim()||v.caption.length>2000||typeof v.cta!=='string'||v.cta.length>80||typeof v.destination_url!=='string')return json({error:'Check the caption, CTA and draft revision.'},400);
+   if(!Number.isInteger(v.revision)||typeof v.caption!=='string'||!v.caption.trim()||v.caption.length>2000||typeof v.cta!=='string'||v.cta.trim().length>70||!v.cta.trim()||typeof v.destination_url!=='string')return json({error:'Check the caption, CTA and draft revision.'},400);
    try{const u=new URL(v.destination_url);if(u.protocol!=='https:'||u.username||u.password)throw new Error();}catch{return json({error:'Use a valid HTTPS destination URL.'},400);}
    if(v.images!==undefined)return json({error:'Images are saved by the protected generation worker. Use render saved cards or generate photo.'},400);
    return json({draft:checked(await service.rpc('edit_marketing_draft',{p_id:path[1],p_revision:v.revision,p_patch:{caption:v.caption.trim(),cta:v.cta.trim(),destination_url:v.destination_url.trim()}}))});

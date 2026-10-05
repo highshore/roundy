@@ -1,3 +1,4 @@
+import {prepareSavedCtaRecovery,SAVED_CTA_RECOVERY_VERSION} from './marketing-output-recovery';
 import {loadEditorialAssets} from './marketing-render-assets';
 import {CONTENT_POLICY_VERSION} from './marketing-content-policy';
 import 'server-only';
@@ -147,22 +148,31 @@ async function generatePhoto(db:DB,draft:Row,input:GenerationInput,job:Row){
  // One paid background, a complete server-rendered carousel. Never pay per card.
  return renderCards(db,draft,job,'data:image/jpeg;base64,'+encoded);
 }
-type GenerationThreadContext={threadId:string;attemptNumber:number;retryOfJobId:string};
+type GenerationThreadContext={threadId:string;attemptNumber:number;retryOfJobId:string;recoverySourceJobId?:string};
 export async function runGeneration(draftId:string,value:unknown,actor:string|null,automatic=false,thread?:GenerationThreadContext){
  const input=validateGenerationInput(value),db=createServiceRoleClient();if(automatic&&input.visual_mode==='photo')throw new Error('AUTOMATIC_PAID_PHOTOS_DISABLED');
  let draft=await readDraft(db,draftId);
+ let recoveryPatch:Row|null=null,recoverySource:Row|null=null;
+ if(thread?.recoverySourceJobId){
+  if(automatic||input.visual_mode!=='cards')throw new Error('SAVED_RESULT_RECOVERY_UNAVAILABLE');
+  recoverySource=checked(await db.from('marketing_generation_jobs').select('*').eq('id',thread.recoverySourceJobId).single()).data as Row;
+  if(!recoverySource||recoverySource.draft_id!==draftId||(recoverySource.generation_thread_id||recoverySource.id)!==thread.threadId)throw new Error('SAVED_RESULT_RECOVERY_MISMATCH');
+  const original=recoverySource.request_payload;
+  if(!original||original.content_mode!==input.content_mode||(original.topic_type||null)!==(input.topic_type||null)||original.language!==input.language||(original.instruction||'')!==(input.instruction||''))throw new Error('SAVED_RESULT_RECOVERY_MISMATCH');
+  recoveryPatch=prepareSavedCtaRecovery(recoverySource);
+ }
  // Verify the schema before reserving or calling any provider.
  checked(await db.from('instagram_post_drafts').select('content_document,quality_report,quality_revision').eq('id',draftId).single());
- if(input.mode==='image'){const q=draftQuality(draft);if(q.status!=='passed')throw new Error('품질 검토 필요: '+q.issues.join(' '));}
+ if(input.mode==='image'&&!recoveryPatch){const q=draftQuality(draft);if(q.status!=='passed')throw new Error('품질 검토 필요: '+q.issues.join(' '));}
  input.language=input.mode==='image'?(draft.content_language==='en'?'en':draft.content_language==='ko'?'ko':await nextContentLanguage(db,draft.id)):await resolveContentLanguage(db,draft,input.language);
  const growth=input.content_mode==='growth_carousel',research=growth&&researchTopics.has(input.topic_type||'')&&!input.render_only&&input.mode!=='image';
- const operation=input.render_only||input.mode==='image'&&input.visual_mode==='cards'?'render':input.visual_mode==='photo'?(input.mode==='both'?'copy_photo':'photo'):research?'research':'copy';
- const fingerprint=createHash('sha256').update(JSON.stringify({id:draftId,revision:input.revision,mode:input.mode,content:input.content_mode,language:input.language,visual:input.visual_mode,topic:input.topic_type||'',instruction:input.instruction,render:!!input.render_only})).digest('hex');
+ const operation=recoveryPatch?'render':input.render_only||input.mode==='image'&&input.visual_mode==='cards'?'render':input.visual_mode==='photo'?(input.mode==='both'?'copy_photo':'photo'):research?'research':'copy';
+ const fingerprint=createHash('sha256').update(JSON.stringify({id:draftId,revision:input.revision,mode:input.mode,content:input.content_mode,language:input.language,visual:input.visual_mode,topic:input.topic_type||'',instruction:input.instruction,render:!!input.render_only,saved_recovery_of:thread?.recoverySourceJobId||null})).digest('hex');
  const reservation=checked(await db.rpc('reserve_marketing_generation',{p_key:input.request_key,p_fingerprint:fingerprint,p_draft:draftId,p_revision:input.revision,p_operation:operation,p_actor:actor,p_automatic:automatic})).data as Row,job=reservation.job as Row;
  if(!reservation.accepted)return {draft,job,deduplicated:true};
  let contentQuality:Row|null=null;
  try{
-  const requestPayload={mode:input.mode,content_mode:input.content_mode,language:input.language,visual_mode:input.visual_mode,topic_type:input.topic_type||null,instruction:input.instruction||'',confirm_photo:input.confirm_photo===true,render_only:input.render_only===true};
+  const requestPayload={mode:input.mode,content_mode:input.content_mode,language:input.language,visual_mode:input.visual_mode,topic_type:input.topic_type||null,instruction:input.instruction||'',confirm_photo:input.confirm_photo===true,render_only:input.render_only===true,...(recoverySource?{saved_recovery_of:recoverySource.id}: {})};
   const threadId=thread?.threadId||job.id,attemptNumber=thread?.attemptNumber||1;
   checked(await db.from('marketing_generation_jobs').update({
    request_payload:requestPayload,
@@ -171,11 +181,16 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
    retry_of_job_id:thread?.retryOfJobId||null,
    updated_at:new Date().toISOString()
   }).eq('id',job.id));
-  if(operation!=='render'&&operation!=='photo'){
+  if(recoveryPatch){
+   contentQuality=recoveryPatch.quality_report;await progress(db,job,'restoring_saved_copy');
+   // Preserve failed source snapshots. The recovery is a new zero-cost attempt in the SAME thread.
+   checked(await db.from('marketing_generation_jobs').update({quality_report:contentQuality,result_snapshot:{...recoveryPatch,draft_id:draftId,recovery:{version:SAVED_CTA_RECOVERY_VERSION,source_job_id:recoverySource!.id,additional_paid_calls:0}}}).eq('id',job.id).eq('status','running'));
+   draft=await savePartial(db,draft,{...recoveryPatch,last_regeneration_mode:input.mode,last_regeneration_instruction:input.instruction});
+  }else if(operation!=='render'&&operation!=='photo'){
    const copy=await generateCopy(db,draft,input,job,research);contentQuality=copy.quality_report;await progress(db,job,'saving_copy');
    draft=await savePartial(db,draft,{...copy,last_regeneration_mode:input.mode,last_regeneration_instruction:input.instruction,images:[]});
   }
-  if(input.mode!=='text'||automatic){
+  if(recoveryPatch||input.mode!=='text'||automatic){
    const images=input.visual_mode==='photo'?await generatePhoto(db,draft,input,job):await renderCards(db,draft,job);await progress(db,job,'saving_images');
    draft=await savePartial(db,draft,{images,last_regeneration_mode:input.mode,last_regeneration_instruction:input.instruction});
   }
@@ -183,6 +198,7 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
   if(quality.status!=='passed')throw new Error('품질 검토 필요: '+quality.issues.join(' '));
   draft=checked(await db.rpc('set_marketing_quality',{p_draft:draft.id,p_revision:draft.revision,p_report:quality})).data as Row;
   const resultSnapshot={
+   ...(recoverySource?{recovery:{version:SAVED_CTA_RECOVERY_VERSION,source_job_id:recoverySource.id,original_cta:recoverySource.result_snapshot.content_document.cta,additional_paid_calls:0}}:{}),
    content_document:draft.content_document,quality_report:quality,quality_revision:draft.revision,
    draft_id:draft.id,draft_date:draft.draft_date,caption:draft.caption,cta:draft.cta,destination_url:draft.destination_url,
    images:draft.images||[],carousel_slides:draft.carousel_slides||[],research_sources:draft.research_sources||[],
