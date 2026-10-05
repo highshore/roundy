@@ -25,12 +25,13 @@ export function validateGenerationInput(value:unknown):GenerationInput{
  if(!v||typeof v!=='object'||typeof v.request_key!=='string'||!/^[a-zA-Z0-9:_-]{8,120}$/.test(v.request_key)||!Number.isInteger(v.revision)||v.revision<1||v.revision>98)throw new Error('INVALID_GENERATION_REQUEST');
  if(!['text','image','both'].includes(v.mode)||!['prelaunch','live_event','growth_carousel'].includes(v.content_mode)||!['cards','photo'].includes(v.visual_mode))throw new Error('INVALID_GENERATION_OPTIONS');
  if(v.instruction!==undefined&&(typeof v.instruction!=='string'||v.instruction.trim().length>500))throw new Error('INSTRUCTION_LIMIT_500');
- if(v.topic_type!=null&&!topics.includes(v.topic_type))throw new Error('INVALID_GROWTH_TOPIC');
+ const topicType=v.content_mode==='growth_carousel'?v.topic_type:undefined;
+ if(topicType!=null&&!topics.includes(topicType))throw new Error('INVALID_GROWTH_TOPIC');
  if(v.language!==undefined&&!['ko','en'].includes(v.language))throw new Error('INVALID_CONTENT_LANGUAGE');
  if(v.visual_mode==='photo'&&(v.content_mode==='growth_carousel'||v.mode==='text'||v.render_only))throw new Error('PHOTO_OPTION_NOT_APPLICABLE');
  if(v.visual_mode==='photo'&&v.confirm_photo!==true)throw new Error('CONFIRM_PAID_PHOTO_FIRST');
  if(v.render_only&&v.mode!=='image')throw new Error('INVALID_RENDER_OPTIONS');
- return {...v,instruction:v.instruction?.trim()||''};
+ return {...v,topic_type:topicType,instruction:v.instruction?.trim()||''};
 }
 async function readDraft(db:DB,id:string){return checked(await db.from('instagram_post_drafts').select('*').eq('id',id).single()).data as Row;}
 async function readControl(db:DB){return checked(await db.from('marketing_ai_control').select('*').eq('singleton',true).single()).data as Row;}
