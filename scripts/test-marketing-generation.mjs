@@ -60,8 +60,14 @@ for(const language of ['en','ko'])for(const type of Object.keys(harness().policy
 {const h=harness();await h.api.runGeneration(id,base,null);const before=h.requests.length,d=h.tables.instagram_post_drafts[0];const r=await h.api.runGeneration(id,{...base,request_key:'manual:render-fixture',revision:d.revision,mode:'image',render_only:true},null);check(()=>assert.equal(r.job.status,'completed'));check(()=>assert.equal(h.requests.length,before));}
 {const h=harness();for(const bad of [{...base,visual_mode:'photo'},{...base,revision:99},{...base,instruction:'x'.repeat(501)},{...base,language:'fr'},{...base,mode:'loop'}])check(()=>assert.throws(()=>h.api.validateGenerationInput(bad)));}
 {const p=harness().policy,c=fixture('book_insight','en',p.CONTENT_PROFILES);const q=p.evaluateContent(c,'book_insight','en',[{id:'S1',url:'https://english-school.example',title:'English lessons',evidence:'Unrelated tutoring services'}]);check(()=>assert.equal(q.status,'rejected'));const quiz=fixture('mini_quiz','en',p.CONTENT_PROFILES);quiz.slides[2].options=['Same','Same'];check(()=>assert.equal(p.evaluateContent(quiz,'mini_quiz','en').status,'rejected'));}
+{const p=harness().policy;check(()=>assert.equal(p.CONTENT_POLICY_VERSION,3));const ko=fixture('prelaunch','ko',p.CONTENT_PROFILES);ko.caption='진정한 인연을 위한 특별한 만남';check(()=>assert.equal(p.evaluateContent(ko,'prelaunch','ko').status,'rejected'));const en=fixture('prelaunch','en',p.CONTENT_PROFILES);en.caption='Discover meaningful human connections in a premium experience.';check(()=>assert.equal(p.evaluateContent(en,'prelaunch','en').status,'rejected'));check(()=>assert.match(p.writingInstructions('conversation_prompt','ko'),/실제 SNS|당장 써볼 수|AI\/마케팅 표현|AI\/marketing|상투적인|generic AI/i));}
+
 const generationSource=fs.readFileSync(new URL('../src/lib/marketing-generation.ts',import.meta.url),'utf8');
 check(()=>assert.ok(generationSource.includes("IMAGE_MODEL='gpt-image-2.5-flare'")));
 check(()=>assert.ok(generationSource.includes("size:'1024x1280'")));
 check(()=>assert.ok(generationSource.includes("draft_role:'workspace'")));
+const editorialSource=fs.readFileSync(new URL('../src/lib/marketing-editorial.ts',import.meta.url),'utf8');
+check(()=>assert.ok(editorialSource.includes('roundyMark')));
+check(()=>assert.ok(editorialSource.includes('visualMotif')));
+check(()=>assert.ok(editorialSource.includes("roundyLockup(46,true)")));
 console.log('PASS '+checks+' editorial/runtime assertions; zero live API calls.');

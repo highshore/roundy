@@ -11,3 +11,14 @@ Rendering uses role-specific cover, book attribution, evidence, dialogue, contra
 A database trigger blocks ALL new Instagram publishing queue entries unless the current draft revision passed quality checks. Editing or restoring content invalidates the pass. Free rechecks do not call AI. The old source-less success fallback is no longer used for evidence-dependent content.
 
 Reservations: copy $0.02; research (up to two targeted searches + one writing call) $0.05; photo $0.05; copy+photo $0.07. Existing $0.25/day, $3/month, locks and unknown-outcome protection remain. Identical explicit retries can reuse valid saved research (books 7 days, studies 1 day). Reservations are conservative app accounting, not provider invoice guarantees. No paid API calls are made by CI tests.
+
+
+## Human copy and branded visuals
+
+Policy v3 explicitly avoids generic AI-ad language. The writing prompt uses type-specific tone guides and bans recurring abstract marketing phrases such as "meaningful connection", "premium experience", "진정한 인연", "품격 있는 만남" and similar stock language. The quality gate rejects these phrases and common formulaic AI openings before publication.
+
+Copy should prefer observable scenes, concrete actions, usable questions and short natural sentences over motivational abstractions. Growth posts remain editorial-first: Roundy appears only on the final CTA/caption unless the post itself is an event/brand announcement.
+
+Every server-rendered card now includes the real Roundy vector mark. Contextual zero-cost illustrations are chosen deterministically from the editorial type and semantic slide role (book stack, research bars, conversation bubbles, Seoul skyline, quiz cards, or 1:1 meeting motif). This creates visual variety without calling an image model.
+
+When the administrator explicitly chooses Photo for pre-launch/event content, the app uses gpt-image-2.5-flare at low quality in 1024x1280 JPEG. The model is instructed to generate only the candid lifestyle photograph with no text/logo; the real Roundy mark and headline are overlaid server-side. Automatic paid-photo generation remains disabled.
