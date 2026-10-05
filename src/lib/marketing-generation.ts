@@ -1,3 +1,5 @@
+import {loadEditorialAssets} from './marketing-render-assets';
+import {CONTENT_POLICY_VERSION} from './marketing-content-policy';
 import 'server-only';
 import { createHash } from 'node:crypto';
 import { createElement } from 'react';
@@ -110,24 +112,6 @@ async function resolveContentLanguage(db:DB,draft:Row,requested?:ContentLanguage
  if(draft.content_language==='ko'||draft.content_language==='en')return draft.content_language;
  return nextContentLanguage(db,draft.id);
 }
-function normalizePositioning(content:Row,language:ContentLanguage):Row{
- const serviceLine=language==='ko'?'Roundy는 서울에서 영어로 진행되는 1:1 밍글입니다.':'Roundy is an English-only 1:1 mingle in Seoul.';
- const mentionsEnglish=language==='ko'?/(영어|English-only)/i:/(English-only|in English)/i;
- let caption=String(content.caption||'').trim();
- if(!mentionsEnglish.test(caption))caption=(caption+'\n\n'+serviceLine).trim();
- const slides=Array.isArray(content.slides)?content.slides.map((item:Row)=>({...item})):[];
- if(slides.length){
-  const last=slides[slides.length-1];
-  const visible=String(last.title||'')+' '+String(last.body||'');
-  if(!mentionsEnglish.test(visible))last.body=(String(last.body||'').trim()+' '+serviceLine).trim();
- }
- const all=[caption,...slides.flatMap((item:Row)=>[String(item.title||''),String(item.body||'')])].join(' ');
- const overt=/\b(qualified|screened|vetted|elite|high[- ]caliber|high[- ]status|exclusive applicants?|selective admission)\b|검증된|선별된|엄선된|엘리트|고스펙|고소득|상위\s*\d+%|자격을 갖춘/i;
- if(overt.test(all))throw new Error('OVERT_QUALIFICATION_LANGUAGE_BLOCKED');
- if(language==='en'&&/[가-힣]/.test(all))throw new Error('ENGLISH_POST_CONTAINS_KOREAN');
- if(language==='ko'&&!/[가-힣]/.test(all))throw new Error('KOREAN_POST_MISSING_KOREAN');
- return {...content,caption,slides};
-}
 async function generateCopy(db:DB,draft:Row,input:GenerationInput,job:Row,_research:boolean){
  return generateEditorialCopy(db,draft,input,job,upstream);
 }
@@ -139,13 +123,14 @@ async function storeImage(db:DB,job:Row,bytes:Buffer,index:number){
  const suffix=createHash('sha256').update(job.id+':'+index).digest('hex'),id=suffix.slice(0,8)+'-'+suffix.slice(8,12)+'-'+suffix.slice(12,16)+'-'+suffix.slice(16,20)+'-'+suffix.slice(20,32),path=job.id+'/'+id+'.jpg';
  checked(await db.storage.from('wis-event-images').upload(path,bytes,{contentType:'image/jpeg',upsert:true}));return db.storage.from('wis-event-images').getPublicUrl(path).data.publicUrl;
 }
-async function renderCards(db:DB,draft:Row,job:Row){
+async function renderCards(db:DB,draft:Row,job:Row,photoOverride?:string){
  const cards=draft.carousel_slides||[];
  if(!draft.content_document||!cards.length||cards.length>6)throw new Error('유형별 카드 문구가 없습니다. 품질 재작업 후 렌더하세요.');
+ const assets=await loadEditorialAssets();if(photoOverride)assets.photo=photoOverride;
  const urls:string[]=[];
  for(let i=0;i<cards.length;i++){
   await progress(db,job,'rendering_'+(i+1)+'_of_'+cards.length);
-  const image=editorialCard(cards[i],i,cards.length,draft.content_document);
+  const image=editorialCard(cards[i],i,cards.length,{...draft.content_document,slides:cards},assets);
   let timer:ReturnType<typeof setTimeout>|undefined;
   try{const bytes=await Promise.race([image.arrayBuffer(),new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(new Error('CARD_RENDER_TIMEOUT')),20000);})]);
    urls.push(await storeImage(db,job,await sharp(Buffer.from(bytes)).jpeg({quality:88}).toBuffer(),i));
@@ -155,13 +140,12 @@ async function renderCards(db:DB,draft:Row,job:Row){
 }
 async function generatePhoto(db:DB,draft:Row,input:GenerationInput,job:Row){
  await progress(db,job,'generating_photo');
- const prompt=['One candid hyper-realistic editorial photograph for Roundy, an English-only 1:1 mingle in Seoul. Show two adults naturally talking face-to-face in a believable café or hosted mingle setting. Smart-casual dating attire, coffee or non-alcoholic drinks, natural skin texture, imperfect human gestures, genuine eye contact, lived-in Seoul atmosphere. Compose vertically for Instagram 4:5 with breathing room for a headline overlay. Avoid posed stock-photo smiles, symmetrical corporate staging, glamour/luxury cues, exaggerated romance, crowded parties, alcohol, visible text, logos, watermarks or invented event details. The server will add the real Roundy logo and typography afterward.',String(draft.caption||'').slice(0,700),input.instruction||''].join('\n');
+ const prompt=['One candid editorial lifestyle photograph for Roundy, a Seoul-based 1:1 mingle for Korean and international adults. Korean-Korean meetings are also part of the service. Show two adults naturally talking face-to-face in a believable café or hosted mingle setting. Smart-casual dating attire, coffee or non-alcoholic drinks, natural skin texture, imperfect human gestures, genuine eye contact, lived-in Seoul atmosphere. Compose vertically for Instagram 4:5: place the people in the upper half, leave clean dark negative space in the lower half for a bold Gothic headline and coral highlight. The same photograph will be reused as the closing card image. No sidebar, UI frame, artificial chart, text or logo. Avoid posed stock-photo smiles, symmetrical corporate staging, glamour/luxury cues, exaggerated romance, crowded parties, alcohol, visible text, logos, watermarks or invented event details. The server will add the real Roundy logo and typography afterward.',String(draft.caption||'').slice(0,700),input.instruction||''].join('\n');
  const result=await upstream('images/generations',{model:IMAGE_MODEL,prompt,n:1,size:'1024x1280',quality:'low',output_format:'jpeg',output_compression:85,background:'opaque'},120000),encoded=result.data?.[0]?.b64_json;
  if(typeof encoded!=='string'||encoded.length<100||encoded.length>8*1024*1024)throw new Error('INVALID_GENERATED_PHOTO');
  await progress(db,job,'saving_photo');
- const cover=editorialPhotoCover(draft.carousel_slides[0],encoded);
- const jpeg=await sharp(Buffer.from(await cover.arrayBuffer())).jpeg({quality:88}).toBuffer();
- return [await storeImage(db,job,jpeg,0)];
+ // One paid background, a complete server-rendered carousel. Never pay per card.
+ return renderCards(db,draft,job,'data:image/jpeg;base64,'+encoded);
 }
 type GenerationThreadContext={threadId:string;attemptNumber:number;retryOfJobId:string};
 export async function runGeneration(draftId:string,value:unknown,actor:string|null,automatic=false,thread?:GenerationThreadContext){
@@ -223,7 +207,7 @@ export async function generationOverview(){
  checked(jobs);checked(usage);checked(dispatch);const rows=usage.data||[],dayStart=Date.parse(date+'T00:00:00+09:00'),todayRows=rows.filter(r=>Date.parse(r.created_at)>=dayStart);
  const temporaryActive=Boolean(control.temporary_daily_budget_usd&&control.temporary_daily_budget_expires_at&&Date.parse(control.temporary_daily_budget_expires_at)>Date.now());
  const dailyBudget=temporaryActive?Number(control.temporary_daily_budget_usd):Number(control.daily_budget_usd);
- return {control,jobs:jobs.data,dispatch:dispatch.data,usage:{daily_reserved_usd:todayRows.reduce((sum,r)=>sum+Number(r.reserved_usd),0),daily_budget_usd:dailyBudget,daily_budget_override_expires_at:temporaryActive?control.temporary_daily_budget_expires_at:null,monthly_reserved_usd:rows.reduce((sum,r)=>sum+Number(r.reserved_usd),0),daily_attempts:todayRows.filter(r=>Number(r.reserved_usd)>0).length,daily_calls:todayRows.filter(r=>Number(r.reserved_usd)>0&&['running','completed','uncertain'].includes(r.status)).length,daily_call_limit:5,monthly_call_limit:90,photo_daily_limit:1,photo_monthly_limit:10},provider:{configured:!!process.env.OPENAI_API_KEY?.trim(),copy_model:COPY_MODEL,image_model:IMAGE_MODEL,automatic_photos:false,retries:0,content_policy_version:2,research_reservation_usd:0.05}};
+ return {control,jobs:jobs.data,dispatch:dispatch.data,usage:{daily_reserved_usd:todayRows.reduce((sum,r)=>sum+Number(r.reserved_usd),0),daily_budget_usd:dailyBudget,daily_budget_override_expires_at:temporaryActive?control.temporary_daily_budget_expires_at:null,monthly_reserved_usd:rows.reduce((sum,r)=>sum+Number(r.reserved_usd),0),daily_attempts:todayRows.filter(r=>Number(r.reserved_usd)>0).length,daily_calls:todayRows.filter(r=>Number(r.reserved_usd)>0&&['running','completed','uncertain'].includes(r.status)).length,daily_call_limit:5,monthly_call_limit:90,photo_daily_limit:1,photo_monthly_limit:10},provider:{configured:!!process.env.OPENAI_API_KEY?.trim(),copy_model:COPY_MODEL,image_model:IMAGE_MODEL,automatic_photos:false,retries:0,content_policy_version:CONTENT_POLICY_VERSION,research_reservation_usd:0.05}};
 }
 export async function todayDraft(){
  const db=createServiceRoleClient(),today=kstDate();
