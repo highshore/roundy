@@ -549,7 +549,7 @@ Deno.serve(async req=>{
   let adminClient:ReturnType<typeof createClient>|null=null;
   const schedulerKey=req.headers.get('x-marketing-secret');
   if(schedulerKey){const {data,error}=await service.rpc('marketing_scheduler_authorized',{p_secret:schedulerKey});if(error||data!==true)return json({error:'Unauthorized'},401);}
-  else {const authorization=req.headers.get('Authorization')??'';adminClient=createClient(url,Deno.env.get('SUPABASE_ANON_KEY')!,{global:{headers:{Authorization:authorization}},auth:{persistSession:false}});const {data:{user},error}=await adminClient.auth.getUser();if(error||!user||user.app_metadata.provider!=='kakao')return json({error:'Sign in required'},401);const {data:admin,error:adminError}=await adminClient.rpc('is_admin');if(adminError||admin!==true)return json({error:'Administrator access required'},403);}
+  else {const authorization=req.headers.get('Authorization')??'';adminClient=createClient(url,Deno.env.get('SUPABASE_ANON_KEY')!,{global:{headers:{Authorization:authorization}},auth:{persistSession:false}});const {data:{user},error}=await adminClient.auth.getUser();if(error||!user)return json({error:'Sign in required'},401);const {data:admin,error:adminError}=await adminClient.rpc('is_admin');if(adminError||admin!==true)return json({error:'Administrator access required'},403);}
   if(req.method==='GET')return json(connection());
   if(req.method!=='POST')return json({error:'Method not allowed'},405);
   if(adminClient){
@@ -568,7 +568,9 @@ Deno.serve(async req=>{
    if(body.action==='generate_draft_now'){
     return json({draft:await ensureDailyDraft(true)});
    }
-   const {data:template,error}=await adminClient.from('marketing_templates').select('*').eq('id',body.template_id).single();if(error||!template)return json({error:'Template not found'},404);validate(template);const result=await adminClient.rpc('enqueue_marketing',{p_template:body.template_id,p_request_key:body.request_key});if(result.error)throw result.error;
+   if(body.action!=='process_queue'){
+    const {data:template,error}=await adminClient.from('marketing_templates').select('*').eq('id',body.template_id).single();if(error||!template)return json({error:'Template not found'},404);validate(template);const result=await adminClient.rpc('enqueue_marketing',{p_template:body.template_id,p_request_key:body.request_key});if(result.error)throw result.error;
+   }
   }
   if(schedulerKey){
    await ensureDailyDraft();
