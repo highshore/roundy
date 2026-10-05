@@ -58,6 +58,12 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
   const result=await runGeneration(currentDraft.id,retryPayload,user.id,false,{threadId,attemptNumber:nextAttempt,retryOfJobId:latest.id});
   return json({...result,generation_thread_id:threadId,attempt_number:nextAttempt,retry_of_job_id:latest.id},result.error?400:200);
  }
+ if(id==='generation'&&path[1]==='jobs'&&path.length===4&&uuid(path[2])&&path[3]==='restore'&&req.method==='POST'){
+  const body=await req.json().catch(()=>({}));
+  if(body.confirm_restore!==true)return json({error:'RESTORE_CONFIRMATION_REQUIRED'},400);
+  const restored=checked(await service.rpc('restore_marketing_generation_snapshot',{p_job_id:path[2]}));
+  return json({draft:restored});
+ }
  if(id==='draft'&&path[1]==='generate'&&path.length===2&&req.method==='POST'){
   const body=await req.json().catch(()=>null);
   if(!body||typeof body.request_key!=='string')return json({error:'Refresh this page to use the cost-protected generator.'},400);
