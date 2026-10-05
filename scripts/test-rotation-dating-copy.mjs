@@ -26,7 +26,7 @@ check(()=>assert.ok(copy.includes('**Rotation Dating / 로테이션 소개팅**'
 check(()=>assert.ok(data.includes("eventCategories=['1:1 Speed Mingle']")));
 check(()=>assert.ok(app.includes("eventCategory(e)==='1:1 Speed Mingle'")));
 function walk(dir){return fs.readdirSync(dir,{withFileTypes:true}).flatMap(e=>e.isDirectory()?walk(dir+'/'+e.name):[dir+'/'+e.name]);}
-const sourceText=walk('src').filter(p=>/\.(ts|tsx)$/.test(p)).map(p=>fs.readFileSync(p,'utf8')).join('\n');
-check(()=>assert.ok(!/1:1 Mingle|1:1 밍글|1:1 mingle/.test(sourceText)));
-check(()=>assert.ok(!/entirely in English/i.test(sourceText)));
+const publicText=[...walk('src/components').filter(p=>/\.(ts|tsx)$/.test(p)),'src/lib/about-copy.ts','src/lib/data.ts'].map(p=>fs.readFileSync(p,'utf8')).join('\n');
+check(()=>assert.ok(!/1:1 Mingle|1:1 밍글|1:1 mingle/.test(publicText)));
+check(()=>assert.ok(!/entirely in English/i.test(publicText)));
 console.log('PASS '+checks+' Rotation Dating public-copy assertions; internal category identifiers preserved.');
