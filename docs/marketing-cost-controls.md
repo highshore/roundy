@@ -6,7 +6,7 @@ Generation and publishing remain separate. Generation never inserts publishing r
 
 Automatic generation: one daily copy/research request, then 2–3 brand cards or 4–6 Growth Carousel cards rendered server-side. No paid photos automatically. Copy model: fixed gpt-4.1-mini, 4,096 output token cap, 16,000 supplied prompt byte cap. Book/research/meme topics allow at most one low-context web search. Other topics do not search. Paid photos require per-request confirmation and use gpt-image-2, low, 1024x1024, n=1, with 1/day and 10/month limits.
 
-Application reservations are conservative estimates, not invoices: copy $0.02; research $0.02; photo $0.05; copy+photo $0.07; render saved cards $0. Paid work stops at $0.25/day, $3/calendar month, 5 paid jobs/day or 90/month. A copy+photo job can make two paid HTTP requests, so the maximum is six paid HTTP requests/day, with at most one photo request. Free render jobs are limited to 10/day. Day/month boundaries use Asia/Seoul. Limits are global, not per process or administrator.
+Application reservations are conservative estimates, not invoices: copy $0.02; research $0.05; photo $0.05; copy+photo $0.07; render saved cards $0. Paid work stops at $0.25/day, $3/calendar month, 5 paid jobs/day or 90/month. A copy+photo job can make two paid HTTP requests, so the maximum is six paid HTTP requests/day, with at most one photo request. Free render jobs are limited to 10/day. Day/month boundaries use Asia/Seoul. Limits are global, not per process or administrator.
 
 Provider pricing may change. Spending from other routes/projects/users or leaked keys is outside this ledger. Configure provider-side project/key limits independently. Never describe the application reservation budget as an unconditional invoice guarantee.
 
@@ -57,3 +57,6 @@ A user-visible generation task is a thread, not an individual provider attempt. 
 ## Immutable generated results
 
 Each completed generation attempt stores an immutable `result_snapshot` containing its caption, cards/images, sources, language, content mode and related draft metadata. Later generations may replace the current working draft, but they do not replace prior snapshots. Generation History exposes View result. An administrator may explicitly restore a completed snapshot into its still-editable draft; restoration increments the draft revision and never publishes automatically. Results generated before this snapshot feature can only be backfilled when the current draft still exactly corresponds to that completed attempt.
+
+
+Editorial policy v2 supersedes earlier source-less research fallback and single-call research descriptions. Book/study/myth generation now permits one source search followed by one tools-free structured writing call, with a 0.05 USD reservation. Evidence-dependent content without cited evidence is rejected and preserved, not marked publishable. Every new Instagram queue entry is checked against the reviewed current draft revision.

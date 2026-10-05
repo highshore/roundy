@@ -75,7 +75,7 @@ export function editorialCard(slide:Row,index:number,total:number,document:Row){
  const contrast=['contrast','options','checklist'].includes(role),evidence=['finding','context','limitation','insight'].includes(role);
  const dark=cta,ink=dark?'#fffefa':'#20211f',paper=dark?'#20211f':'#fffefa',accent='#ff6666';
  const box=(style:Row,...children:any[])=>h('div',{style:{display:'flex',...style}},...children);
- const text=(value:string,size:number,style:Row={})=>box({fontSize:size,lineHeight:1.45,whiteSpace:'pre-wrap',wordBreak:'break-word',...style},value);
+ const text=(value:string,size:number,style:Row={})=>box({fontSize:size,lineHeight:1.45,whiteSpace:'pre-wrap',wordBreak:'keep-all',...style},value);
  const title=String(slide.title||''),body=String(slide.body||''),highlight=String(slide.highlight||'');
  const source=String(slide.source_label||'');
  const head=box({justifyContent:'space-between',alignItems:'center',fontSize:24,letterSpacing:2},text(cover?'ROUNDY NOTES':String(slide.eyebrow||role).toUpperCase(),24),text(String(index+1).padStart(2,'0')+' / '+total,24));
@@ -103,4 +103,14 @@ export function editorialCard(slide:Row,index:number,total:number,document:Row){
   !cover&&!book&&!evidence&&source?text(source,22):null,slide.footer_note?text(slide.footer_note,20):null,
   box({justifyContent:'space-between'},text('@roundy.meet',22),text('SEOUL / 1:1',22)));
  return new ImageResponse(box({width:'100%',height:'100%',flexDirection:'column',padding:72,background:paper,color:ink,fontFamily:'sans-serif'},head,content,footer),{width:1080,height:1350});
+}
+
+export function editorialPhotoCover(slide:Row,encoded:string){
+ return new ImageResponse(h('div',{style:{display:'flex',width:'100%',height:'100%',position:'relative',background:'#20211f'}},
+  h('img',{src:'data:image/jpeg;base64,'+encoded,style:{position:'absolute',width:'100%',height:'100%',objectFit:'cover'}}),
+  h('div',{style:{position:'absolute',inset:0,display:'flex',flexDirection:'column',justifyContent:'flex-end',padding:72,color:'#fffefa',background:'linear-gradient(0deg,rgba(15,18,15,.93),rgba(15,18,15,.15) 85%)'}},
+   h('div',{style:{display:'flex',fontSize:27,letterSpacing:3,marginBottom:28}},'ROUNDY / SEOUL'),
+   h('div',{style:{display:'flex',fontSize:80,lineHeight:1.2,fontWeight:700,marginBottom:28}},String(slide?.title||'')),
+   h('div',{style:{display:'flex',fontSize:35,lineHeight:1.5}},String(slide?.body||''))
+  )),{width:1080,height:1350});
 }

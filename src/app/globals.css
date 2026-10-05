@@ -3408,3 +3408,5 @@ html:lang(ko) .legal-intro h1{word-break:keep-all}
  .marketing-result-images{grid-auto-columns:84%}
  .marketing-result-head{gap:10px}.marketing-result-head h2{font-size:22px}
 }
+
+.marketing-quality-status{display:grid;gap:9px;padding:16px;border:1px solid var(--border);border-radius:14px;background:var(--surface);font-size:13px;line-height:1.6}.marketing-quality-status strong{font-size:14px}.marketing-quality-status p{margin:0}

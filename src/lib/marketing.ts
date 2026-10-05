@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
+import {draftQuality} from './marketing-editorial';
 import type { createClient } from './supabase/server';
 import { createServiceRoleClient } from './supabase/service';
 import { marketingApi as legacyMarketingApi } from './marketing-legacy';
@@ -26,6 +27,19 @@ async function invokeMarketingWorker(db:Client,body:Record<string,unknown>,timeo
 // No generation route, including malformed suffixes, can reach legacy AI code.
 export async function marketingApi(req:NextRequest,db:Client,path:string[]){
  const id=path[0],service=createServiceRoleClient();
+ if(id==='quality'&&path[1]==='recheck'&&path.length===2&&req.method==='POST'){
+  const body=await req.json();if(!uuid(body.draft_id||'')||!Number.isInteger(body.revision))return json({error:'INVALID_REVIEW_REQUEST'},400);
+  const d=checked(await service.from('instagram_post_drafts').select('*').eq('id',body.draft_id).single());
+  if(d.revision!==body.revision)return json({error:'DRAFT_CHANGED_REFRESH_FIRST'},409);
+  const report=draftQuality(d),draft=checked(await service.rpc('set_marketing_quality',{p_draft:d.id,p_revision:d.revision,p_report:report}));
+  return json({draft,quality_report:report});
+ }
+ if(id==='generation'&&path[1]==='jobs'&&path.length===4&&uuid(path[2])&&path[3]==='reject'&&req.method==='POST'){
+  const body=await req.json();if(body.confirm_reject!==true)return json({error:'REJECT_CONFIRMATION_REQUIRED'},400);
+  const result=checked(await service.rpc('reject_marketing_content',{p_job:path[2],p_reason:typeof body.reason==='string'?body.reason.slice(0,500):'관리자 품질 검토에서 재작업 요청'}));
+  return json(result);
+ }
+
  if(!id&&req.method==='GET'){
   const response=await legacyMarketingApi(req,db,path);if(!response.ok)return response;
   const data=await response.json();return json({...data,generation:await generationOverview()});
