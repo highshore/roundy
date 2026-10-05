@@ -573,7 +573,6 @@ Deno.serve(async req=>{
    }
   }
   if(schedulerKey){
-   await ensureDailyDraft();
    const insightsChanged=await captureDueInsights();
    if(insightsChanged)await refreshTimeRecommendations();
   }
