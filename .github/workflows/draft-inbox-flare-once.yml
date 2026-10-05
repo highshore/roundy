@@ -28,7 +28,7 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src scripts/test-marketing-generation.mjs scripts/test-marketing-draft-inbox.mjs .github/workflows/ci.yml
+          git add src scripts/test-marketing-generation.mjs scripts/test-marketing-draft-inbox.mjs
           if ! git diff --cached --quiet; then
             git commit -m 'Integrate independent draft inbox and Flare image defaults'
             git push origin HEAD:feature/marketing-draft-inbox-image-flare
