@@ -3285,3 +3285,98 @@ html:lang(ko) .legal-intro h1{word-break:keep-all}
 .event-offer-note{grid-column:1/-1;margin:2px 0 0!important;font-size:10px!important;line-height:1.5!important;color:inherit;opacity:.8}
 @keyframes roundy-offer-shine{0%,60%{transform:translateX(-140%)}90%,100%{transform:translateX(140%)}}
 @media(prefers-reduced-motion:reduce){.event-status-strip.has-offer::before{animation:none;display:none}}
+
+/* Marketing admin compact tabs and scalable activity logs (2026-10-05). */
+.marketing-subtabs{
+ display:flex;
+ align-items:center;
+ gap:8px;
+ overflow-x:auto;
+ padding:4px 0 10px;
+ border-bottom:1px solid var(--border);
+ scrollbar-width:none;
+}
+.marketing-subtabs::-webkit-scrollbar{display:none}
+.marketing-subtabs button{
+ position:relative;
+ flex:0 0 auto;
+ min-height:40px;
+ padding:8px 14px;
+ border:1px solid transparent;
+ border-radius:999px;
+ background:transparent;
+ color:var(--muted);
+ font-size:13px;
+ font-weight:750;
+ white-space:nowrap;
+}
+.marketing-subtabs button.active{background:var(--ink);color:var(--paper)}
+.marketing-tab-dot{position:absolute;right:7px;top:7px;width:6px;height:6px;border-radius:50%;background:var(--brand);box-shadow:0 0 0 2px var(--paper)}
+.marketing-subtabs button.active .marketing-tab-dot{box-shadow:0 0 0 2px var(--ink)}
+.marketing-tab-panel{display:grid;gap:20px;min-width:0}
+.marketing-settings-card{display:grid;gap:20px;padding:22px;border:1px solid var(--border);border-radius:20px;background:var(--surface)}
+.marketing-settings-card>p{font-size:14px;line-height:1.65}
+.marketing-settings-card>label{display:grid;gap:7px}
+.marketing-settings-card>label>input{width:100%;border:1px solid var(--border);border-radius:12px;background:var(--paper);padding:12px 13px}
+.marketing-filter-chips{display:flex;gap:7px;overflow-x:auto;scrollbar-width:none}
+.marketing-filter-chips::-webkit-scrollbar{display:none}
+.marketing-filter-chips button{flex:0 0 auto;min-height:36px;padding:7px 12px;border:1px solid var(--border);border-radius:999px;background:var(--paper);font-size:12px;font-weight:700;color:var(--muted)}
+.marketing-filter-chips button[aria-pressed=true]{background:var(--ink);border-color:var(--ink);color:var(--paper)}
+.marketing-log-list{display:grid;border:1px solid var(--border);border-radius:18px;overflow:hidden;background:var(--paper)}
+.marketing-log-row{border-bottom:1px solid var(--border);background:var(--paper)}
+.marketing-log-row:last-child{border-bottom:0}
+.marketing-log-row>summary{list-style:none;display:flex;align-items:center;gap:12px;min-height:72px;padding:13px 16px;cursor:pointer}
+.marketing-log-row>summary::-webkit-details-marker{display:none}
+.marketing-log-row>summary:after{content:"›";margin-left:2px;color:var(--muted);font-size:22px;line-height:1;transform:rotate(90deg);transition:transform .15s}
+.marketing-log-row[open]>summary:after{transform:rotate(-90deg)}
+.marketing-log-row[open]>summary{background:var(--surface)}
+.marketing-log-main{display:flex;align-items:center;gap:10px;min-width:0;flex:1}
+.marketing-log-main>div{display:grid;gap:3px;min-width:0}
+.marketing-log-main strong{font-size:13px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.marketing-log-main small{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.marketing-log-end{display:grid;justify-items:end;gap:4px;flex:none}
+.marketing-log-end>small{font-size:10px;color:var(--muted)}
+.marketing-status-dot{width:8px;height:8px;flex:0 0 8px;border-radius:50%;background:#aaa}
+.marketing-status-dot.completed,.marketing-status-dot.sent{background:#4d8b57}
+.marketing-status-dot.failed{background:#b94c42}
+.marketing-status-dot.running,.marketing-status-dot.sending{background:#c58b31}
+.marketing-status-dot.uncertain,.marketing-status-dot.needs_review{background:#8b6a9b}
+.marketing-status-dot.queued,.marketing-status-dot.scheduled{background:#5d77a8}
+.marketing-status-pill{display:inline-flex;align-items:center;min-height:24px;padding:3px 8px;border-radius:999px;background:var(--surface);font-size:10px;font-weight:800;white-space:nowrap}
+.marketing-status-pill.completed,.marketing-status-pill.sent{background:#e9f3e8;color:#35673b}
+.marketing-status-pill.failed{background:#fff0f0;color:#973d45}
+.marketing-status-pill.running,.marketing-status-pill.sending{background:#fff6dd;color:#8a6325}
+.marketing-status-pill.uncertain,.marketing-status-pill.needs_review{background:#f4ebf7;color:#714b7e}
+.marketing-status-pill.queued,.marketing-status-pill.scheduled{background:#edf1f9;color:#435b8b}
+.marketing-log-detail{display:grid;gap:13px;padding:14px 16px 18px;border-top:1px solid var(--border);background:color-mix(in srgb,var(--surface) 55%,var(--paper))}
+.marketing-log-detail>p{font-size:12px;line-height:1.55}
+.marketing-log-detail dl{display:grid;gap:8px;margin:0}
+.marketing-log-detail dl>div{display:grid;grid-template-columns:90px minmax(0,1fr);gap:10px;font-size:11px}
+.marketing-log-detail dt{color:var(--muted)}
+.marketing-log-detail dd{margin:0;overflow-wrap:anywhere}
+.marketing-log-thumb{width:44px;height:44px;flex:0 0 44px;border-radius:10px;object-fit:cover;background:var(--surface)}
+.marketing-log-thumb.placeholder{display:block;border:1px solid var(--border)}
+.marketing-load-more{min-height:44px;border:1px solid var(--border);border-radius:999px;background:var(--paper);font-weight:750}
+@media(max-width:600px){
+ .marketing-subtabs{
+  position:sticky;
+  top:0;
+  z-index:12;
+  margin:0 -24px;
+  padding:10px 24px;
+  background:color-mix(in srgb,var(--paper) 94%,transparent);
+  border-top:1px solid var(--border);
+  backdrop-filter:blur(14px);
+  -webkit-backdrop-filter:blur(14px);
+ }
+ .marketing-subtabs button{min-height:38px;padding:7px 12px;font-size:12px}
+ .marketing-settings-card{padding:18px}
+ .marketing-log-row>summary{min-height:68px;padding:11px 12px;gap:9px}
+ .marketing-log-main strong{font-size:12px}
+ .marketing-log-main small{max-width:42vw}
+ .marketing-log-end{gap:3px}
+ .marketing-status-pill{font-size:9px;padding:3px 7px}
+ .marketing-log-thumb{width:38px;height:38px;flex-basis:38px}
+ .marketing-log-detail{padding:13px}
+ .marketing-log-detail dl>div{grid-template-columns:72px minmax(0,1fr)}
+}
