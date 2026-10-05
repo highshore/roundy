@@ -222,7 +222,19 @@ export function AdminMarketing({locale}:{locale:Locale}){
   {channel==='instagram'&&activeTab==='automation'&&<section className="marketing-tab-panel">   {settings&&<div className="marketing-settings-card"><div className="admin-section-title"><div><p className="admin-kicker">{t('Schedule','스케줄')}</p><Heading level={2}>{t('Automation settings','자동화 설정')}</Heading></div></div><form className="admin-form" onSubmit={e=>{e.preventDefault();void work(async()=>{await mutate('/settings',settings,'PUT');await load(draft?.id);setNotice(t('Automation saved.','자동화 설정을 저장했습니다.'));});}}>
     <label className="check-row"><input type="checkbox" checked={settings.daily_instagram_enabled} onChange={e=>setSettings({...settings,daily_instagram_enabled:e.target.checked})}/>{t('One automatic draft per day','매일 완성된 초안 1개 자동 생성')}</label><label>{t('Generation time KST','생성 시간 KST')}<input type="time" value={settings.draft_generation_time_kst.slice(0,5)} onChange={e=>setSettings({...settings,draft_generation_time_kst:e.target.value})}/></label><p className="admin-help">{t('Checked every 15 minutes after this time. One dispatch per date, even on failure.','이 시간 이후 15분 간격으로 확인합니다. 실패해도 해당 날짜에는 자동 호출을 반복하지 않습니다.')}</p>
     <label>{t('Daily basis','일일 콘텐츠 기준')}<select value={settings.content_mode} onChange={e=>setSettings({...settings,content_mode:e.target.value})}><option value="prelaunch">{t('Pre-launch','오픈 전 홍보')}</option><option value="live_event">{t('Live event','정식 이벤트')}</option></select></label>
-    <label className="check-row"><input type="checkbox" checked={settings.growth_carousel_enabled} onChange={e=>setSettings({...settings,growth_carousel_enabled:e.target.checked})}/>Growth Carousel</label><div className="marketing-days">{['일','월','화','수','목','금','토'].map((day,i)=><label key={day}><input type="checkbox" checked={settings.growth_days.includes(i)} onChange={e=>{const days=e.target.checked?[...settings.growth_days,i]:settings.growth_days.filter((x:number)=>x!==i);setSettings({...settings,growth_days:days,growth_posts_per_week:days.length});}}/>{day}</label>)}</div>
+    <label className="check-row"><input type="checkbox" checked={settings.growth_carousel_enabled} onChange={e=>setSettings({...settings,growth_carousel_enabled:e.target.checked})}/>Growth Carousel</label>
+    <div>
+     <span className="admin-field-label">{t('Growth Carousel days','Growth Carousel 요일')}</span>
+     <div className="marketing-days" role="group" aria-label={t('Growth Carousel days','Growth Carousel 요일')}>
+      {['일','월','화','수','목','금','토'].map((day,i)=>{const active=settings.growth_days.includes(i);return <button key={day} type="button" aria-pressed={active} className={active?'active':''} onClick={()=>{const days=active?settings.growth_days.filter((x:number)=>x!==i):[...settings.growth_days,i].sort((a:number,b:number)=>a-b);setSettings({...settings,growth_days:days,growth_posts_per_week:days.length});}}>{day}</button>;})}
+     </div>
+     <div className="marketing-day-presets">{[
+      [[1,2,3,4,5],t('Weekdays','평일')],
+      [[0,6],t('Weekend','주말')],
+      [[0,1,2,3,4,5,6],t('Every day','매일')],
+      [[],t('Clear','해제')]
+     ].map(([days,label]:any)=><button key={label} type="button" onClick={()=>setSettings({...settings,growth_days:days,growth_posts_per_week:days.length})}>{label}</button>)}</div>
+    </div>
     <label className="check-row"><input type="checkbox" checked={settings.optimization_enabled} onChange={e=>setSettings({...settings,optimization_enabled:e.target.checked})}/>{t('Optimize posting time','게시 시간 최적화')}</label><label>{t('Fallback posting time KST','기본 게시 시간 KST')}<input type="time" value={settings.daily_time_kst.slice(0,5)} onChange={e=>setSettings({...settings,daily_time_kst:e.target.value})}/></label><label className="check-row"><input type="checkbox" checked={settings.auto_reply_enabled} onChange={e=>setSettings({...settings,auto_reply_enabled:e.target.checked})}/>{t('Existing comments/DM auto-replies','기존 댓글 및 DM 자동 응답')}</label><button disabled={busy} className="admin-primary">{t('Save automation','자동화 저장')}</button>
    </form></div>}
   </section>}
