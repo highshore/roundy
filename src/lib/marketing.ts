@@ -7,6 +7,20 @@ type Client=Awaited<ReturnType<typeof createClient>>;
 const json=(value:unknown,status=200)=>NextResponse.json(value,{status,headers:{'Cache-Control':'private, no-store'}});
 const uuid=(value:string)=>/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 const checked=(r:any)=>{if(r.error)throw r.error;return r.data;};
+async function invokeMarketingWorker(db:Client,body:Record<string,unknown>,timeout=140000){
+ const {data:{session},error:sessionError}=await db.auth.getSession();
+ if(sessionError||!session?.access_token)throw new Error('Sign in required');
+ const response=await fetch(process.env.NEXT_PUBLIC_SUPABASE_URL+'/functions/v1/roundy-marketing',{
+  method:'POST',
+  headers:{Authorization:'Bearer '+session.access_token,apikey:process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,'Content-Type':'application/json'},
+  body:JSON.stringify(body),
+  signal:AbortSignal.timeout(timeout),
+  cache:'no-store'
+ });
+ const payload=await response.json().catch(()=>({}));
+ if(!response.ok)throw new Error(typeof payload.error==='string'?payload.error:'Publishing worker request failed');
+ return payload;
+}
 // The caller has already checked origin, member session and admin role.
 // No generation route, including malformed suffixes, can reach legacy AI code.
 export async function marketingApi(req:NextRequest,db:Client,path:string[]){
@@ -47,6 +61,19 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
    try{const u=new URL(v.destination_url);if(u.protocol!=='https:'||u.username||u.password)throw new Error();}catch{return json({error:'Use a valid HTTPS destination URL.'},400);}
    if(v.images!==undefined)return json({error:'Images are saved by the protected generation worker. Use render saved cards or generate photo.'},400);
    return json({draft:checked(await service.rpc('edit_marketing_draft',{p_id:path[1],p_revision:v.revision,p_patch:{caption:v.caption.trim(),cta:v.cta.trim(),destination_url:v.destination_url.trim()}}))});
+  }
+  if(path.length===3&&path[2]==='publish-now'&&req.method==='POST'){
+   const body=await req.json();if(!Number.isInteger(body.revision))return json({error:'Refresh and review the current draft before publishing.'},400);
+   const user=(await db.auth.getUser()).data.user;if(!user)return json({error:'Sign in required'},401);
+   const queued=checked(await service.rpc('publish_marketing_draft_now',{p_id:path[1],p_revision:body.revision,p_actor:user.id}));
+   let workerWarning='';
+   try{await invokeMarketingWorker(db,{action:'process_queue'});}catch(error){workerWarning=error instanceof Error?error.message:'The publish worker response could not be confirmed.';}
+   const run=checked(await service.from('marketing_runs').select('*').eq('id',queued.run.id).single());
+   const draft=checked(await service.from('instagram_post_drafts').select('*').eq('id',path[1]).single());
+   if(run.status==='sent')return json({draft,run,published:true});
+   if(run.status==='failed')return json({draft,run,error:run.message||'Instagram publishing failed.'},400);
+   if(run.status==='needs_review')return json({draft,run,published:false,needs_review:true,warning:run.message||workerWarning||'Instagram may have received the publish request. Check the account before resolving.'},202);
+   return json({draft,run,published:false,pending:true,warning:workerWarning||'The post is queued for immediate processing. Refresh status before trying again.'},202);
   }
   if(path.length===3&&path[2]==='approve'&&req.method==='POST'){
    const body=await req.json();if(!Number.isInteger(body.revision))return json({error:'Refresh and review the current draft before approving.'},400);
