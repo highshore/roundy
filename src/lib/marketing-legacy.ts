@@ -227,11 +227,12 @@ async function generateMarketingImage(prompt:string,draftId:string){
    method:'POST',
    headers:{Authorization:'Bearer '+ai.key,'Content-Type':'application/json'},
    body:JSON.stringify({
-    model:process.env.MARKETING_GATEWAY_IMAGE_MODEL||'openai/gpt-image-2',
+    model:process.env.MARKETING_GATEWAY_IMAGE_MODEL||'openai/gpt-image-2.5-flare',
     prompt,
     n:1,
-    size:'1024x1024',
-    response_format:'b64_json'
+    size:'1024x1280',
+    quality:'low',
+    output_format:'jpeg'
    }),
    signal:AbortSignal.timeout(120000)
   });
@@ -247,10 +248,10 @@ async function generateMarketingImage(prompt:string,draftId:string){
     input:[{role:'user',content:[{type:'input_text',text:prompt}]}],
     tools:[{
      type:'image_generation',
-     model:process.env.MARKETING_IMAGE_MODEL||'gpt-image-2',
+     model:process.env.MARKETING_IMAGE_MODEL||'gpt-image-2.5-flare',
      action:'generate',
-     size:'1024x1024',
-     quality:'medium',
+     size:'1024x1280',
+     quality:'low',
      output_format:'jpeg',
      background:'opaque'
     }],
@@ -311,7 +312,7 @@ function liveEventSystem(){
 
 function imagePrompt(mode:ContentMode,instruction:string,caption:string,imageBrief:string){
  const base=[
-  'Create one square 1:1 hyper-realistic Instagram marketing photograph for Roundy.',
+  'Create one portrait 4:5 hyper-realistic Instagram marketing photograph for Roundy.',
   'Scene: Seoul, polished but natural social venue, a Korean and an international adult in their late 20s or early 30s having a warm face-to-face 1:1 conversation in a rotation mingle setting.',
   'Dating-appropriate smart casual clothing, realistic skin texture, candid body language, coffee or non-alcoholic drinks only.',
   'International Seoul atmosphere, premium editorial lifestyle photography, cinematic natural indoor lighting, shallow depth of field.',
@@ -401,7 +402,7 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
    db.from('marketing_automation_settings').select('*').eq('singleton',true).single(),
    db.from('instagram_inbox').select('*').in('status',['new','needs_review','failed']).order('received_at',{ascending:false}).limit(100),
    createServiceRoleClient().rpc('instagram_webhook_setup_service'),
-   db.from('instagram_post_drafts').select('*').order('draft_date',{ascending:false}).limit(14),
+   db.from('instagram_post_drafts').select('*').eq('draft_role','candidate').eq('status','needs_approval').order('imported_at',{ascending:false}).order('updated_at',{ascending:false}).limit(100),
    db.from('instagram_posting_time_recommendations').select('*').order('dow'),
    db.from('instagram_post_insights').select('*').order('captured_at',{ascending:false}).limit(30)
   ]);

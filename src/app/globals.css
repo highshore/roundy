@@ -3410,3 +3410,20 @@ html:lang(ko) .legal-intro h1{word-break:keep-all}
 }
 
 .marketing-quality-status{display:grid;gap:9px;padding:16px;border:1px solid var(--border);border-radius:14px;background:var(--surface);font-size:13px;line-height:1.6}.marketing-quality-status strong{font-size:14px}.marketing-quality-status p{margin:0}
+
+/* Draft inbox / independent generation results (2026-10-05). */
+.marketing-generator-card{display:grid;gap:18px;padding:22px;border:1px solid var(--border);border-radius:22px;background:var(--surface)}
+.marketing-draft-inbox{display:grid;gap:10px}
+.marketing-draft-card{display:grid;grid-template-columns:72px minmax(0,1fr) auto;align-items:center;gap:14px;padding:12px;border:1px solid var(--border);border-radius:18px;background:var(--paper)}
+.marketing-draft-card.selected{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink)}
+.marketing-draft-card>img,.marketing-draft-thumb{width:72px;height:90px;border-radius:12px;object-fit:cover;background:var(--surface)}
+.marketing-draft-copy{display:grid;gap:4px;min-width:0}
+.marketing-draft-copy strong{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.marketing-draft-copy p{font-size:12px;color:var(--muted)}
+.marketing-draft-copy small{font-size:10px;color:var(--muted)}
+@media(max-width:600px){
+ .marketing-generator-card{padding:18px}
+ .marketing-draft-card{grid-template-columns:54px minmax(0,1fr);gap:10px}
+ .marketing-draft-card>img,.marketing-draft-thumb{width:54px;height:68px}
+ .marketing-draft-card>button{grid-column:1/-1;width:100%}
+}

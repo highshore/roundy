@@ -60,32 +60,37 @@ export function AdminMarketing({locale}:{locale:Locale}){
    GENERATION_THREAD_NOT_RETRYABLE:['Only the latest failed attempt in this generation thread can be retried. Refresh the history first.','이 생성 스레드의 가장 최근 실패 시도만 재시도할 수 있습니다. 생성 기록을 새로고침하세요.'],
    RESTORE_CONFIRMATION_REQUIRED:['Confirm before replacing the current draft with this saved result.','저장된 결과로 현재 초안을 교체하기 전에 확인하세요.'],
    COMPLETED_GENERATION_REQUIRED:['Only a completed generation result can be restored.','완료된 생성 결과만 초안으로 불러올 수 있습니다.'],
-   RESULT_SNAPSHOT_UNAVAILABLE:['This older completed generation predates result snapshots, so its exact content is no longer available.','이 완료 작업은 결과 보존 기능 도입 이전에 생성되어 정확한 결과를 다시 불러올 수 없습니다.']
+   RESULT_SNAPSHOT_UNAVAILABLE:['This older completed generation predates result snapshots, so its exact content is no longer available.','이 완료 작업은 결과 보존 기능 도입 이전에 생성되어 정확한 결과를 다시 불러올 수 없습니다.'],
+   IMPORT_CONFIRMATION_REQUIRED:['Confirm before adding this generated result to Drafts.','생성 결과를 초안으로 가져오기 전에 확인하세요.'],
+   RESULT_ALREADY_USED:['This generated result has already moved beyond the editable Drafts inbox.','이 생성 결과는 이미 초안으로 사용되어 편집 가능한 초안 목록을 벗어났습니다.']
   };
   return map[message]?t(...map[message]):message;
  }
  async function work(fn:()=>Promise<void>){if(inFlight.current)return;inFlight.current=true;setBusy(true);setError('');setNotice('');try{await fn();}catch(e){setError(friendlyError(e instanceof Error?e.message:'Request failed'));}finally{inFlight.current=false;if(mounted.current)setBusy(false);}}
  async function mutate(path:string,body:Row,method='POST'){const r=await request(path,body,method);if(r.data.draft)selectDraft(r.data.draft);if(!r.ok||r.data.error)throw new Error(r.data.error||'Request failed');return r.data;}
  async function generate(today=false,renderOnly=false){
-  if(!today&&!draft)return;if(dirty&&!window.confirm(t('Discard unsaved edits before generating?','저장하지 않은 수정을 버리고 생성할까요?')))return;
+  if(renderOnly&&!draft)return;
+  if(renderOnly&&dirty&&!window.confirm(t('Discard unsaved edits before rendering?','저장하지 않은 수정을 버리고 이미지를 다시 렌더할까요?')))return;
   const actualVisual=today||renderOnly||basis==='growth_carousel'||mode==='text'?'cards':visual,photo=actualVisual==='photo';
-  const cost=renderOnly||!today&&mode==='image'&&!photo?'$0':photo?(mode==='both'?'$0.07':'$0.05'):basis==='growth_carousel'&&['book_insight','trend_research','dating_myth'].includes(topic)?'$0.05':'$0.02';
-  const message=photo?t('Generate one paid low-quality AI photo? No retries. This reserves '+cost+' from the app budget, not an exact invoice quote.','유료 AI 사진 1장을 저비용 품질로 생성할까요? 자동 재시도는 없습니다. 앱 예산에서 '+cost+'를 보수적으로 차감하며 실제 청구액과는 다릅니다.'):t('Generate with a '+cost+' budget reservation? Existing copy may be replaced. Nothing will be published.','앱 예산 '+cost+'를 예약하고 생성할까요? 기존 문구가 교체될 수 있으며, 인스타그램에는 게시되지 않습니다.');
+  const cost=renderOnly?'$0':photo?'$0.05':basis==='growth_carousel'&&['book_insight','trend_research','dating_myth'].includes(topic)?'$0.05':'$0.02';
+  const message=photo?t('Generate one Flare AI photo at low quality? No retries. This reserves '+cost+' from the app budget.','Flare AI 사진 1장을 low 품질로 생성할까요? 자동 재시도는 없으며 앱 예산 '+cost+'를 예약합니다.'):t('Generate a new immutable content result with a '+cost+' budget reservation? It will not enter Drafts until you choose Add to Drafts.','앱 예산 '+cost+'를 예약하고 새 생성 결과를 만들까요? 생성 후 직접 초안으로 가져오기 전에는 초안 목록에 들어가지 않습니다.');
   if(!window.confirm(message))return;
   await work(async()=>{
-   const payload={request_key:'manual:'+crypto.randomUUID(),revision:draft?.revision||1,mode:renderOnly?'image':today?'both':mode,content_mode:basis,language:today?(draft?.content_language||undefined):contentLanguage,visual_mode:today?'cards':actualVisual,topic_type:topic,instruction:direction.trim(),confirm_photo:photo,render_only:renderOnly};
-   const r=await request(today?'/draft/generate':'/draft/'+draft!.id+'/regenerate',payload);
-   if(r.data.draft)selectDraft(r.data.draft);await load(r.data.draft?.id||draft?.id);
+   const payload={request_key:'manual:'+crypto.randomUUID(),revision:renderOnly?draft!.revision:1,mode:renderOnly?'image':today?'both':mode,content_mode:basis,language:today?undefined:contentLanguage,visual_mode:today?'cards':actualVisual,topic_type:topic,instruction:direction.trim(),confirm_photo:photo,render_only:renderOnly};
+   const path=renderOnly?'/draft/'+draft!.id+'/regenerate':'/draft/generate';
+   const r=await request(path,payload);
    if(!r.ok||r.data.error)throw new Error(r.data.error||'Generation failed');
-   if(r.data.job?.status==='running'){setNotice(t('This request already exists. Check its status; it was not billed again.','이미 접수된 요청입니다. 작업 기록을 확인하세요. 추가 호출하지 않았습니다.'));return;}
-   if(['failed','uncertain'].includes(r.data.job?.status))throw new Error(r.data.job.error_message||'Previous attempt stopped; no retry was sent.');
-   setNotice(t('Generation complete. Review the result before approving.','생성이 완료됐습니다. 결과를 검토한 뒤 승인하세요.'));setDirection('');
+   if(r.data.job?.status==='running'){setNotice(t('This request already exists. Check Generation history; it was not billed again.','이미 접수된 요청입니다. 생성 기록을 확인하세요. 추가 호출하지 않았습니다.'));return;}
+   if(['failed','uncertain'].includes(r.data.job?.status))throw new Error(r.data.job?.error_message||'Previous attempt stopped; no retry was sent.');
+   await load(renderOnly?draft?.id:undefined);
+   if(renderOnly&&r.data.draft)selectDraft(r.data.draft);
+   else setActiveTab('generation');
+   setNotice(renderOnly?t('Cards rendered from the current draft.','현재 초안의 카드를 다시 렌더했습니다.'):t('Generation complete. Open the result in Generation history and choose Add to Drafts.','생성이 완료됐습니다. 생성 기록에서 결과를 확인한 뒤 초안으로 가져오세요.'));
+   setDirection('');
   });
  }
  function retryCost(job:Row){return job.operation==='render'?0:job.operation==='photo'?0.05:job.operation==='copy_photo'?0.07:job.operation==='research'?0.05:0.02;}
  async function retryJob(job:Row){
-  const sourceDraft=data.drafts.find((d:Row)=>d.id===job.draft_id);
-  if(!sourceDraft||sourceDraft.status!=='needs_approval')throw new Error('DRAFT_NOT_EDITABLE');
   if(!job.request_payload)throw new Error('RETRY_PAYLOAD_UNAVAILABLE');
   const cost=retryCost(job),photo=['photo','copy_photo'].includes(job.operation),budget=cost.toFixed(2)+' USD';
   const confirmMessage=t(
@@ -95,12 +100,11 @@ export function AdminMarketing({locale}:{locale:Locale}){
   if(!window.confirm(confirmMessage))return;
   await work(async()=>{
    const r=await request('/generation/jobs/'+job.id+'/retry',{confirm_retry:true,confirm_paid_photo:photo});
-   if(r.data.draft)selectDraft(r.data.draft);
-   await load(r.data.draft?.id||job.draft_id);
+   await load();
    if(!r.ok||r.data.error)throw new Error(r.data.error||'Retry failed');
    if(['failed','uncertain'].includes(r.data.job?.status))throw new Error(r.data.job?.error_message||'Retry stopped');
-   setActiveTab('draft');
-   setNotice(t('Retry complete. The generated result is open in Draft.','재시도가 완료됐습니다. 생성 결과를 초안 탭에 열었습니다.'));
+   setActiveTab('generation');
+   setNotice(t('Retry complete. Open the result and choose Add to Drafts.','재시도가 완료됐습니다. 결과를 확인한 뒤 초안으로 가져오세요.'));
   });
  }
  function openThreadResult(thread:Row){
@@ -109,20 +113,20 @@ export function AdminMarketing({locale}:{locale:Locale}){
   if(!attempt){setError(friendlyError('RESULT_SNAPSHOT_UNAVAILABLE'));return;}
   setResultPreview({thread,attempt,snapshot:attempt.result_snapshot});
  }
- async function restoreResultToDraft(){
+ async function importResultToDraft(){
   if(!resultPreview?.attempt?.id)return;
-  if(!window.confirm(t('Replace the current editable draft with this saved generation result? This does not publish it.','현재 편집 가능한 초안을 이 저장된 생성 결과로 교체할까요? 게시되지는 않습니다.')))return;
+  if(!window.confirm(t('Create a new independent draft from this saved generation result? This does not publish it.','이 저장된 생성 결과로 독립적인 새 초안을 만들까요? 게시되지는 않습니다.')))return;
   await work(async()=>{
-   const r=await request('/generation/jobs/'+resultPreview.attempt.id+'/restore',{confirm_restore:true});
-   if(!r.ok||r.data.error)throw new Error(r.data.error||'Restore failed');
+   const r=await request('/generation/jobs/'+resultPreview.attempt.id+'/import',{confirm_import:true});
+   if(!r.ok||r.data.error)throw new Error(r.data.error||'Import failed');
    if(r.data.draft)selectDraft(r.data.draft);
    await load(r.data.draft?.id);
    setResultPreview(null);setActiveTab('draft');
-   setNotice(t('Saved generation result restored to Draft.','저장된 생성 결과를 초안으로 불러왔습니다.'));
+   setNotice(t('Generated result added to Drafts.','생성 결과를 독립 초안으로 추가했습니다.'));
   });
  }
   const running=(generation?.jobs||[]).find((j:Row)=>j.status==='running'&&Date.now()-Date.parse(j.created_at)<300000),blocked=Boolean(generation?.control?.blocked_reason||generation?.control?.enabled===false);
- function stage(s:string){const labels:Record<string,string>={reserved:t('Reserved; duplicate checks passed','예산 예약 및 중복 검사 완료'),writing:t('Writing copy','문구 작성 중'),researching:t('One web search and copy','웹 검색 최대 1회 및 문구 작성 중'),saving_copy:t('Saving copy','문구 저장 중'),generating_photo:t('Generating one photo','사진 1장 생성 중'),saving_photo:t('Saving photo','사진 저장 중'),saving_images:t('Saving images','이미지 저장 중'),complete:t('Complete','완료'),stopped:t('Stopped','중지')};return labels[s]||s.replace('rendering_','카드 생성 ').replace('_of_',' / ');}
+ function stage(s:string){const labels:Record<string,string>={reserved:t('Reserved; duplicate checks passed','예산 예약 및 중복 검사 완료'),writing:t('Writing copy','문구 작성 중'),researching:t('Researching sources','출처 조사 중'),saving_copy:t('Saving copy','문구 저장 중'),generating_photo:t('Generating one photo','사진 1장 생성 중'),saving_photo:t('Saving photo','사진 저장 중'),saving_images:t('Saving images','이미지 저장 중'),complete:t('Complete','완료'),stopped:t('Stopped','중지')};return labels[s]||s.replace('rendering_','카드 생성 ').replace('_of_',' / ');}
  function changeDraft(key:string,value:string){setDraft(d=>d?{...d,[key]:value}:d);setDirty(true);}
  const allGenerationJobs=((generation?.jobs||[]) as Row[]);
  const threadMap=new Map<string,Row[]>();
@@ -162,25 +166,26 @@ export function AdminMarketing({locale}:{locale:Locale}){
     <button type="button" className="admin-secondary" onClick={()=>void (async()=>{try{const enable=blocked;if(enable&&!window.confirm(t('Resume after checking API configuration? Budgets are not reset and failed jobs are not retried.','API 설정을 확인했나요? 사용 한도를 초기화하거나 실패 작업을 재시도하지 않고 AI를 재개합니다.')))return;const r=await request('/generation/control',{enabled:enable,confirm_resume:enable},'PUT');if(!r.ok)throw new Error(r.data.error);setGeneration(r.data);}catch(e){setError(e instanceof Error?e.message:'Could not update AI control');}})()}>{blocked?t('Resume after checking configuration','설정 확인 후 AI 재개'):t('Pause paid AI','유료 AI 일시 중지')}</button>
    </div>
    {running&&<div className="generation-progress active" role="status" aria-live="polite"><strong>{stage(running.stage)}</strong><p>{t('You may leave this page. Returning only reads the existing job, never restarts it.','페이지를 나가도 이미 접수된 작업은 서버에서 처리합니다. 다시 접속해도 같은 작업을 새로 시작하지 않습니다.')}</p></div>}
-   <div className="admin-section-title"><Heading level={2}>{t('Instagram drafts','Instagram 초안')}</Heading><button type="button" className="admin-primary" disabled={busy||!!running||blocked} onClick={()=>void generate(true)}>{t('Generate today’s copy + cards','오늘 문구와 카드 생성')}</button></div>
-   <label className="admin-form"><span>{t('Choose draft','초안 선택')}</span><select value={draft?.id||''} disabled={busy||!!running} onChange={e=>{if(dirty&&!window.confirm(t('Discard unsaved changes?','저장하지 않은 수정을 버릴까요?')))return;selectDraft(data.drafts.find((d:Row)=>d.id===e.target.value)||null);}}>{data.drafts.map((d:Row)=><option key={d.id} value={d.id}>{d.draft_date} / {d.status} / v{d.revision}</option>)}</select></label>
-   {!draft?<p className="admin-empty">{t('Generate the first draft above.','위 버튼으로 첫 초안을 생성하세요.')}</p>:<div className="marketing-layout"><div className="admin-form marketing-editor"><p>{draft.generation_reason}</p><p>{draft.draft_date} / v{draft.revision} / {draft.status} / {draft.content_language==='en'?t('English content','영어 콘텐츠'):t('Korean content','한국어 콘텐츠')}</p><p>{t('Recommended window','추천 게시 시간')}: {draft.window_start_kst?.slice(0,5)}–{draft.window_end_kst?.slice(0,5)} KST</p>
+   <section className="marketing-generator-card">
+    <div className="admin-section-title"><div><p className="admin-kicker">{t('Create','생성')}</p><Heading level={2}>{t('New content','새 콘텐츠 생성')}</Heading></div></div>
+    <div className="admin-form">
+     <div className="admin-two"><label><span>{t('Content basis','콘텐츠 기준')}</span><select value={basis} onChange={e=>setBasis(e.target.value)}><option value="prelaunch">{t('Pre-launch','오픈 전 홍보')}</option><option value="live_event">{t('Live event','정식 이벤트')}</option><option value="growth_carousel">Growth Carousel</option></select></label><label><span>{t('Generation scope','생성 범위')}</span><select value={mode} onChange={e=>setMode(e.target.value)}><option value="both">{t('Copy + visuals','문구 + 비주얼')}</option><option value="text">{t('Copy only','문구만')}</option></select></label></div>
+     <label><span>{t('Content language','콘텐츠 언어')}</span><select value={contentLanguage} onChange={e=>setContentLanguage(e.target.value as 'ko'|'en')}><option value="ko">{t('Korean post','한국어 콘텐츠')}</option><option value="en">{t('English post','영어 콘텐츠')}</option></select></label>
+     {basis==='growth_carousel'?<label><span>{t('Topic','주제')}</span><select value={topic} onChange={e=>setTopic(e.target.value)}>{topics.map((x,i)=><option key={x} value={x}>{t(x.replaceAll('_',' '),topicKo[i])}</option>)}</select></label>:mode!=='text'&&<label><span>{t('Visual method','비주얼 방식')}</span><select value={visual} onChange={e=>setVisual(e.target.value)}><option value="cards">{t('Rendered editorial cards — no image AI charge','에디토리얼 카드 — 이미지 AI 비용 없음')}</option><option value="photo">{t('Flare AI photo — low quality, 4:5','Flare AI 사진 — low 품질, 4:5')}</option></select></label>}
+     <label><span>{t('Creative direction','커스텀 지시문')}</span><textarea value={direction} maxLength={500} rows={4} onChange={e=>setDirection(e.target.value)}/><small>{direction.length}/500</small></label>
+     {basis==='growth_carousel'&&<p className="admin-help">{CONTENT_PROFILES[postType({content_mode:basis,topic_type:topic})].label}: {CONTENT_PROFILES[postType({content_mode:basis,topic_type:topic})].roles.join(' → ')}</p>}
+     {basis==='growth_carousel'&&['book_insight','trend_research','dating_myth'].includes(topic)&&<p className="admin-help">{t('High-context research may use up to two targeted searches before one structured writing request. Missing evidence blocks publication.','고품질 검색으로 목적별 검색을 최대 2회 사용한 뒤 구조화된 문구를 작성합니다. 근거가 부족하면 게시가 차단됩니다.')}</p>}
+     <button type="button" className="admin-primary" disabled={busy||!!running||blocked} onClick={()=>void generate(false)}>{t('Generate content','콘텐츠 생성')}</button>
+    </div>
+   </section>
+   <div className="admin-section-title"><div><p className="admin-kicker">{t('Working inbox','작업함')}</p><Heading level={2}>{t('Drafts','초안')}</Heading><p>{t('Only editable drafts appear here. Scheduled and published posts move to Publishing history.','편집 가능한 초안만 표시됩니다. 예약 또는 게시된 콘텐츠는 게시 기록으로 이동합니다.')}</p></div><button type="button" className="admin-secondary" onClick={()=>setActiveTab('generation')}>{t('Add from generated results','생성 결과에서 가져오기')}</button></div>
+   <div className="marketing-draft-inbox">{data.drafts.length?data.drafts.map((item:Row)=><article className={'marketing-draft-card '+(draft?.id===item.id?'selected':'')} key={item.id}>{item.images?.[0]?<img src={item.images[0]} alt="" />:<span className="marketing-draft-thumb placeholder"/>}<div className="marketing-draft-copy"><strong>{contentLabel(item)}</strong><p>{item.content_language==='en'?'EN':'KO'} · {item.quality_report?.status==='passed'?t('Ready for review','검토 가능'):t('Needs quality review','품질 검토 필요')}</p><small>{new Date(item.imported_at||item.updated_at).toLocaleString(locale,{timeZone:'Asia/Seoul'})}</small></div><button type="button" className={draft?.id===item.id?'admin-primary':'admin-secondary'} disabled={busy||!!running} onClick={()=>{if(dirty&&!window.confirm(t('Discard unsaved changes?','저장하지 않은 수정을 버릴까요?')))return;selectDraft(item);}}>{draft?.id===item.id?t('Editing','편집 중'):t('Edit','편집')}</button></article>):<div className="admin-empty"><p>{t('No editable drafts yet. Generate content, then add a completed result from Generation history.','아직 편집 가능한 초안이 없습니다. 콘텐츠를 생성한 뒤 생성 기록의 완료 결과를 초안으로 가져오세요.')}</p><button type="button" className="admin-secondary" onClick={()=>setActiveTab('generation')}>{t('Open Generation history','생성 기록 열기')}</button></div>}</div>
+   {!draft?<p className="admin-empty">{t('Select a working draft above to edit it.','위 작업함에서 편집할 초안을 선택하세요.')}</p>:<div className="marketing-layout"><div className="admin-form marketing-editor"><p>{draft.generation_reason}</p><p>{draft.draft_date} / v{draft.revision} / {draft.status} / {draft.content_language==='en'?t('English content','영어 콘텐츠'):t('Korean content','한국어 콘텐츠')}</p><p>{t('Recommended window','추천 게시 시간')}: {draft.window_start_kst?.slice(0,5)}–{draft.window_end_kst?.slice(0,5)} KST</p>
     <div className="marketing-quality-status" role="status">
      <strong>{draft.quality_report?.status==='passed'?t('Automated checks passed — editorial review still required','자동 검사 통과 — 내용 검토 후 승인'):t('Quality review required — publishing is blocked','품질 검토 필요 — 게시가 차단되어 있습니다')}</strong>
      {(draft.quality_report?.issues||[]).map((issue:string)=><p key={issue}>{issue}</p>)}
      {draft.status==='needs_approval'&&<button type="button" className="admin-secondary" disabled={busy||!!running||dirty} onClick={()=>void work(async()=>{const r=await request('/quality/recheck',{draft_id:draft.id,revision:draft.revision});if(!r.ok)throw new Error(r.data.error);selectDraft(r.data.draft);setNotice(t('Quality check finished. No AI request was made.','품질 검사를 마쳤습니다. AI를 호출하지 않았습니다.'));})}>{t('Recheck saved edits — no AI charge','저장한 내용 품질 검사 — AI 비용 없음')}</button>}
     </div>
-    {draft.status==='needs_approval'&&<fieldset disabled={busy||!!running} className="regeneration-panel"><legend>{t('Custom generation','커스텀 생성')}</legend><div className="admin-two">
-     <label><span>{t('Content basis','콘텐츠 기준')}</span><select value={basis} onChange={e=>setBasis(e.target.value)}><option value="prelaunch">{t('Pre-launch','오픈 전 홍보')}</option><option value="live_event">{t('Live event','정식 이벤트')}</option><option value="growth_carousel">Growth Carousel</option></select></label>
-     <label><span>{t('Generation scope','생성 범위')}</span><select value={mode} onChange={e=>setMode(e.target.value)}><option value="both">{t('Copy + image','문구 + 이미지')}</option><option value="text">{t('Copy only','문구만')}</option><option value="image">{t('Image only','이미지만')}</option></select></label></div>
-     <label><span>{t('Content language','콘텐츠 언어')}</span><select value={contentLanguage} onChange={e=>setContentLanguage(e.target.value as 'ko'|'en')} disabled={mode==='image'}><option value="ko">{t('Korean post','한국어 콘텐츠')}</option><option value="en">{t('English post','영어 콘텐츠')}</option></select></label>
-     <p className="admin-help">{t('Automatic posts alternate Korean and English. Each post uses one main language only, while always positioning Roundy as an English-only 1:1 mingle in Seoul.','자동 콘텐츠는 한국어와 영어를 번갈아 생성합니다. 한 게시물은 한 언어를 중심으로 작성하며, Roundy가 서울에서 영어로 진행되는 1:1 밍글이라는 점은 자연스럽게 포함합니다.')}</p>
-     {basis==='growth_carousel'?<label><span>{t('Topic','주제')}</span><select value={topic} onChange={e=>setTopic(e.target.value)}>{topics.map((x,i)=><option key={x} value={x}>{t(x.replaceAll('_',' '),topicKo[i])}</option>)}</select></label>:mode!=='text'&&<label><span>{t('Image method','이미지 방식')}</span><select value={visual} onChange={e=>setVisual(e.target.value)}><option value="cards">{t('Rendered cards — no image AI charge','카드 이미지 — 이미지 AI 비용 없음')}</option><option value="photo">{t('AI photo — paid, confirmation required','AI 사진 — 유료, 생성 전 확인')}</option></select></label>}
-     <label><span>{t('Creative direction','커스텀 지시문')}</span><textarea value={direction} maxLength={500} rows={4} onChange={e=>setDirection(e.target.value)}/><small>{direction.length}/500</small></label>
-     {basis==='growth_carousel'&&<p className="admin-help">{CONTENT_PROFILES[postType({content_mode:basis,topic_type:topic})].label}: {CONTENT_PROFILES[postType({content_mode:basis,topic_type:topic})].roles.join(' → ')}</p>}
-     {basis==='growth_carousel'&&['book_insight','trend_research','dating_myth'].includes(topic)&&<p>{t('One source search, then one structured writing request. Identical retries can reuse saved research. Missing citations block publishing.','출처 검색 1회 후 구조화된 문구 작성 1회로 처리합니다. 같은 설정의 재시도는 저장된 조사를 재사용합니다. 출처가 없으면 게시할 수 없습니다.')}</p>}
-     <div className="admin-form-actions"><button type="button" className="admin-primary" disabled={blocked&&(mode!=='image'||visual==='photo')} onClick={()=>void generate()}>{t('Generate custom content','커스텀 콘텐츠 생성')}</button><button type="button" className="admin-secondary" disabled={!draft.carousel_slides?.length} onClick={()=>void generate(false,true)}>{t('Render saved cards — no AI call','저장된 문구로 카드 복구 — AI 호출 없음')}</button></div>
-    </fieldset>}
     <label><span>{t('Caption','캡션')}</span><textarea rows={10} value={draft.caption||''} maxLength={2000} disabled={busy||!!running||draft.status!=='needs_approval'} onChange={e=>changeDraft('caption',e.target.value)}/></label>
     <label><span>CTA</span><input value={draft.cta||''} maxLength={80} disabled={busy||!!running||draft.status!=='needs_approval'} onChange={e=>changeDraft('cta',e.target.value)}/></label>
     <label><span>{t('Destination','연결 주소')}</span><input value={draft.destination_url||''} disabled={busy||!!running||draft.status!=='needs_approval'} onChange={e=>changeDraft('destination_url',e.target.value)}/></label>
@@ -195,8 +200,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
    <div className="marketing-filter-chips" role="group" aria-label={t('Generation status filter','생성 상태 필터')}>{([['all',t('All','전체')],['completed',t('Completed','완료')],['failed',t('Failed','실패')],['running',t('Running','진행 중')]] as const).map(([value,label])=><button type="button" key={value} aria-pressed={generationFilter===value} onClick={()=>{setGenerationFilter(value);setGenerationVisible(20);}}>{label}</button>)}</div>
    <div className="marketing-log-list">{visibleGenerationThreads.length?visibleGenerationThreads.map((thread:Row)=>{
     const latest=thread.latest as Row,root=thread.root as Row,attempts=thread.attempts as Row[];
-    const sourceDraft=data.drafts.find((d:Row)=>d.id===latest.draft_id);
-    const canRetry=thread.status==='failed'&&!latest.automatic&&!!latest.request_payload&&sourceDraft?.status==='needs_approval';
+    const canRetry=thread.status==='failed'&&!latest.automatic&&!!latest.request_payload;
     const language=root.request_payload?.language==='en'?'EN':root.request_payload?.language==='ko'?'KO':'';
     return <details className={'marketing-log-row generation-thread '+thread.status} key={thread.id}>
      <summary><div className="marketing-log-main"><span className={'marketing-status-dot '+thread.status}/><div><strong>{contentLabel(root)}{language?' · '+language:''}</strong><small>{new Date(root.created_at).toLocaleString(locale,{timeZone:'Asia/Seoul'})} · {attempts.length} {t('attempts','회 시도')} · {root.operation}</small></div></div><div className="marketing-log-end"><span className={'marketing-status-pill '+thread.status}>{statusText(thread.status)}</span><small>{'$'+Number(thread.total_reserved_usd).toFixed(2)}</small></div></summary>
@@ -246,7 +250,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
     <div className="marketing-result-copy"><strong>{t('Caption','캡션')}</strong><p>{resultPreview.snapshot.caption||''}</p></div>
     {!!resultPreview.snapshot.research_sources?.length&&<div className="growth-sources">{resultPreview.snapshot.research_sources.map((s:Row)=><a key={s.url} href={s.url} target="_blank" rel="noreferrer">{s.publisher||s.title||s.url}</a>)}</div>}
     {resultPreview.attempt.status==='completed'&&<button type="button" className="admin-secondary" disabled={busy} onClick={()=>{if(window.confirm(t('Reject this result for quality and enable rework in the same thread?','이 결과를 품질 불합격 처리하고 같은 스레드에서 재작업할까요?')))void work(async()=>{const r=await request('/generation/jobs/'+resultPreview.attempt.id+'/reject',{confirm_reject:true});if(!r.ok)throw new Error(r.data.error);setResultPreview(null);await load(draft?.id);setActiveTab('generation');});}}>{t('Reject quality / request rework','품질 불합격 및 재작업 요청')}</button>}
-    <div className="admin-form-actions"><button type="button" className="admin-primary" disabled={busy||resultPreview.attempt.status!=='completed'||resultPreview.attempt.quality_report?.status==='rejected'} onClick={()=>void restoreResultToDraft()}>{t('Load this result into Draft','이 결과를 초안으로 불러오기')}</button><button type="button" className="admin-secondary" onClick={()=>setResultPreview(null)}>{t('Close','닫기')}</button></div>
+    <div className="admin-form-actions"><button type="button" className="admin-primary" disabled={busy||resultPreview.attempt.status!=='completed'||resultPreview.attempt.quality_report?.status==='rejected'} onClick={()=>void importResultToDraft()}>{t('Add to Drafts','초안으로 가져오기')}</button><button type="button" className="admin-secondary" onClick={()=>setResultPreview(null)}>{t('Close','닫기')}</button></div>
    </section>
   </div>}
  </section>;

@@ -12,7 +12,7 @@ type ContentLanguage='ko'|'en';
 export type GenerationInput={request_key:string;revision:number;mode:'text'|'image'|'both';content_mode:'prelaunch'|'live_event'|'growth_carousel';visual_mode:'cards'|'photo';topic_type?:string;instruction?:string;language?:ContentLanguage;confirm_photo?:boolean;render_only?:boolean};
 const topics=['mbti','dating_archetype','book_insight','trend_research','meme_remix','dating_myth','conversation_prompt','seoul_dating','mini_quiz'];
 const researchTopics=new Set(['book_insight','trend_research','dating_myth']);
-const COPY_MODEL='gpt-4.1-mini',IMAGE_MODEL='gpt-image-2',MAX_INPUT_BYTES=16000;
+const COPY_MODEL='gpt-4.1-mini',IMAGE_MODEL='gpt-image-2.5-flare',MAX_INPUT_BYTES=16000;
 export const kstDate=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 const checked=<T extends {error:unknown}>(r:T):T=>{if(r.error)throw r.error;return r;};
 const safeError=(error:unknown)=>(error instanceof Error?error.message:String((error as Row)?.message||'Generation failed')).replace(/sk-[A-Za-z0-9_-]+/g,'[redacted]').replace(/Bearer\s+\S+/gi,'Bearer [redacted]').slice(0,500);
@@ -101,7 +101,7 @@ function normalizeCarouselSlides(value:unknown,growth:boolean):Row[]{
  return [...slides.slice(0,5),slides[slides.length-1]];
 }
 async function nextContentLanguage(db:DB,excludeId?:string):Promise<ContentLanguage>{
- const history=checked(await db.from('instagram_post_drafts').select('id,content_language,draft_date,caption').order('draft_date',{ascending:false}).limit(30)).data as Row[];
+ const history=checked(await db.from('instagram_post_drafts').select('id,content_language,draft_date,caption').eq('draft_role','workspace').order('draft_date',{ascending:false}).limit(30)).data as Row[];
  const previous=(history||[]).find(row=>row.id!==excludeId&&['ko','en'].includes(row.content_language)&&String(row.caption||'').trim());
  return previous?.content_language==='ko'?'en':'ko';
 }
@@ -156,7 +156,7 @@ async function renderCards(db:DB,draft:Row,job:Row){
 async function generatePhoto(db:DB,draft:Row,input:GenerationInput,job:Row){
  await progress(db,job,'generating_photo');
  const prompt=['One hyper-realistic editorial marketing photo: Korean and international adults, late 20s/early 30s, face-to-face conversation in an English-only Seoul 1:1 mingle setting. Smart casual, coffee only, natural skin, candid respectful body language, intentional social atmosphere. No text, logos, watermarks, alcohol, status-signaling luxury stereotypes or specific event claims.',String(draft.caption||'').slice(0,800),input.instruction||''].join('\n');
- const result=await upstream('images/generations',{model:IMAGE_MODEL,prompt,n:1,size:'1024x1024',quality:'low',output_format:'jpeg',background:'opaque'},120000),encoded=result.data?.[0]?.b64_json;
+ const result=await upstream('images/generations',{model:IMAGE_MODEL,prompt,n:1,size:'1024x1280',quality:'low',output_format:'jpeg',output_compression:85,background:'opaque'},120000),encoded=result.data?.[0]?.b64_json;
  if(typeof encoded!=='string'||encoded.length<100||encoded.length>8*1024*1024)throw new Error('INVALID_GENERATED_PHOTO');
  await progress(db,job,'saving_photo');
  const cover=editorialPhotoCover(draft.carousel_slides[0],encoded);
@@ -224,11 +224,16 @@ export async function generationOverview(){
  return {control,jobs:jobs.data,dispatch:dispatch.data,usage:{daily_reserved_usd:todayRows.reduce((sum,r)=>sum+Number(r.reserved_usd),0),monthly_reserved_usd:rows.reduce((sum,r)=>sum+Number(r.reserved_usd),0),daily_attempts:todayRows.filter(r=>Number(r.reserved_usd)>0).length,daily_calls:todayRows.filter(r=>Number(r.reserved_usd)>0&&['running','completed','uncertain'].includes(r.status)).length,daily_call_limit:5,monthly_call_limit:90,photo_daily_limit:1,photo_monthly_limit:10},provider:{configured:!!process.env.OPENAI_API_KEY?.trim(),copy_model:COPY_MODEL,image_model:IMAGE_MODEL,automatic_photos:false,retries:0,content_policy_version:2,research_reservation_usd:0.05}};
 }
 export async function todayDraft(){
- const db=createServiceRoleClient(),today=kstDate();const draft=checked(await db.from('instagram_post_drafts').select('*').eq('draft_date',today).maybeSingle()).data as Row|null;if(draft)return draft;
+ const db=createServiceRoleClient(),today=kstDate();
+ const existing=checked(await db.from('instagram_post_drafts').select('*').eq('draft_date',today).eq('draft_role','workspace').maybeSingle()).data as Row|null;
+ if(existing)return existing;
  const settings=checked(await db.from('marketing_automation_settings').select('*').eq('singleton',true).single()).data as Row,dow=new Date(today+'T12:00:00+09:00').getUTCDay();
  const rec=checked(await db.from('instagram_posting_time_recommendations').select('*').eq('dow',dow).maybeSingle()).data as Row|null,isGrowth=Boolean(settings.growth_carousel_enabled&&settings.growth_days.includes(dow)),topic=topics[Math.floor(Date.parse(today+'T00:00:00Z')/86400000)%topics.length],language=await nextContentLanguage(db);
- const base={draft_date:today,status:'needs_approval',content_language:language,content_mode:settings.content_mode,draft_kind:isGrowth?'growth_carousel':'brand',growth_topic_type:isGrowth?topic:null,content_pillar:'concept',caption:'',cta:'Follow @roundy.meet',destination_url:'https://roundy.team',images:[],carousel_slides:[],research_sources:[],research_status:isGrowth?'pending':'not_required',generation_reason:'Waiting for cost-controlled '+(language==='ko'?'Korean':'English')+' generation. Roundy is an English-only 1:1 mingle.',recommended_time_kst:rec?.recommended_time_kst||'21:00',window_start_kst:rec?.window_start_kst||'20:30',window_end_kst:rec?.window_end_kst||'21:30',scheduled_for:today+'T'+String(rec?.recommended_time_kst||'21:00').slice(0,5)+':00+09:00',revision:1};
- checked(await db.from('instagram_post_drafts').upsert(base,{onConflict:'draft_date',ignoreDuplicates:true}));return readDraft(db,checked(await db.from('instagram_post_drafts').select('id').eq('draft_date',today).single()).data!.id);
+ const base={draft_date:today,draft_role:'workspace',status:'needs_approval',content_language:language,content_mode:settings.content_mode,draft_kind:isGrowth?'growth_carousel':'brand',growth_topic_type:isGrowth?topic:null,content_pillar:'concept',caption:'',cta:'Follow @roundy.meet',destination_url:'https://roundy.team',images:[],carousel_slides:[],research_sources:[],research_status:isGrowth?'pending':'not_required',generation_reason:'Hidden generation workspace. Results are imported into independent drafts.',recommended_time_kst:rec?.recommended_time_kst||'21:00',window_start_kst:rec?.window_start_kst||'20:30',window_end_kst:rec?.window_end_kst||'21:30',scheduled_for:today+'T'+String(rec?.recommended_time_kst||'21:00').slice(0,5)+':00+09:00',revision:1};
+ const inserted=await db.from('instagram_post_drafts').insert(base).select('id').maybeSingle();
+ if(inserted.error&&String((inserted.error as any).code||'')!=='23505')throw inserted.error;
+ const id=inserted.data?.id||checked(await db.from('instagram_post_drafts').select('id').eq('draft_date',today).eq('draft_role','workspace').single()).data!.id;
+ return readDraft(db,id);
 }
 export async function automaticGeneration(){
  if(process.env.VERCEL_ENV&&process.env.VERCEL_ENV!=='production')throw new Error('PRODUCTION_ONLY');

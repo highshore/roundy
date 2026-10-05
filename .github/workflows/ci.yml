@@ -24,3 +24,4 @@ jobs:
       - run: npm test
       - run: node scripts/test-marketing-generation.mjs
       - run: node scripts/test-marketing-renderer.mjs
+      - run: node scripts/test-marketing-draft-inbox.mjs
