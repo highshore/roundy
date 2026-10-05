@@ -52,7 +52,8 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
   const user=(await db.auth.getUser()).data.user;if(!user)return json({error:'Sign in required'},401);
   const retryPayload={...original.request_payload,request_key:'retry:'+randomUUID(),revision:currentDraft.revision,confirm_photo:isPhoto};
   const result=await runGeneration(currentDraft.id,retryPayload,user.id);
-  if(result.job?.id)await service.from('marketing_generation_jobs').update({retry_of_job_id:original.id}).eq('id',result.job.id);
+  const retriedJob=result.job as Record<string,unknown>|undefined;
+  if(typeof retriedJob?.id==='string')await service.from('marketing_generation_jobs').update({retry_of_job_id:original.id}).eq('id',retriedJob.id);
   return json({...result,retry_of_job_id:original.id},result.error?400:200);
  }
  if(id==='draft'&&path[1]==='generate'&&path.length===2&&req.method==='POST'){
