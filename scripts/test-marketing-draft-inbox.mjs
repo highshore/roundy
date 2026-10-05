@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+let checks=0;const check=f=>{f();checks++;};
+const legacy=fs.readFileSync(new URL('../src/lib/marketing-legacy.ts',import.meta.url),'utf8');
+const api=fs.readFileSync(new URL('../src/lib/marketing.ts',import.meta.url),'utf8');
+const ui=fs.readFileSync(new URL('../src/components/admin-marketing.tsx',import.meta.url),'utf8');
+const migration=fs.readFileSync(new URL('../supabase/migrations/20261005070010_marketing_candidate_draft_inbox.sql',import.meta.url),'utf8');
+check(()=>assert.ok(legacy.includes(".eq('draft_role','candidate').eq('status','needs_approval')")));
+check(()=>assert.ok(api.includes("path[3]==='import'")));
+check(()=>assert.ok(ui.includes('marketing-draft-inbox')));
+check(()=>assert.ok(ui.includes('Add to Drafts')));
+check(()=>assert.ok(!ui.includes("Choose draft")));
+check(()=>assert.ok(migration.includes("where draft_role='workspace'")));
+check(()=>assert.ok(migration.includes('create_marketing_candidate_from_generation')));
+console.log('PASS '+checks+' draft inbox/source contract assertions.');

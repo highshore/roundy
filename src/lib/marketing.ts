@@ -72,6 +72,18 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
   const result=await runGeneration(currentDraft.id,retryPayload,user.id,false,{threadId,attemptNumber:nextAttempt,retryOfJobId:latest.id});
   return json({...result,generation_thread_id:threadId,attempt_number:nextAttempt,retry_of_job_id:latest.id},result.error?400:200);
  }
+ if(id==='generation'&&path[1]==='jobs'&&path.length===4&&uuid(path[2])&&path[3]==='import'&&req.method==='POST'){
+  const body=await req.json().catch(()=>({}));
+  if(body.confirm_import!==true)return json({error:'IMPORT_CONFIRMATION_REQUIRED'},400);
+  try{
+   const imported=checked(await service.rpc('create_marketing_candidate_from_generation',{p_job_id:path[2]}));
+   if(imported.status!=='needs_approval')return json({error:'RESULT_ALREADY_USED'},409);
+   return json({draft:imported});
+  }catch(error){
+   const message=error instanceof Error?error.message:String((error as {message?:unknown})?.message||'Import failed');
+   return json({error:message.slice(0,500)},400);
+  }
+ }
  if(id==='generation'&&path[1]==='jobs'&&path.length===4&&uuid(path[2])&&path[3]==='restore'&&req.method==='POST'){
   const body=await req.json().catch(()=>({}));
   if(body.confirm_restore!==true)return json({error:'RESTORE_CONFIRMATION_REQUIRED'},400);
