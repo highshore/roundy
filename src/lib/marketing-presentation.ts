@@ -75,7 +75,7 @@ export function normalizeCompactDocument(raw: PresentationRow, language: string)
       body:ko?bodyKo:bodyEn, secondary_body:ko?bodyEn:bodyKo, body_ko:bodyKo, body_en:bodyEn,
       highlight:'', options:[], source_ids:[],
       instagram:ROUNDY_IDENTITY.instagram, website:ROUNDY_IDENTITY.website};
-  }) : [];
+  });
   return {...raw, cta:generatedCta(language), caption_ko, caption_en, caption:ko?caption_ko:caption_en, slides,
     tagline:clean(raw.tagline), hashtags:curateHashtags(raw.post_type, raw.hashtags, raw),
     hashtag_selection:{basis:'topic_relevance_catalog',search_volume_verified:false},
