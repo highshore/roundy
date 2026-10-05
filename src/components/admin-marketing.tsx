@@ -69,7 +69,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
  async function generate(today=false,renderOnly=false){
   if(!today&&!draft)return;if(dirty&&!window.confirm(t('Discard unsaved edits before generating?','저장하지 않은 수정을 버리고 생성할까요?')))return;
   const actualVisual=today||renderOnly||basis==='growth_carousel'||mode==='text'?'cards':visual,photo=actualVisual==='photo';
-  const cost=renderOnly||!today&&mode==='image'&&!photo?'$0':photo?(mode==='both'?'$0.07':'$0.05'):basis==='growth_carousel'&&['book_insight','trend_research','dating_myth'].includes(topic)?'$0.07':'$0.02';
+  const cost=renderOnly||!today&&mode==='image'&&!photo?'$0':photo?(mode==='both'?'$0.07':'$0.05'):basis==='growth_carousel'&&['book_insight','trend_research','dating_myth'].includes(topic)?'$0.05':'$0.02';
   const message=photo?t('Generate one paid low-quality AI photo? No retries. This reserves '+cost+' from the app budget, not an exact invoice quote.','유료 AI 사진 1장을 저비용 품질로 생성할까요? 자동 재시도는 없습니다. 앱 예산에서 '+cost+'를 보수적으로 차감하며 실제 청구액과는 다릅니다.'):t('Generate with a '+cost+' budget reservation? Existing copy may be replaced. Nothing will be published.','앱 예산 '+cost+'를 예약하고 생성할까요? 기존 문구가 교체될 수 있으며, 인스타그램에는 게시되지 않습니다.');
   if(!window.confirm(message))return;
   await work(async()=>{
@@ -82,15 +82,15 @@ export function AdminMarketing({locale}:{locale:Locale}){
    setNotice(t('Generation complete. Review the result before approving.','생성이 완료됐습니다. 결과를 검토한 뒤 승인하세요.'));setDirection('');
   });
  }
- function retryCost(job:Row){return job.operation==='render'?0:job.operation==='photo'?0.05:job.operation==='copy_photo'?0.07:job.operation==='research'?0.07:0.02;}
+ function retryCost(job:Row){return job.operation==='render'?0:job.operation==='photo'?0.05:job.operation==='copy_photo'?0.07:job.operation==='research'?0.05:0.02;}
  async function retryJob(job:Row){
   const sourceDraft=data.drafts.find((d:Row)=>d.id===job.draft_id);
   if(!sourceDraft||sourceDraft.status!=='needs_approval')throw new Error('DRAFT_NOT_EDITABLE');
   if(!job.request_payload)throw new Error('RETRY_PAYLOAD_UNAVAILABLE');
   const cost=retryCost(job),photo=['photo','copy_photo'].includes(job.operation),budget=cost.toFixed(2)+' USD';
   const confirmMessage=t(
-   'Retry this failed generation with the same saved settings? This starts one generation attempt (research uses up to three targeted searches and one writing request) and reserves '+budget+'. It will not publish automatically.',
-   '이 실패 작업을 저장된 동일 설정으로 재시도할까요? 생성 시도 1회를 시작합니다. 검색형은 목적별 검색 최대 3회와 문구 작성 1회까지 사용하며, 앱 예산 '+budget+'를 예약합니다. 자동 게시되지는 않습니다.'
+   'Retry this failed generation with the same saved settings? This starts one generation attempt (research uses up to two targeted searches and one writing request) and reserves '+budget+'. It will not publish automatically.',
+   '이 실패 작업을 저장된 동일 설정으로 재시도할까요? 생성 시도 1회를 시작합니다. 검색형은 목적별 검색 최대 2회와 문구 작성 1회까지 사용하며, 앱 예산 '+budget+'를 예약합니다. 자동 게시되지는 않습니다.'
   );
   if(!window.confirm(confirmMessage))return;
   await work(async()=>{
