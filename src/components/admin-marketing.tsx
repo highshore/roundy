@@ -34,7 +34,19 @@ export function AdminMarketing({locale}:{locale:Locale}){
   async function poll(){if(cancelled||attempts++>=48||failures>=3)return;if(document.visibilityState==='visible')try{const r=await request('/generation');if(r.ok){if(!cancelled)setGeneration(r.data);failures=0;}else failures++;}catch{failures++;}if(!cancelled)timer=setTimeout(poll,5000);}
   timer=setTimeout(poll,2000);return()=>{cancelled=true;if(timer)clearTimeout(timer);};
  },[busy]);
- async function work(fn:()=>Promise<void>){if(inFlight.current)return;inFlight.current=true;setBusy(true);setError('');setNotice('');try{await fn();}catch(e){setError(e instanceof Error?e.message:'Request failed');}finally{inFlight.current=false;if(mounted.current)setBusy(false);}}
+ function friendlyError(message:string){
+  const map:Record<string,[string,string]>={
+   DUPLICATE_GENERATION_BLOCKED:['A matching generation is already running, completed, or has an unknown outcome. Refresh status before trying again.','같은 생성 작업이 이미 진행 중이거나 완료됐거나 결과 확인이 필요한 상태입니다. 상태를 새로고침한 뒤 확인하세요.'],
+   GENERATION_COOLDOWN_30_SECONDS:['Please wait 30 seconds before starting another generation.','연속 생성 방지를 위해 30초 후 다시 시도하세요.'],
+   GENERATION_BUDGET_REACHED:['Today’s marketing AI safety budget has been reached.','오늘 마케팅 AI 안전 한도에 도달했습니다.'],
+   GENERATION_CALL_LIMIT:['Today’s generation call limit has been reached.','오늘 생성 횟수 안전 한도에 도달했습니다.'],
+   GENERATION_ALREADY_RUNNING:['Another generation is still running. Wait for it to finish or refresh status.','다른 생성 작업이 진행 중입니다. 완료될 때까지 기다리거나 상태를 새로고침하세요.'],
+   DRAFT_CHANGED_REFRESH_FIRST:['This draft changed. Refresh status before trying again.','초안이 변경됐습니다. 상태를 새로고침한 뒤 다시 시도하세요.'],
+   DRAFT_NOT_EDITABLE:['This draft is no longer editable. Refresh status.','이 초안은 더 이상 수정할 수 없습니다. 상태를 새로고침하세요.']
+  };
+  return map[message]?t(...map[message]):message;
+ }
+ async function work(fn:()=>Promise<void>){if(inFlight.current)return;inFlight.current=true;setBusy(true);setError('');setNotice('');try{await fn();}catch(e){setError(friendlyError(e instanceof Error?e.message:'Request failed'));}finally{inFlight.current=false;if(mounted.current)setBusy(false);}}
  async function mutate(path:string,body:Row,method='POST'){const r=await request(path,body,method);if(r.data.draft)selectDraft(r.data.draft);if(!r.ok||r.data.error)throw new Error(r.data.error||'Request failed');return r.data;}
  async function generate(today=false,renderOnly=false){
   if(!today&&!draft)return;if(dirty&&!window.confirm(t('Discard unsaved edits before generating?','저장하지 않은 수정을 버리고 생성할까요?')))return;
