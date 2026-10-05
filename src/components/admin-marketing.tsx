@@ -89,8 +89,8 @@ export function AdminMarketing({locale}:{locale:Locale}){
   if(!job.request_payload)throw new Error('RETRY_PAYLOAD_UNAVAILABLE');
   const cost=retryCost(job),photo=['photo','copy_photo'].includes(job.operation),budget=cost.toFixed(2)+' USD';
   const confirmMessage=t(
-   'Retry this failed generation with the same saved settings? This starts one generation attempt (research uses at most one search and one writing request) and reserves '+budget+'. It will not publish automatically.',
-   '이 실패 작업을 저장된 동일 설정으로 재시도할까요? 생성 시도 1회를 시작합니다. 검색형은 검색 1회와 문구 작성 1회까지 사용하며, 앱 예산 '+budget+'를 예약합니다. 자동 게시되지는 않습니다.'
+   'Retry this failed generation with the same saved settings? This starts one generation attempt (research uses up to two targeted searches and one writing request) and reserves '+budget+'. It will not publish automatically.',
+   '이 실패 작업을 저장된 동일 설정으로 재시도할까요? 생성 시도 1회를 시작합니다. 검색형은 목적별 검색 최대 2회와 문구 작성 1회까지 사용하며, 앱 예산 '+budget+'를 예약합니다. 자동 게시되지는 않습니다.'
   );
   if(!window.confirm(confirmMessage))return;
   await work(async()=>{
