@@ -24,7 +24,7 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
   if(cache?.key===cacheKey&&Array.isArray(cache.sources)&&cache.sources.length&&Date.now()-Date.parse(cache.saved_at)<(type==='book_insight'?7:1)*86400000){sources=cache.sources;notes=cache.notes;}
   else{
    ok(await db.from('marketing_generation_jobs').update({stage:'researching'}).eq('id',job.id));
-   const research=await call('responses',{model:MODEL,instructions:researchInstructions(type,language,input.instruction||''),input:'Build a source-grounded research brief for '+type+'. Use multiple targeted searches when needed to verify identity, evidence and limitations before writing the brief.',tools:[{type:'web_search',search_context_size:'high',external_web_access:true}],tool_choice:'required',max_tool_calls:3,include:['web_search_call.action.sources'],max_output_tokens:2400,store:false},90000);
+   const research=await call('responses',{model:MODEL,instructions:researchInstructions(type,language,input.instruction||''),input:'Build a source-grounded research brief for '+type+'. Use multiple targeted searches when needed to verify identity, evidence and limitations before writing the brief.',tools:[{type:'web_search',search_context_size:'high',external_web_access:true}],tool_choice:'required',max_tool_calls:2,include:['web_search_call.action.sources'],max_output_tokens:2400,store:false},90000);
    await record(research);const evidence=extractResearchEvidence(research);sources=evidence.sources;notes=evidence.notes;
    const cached={key:cacheKey,saved_at:new Date().toISOString(),sources,notes,search_completed:evidence.completed};
    ok(await db.from('marketing_generation_jobs').update({research_cache:cached}).eq('id',job.id));
