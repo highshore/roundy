@@ -2,7 +2,7 @@ name: Editorial repair verification
 on:
   push:
     branches: ['fix/marketing-editorial-quality-v2']
-    paths: ['scripts/apply-editorial-repair.mjs']
+    paths: ['scripts/apply-editorial-repair.mjs', 'scripts/refine-editorial-quality.mjs', '.github/workflows/quality-repair-once.yml']
 permissions:
   contents: write
 jobs:
@@ -20,6 +20,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: node scripts/apply-editorial-repair.mjs
+      - run: node scripts/refine-editorial-quality.mjs
       - run: npm run typecheck
       - run: npm test
       - run: node scripts/test-marketing-generation.mjs
@@ -36,12 +37,12 @@ jobs:
           name: editorial-quality-verification
           path: quality-artifacts
           retention-days: 3
-      - name: Commit verified patch only to the repair branch
+      - name: Commit verified application patch only to the repair branch
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src scripts/test-marketing-generation.mjs scripts/test-marketing-renderer.mjs scripts/marketing-fixtures.cjs .github/workflows/ci.yml docs
+          git add src scripts/test-marketing-generation.mjs scripts/test-marketing-renderer.mjs scripts/marketing-fixtures.cjs docs
           if ! git diff --cached --quiet; then
-            git commit -m 'Integrate editorial quality gates and verified role-specific rendering'
+            git commit -m 'Integrate editorial quality gates and verified bilingual card rendering'
             git push origin HEAD:fix/marketing-editorial-quality-v2
           fi
