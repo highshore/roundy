@@ -23,5 +23,14 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: node scripts/test-marketing-generation.mjs
+      - run: node scripts/test-marketing-compact.mjs
+      - run: node scripts/test-marketing-compact-runtime.mjs
       - run: node scripts/test-marketing-renderer.mjs
       - run: node scripts/test-marketing-draft-inbox.mjs
+      - run: node scripts/test-marketing-compact.mjs --render
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: marketing-editorial-render-qa
+          path: quality-artifacts
+          retention-days: 7
