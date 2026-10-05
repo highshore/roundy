@@ -91,8 +91,6 @@ export function AdminMarketing({locale}:{locale:Locale}){
  }
  function retryCost(job:Row){return job.operation==='render'?0:job.operation==='photo'?0.05:job.operation==='copy_photo'?0.07:job.operation==='research'?0.05:0.02;}
  async function retryJob(job:Row){
-  const sourceDraft=data.drafts.find((d:Row)=>d.id===job.draft_id);
-  if(!sourceDraft||sourceDraft.status!=='needs_approval')throw new Error('DRAFT_NOT_EDITABLE');
   if(!job.request_payload)throw new Error('RETRY_PAYLOAD_UNAVAILABLE');
   const cost=retryCost(job),photo=['photo','copy_photo'].includes(job.operation),budget=cost.toFixed(2)+' USD';
   const confirmMessage=t(
@@ -102,8 +100,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
   if(!window.confirm(confirmMessage))return;
   await work(async()=>{
    const r=await request('/generation/jobs/'+job.id+'/retry',{confirm_retry:true,confirm_paid_photo:photo});
-   if(r.data.draft)selectDraft(r.data.draft);
-   await load(r.data.draft?.id||job.draft_id);
+   await load();
    if(!r.ok||r.data.error)throw new Error(r.data.error||'Retry failed');
    if(['failed','uncertain'].includes(r.data.job?.status))throw new Error(r.data.job?.error_message||'Retry stopped');
    setActiveTab('generation');
@@ -203,8 +200,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
    <div className="marketing-filter-chips" role="group" aria-label={t('Generation status filter','생성 상태 필터')}>{([['all',t('All','전체')],['completed',t('Completed','완료')],['failed',t('Failed','실패')],['running',t('Running','진행 중')]] as const).map(([value,label])=><button type="button" key={value} aria-pressed={generationFilter===value} onClick={()=>{setGenerationFilter(value);setGenerationVisible(20);}}>{label}</button>)}</div>
    <div className="marketing-log-list">{visibleGenerationThreads.length?visibleGenerationThreads.map((thread:Row)=>{
     const latest=thread.latest as Row,root=thread.root as Row,attempts=thread.attempts as Row[];
-    const sourceDraft=data.drafts.find((d:Row)=>d.id===latest.draft_id);
-    const canRetry=thread.status==='failed'&&!latest.automatic&&!!latest.request_payload&&sourceDraft?.status==='needs_approval';
+    const canRetry=thread.status==='failed'&&!latest.automatic&&!!latest.request_payload;
     const language=root.request_payload?.language==='en'?'EN':root.request_payload?.language==='ko'?'KO':'';
     return <details className={'marketing-log-row generation-thread '+thread.status} key={thread.id}>
      <summary><div className="marketing-log-main"><span className={'marketing-status-dot '+thread.status}/><div><strong>{contentLabel(root)}{language?' · '+language:''}</strong><small>{new Date(root.created_at).toLocaleString(locale,{timeZone:'Asia/Seoul'})} · {attempts.length} {t('attempts','회 시도')} · {root.operation}</small></div></div><div className="marketing-log-end"><span className={'marketing-status-pill '+thread.status}>{statusText(thread.status)}</span><small>{'$'+Number(thread.total_reserved_usd).toFixed(2)}</small></div></summary>
