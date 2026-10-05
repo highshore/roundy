@@ -49,7 +49,7 @@ for(const language of ['en','ko'])for(const type of Object.keys(harness().policy
  check(()=>assert.ok(h.tables.marketing_generation_jobs[0].result_snapshot.content_document));
  const write=h.requests.find(x=>x.url.endsWith('chat/completions')).body;
  check(()=>assert.equal(write.response_format.json_schema.strict,true));check(()=>assert.equal(write.tools,undefined));
- if(h.policy.CONTENT_PROFILES[type].research){check(()=>assert.equal(h.requests[0].body.max_tool_calls,1));check(()=>assert.equal(h.requests[0].body.text,undefined));}
+ if(h.policy.CONTENT_PROFILES[type].research){check(()=>assert.equal(h.requests[0].body.max_tool_calls,2));check(()=>assert.equal(h.requests[0].body.tools?.[0]?.search_context_size,'high'));check(()=>assert.equal(h.requests[0].body.tools?.[0]?.external_web_access,true));check(()=>assert.equal(h.requests[0].body.text,undefined));}
  const dup=await h.api.runGeneration(id,input,null);check(()=>assert.equal(dup.deduplicated,true));
 }
 {const h=harness({duplicate:true});const r=await h.api.runGeneration(id,{...base,content_mode:'growth_carousel',topic_type:'book_insight'},null);check(()=>assert.equal(r.job.status,'failed'));check(()=>assert.ok(h.tables.marketing_generation_jobs[0].quality_report.issues.some(x=>x.includes('중복'))));check(()=>assert.equal(h.stored.length,0));check(()=>assert.equal(h.tables.instagram_post_drafts[0].caption,'Original'));check(()=>assert.ok(h.tables.marketing_generation_jobs[0].result_snapshot));}
