@@ -397,7 +397,7 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
  if(!id&&req.method==='GET'){
   const [templates,runs,settings,inbox,webhook,drafts,recommendations,insights]=await Promise.all([
    db.from('marketing_templates').select('*').order('updated_at',{ascending:false}),
-   db.from('marketing_runs').select('*').order('created_at',{ascending:false}).limit(50),
+   db.from('marketing_runs').select('*').order('created_at',{ascending:false}).limit(100),
    db.from('marketing_automation_settings').select('*').eq('singleton',true).single(),
    db.from('instagram_inbox').select('*').in('status',['new','needs_review','failed']).order('received_at',{ascending:false}).limit(100),
    createServiceRoleClient().rpc('instagram_webhook_setup_service'),
