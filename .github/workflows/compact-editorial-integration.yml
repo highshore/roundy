@@ -5,6 +5,7 @@ on:
     paths:
       - 'scripts/apply-compact-editorial.mjs'
       - 'scripts/test-marketing-compact.mjs'
+      - 'scripts/test-marketing-renderer.mjs'
       - 'src/lib/marketing-presentation.ts'
       - 'src/lib/marketing-visuals.ts'
       - 'src/lib/marketing-render-assets.ts'
@@ -31,6 +32,7 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: node scripts/test-marketing-generation.mjs
+      - run: node scripts/test-marketing-compact.mjs
       - run: node scripts/test-marketing-renderer.mjs
       - run: node scripts/test-marketing-draft-inbox.mjs
       - run: node scripts/test-marketing-compact.mjs --render
