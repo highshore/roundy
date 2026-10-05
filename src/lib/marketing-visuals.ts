@@ -72,9 +72,9 @@ function outro(index:number,total:number,document:Row,assets:EditorialAssets){
  return box({position:'relative',width:1080,height:1350,background:BRAND.paper,color:BRAND.ink},
   background(assets.photo,590),!assets.photo?box({position:'absolute',top:0,left:0,width:1080,height:590,background:BRAND.ink,alignItems:'center',justifyContent:'center'},officialRoundyLogo(true,98)):box({position:'absolute',top:0,left:0,width:1080,height:210,background:'linear-gradient(180deg,rgba(0,0,0,.5),transparent)'}),header(index,total,true),
   box({position:'absolute',left:64,right:64,top:642,flexDirection:'column',gap:24},
-   box({flexDirection:'column',gap:8},text(ko?'서울에서 만나는':'Meet in Seoul.',78,{fontWeight:900,lineHeight:1.13,letterSpacing:-2}),text(ko?'1:1 밍글':'One person at a time.',ko?86:68,{fontWeight:900,lineHeight:1.13,letterSpacing:-2,color:BRAND.accent})),
+   box({flexDirection:'column',gap:8},text(ko?'서울에서 만나는':'Meet in Seoul.',78,{fontWeight:900,lineHeight:1.13,letterSpacing:-2}),text(ko?'로테이션 소개팅':'Rotation Dating',ko?80:68,{fontWeight:900,lineHeight:1.13,letterSpacing:-2,color:BRAND.accent})),
    paragraph(ko?'한 사람씩 만나고, 대화해보세요.':'Meet face to face, one conversation at a time.',33),
-   box({gap:18,justifyContent:'space-between',padding:'16px 0'},...['서울 밍글','1:1 로테이션','직접 만나서'].map((s,i)=>text(ko?s:['Seoul','1:1 rotations','In person'][i],27,{fontWeight:700}))),
+   box({gap:18,justifyContent:'space-between',padding:'16px 0'},...['서울 소개팅','로테이션 진행','직접 만나서'].map((s,i)=>text(ko?s:['Seoul dating','Hosted rotations','In person'][i],27,{fontWeight:700}))),
    box({height:1,background:'#dedfd7',width:'100%'}),
    box({justifyContent:'space-between',alignItems:'center',gap:22},box({flexDirection:'column',gap:8},text('Find Roundy',29,{fontWeight:900}),text('Instagram  '+BRAND.instagram,26),text('Website  '+BRAND.website,26)),text(ko?'Roundy 둘러보기  ›':'Explore Roundy  ›',28,{fontWeight:700,background:BRAND.accent,padding:'22px 28px',borderRadius:999}))),
   document.slides?.find((s:Row)=>s.role==='cta')?.footer_note?text(document.slides.find((s:Row)=>s.role==='cta').footer_note,18,{position:'absolute',left:64,right:64,bottom:30,color:BRAND.muted}):null);
