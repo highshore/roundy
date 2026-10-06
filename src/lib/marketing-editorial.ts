@@ -83,7 +83,11 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
  let prepared=prepareContent(written.document,effectiveType,language,sources);
  if(prepared.report.status!=='passed'){
   const grouped=classifyQualityIssues(prepared.report.issues);
-  if(grouped.critical.length)throw new Error('품질 검토 필요: '+grouped.critical.join(' '));
+  if(grouped.critical.length){
+   const rejected={...prepared.report,severity:'critical',classification:grouped};
+   ok(await db.from('marketing_generation_jobs').update({quality_report:rejected,result_snapshot:{draft_id:draft.id,content_language:language,growth_topic_type:effectiveType,raw_content:written.raw.slice(0,24000),research_sources:sources,images:[],carousel_slides:[],caption:'',quality_report:rejected,generation_recovery:{fallback_reason:fallbackReason||null,repair_used:false}}}).eq('id',job.id));
+   throw new Error('품질 검토 필요: '+grouped.critical.join(' '));
+  }
   const repairIssues=[...grouped.quality,...grouped.formatting];
   if(repairIssues.length){
    repairUsed=true;
@@ -100,7 +104,7 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
  }
  const effectiveProfile=CONTENT_PROFILES[effectiveType];
  const recovery={requested_type:requestedType,effective_type:effectiveType,fallback_reason:fallbackReason||null,repair_used:repairUsed,search_limit:requestedType==='book_insight'?0:CONTENT_PROFILES[requestedType].research?3:0};
- const patch={caption:prepared.caption,cta:prepared.cta,content_document:document,quality_report:{...prepared.report,recovery},carousel_slides:prepared.slides,research_sources:prepared.sources,research_status:effectiveProfile.research?'generated':input.content_mode==='growth_carousel'?'generated':'not_required',content_language:language,draft_kind:input.content_mode==='growth_carousel'?'growth_carousel':'brand',growth_topic_type:input.content_mode==='growth_carousel'?effectiveType:null,content_mode:facts?'live_event':'prelaunch',content_pillar:facts?'event':'concept',generation_reason:effectiveProfile.label+' / editorial policy v'+CONTENT_POLICY_VERSION+(fallbackReason?' / safe fallback from '+requestedType:''),event_id:facts?.id||null,destination_url:facts?'https://roundy.team/events/'+facts.slug:'https://roundy.team'};
+ const finalClassification=classifyQualityIssues(prepared.report.issues);\n const patch={caption:prepared.caption,cta:prepared.cta,content_document:document,quality_report:{...prepared.report,recovery,classification:finalClassification},carousel_slides:prepared.slides,research_sources:prepared.sources,research_status:effectiveProfile.research?'generated':input.content_mode==='growth_carousel'?'generated':'not_required',content_language:language,draft_kind:input.content_mode==='growth_carousel'?'growth_carousel':'brand',growth_topic_type:input.content_mode==='growth_carousel'?effectiveType:null,content_mode:facts?'live_event':'prelaunch',content_pillar:facts?'event':'concept',generation_reason:effectiveProfile.label+' / editorial policy v'+CONTENT_POLICY_VERSION+(fallbackReason?' / safe fallback from '+requestedType:''),event_id:facts?.id||null,destination_url:facts?'https://roundy.team/events/'+facts.slug:'https://roundy.team'};
  ok(await db.from('marketing_generation_jobs').update({quality_report:patch.quality_report,result_snapshot:{...patch,draft_id:draft.id,images:[],research_notes:notes,saved_at:new Date().toISOString(),generation_recovery:recovery}}).eq('id',job.id));
  if(prepared.report.status!=='passed')throw new Error('품질 검토 필요: '+prepared.report.issues.join(' '));
  return patch;
