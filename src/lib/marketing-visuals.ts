@@ -5,6 +5,8 @@ import {ROUNDY_IDENTITY as BRAND, EDITORIAL_PRESET, type PresentationRow as Row}
 export type EditorialAssets = {
  photo?: string|null;
  photos?: string[];
+ cardPhotos?: Record<number,string>;
+ reusePhotos?: boolean;
  fonts?: Array<{name:string;data:ArrayBuffer;weight:400|700|900;style:'normal'}>;
 };
 const box=(style:Row,...children:any[])=>h('div',{style:{display:'flex',...style}},...children.filter(x=>x!==null&&x!==undefined&&x!==false));
@@ -74,8 +76,10 @@ function selectedBody(slide:Row,language:string){
  return String(slide.body_ko||slide.body||'');
 }
 function selectedPhoto(assets:EditorialAssets,index:number,cover=false){
+ const exact=assets.cardPhotos?.[index];if(exact)return exact;
  if(cover&&assets.photo)return assets.photo;
  const photos=(assets.photos||[]).filter(Boolean);
+ if(assets.reusePhotos===false)return null;
  if(photos.length)return photos[Math.abs(index)%photos.length];
  return assets.photo||null;
 }
@@ -162,8 +166,22 @@ function contentTextLead(slide:Row,index:number,document:Row,assets:EditorialAss
  );
 }
 
+function contentTextOnly(slide:Row,document:Row){
+ const language=document.content_language==='en'?'en':'ko',body=selectedBody(slide,language),options=Array.isArray(slide.options)?slide.options.filter(Boolean):[];
+ return box({position:'relative',width:1080,height:1350,background:BRAND.paper,color:BRAND.ink},
+  box({position:'absolute',left:64,top:58},miniLogo()),
+  box({position:'absolute',left:92,right:92,top:220,bottom:160,flexDirection:'column',justifyContent:'center',gap:38},
+   accentedHeadline(String(slide.title||''),language==='ko'?88:78,880),
+   paragraph(body,language==='ko'?42:38,840,{color:'#3e403b'}),
+   options.length?optionList(options,language):null,
+   String(slide.highlight||'')?text(slide.highlight,language==='ko'?36:33,{fontWeight:700,color:BRAND.accent,lineHeight:1.35}):null
+  ),
+  box({position:'absolute',left:92,bottom:78},sourceFootnote(slide,language))
+ );
+}
 function content(slide:Row,index:number,_total:number,document:Row,assets:EditorialAssets){
  const options=Array.isArray(slide.options)?slide.options.filter(Boolean):[];
+ if(assets.reusePhotos===false&&!selectedPhoto(assets,index))return contentTextOnly(slide,document);
  if(options.length>=2)return contentTextLead(slide,index,document,assets);
  return index%3===1?contentSplit(slide,index,document,assets):index%3===2?contentPhotoBand(slide,index,document,assets):contentTextLead(slide,index,document,assets);
 }
