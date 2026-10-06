@@ -82,6 +82,15 @@ create index if not exists marketing_trend_scans_created_idx on public.marketing
 
 alter table public.instagram_post_drafts
   add column if not exists trend_id uuid references public.marketing_trends(id) on delete set null;
+
+alter table public.instagram_post_drafts
+  drop constraint if exists instagram_post_drafts_growth_topic_type_check;
+alter table public.instagram_post_drafts
+  add constraint instagram_post_drafts_growth_topic_type_check
+  check (growth_topic_type is null or growth_topic_type in (
+    'mbti','dating_archetype','book_insight','trend_research','meme_remix','dating_myth',
+    'conversation_prompt','seoul_dating','seoul_trend','mini_quiz'
+  ));
 create index if not exists instagram_post_drafts_trend_idx on public.instagram_post_drafts(trend_id) where trend_id is not null;
 
 alter table public.marketing_trend_control enable row level security;
