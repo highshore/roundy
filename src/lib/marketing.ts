@@ -63,24 +63,27 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
   await manualCandidate(draftId);
   return json({images:await signedUploads(draftId)});
  }
- if(id==='uploads'&&path.length===1&&req.method==='POST'){
-  const form=await req.formData(),draftId=String(form.get('draft_id')||''),assetType=String(form.get('asset_type')||'photo'),role=String(form.get('role')||'flexible');
-  if(!uuid(draftId)||!['photo','completed_card'].includes(assetType)||!['cover','body','flexible'].includes(role))return json({error:'INVALID_UPLOAD_METADATA'},400);
+ if(id==='uploads'&&path[1]==='register'&&path.length===2&&req.method==='POST'){
+  const body=await req.json().catch(()=>({})),draftId=String(body.draft_id||''),storagePath=String(body.storage_path||''),assetType=String(body.asset_type||'photo'),role=String(body.role||'flexible');
+  if(!uuid(draftId)||!storagePath||!['photo','completed_card'].includes(assetType)||!['cover','body','flexible'].includes(role))return json({error:'INVALID_UPLOAD_METADATA'},400);
   await manualCandidate(draftId);
   const active=checked(await service.from('marketing_generation_jobs').select('id').eq('draft_id',draftId).eq('status','running').gt('created_at',new Date(Date.now()-300000).toISOString()).limit(1));
   if(active.length)return json({error:'GENERATION_ALREADY_RUNNING'},409);
+  const user=(await db.auth.getUser()).data.user;if(!user)return json({error:'Sign in required'},401);
+  const expectedPrefix=user.id+'/'+draftId+'/';
+  if(!storagePath.startsWith(expectedPrefix)||storagePath.includes('..'))return json({error:'INVALID_MARKETING_STORAGE_PATH'},400);
   const existing=checked(await service.from('marketing_uploaded_images').select('id').eq('draft_id',draftId).order('sort_order',{ascending:true})) as Row[];
-  if(existing.length>=6)return json({error:'MAXIMUM_6_MARKETING_IMAGES'},400);
-  const file=form.get('file');
-  if(!(file instanceof File)||!file.size||file.size>10*1024*1024||!['image/jpeg','image/png','image/webp'].includes(file.type))return json({error:'Use JPEG, PNG or WebP, max 10 MB.'},400);
-  const raw=Buffer.from(await file.arrayBuffer()),meta=await sharp(raw).metadata(),width=Number(meta.width||0),height=Number(meta.height||0);
-  if(!width||!height)return json({error:'INVALID_IMAGE_FILE'},400);
-  if(assetType==='completed_card'&&Math.abs(width/height-.8)>.035)return json({error:'COMPLETED_CARD_MUST_BE_4_5'},400);
-  const ext=file.type==='image/png'?'png':file.type==='image/webp'?'webp':'jpg',storagePath=draftId+'/originals/'+randomUUID()+'.'+ext;
-  checked(await service.storage.from('marketing-images').upload(storagePath,raw,{contentType:file.type,upsert:false}));
-  const user=(await db.auth.getUser()).data.user;
+  if(existing.length>=6){await service.storage.from('marketing-images').remove([storagePath]);return json({error:'MAXIMUM_6_MARKETING_IMAGES'},400);}
+  const downloaded=await service.storage.from('marketing-images').download(storagePath);
+  if(downloaded.error||!downloaded.data){await service.storage.from('marketing-images').remove([storagePath]);return json({error:'MARKETING_UPLOAD_NOT_FOUND'},400);}
+  const raw=Buffer.from(await downloaded.data.arrayBuffer());
+  if(!raw.length||raw.length>10*1024*1024){await service.storage.from('marketing-images').remove([storagePath]);return json({error:'Use JPEG, PNG or WebP, max 10 MB.'},400);}
+  let meta;try{meta=await sharp(raw).metadata();}catch{await service.storage.from('marketing-images').remove([storagePath]);return json({error:'INVALID_IMAGE_FILE'},400);}
+  const width=Number(meta.width||0),height=Number(meta.height||0),mimeType=meta.format==='png'?'image/png':meta.format==='webp'?'image/webp':meta.format==='jpeg'?'image/jpeg':'';
+  if(!width||!height||!mimeType){await service.storage.from('marketing-images').remove([storagePath]);return json({error:'INVALID_IMAGE_FILE'},400);}
+  if(assetType==='completed_card'&&Math.abs(width/height-.8)>.035){await service.storage.from('marketing-images').remove([storagePath]);return json({error:'COMPLETED_CARD_MUST_BE_4_5'},400);}
   try{
-   const row=checked(await service.from('marketing_uploaded_images').insert({draft_id:draftId,storage_path:storagePath,sort_order:existing.length,role,asset_type:assetType,width,height,file_size:file.size,mime_type:file.type,created_by:user?.id||null}).select('*').single());
+   const row=checked(await service.from('marketing_uploaded_images').insert({draft_id:draftId,storage_path:storagePath,sort_order:existing.length,role,asset_type:assetType,width,height,file_size:raw.length,mime_type:mimeType,created_by:user.id}).select('*').single());
    const signed=await service.storage.from('marketing-images').createSignedUrl(storagePath,3600);
    const warnings:string[]=[];if(Math.min(width,height)<800)warnings.push('IMAGE_RESOLUTION_LOW');
    return json({image:{...row,signed_url:signed.data?.signedUrl||null},warnings},201);
