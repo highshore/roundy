@@ -197,12 +197,23 @@ end
 $$;
 revoke all on function roundy_private.dispatch_marketing_trend_radar() from public,anon,authenticated,service_role;
 
-do $$
-declare jid bigint;
+do $radar_cron$
 begin
-  select jobid into jid from cron.job where jobname='roundy-marketing-trend-radar' limit 1;
-  if jid is not null then perform cron.unschedule(jid); end if;
-end $$;
-select cron.schedule('roundy-marketing-trend-radar','0 */6 * * *','select roundy_private.dispatch_marketing_trend_radar()');
+  if to_regnamespace('cron') is not null then
+    begin
+      execute 'select cron.unschedule($1)' using 'roundy-marketing-trend-radar';
+    exception when others then
+      null;
+    end;
+    execute $schedule$
+      select cron.schedule(
+        'roundy-marketing-trend-radar',
+        '0 */6 * * *',
+        'select roundy_private.dispatch_marketing_trend_radar()'
+      )
+    $schedule$;
+  end if;
+end
+$radar_cron$;
 
 commit;
