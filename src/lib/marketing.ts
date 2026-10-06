@@ -7,6 +7,7 @@ import type { createClient } from './supabase/server';
 import { createServiceRoleClient } from './supabase/service';
 import { marketingApi as legacyMarketingApi } from './marketing-legacy';
 import { generationOverview, runGeneration, todayDraft } from './marketing-generation';
+import {runTrendRadar,trendOverview} from './marketing-trend-radar';
 type Client=Awaited<ReturnType<typeof createClient>>;
 type Row=Record<string,any>;
 const json=(value:unknown,status=200)=>NextResponse.json(value,{status,headers:{'Cache-Control':'private, no-store'}});
@@ -121,7 +122,7 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
  }
  if(!id&&req.method==='GET'){
   const response=await legacyMarketingApi(req,db,path);if(!response.ok)return response;
-  const data=await response.json();return json({...data,generation:await generationOverview()});
+  const data=await response.json();const [generation,trend]=await Promise.all([generationOverview(),trendOverview()]);return json({...data,generation,trend});
  }
  if(id==='generation'&&path.length===1&&req.method==='GET')return json(await generationOverview());
  if(id==='generation'&&path[1]==='control'&&path.length===2&&req.method==='PUT'){
@@ -130,6 +131,13 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
   const patch=body.enabled?{enabled:true,blocked_reason:null,updated_at:new Date().toISOString()}:{enabled:false,updated_at:new Date().toISOString()};
   checked(await service.from('marketing_ai_control').update(patch).eq('singleton',true));return json(await generationOverview());
  }
+ if(id==='trend-radar'&&path.length===1&&req.method==='GET')return json(await trendOverview());
+ if(id==='trend-radar'&&path[1]==='run'&&path.length===2&&req.method==='POST'){
+  const body=await req.json().catch(()=>({}));if(body.confirm_paid_scan!==true)return json({error:'TREND_SCAN_CONFIRMATION_REQUIRED'},400);
+  try{return json(await runTrendRadar('radar:manual:'+randomUUID()));}
+  catch(error){return json({error:error instanceof Error?error.message:'Trend radar scan failed'},400);}
+ }
+
  if(id==='generation'&&path[1]==='jobs'&&path.length===4&&uuid(path[2])&&path[3]==='retry'&&req.method==='POST'){
   const confirmation=await req.json().catch(()=>({}));
   if(confirmation.confirm_retry!==true)return json({error:'RETRY_CONFIRMATION_REQUIRED'},400);
@@ -159,8 +167,10 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
   const body=await req.json().catch(()=>({}));
   if(body.confirm_import!==true)return json({error:'IMPORT_CONFIRMATION_REQUIRED'},400);
   try{
-   const imported=checked(await service.rpc('create_marketing_candidate_from_generation',{p_job_id:path[2]}));
+   let imported=checked(await service.rpc('create_marketing_candidate_from_generation',{p_job_id:path[2]}));
    if(imported.status!=='needs_approval')return json({error:'RESULT_ALREADY_USED'},409);
+   const source=checked(await service.from('marketing_generation_jobs').select('result_snapshot').eq('id',path[2]).single()),trendId=source?.result_snapshot?.trend_id;
+   if(trendId){imported=checked(await service.from('instagram_post_drafts').update({trend_id:trendId,updated_at:new Date().toISOString()}).eq('id',imported.id).select('*').single());}
    return json({draft:imported});
   }catch(error){
    const message=error instanceof Error?error.message:String((error as {message?:unknown})?.message||'Import failed');
