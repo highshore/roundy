@@ -142,8 +142,8 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
  }
 
  if(id==='trend-radar'&&path[1]==='generate'&&path.length===2&&req.method==='POST'){
-  const body=await req.json().catch(()=>({})),trendId=String(body.trend_id||'');
-  if(!uuid(trendId)||body.confirm_generate!==true)return json({error:'INVALID_TREND_GENERATION_REQUEST'},400);
+  const body=await req.json().catch(()=>({})),trendId=String(body.trend_id||''),language=body.language==='en'?'en':body.language==='ko'?'ko':'';
+  if(!uuid(trendId)||!language||body.confirm_generate!==true)return json({error:'INVALID_TREND_GENERATION_REQUEST'},400);
   const trend=checked(await service.from('marketing_trends').select('*').eq('id',trendId).maybeSingle());
   if(!trend)return json({error:'TREND_NOT_FOUND'},404);
   if(!['emerging','rising','peak'].includes(String(trend.status)))return json({error:'TREND_NOT_ACTIVE'},409);
@@ -152,14 +152,14 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
   if(recent.length)return json({error:'GENERATION_COOLDOWN_30_SECONDS'},429);
   const user=(await db.auth.getUser()).data.user;if(!user)return json({error:'Sign in required'},401);
   const workspace=await todayDraft(trend);
-  const draft=workspace.trend_id===trendId?workspace:checked(await service.from('instagram_post_drafts').insert({
+  const draft=workspace.trend_id===trendId&&workspace.content_language===language?workspace:checked(await service.from('instagram_post_drafts').insert({
    draft_date:new Date().toISOString().slice(0,10),draft_role:'candidate',status:'needs_approval',generation_source:'manual',visual_source:'auto_ai',
-   content_language:'ko',content_mode:'prelaunch',draft_kind:'growth_carousel',growth_topic_type:String(trend.route_type||'seoul_trend'),
+   content_language:language,content_mode:'prelaunch',draft_kind:'growth_carousel',growth_topic_type:String(trend.route_type||'seoul_trend'),
    trend_id:trendId,content_pillar:'seoul',caption:'',cta:'Follow @roundy.meet',destination_url:'https://roundy.team',images:[],carousel_slides:[],
    research_sources:[],research_status:'pending',generation_reason:'Manual Trend Radar content: '+String(trend.display_name),revision:1
   }).select('*').single());
   const instruction=[String(trend.display_name),String(trend.content_angle||trend.summary||'')].filter(Boolean).join(': ').slice(0,500);
-  const result=await runGeneration(draft.id,{request_key:'trend-manual:'+trendId+':'+randomUUID(),revision:draft.revision,mode:'both',visual_mode:'cards',visual_source:'auto_ai',content_mode:'growth_carousel',topic_type:String(trend.route_type||'seoul_trend'),instruction},user.id,false);
+  const result=await runGeneration(draft.id,{request_key:'trend-manual:'+trendId+':'+language+':'+randomUUID(),revision:draft.revision,mode:'both',visual_mode:'cards',visual_source:'auto_ai',content_mode:'growth_carousel',topic_type:String(trend.route_type||'seoul_trend'),language,instruction},user.id,false);
   if(result.job?.status==='completed')checked(await service.from('marketing_trends').update({used_at:new Date().toISOString(),cooldown_until:new Date(Date.now()+60*86400000).toISOString(),material_change:false,updated_at:new Date().toISOString()}).eq('id',trendId));
   return json(result,result.error?400:200);
  }
