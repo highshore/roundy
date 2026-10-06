@@ -24,7 +24,7 @@ function scenario(language,topic,length=88){
  h.tables.marketing_generation_jobs.push(source);
  return {...h,source,request,p};
 }
-for(const language of ['ko','en'])for(const topic of ['seoul_dating','dating_archetype'])for(const length of [88,99,0]){
+for(const language of ['ko','en'])for(const topic of ['dating_archetype'])for(const length of [88,99,0]){
  const h=scenario(language,topic,length),raw=structuredClone(h.source.result_snapshot),before=JSON.stringify(h.source),ctx={threadId:sourceId,attemptNumber:2,retryOfJobId:sourceId,recoverySourceJobId:sourceId};
  const input={...h.request,request_key:'recover:test-'+language+'-'+topic+'-'+length,revision:1};
  check(()=>assert.equal(h.recovery.canRecoverSavedCta(h.source),true));
@@ -58,6 +58,10 @@ for(const language of ['ko','en'])for(const topic of ['seoul_dating','dating_arc
  check(()=>assert.equal(schema.properties.cta.minLength,1));
 }
 {
+ const legacySeoul=scenario('ko','seoul_dating');
+ check(()=>assert.equal(legacySeoul.recovery.canRecoverSavedCta(legacySeoul.source),false));
+}
+{
  const h=scenario('ko','dating_archetype');
  check(()=>assert.deepEqual(Array.from(h.p.captionCtaIssues('valid','x'.repeat(70))),[]));
  check(()=>assert.ok(h.p.captionCtaIssues('valid','x'.repeat(71)).some(s=>s.includes('CTA')&&s.includes('71'))));
@@ -83,11 +87,12 @@ for(const bad of ['thread','topic','automatic','photo','caption']){
 }
 {
  const h=harness('ko');
- for(const type of ['book_insight','dating_myth','trend_research']){
-  const task=h.research.buildMarketingResearchTask(type,'','ko');
+ for(const type of ['book_insight','dating_myth','trend_research','seoul_dating']){
+  const task=h.research.buildMarketingResearchTask(type,'','ko',type==='seoul_dating'?'places':'');
   check(()=>assert.ok(task.includes('THREE targeted')));
-  check(()=>assert.ok(type==='book_insight'?task.includes('published book'):type==='dating_myth'?task.includes('Asking more questions'):task.includes('underestimate')));
+  check(()=>assert.ok(type==='book_insight'?task.includes('published book'):type==='dating_myth'?task.includes('Asking more questions'):type==='trend_research'?task.includes('underestimate'):task.includes('6–10 real candidates')));
  }
+ const course=h.research.buildMarketingResearchTask('seoul_dating','','ko','course');check(()=>assert.ok(course.includes('three sequential stops')));
  const chosen=h.research.buildMarketingResearchTask('dating_myth','첫인상과 말의 속도에 대한 연구','ko');check(()=>assert.ok(chosen.includes('첫인상과 말의 속도')));
  check(()=>assert.throws(()=>h.research.buildMarketingResearchTask('mini_quiz','','ko')));
  const source=fs.readFileSync('src/lib/marketing-editorial.ts','utf8');
