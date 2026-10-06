@@ -128,7 +128,7 @@ async function storeImage(db:DB,job:Row,bytes:Buffer,index:number){
 async function renderCards(db:DB,draft:Row,job:Row,photoOverride?:string){
  const cards=draft.carousel_slides||[];
  if(!draft.content_document||!cards.length||cards.length>6)throw new Error('유형별 카드 문구가 없습니다. 품질 재작업 후 렌더하세요.');
- const assets=await loadEditorialAssets();if(photoOverride)assets.photo=photoOverride;
+ const assets=await loadEditorialAssets();if(photoOverride){assets.photo=photoOverride;assets.photos=[photoOverride,...(assets.photos||[])];}
  const urls:string[]=[];
  for(let i=0;i<cards.length;i++){
   await progress(db,job,'rendering_'+(i+1)+'_of_'+cards.length);
@@ -142,7 +142,7 @@ async function renderCards(db:DB,draft:Row,job:Row,photoOverride?:string){
 }
 async function generatePhoto(db:DB,draft:Row,input:GenerationInput,job:Row){
  await progress(db,job,'generating_photo');
- const prompt=['One candid editorial lifestyle photograph for Roundy, a Seoul-based Rotation Dating service for Korean and international adults. Korean-Korean meetings are also part of the service. Show two adults naturally talking face-to-face in a believable café or hosted mingle setting. Smart-casual dating attire, coffee or non-alcoholic drinks, natural skin texture, imperfect human gestures, genuine eye contact, lived-in Seoul atmosphere. Compose vertically for Instagram 4:5: place the people in the upper half, leave clean dark negative space in the lower half for a bold Gothic headline and coral highlight. The same photograph will be reused as the closing card image. No sidebar, UI frame, artificial chart, text or logo. Avoid posed stock-photo smiles, symmetrical corporate staging, glamour/luxury cues, exaggerated romance, crowded parties, alcohol, visible text, logos, watermarks or invented event details. The server will add the real Roundy logo and typography afterward.',String(draft.caption||'').slice(0,700),input.instruction||''].join('\n');
+ const prompt=['One candid editorial lifestyle photograph for Roundy, a Seoul-based Rotation Dating service for Korean and international adults. Korean-Korean meetings are also part of the service. Choose a believable Seoul setting that is NOT automatically a café: rotate naturally among a restaurant, lounge, rooftop, riverside, neighborhood street, hosted social venue, quiet bar-like interior without visible alcohol, or café only when it genuinely fits. Show two adults in a natural social moment rather than a posed couple portrait. Smart-casual styling, natural skin texture, imperfect human gestures, genuine conversation, and a lived-in Seoul atmosphere. Compose vertically for Instagram 4:5 with useful negative space for editorial typography. The photograph should feel like a modern lifestyle magazine, not a dating-app stock image. No text or logo. Avoid posed stock-photo smiles, symmetrical corporate staging, glamour/luxury cues, exaggerated romance, physical intimacy, flowers-as-romance clichés, crowded parties, visible alcohol, watermarks or invented event details. The server adds the real Roundy logo and typography afterward.',String(draft.caption||'').slice(0,700),input.instruction||''].join('\n');
  const result=await upstream('images/generations',{model:IMAGE_MODEL,prompt,n:1,size:'1024x1280',quality:'low',output_format:'jpeg',output_compression:85,background:'opaque'},120000),encoded=result.data?.[0]?.b64_json;
  if(typeof encoded!=='string'||encoded.length<100||encoded.length>8*1024*1024)throw new Error('INVALID_GENERATED_PHOTO');
  await progress(db,job,'saving_photo');

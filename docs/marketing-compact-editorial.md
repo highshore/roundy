@@ -4,32 +4,42 @@ Preset: `roundy_compact_editorial_v1`.
 
 ## Production path
 
-The existing guarded generation job still owns idempotency, concurrency, reservation, retry lineage and result snapshots. Research is separate from structured writing. The writing request uses the existing role/provenance schema extended with concise bilingual fields. Whitespace is normalized locally; content is not silently truncated or passed through automatic paid rewrite loops.
+The existing guarded generation job still owns idempotency, concurrency, reservation, retry lineage and result snapshots. Research is separate from structured writing. The writing request keeps bilingual structured fields for caption parity and evidence handling, but the image renderer displays only the selected post language.
 
-`generateEditorialCopy` -> `contentSchema(type, language)` / `writingInstructions` -> `normalizeCompactDocument` -> existing evidence checks + compact text checks -> `prepareContent` -> `renderCards` -> immutable result snapshot.
+`generateEditorialCopy` -> `contentSchema(type, language)` / `writingInstructions` -> `normalizeCompactDocument` -> evidence and compact-text checks -> `prepareContent` -> `renderCards` -> immutable result snapshot.
 
-Generated results stay in Generation history. A user explicitly imports a passed result into an independent editable draft. Existing snapshots, publications and account limits are not rewritten by this release.
+Generated results stay in Generation history. An administrator explicitly imports a passed result into an independent editable draft. Existing snapshots, publications and account limits are not rewritten by this release.
 
 ## Visual contract
 
 * 1080 x 1350 output, 4:5 aspect ratio.
+* Magazine-editorial direction: minimal, readable, photo-led, with varied layouts instead of repeated UI cards.
 * Official four-path Roundy mark, geometrically checked against `roundy-brand.tsx`.
-* Brand colors are #ff6666, #20211f and #fffefa, matching the site; no reference-brand blue.
-* Gothic/sans-serif typography, with regular and extra-bold Nanum Gothic assets and DM Sans for the wordmark. Fixed font URLs are fetched with timeouts and cached in the warm server. When unavailable, the renderer uses Next/OG sans-serif fallback, not a paid image retry.
-* Cover: photograph, dark legibility gradient, a short large headline, one coral emphasis line, concise subtitle. No sidebar, chart, mock Instagram controls or large bibliography.
-* Content: coral heading, concise Korean paragraph, one optional takeaway, concise English paragraph, and a small source footnote. Full citations remain in the caption and source metadata.
-* Outro: photograph plus a server-owned Roundy introduction, Instagram `@roundy.meet`, website `roundy.team`, and an explore CTA. The service is not described as English-only.
+* Brand colors remain #ff6666, #20211f and #fffefa.
+* Korean cards use Noto Sans KR. English cards and the Roundy wordmark use DM Sans.
+* Cover: real Roundy logo at the top, full-bleed lifestyle photograph, short large headline, restrained coral keyword emphasis and one short subtitle. No `Roundy Notes`, page number, Instagram handle or website on the cover.
+* Content cards: only the selected post language is visible. Korean posts do not render the English `secondary_body`; English posts do not render the Korean translation. There are no `국문본문` or `영어본문` labels.
+* Content layouts vary deterministically between split editorial, photo-band and text-led compositions. Option/list cards use typography and rules rather than pill/button UI.
+* Coral is used as a restrained emphasis color, not as a large card background.
+* Research attribution remains in caption metadata. A sourced card uses a language-specific note such as `출처는 캡션에서 확인` or `Sources in caption`, avoiding bilingual source labels on-image.
+* Outro: no photo-heavy sales layout. It contains only the real Roundy logo, a short language-specific service description, `@roundy.meet` and `https://roundy.team`.
 
-The default uses the existing `discovery-hero-v2-poster.webp` brand asset; this does not spend an image API call. The explicitly selected New Flare option retains `gpt-image-2.5-flare`, low quality, 1024x1280 JPEG and n=1. That one background is reused for cover and outro; body cards are rendered locally, producing the full carousel rather than just a single cover. It is not one image API call per slide.
+## Photography
+
+The no-cost renderer uses a deterministic local photo bank from existing Roundy assets rather than repeating one café image on every card. The bank currently draws from the discovery hero/offline assets, the Roundy mingle hero photo and Seoul location imagery such as Anam/Korea University and Yeouido.
+
+When an administrator explicitly selects the paid photo option, the app still uses one `gpt-image-2.5-flare` low-quality 1024x1280 JPEG. The photo prompt now asks for a natural editorial Seoul lifestyle scene and rotates beyond cafés toward restaurants, lounges, rooftops, riverside, neighborhood streets and hosted social spaces. It explicitly avoids overly romantic couple-ad styling, physical intimacy, stock-photo posing, visible text/logos and invented event details.
+
+The paid photo is used as the cover image; body cards continue to use the local photo bank so a carousel is visually varied without paying for one AI image per slide.
 
 ## Copy and caption
 
-Primary language controls the cover and heading. Content bodies are bilingual and compact. A card contains one distinct editorial idea. Source identity, source IDs, study limitations and uncertainty cannot be discarded to satisfy text length. Overlength or unsupported content is held for manual review, not auto-regenerated.
+The selected post language controls every visible image field. `secondary_body` remains a storage-only faithful translation for validation/caption parity and is not rendered on the image. Slide options/highlights are instructed to use the primary post language.
 
-Caption order is Korean body, English body, Sources, then tagline/contact details and five relevant hashtags. Hashtags come from a topic-relevant catalog, accepting suitable model suggestions within that catalog. `hashtag_selection.search_volume_verified` is false: no live hashtag-volume feed is connected, and no claim of measured popularity is made. Punctuation-invalid tags such as `#1:1밍글` are not emitted.
+Caption generation remains bilingual as a publishing caption contract. Each language uses a short hook and concise context. The server appends exactly one content-type CTA plus the fixed `@roundy.meet | roundy.team` footer. Research/book posts add Sources only when actual cited sources exist. Hashtags remain topic-curated rather than claimed live-volume rankings.
 
 ## Cost and release boundaries
 
-No change to the daily/monthly budgets, temporary override expiry, daily call limits, photo limits, pause control, no-fallback rule or explicit-retry policy. Default rendering reuses assets. Research remains at most two targeted search-tool calls within its existing guarded request and one structured writing request. No automatic compression model call is added.
+There is no change to daily/monthly budgets, temporary override expiry, daily call limits, photo limits, pause control, no-fallback rule or explicit-retry policy. Default card rendering is local and does not add image-model calls.
 
-The release checks mocked paid endpoints, full application tests, both primary languages, schema fields, caption ordering, source URLs, absence of obsolete positioning, relevant valid tags, logo geometry, image dimensions and distinct output cards. Render fixtures are fictional QA material; they are not real book citations and are never published. A passing mock test is not a claim that a live OpenAI generation or Instagram publication has been performed.
+Release checks cover both primary languages, source/evidence rules, actual Roundy logo geometry, absence of the old bilingual body labels and page counter, Noto Sans KR and DM Sans availability, local photo-bank availability, 1080x1350 output, distinct rendered cards, and the simplified cover/outro contract.

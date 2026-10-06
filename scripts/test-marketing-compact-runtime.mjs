@@ -47,8 +47,12 @@ for(const language of ['ko','en'])for(const visual_mode of ['cards','photo']){
  check(()=>assert.ok(result.draft.caption.includes('오픈 소식은 프로필에서 확인하세요.')&&result.draft.caption.includes('Follow the profile for launch updates.')));
  check(()=>assert.equal(h.tables.marketing_generation_jobs[0].result_snapshot.images.length,3));
  check(()=>assert.ok(h.stored.every(s=>s.bytes.toString().includes('M22 40C28.6274'))));
- const outro=h.stored.at(-1).bytes.toString();check(()=>assert.ok(outro.includes('@roundy.meet')&&outro.includes('roundy.team')));
- if(visual_mode==='photo'){const call=h.requests.find(r=>r.url.endsWith('/images/generations')).body;check(()=>assert.equal(call.model,'gpt-image-2.5-flare'));check(()=>assert.equal(call.n,1));check(()=>assert.equal(call.quality,'low'));check(()=>assert.equal(call.size,'1024x1280'));check(()=>assert.ok(!call.prompt.includes('English-only')));}
+ const bodyCard=h.stored[1].bytes.toString();
+ if(language==='ko')check(()=>assert.ok(!bodyCard.includes('Instead of trying to join a crowded conversation')));
+ else check(()=>assert.ok(!bodyCard.includes('큰 모임에서 말을 끼워 넣기보다')));
+ const coverCard=h.stored[0].bytes.toString();check(()=>assert.ok(!coverCard.includes('@roundy.meet')&&!coverCard.includes('roundy.team')&&!coverCard.includes('Roundy Notes')));
+ const outro=h.stored.at(-1).bytes.toString();check(()=>assert.ok(outro.includes('@roundy.meet')&&outro.includes('https://roundy.team')));
+ if(visual_mode==='photo'){const call=h.requests.find(r=>r.url.endsWith('/images/generations')).body;check(()=>assert.equal(call.model,'gpt-image-2.5-flare'));check(()=>assert.equal(call.n,1));check(()=>assert.equal(call.quality,'low'));check(()=>assert.equal(call.size,'1024x1280'));check(()=>assert.ok(!call.prompt.includes('English-only')));check(()=>assert.ok(call.prompt.includes('NOT automatically a café')&&call.prompt.includes('not a dating-app stock image')));}
  const count=h.requests.length,repeated=await h.api.runGeneration(h.id,input,null);check(()=>assert.equal(repeated.deduplicated,true));check(()=>assert.equal(h.requests.length,count));
 }
-console.log('PASS '+assertions+' compact runtime assertions: bilingual copy, full 3-card photo/carousel output, original logo, idempotency, one image request only. Zero live paid requests.');
+console.log('PASS '+assertions+' compact runtime assertions: single-language magazine cards, original logo, idempotency, one image request only. Zero live paid requests.');
