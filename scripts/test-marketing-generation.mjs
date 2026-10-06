@@ -31,14 +31,19 @@ function harness({denied=false,network=false,badSources=false,duplicate=false,ph
   const body=JSON.parse(init.body);requests.push({url,body});if(network)throw new Error('timeout');
   if(url.endsWith('images/generations'))return photo403?{ok:false,status:403,json:async()=>({error:{message:'Verify organization'}})}:{ok:true,json:async()=>({data:[0,1,2].map(()=>({b64_json:Buffer.alloc(200).toString('base64')}))})};
   if(url.endsWith('/responses')){
-   const seoul=String(body.input||'').includes('Seoul dating-location')||String(body.input||'').includes('6–10 real candidates');
+   const inputText=String(body.input||''),seoul=inputText.includes('Seoul dating-location')||inputText.includes('6–10 real candidates'),seoulTrend=inputText.includes('emerging or rising Seoul')||inputText.includes('emerging/rising Seoul');
    const notes=seoul
     ?'노들섬 (Nodeul Island) is a Seoul riverside cultural space. 서울공예박물관 (Seoul Museum of Craft Art) is a public craft museum in Jongno. 하늘공원 (Haneul Park) is a Seoul park known for open views and walking.'
-    :'Listening Across Difference by Alex Lee explains attentive listening. Published by Fixture Press. Attentive Conversation Study (2024) observes association, not causation, in a limited sample.';
+    :seoulTrend
+     ?'회크닉 (Hoe-picnic) is appearing across current Seoul lifestyle reporting and public trend signals. 회크닉 (Hoe-picnic) combines takeaway sashimi with an outdoor picnic and is being discussed as a current Seoul date activity.'
+     :'Listening Across Difference by Alex Lee explains attentive listening. Published by Fixture Press. Attentive Conversation Study (2024) observes association, not causation, in a limited sample.';
    const annotations=badSources?[]:seoul?[
     {type:'url_citation',url:'https://official.example/nodeul',title:'노들섬 official',start_index:0,end_index:notes.indexOf('서울공예박물관')-1},
     {type:'url_citation',url:'https://official.example/craftmuseum',title:'서울공예박물관 official',start_index:notes.indexOf('서울공예박물관'),end_index:notes.indexOf('하늘공원')-1},
     {type:'url_citation',url:'https://official.example/haneul',title:'하늘공원 official',start_index:notes.indexOf('하늘공원'),end_index:notes.length}
+   ]:seoulTrend?[
+    {type:'url_citation',url:'https://news.example/hoe-picnic',title:'회크닉 current lifestyle report',start_index:0,end_index:Math.floor(notes.length/2)},
+    {type:'url_citation',url:'https://trends.google.com/trends/explore?geo=KR&q=%ED%9A%8C%ED%81%AC%EB%8B%89',title:'회크닉 search trend',start_index:Math.floor(notes.length/2),end_index:notes.length}
    ]:[{type:'url_citation',url:'https://doi.org/10.1234/attentive.2024',title:'Attentive Conversation Study (2024)',start_index:0,end_index:notes.length}];
    return {ok:true,json:async()=>({status:'completed',output:[{type:'web_search_call',status:'completed',action:{sources:[{url:'https://unrelated.example/english-school'}]}},{type:'message',content:[{type:'output_text',text:notes,annotations}]}],usage:{input_tokens:800,output_tokens:180}})};
   }
@@ -66,6 +71,7 @@ for(const language of ['en','ko'])for(const type of Object.keys(harness().policy
  check(()=>assert.equal(write.response_format.json_schema.strict,true));check(()=>assert.equal(write.tools,undefined));check(()=>assert.equal(write.temperature,undefined));check(()=>assert.equal(write.reasoning_effort,'none'));
  if(['trend_research','dating_myth','seoul_dating'].includes(type)){check(()=>assert.equal(h.requests[0].body.max_tool_calls,3));check(()=>assert.equal(h.requests[0].body.tools?.[0]?.search_context_size,'high'));check(()=>assert.equal(h.requests[0].body.tools?.[0]?.external_web_access,true));check(()=>assert.equal(h.requests[0].body.text,undefined));}
  if(type==='trend_research'){check(()=>assert.match(String(h.requests[0].body.input),/5[–-]10 candidate|5–10 plausible PRIMARY studies/i));check(()=>assert.match(String(h.requests[0].body.input),/Roundy relevance 30/));}
+ if(type==='seoul_trend'){check(()=>assert.match(String(h.requests[0].body.input),/emerging|rising/i));check(()=>assert.equal(r.draft.content_document.trend.trend_key,'hoe-picnic'));}
  if(type==='dating_myth'){check(()=>assert.match(String(h.requests[0].body.input),/6[–-]10 concise myth claims|6–10 plausible myth claims/i));check(()=>assert.match(String(h.requests[0].body.input),/PRIMARY MYTH/));check(()=>assert.match(String(h.requests[0].body.input),/BACKUP MYTH/));}
  const dup=await h.api.runGeneration(id,input,null);check(()=>assert.equal(dup.deduplicated,true));
 }
@@ -88,7 +94,7 @@ for(const language of ['en','ko'])for(const type of Object.keys(harness().policy
 {const p=harness().policy,c=fixture('dating_myth','ko',p.CONTENT_PROFILES);c.caption_ko='연구가 증명했다. 이 통념은 완전히 거짓이다.';c.caption=c.caption_ko;const q=p.evaluateContent(c,'dating_myth','ko',[{id:'S1',url:'https://doi.org/10.1234/attentive.2024',title:'Attentive Conversation Study (2024)',evidence:'Attentive Conversation Study 2024 limited sample association'}]);check(()=>assert.equal(q.status,'rejected'));check(()=>assert.ok(q.issues.some(x=>x.includes('단정'))));}
 {const p=harness().policy,c=fixture('trend_research','en',p.CONTENT_PROFILES);c.caption_en='Recent research suggests this pattern matters.';c.caption=c.caption_en;const q=p.evaluateContent(c,'trend_research','en',[{id:'S1',url:'https://doi.org/10.1234/attentive.2024',title:'Attentive Conversation Study (2024)',evidence:'Attentive Conversation Study 2024 limited sample association'}]);check(()=>assert.equal(q.status,'rejected'));check(()=>assert.ok(q.issues.some(x=>x.includes('현재 연도'))));}
 {const p=harness().policy,c=fixture('book_insight','en',p.CONTENT_PROFILES);const q=p.evaluateContent(c,'book_insight','en',[{id:'S1',url:'https://english-school.example',title:'English lessons',evidence:'Unrelated tutoring services'}]);check(()=>assert.equal(q.status,'rejected'));const quiz=fixture('mini_quiz','en',p.CONTENT_PROFILES);quiz.slides[2].options=['Same','Same'];check(()=>assert.equal(p.evaluateContent(quiz,'mini_quiz','en').status,'rejected'));}
-{const p=harness().policy;check(()=>assert.equal(p.CONTENT_POLICY_VERSION,9));const ko=fixture('prelaunch','ko',p.CONTENT_PROFILES);ko.caption='진정한 인연을 위한 특별한 만남';check(()=>assert.equal(p.evaluateContent(ko,'prelaunch','ko').status,'rejected'));const en=fixture('prelaunch','en',p.CONTENT_PROFILES);en.caption='Discover meaningful human connections in a premium experience.';check(()=>assert.equal(p.evaluateContent(en,'prelaunch','en').status,'rejected'));check(()=>assert.match(p.writingInstructions('conversation_prompt','ko'),/실제 SNS|당장 써볼 수|AI\/마케팅 표현|AI\/marketing|상투적인|generic AI/i));}
+{const p=harness().policy;check(()=>assert.equal(p.CONTENT_POLICY_VERSION,10));const ko=fixture('prelaunch','ko',p.CONTENT_PROFILES);ko.caption='진정한 인연을 위한 특별한 만남';check(()=>assert.equal(p.evaluateContent(ko,'prelaunch','ko').status,'rejected'));const en=fixture('prelaunch','en',p.CONTENT_PROFILES);en.caption='Discover meaningful human connections in a premium experience.';check(()=>assert.equal(p.evaluateContent(en,'prelaunch','en').status,'rejected'));check(()=>assert.match(p.writingInstructions('conversation_prompt','ko'),/실제 SNS|당장 써볼 수|AI\/마케팅 표현|AI\/marketing|상투적인|generic AI/i));}
 
 {const p=harness().policy;check(()=>assert.equal(p.qualitySeverity('실제 인용된 출처가 없습니다.'),'critical'));check(()=>assert.equal(p.qualitySeverity('카드 제목이 중복되거나 지나치게 유사합니다.'),'quality'));const presentation=harness().api?null:null;}
 const adminMarketingSource=fs.readFileSync(new URL('../src/components/admin-marketing.tsx',import.meta.url),'utf8');
