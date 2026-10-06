@@ -9,20 +9,23 @@ function toArrayBuffer(bytes:Uint8Array):ArrayBuffer {const copy=new Uint8Array(
 async function fetchFont(url:string):Promise<ArrayBuffer>{
  const response=await fetch(url,{signal:AbortSignal.timeout(8000),redirect:'error',cache:'force-cache'});
  if(!response.ok)throw new Error('FONT_ASSET_UNAVAILABLE');
- const data=await response.arrayBuffer();if(data.byteLength>16*1024*1024)throw new Error('FONT_ASSET_TOO_LARGE');return data;
+ const data=await response.arrayBuffer();if(data.byteLength>20*1024*1024)throw new Error('FONT_ASSET_TOO_LARGE');return data;
 }
 async function fonts():Promise<NonNullable<EditorialAssets['fonts']>>{
  // Korean marketing cards use Noto Sans KR. English cards and the Roundy wordmark use DM Sans.
  // Fixed upstreams only; generated/admin content can never select a font URL.
  if(!fontPromise)fontPromise=(async()=>{
   const loaded:NonNullable<EditorialAssets['fonts']>=[];
+  // Next/OG cannot reliably parse the current variable Noto Sans KR file,
+  // so use static Korean OTF masters from the official Noto CJK repository.
   const noto=await Promise.allSettled([
-   fetchFont('https://raw.githubusercontent.com/google/fonts/main/ofl/notosanskr/NotoSansKR%5Bwght%5D.ttf'),
+   fetchFont('https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/OTF/Korean/NotoSansCJKkr-Regular.otf'),
+   fetchFont('https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/OTF/Korean/NotoSansCJKkr-Black.otf'),
   ]);
-  if(noto[0].status==='fulfilled'){
-   loaded.push({name:'Noto Sans KR',data:noto[0].value,weight:400,style:'normal'});
-   loaded.push({name:'Noto Sans KR',data:noto[0].value,weight:700,style:'normal'});
-   loaded.push({name:'Noto Sans KR',data:noto[0].value,weight:900,style:'normal'});
+  if(noto[0].status==='fulfilled')loaded.push({name:'Noto Sans KR',data:noto[0].value,weight:400,style:'normal'});
+  if(noto[1].status==='fulfilled'){
+   loaded.push({name:'Noto Sans KR',data:noto[1].value,weight:700,style:'normal'});
+   loaded.push({name:'Noto Sans KR',data:noto[1].value,weight:900,style:'normal'});
   }
   try{
    const regular=await readFile(path.join(process.cwd(),'node_modules/@fontsource/dm-sans/files/dm-sans-latin-400-normal.woff'));
