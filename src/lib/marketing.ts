@@ -153,10 +153,12 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
   const user=(await db.auth.getUser()).data.user;if(!user)return json({error:'Sign in required'},401);
   const workspace=await todayDraft(trend);
   const draft=workspace.trend_id===trendId&&workspace.content_language===language?workspace:checked(await service.from('instagram_post_drafts').insert({
-   draft_date:new Date().toISOString().slice(0,10),draft_role:'candidate',status:'needs_approval',generation_source:'manual',visual_source:'auto_ai',
+   draft_date:workspace.draft_date,draft_role:'candidate',status:'needs_approval',generation_source:'manual',visual_source:'auto_ai',
    content_language:language,content_mode:'prelaunch',draft_kind:'growth_carousel',growth_topic_type:String(trend.route_type||'seoul_trend'),
    trend_id:trendId,content_pillar:'seoul',caption:'',cta:'Follow @roundy.meet',destination_url:'https://roundy.team',images:[],carousel_slides:[],
-   research_sources:[],research_status:'pending',generation_reason:'Manual Trend Radar content: '+String(trend.display_name),revision:1
+   research_sources:[],research_status:'pending',generation_reason:'Manual Trend Radar content: '+String(trend.display_name),
+   recommended_time_kst:workspace.recommended_time_kst||'21:00',window_start_kst:workspace.window_start_kst||'20:30',window_end_kst:workspace.window_end_kst||'21:30',
+   scheduled_for:workspace.scheduled_for||null,revision:1
   }).select('*').single());
   const instruction=[String(trend.display_name),String(trend.content_angle||trend.summary||'')].filter(Boolean).join(': ').slice(0,500);
   const result=await runGeneration(draft.id,{request_key:'trend-manual:'+trendId+':'+language+':'+randomUUID(),revision:draft.revision,mode:'both',visual_mode:'cards',visual_source:'auto_ai',content_mode:'growth_carousel',topic_type:String(trend.route_type||'seoul_trend'),language,instruction},user.id,false);
