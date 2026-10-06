@@ -11,6 +11,7 @@ export function canRecoverSavedCta(job:Row|null|undefined):boolean {
  const input=job.request_payload, snapshot=job.result_snapshot, document=snapshot?.content_document;
  if(!input||input.visual_mode!=='cards'||input.mode==='image'||input.render_only||input.content_mode==='live_event')return false;
  if(!snapshot||!document||!isCompactDocument(document)||!Array.isArray(document.slides)||!document.slides.length)return false;
+ if(document.post_type==='seoul_dating'&&(!document.seoul||!Array.isArray(document.seoul.venues)||document.seoul.venues.length!==3||!Array.isArray(snapshot.research_sources)||snapshot.research_sources.length===0))return false;
  const issues=snapshot.quality_report?.issues;
  if(!Array.isArray(issues)||issues.length!==1||issues[0]!==LEGACY_CTA_FAILURE||snapshot.quality_report?.status!=='rejected')return false;
  if(typeof job.error_message!=='string'||!job.error_message.includes(LEGACY_CTA_FAILURE))return false;
