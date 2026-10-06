@@ -3,7 +3,7 @@ import {canOfferSavedCtaRecovery} from '@/lib/marketing-output-recovery';
 import { useEffect, useRef, useState } from 'react';
 import { Heading } from './heading';
 import { tr, type Locale } from '@/lib/locale';
-import { uploadFile } from '@/lib/uploads';
+import { uploadFile, uploadMarketingFile } from '@/lib/uploads';
 import { OrderedImages } from './ordered-images';
 import {CONTENT_PROFILES,postType} from '@/lib/marketing-content-policy';
 type Row=Record<string,any>;
@@ -20,8 +20,9 @@ export function AdminMarketing({locale}:{locale:Locale}){
  const [data,setData]=useState<Row>({drafts:[],runs:[],templates:[]});
  const [draft,setDraft]=useState<Row|null>(null),[settings,setSettings]=useState<Row|null>(null),[generation,setGeneration]=useState<Row|null>(null);
  const [channel,setChannel]=useState<'instagram'|'koreapas'>('instagram'),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[error,setError]=useState(''),[notice,setNotice]=useState('');
- const [basis,setBasis]=useState('prelaunch'),[mode,setMode]=useState('both'),[topic,setTopic]=useState('conversation_prompt'),[contentLanguage,setContentLanguage]=useState<'ko'|'en'>('ko'),[direction,setDirection]=useState(''),[dirty,setDirty]=useState(false);
+ const [basis,setBasis]=useState('prelaunch'),[manualVisualSource,setManualVisualSource]=useState<'auto_ai'|'uploaded'|'none'>('auto_ai'),[topic,setTopic]=useState('conversation_prompt'),[contentLanguage,setContentLanguage]=useState<'ko'|'en'>('ko'),[direction,setDirection]=useState(''),[dirty,setDirty]=useState(false);
  const [template,setTemplate]=useState<Row>(blank());
+ const [uploadedImages,setUploadedImages]=useState<Row[]>([]),[uploadAssetType,setUploadAssetType]=useState<'photo'|'completed_card'>('photo');
  const [resultPreview,setResultPreview]=useState<Row|null>(null);
  const [activeTab,setActiveTab]=useState<'draft'|'generation'|'publishing'|'automation'|'connection'>('draft');
  const [generationFilter,setGenerationFilter]=useState<'all'|'completed'|'failed'|'running'>('all');
@@ -34,6 +35,11 @@ export function AdminMarketing({locale}:{locale:Locale}){
   selectDraft(rows.find((x:Row)=>x.id===preferredId)||rows.find((x:Row)=>x.status==='needs_approval')||rows[0]||null);
  }
  useEffect(()=>{mounted.current=true;load().catch(e=>{if(mounted.current)setError(e.message);}).finally(()=>{if(mounted.current)setLoading(false);});return()=>{mounted.current=false;};},[]);
+ useEffect(()=>{
+  if(!draft?.id||draft.generation_source!=='manual'||draft.draft_role!=='candidate'){setUploadedImages([]);return;}
+  let cancelled=false;request('/uploads?draft_id='+encodeURIComponent(draft.id),undefined,'GET').then(r=>{if(!cancelled&&r.ok)setUploadedImages(r.data.images||[]);}).catch(()=>{});
+  return()=>{cancelled=true;};
+ },[draft?.id,draft?.generation_source,draft?.draft_role]);
  // Bounded READ-ONLY polling: never calls a paid endpoint or starts generation.
  useEffect(()=>{
   if(!busy)return;let cancelled=false,attempts=0,failures=0,timer:ReturnType<typeof setTimeout>|undefined;
@@ -84,15 +90,17 @@ export function AdminMarketing({locale}:{locale:Locale}){
  async function generate(today=false,renderOnly=false){
   if(renderOnly&&!draft)return;
   if(renderOnly&&dirty&&!window.confirm(t('Discard unsaved edits before rendering?','저장하지 않은 수정을 버리고 이미지를 다시 렌더할까요?')))return;
-  const actualVisual='cards';
-  const research=basis==='growth_carousel'&&['book_insight','trend_research','dating_myth'].includes(topic);
-  const cost=renderOnly?'$0.15':mode==='text'?(research?'$0.05':'$0.02'):'$0.20';
-  const message=mode==='text'&&!renderOnly
-   ?t('Generate copy with a '+cost+' budget reservation? It will not publish automatically.','앱 예산 '+cost+'를 예약하고 문구를 생성할까요? 자동 게시되지는 않습니다.')
-   :t('Generate this content with three fresh AI editorial images? This reserves '+cost+' from the app budget. No existing photo library will be reused.','이 콘텐츠에 맞는 새 AI 에디토리얼 이미지 3장을 함께 생성할까요? 앱 예산 '+cost+'를 예약하며 기존 사진 라이브러리는 재사용하지 않습니다.');
+  const source=today?'auto_ai':renderOnly?(draft?.visual_source||'auto_ai'):manualVisualSource;
+  const research=basis==='growth_carousel'&&['book_insight','trend_research','dating_myth'].includes(topic),requestedMode=renderOnly?'image':source==='auto_ai'?'both':'text';
+  const cost=renderOnly?(source==='uploaded'?'$0':'$0.15'):source==='auto_ai'?'$0.20':research?'$0.05':'$0.02';
+  const message=source==='auto_ai'
+   ?t('Generate copy with three fresh AI editorial images? This reserves '+cost+'.','문구와 새 AI 에디토리얼 이미지 3장을 생성할까요? 앱 예산 '+cost+'를 예약합니다.')
+   :source==='uploaded'
+    ?t('Generate copy for manual image upload? Only copy/research cost is reserved; image AI will not run.','직접 업로드용 문구를 생성할까요? 문구/검색 비용만 예약되며 이미지 AI는 호출하지 않습니다.')
+    :t('Generate copy only? Images can be added later.','문구만 생성할까요? 이미지는 나중에 추가할 수 있습니다.');
   if(!window.confirm(message))return;
   await work(async()=>{
-   const payload={request_key:'manual:'+crypto.randomUUID(),revision:renderOnly?draft!.revision:1,mode:renderOnly?'image':today?'both':mode,content_mode:basis,language:today?undefined:contentLanguage,visual_mode:today?'cards':actualVisual,...(basis==='growth_carousel'?{topic_type:topic}:{}),instruction:direction.trim(),confirm_photo:false,render_only:renderOnly};
+   const payload={request_key:'manual:'+crypto.randomUUID(),revision:renderOnly?draft!.revision:1,mode:today?'both':requestedMode,content_mode:basis,language:today?undefined:contentLanguage,visual_mode:'cards',visual_source:source,...(basis==='growth_carousel'?{topic_type:topic}:{}),instruction:direction.trim(),confirm_photo:false,render_only:renderOnly};
    const path=renderOnly?'/draft/'+draft!.id+'/regenerate':'/draft/generate';
    const r=await request(path,payload);
    if(!r.ok||r.data.error)throw new Error(r.data.error||'Generation failed');
@@ -128,6 +136,31 @@ export function AdminMarketing({locale}:{locale:Locale}){
   const attempt=attempts.find((a:Row)=>a.result_snapshot);
   if(!attempt){setError(friendlyError('RESULT_SNAPSHOT_UNAVAILABLE'));return;}
   setResultPreview({thread,attempt,snapshot:attempt.result_snapshot});
+ }
+ async function refreshUploads(draftId:string){
+  const r=await request('/uploads?draft_id='+encodeURIComponent(draftId),undefined,'GET');if(!r.ok)throw new Error(r.data.error||'Could not load uploads');setUploadedImages(r.data.images||[]);
+ }
+ async function uploadMarketingImages(files:File[]){
+  if(!draft||draft.generation_source!=='manual')throw new Error('UPLOAD_VISUALS_MANUAL_ONLY');
+  if(files.length+uploadedImages.length>6)throw new Error('MAXIMUM_6_MARKETING_IMAGES');
+  for(let i=0;i<files.length;i++){
+   const file=files[i],storagePath=await uploadMarketingFile(file,draft.id);
+   const r=await request('/uploads/register',{draft_id:draft.id,storage_path:storagePath,asset_type:uploadAssetType,role:uploadedImages.length===0&&i===0?'cover':'flexible'});if(!r.ok)throw new Error(r.data.error||'Upload failed');
+  }
+  await refreshUploads(draft.id);
+ }
+ async function updateUpload(id:string,patch:Row){
+  const r=await request('/uploads/'+id,patch,'PATCH');if(!r.ok)throw new Error(r.data.error||'Could not update image');setUploadedImages(r.data.images||[]);
+ }
+ async function deleteUpload(id:string){
+  const r=await request('/uploads/'+id,{},'DELETE');if(!r.ok)throw new Error(r.data.error||'Could not delete image');setUploadedImages(r.data.images||[]);
+ }
+ async function moveUpload(index:number,delta:number){
+  if(!draft)return;const to=index+delta;if(to<0||to>=uploadedImages.length)return;const next=[...uploadedImages];next.splice(to,0,next.splice(index,1)[0]);
+  const r=await request('/uploads/order',{draft_id:draft.id,ids:next.map(x=>x.id)},'PATCH');if(!r.ok)throw new Error(r.data.error||'Could not reorder images');setUploadedImages(r.data.images||[]);
+ }
+ async function renderUploaded(){
+  if(!draft)return;const r=await request('/draft/'+draft.id+'/render-uploaded',{revision:draft.revision,request_key:'upload-render:'+crypto.randomUUID()});if(!r.ok||r.data.error)throw new Error(r.data.error||'Render failed');await load(draft.id);await refreshUploads(draft.id);
  }
  async function importResultToDraft(){
   if(!resultPreview?.attempt?.id)return;
@@ -185,12 +218,12 @@ export function AdminMarketing({locale}:{locale:Locale}){
    <section className="marketing-generator-card">
     <div className="admin-section-title"><div><p className="admin-kicker">{t('Create','생성')}</p><Heading level={2}>{t('New content','새 콘텐츠 생성')}</Heading></div></div>
     <div className="admin-form">
-     <div className="admin-two"><label><span>{t('Content basis','콘텐츠 기준')}</span><select value={basis} onChange={e=>setBasis(e.target.value)}><option value="prelaunch">{t('Pre-launch','오픈 전 홍보')}</option><option value="live_event">{t('Live event','정식 이벤트')}</option><option value="growth_carousel">Growth Carousel</option></select></label><label><span>{t('Generation scope','생성 범위')}</span><select value={mode} onChange={e=>setMode(e.target.value)}><option value="both">{t('Copy + visuals','문구 + 비주얼')}</option><option value="text">{t('Copy only','문구만')}</option></select></label></div>
+     <div className="admin-two"><label><span>{t('Content basis','콘텐츠 기준')}</span><select value={basis} onChange={e=>setBasis(e.target.value)}><option value="prelaunch">{t('Pre-launch','오픈 전 홍보')}</option><option value="live_event">{t('Live event','정식 이벤트')}</option><option value="growth_carousel">Growth Carousel</option></select></label><label><span>{t('Manual generation method','수동 생성 방식')}</span><select value={manualVisualSource} onChange={e=>setManualVisualSource(e.target.value as 'auto_ai'|'uploaded'|'none')}><option value="auto_ai">{t('Copy + AI images','문구 + AI 이미지')}</option><option value="uploaded">{t('Copy + my uploads','문구 + 직접 업로드')}</option><option value="none">{t('Copy only','문구만')}</option></select></label></div>
      <label><span>{t('Cover / headline language','표지 / 제목 언어')}</span><select value={contentLanguage} onChange={e=>setContentLanguage(e.target.value as 'ko'|'en')}><option value="ko">{t('Korean post','한국어 콘텐츠')}</option><option value="en">{t('English post','영어 콘텐츠')}</option></select></label>
      {basis==='growth_carousel'?<label><span>{t('Topic','주제')}</span><select value={topic} onChange={e=>setTopic(e.target.value)}>{topics.map((x,i)=><option key={x} value={x}>{t(x.replaceAll('_',' '),topicKo[i])}</option>)}</select></label>:null}
-     {mode!=='text'&&<p className="admin-help">{t('Visuals: three new content-specific editorial images are generated for every carousel. Existing Roundy photo assets are not reused.','비주얼: 캐러셀을 만들 때마다 콘텐츠에 맞는 새 에디토리얼 이미지 3장을 생성합니다. 기존 Roundy 사진 에셋은 재사용하지 않습니다.')}</p>}
+     {manualVisualSource==='auto_ai'?<p className="admin-help">{t('AI images: three new content-specific editorial images are generated. Existing Roundy photo assets are not reused.','AI 이미지: 콘텐츠에 맞는 새 에디토리얼 이미지 3장을 생성합니다. 기존 Roundy 사진 에셋은 재사용하지 않습니다.')}</p>:manualVisualSource==='uploaded'?<p className="admin-help">{t('Upload mode: generate the copy first, add the result to Drafts, then upload your own images. Image AI is not called.','직접 업로드: 문구를 먼저 생성해 초안으로 가져온 뒤 이미지를 업로드합니다. 이미지 AI는 호출하지 않습니다.')}</p>:<p className="admin-help">{t('Copy only: no images are generated. You can add visuals later.','문구만: 이미지를 생성하지 않습니다. 나중에 비주얼을 추가할 수 있습니다.')}</p>}
      <label><span>{t('Creative direction','커스텀 지시문')}</span><textarea value={direction} maxLength={500} rows={4} onChange={e=>setDirection(e.target.value)}/><small>{direction.length}/500</small></label>
-     <p className="admin-help">{t('Default: photo-led cover, compact Korean/English content, and Roundy outro with Instagram + website. Official logo, coral and typography are composed server-side. Every visual generation creates a fresh three-image editorial set from the current content.','사진형 표지 → 짧은 한영 본문 → 라운디 소개 카드로 구성합니다. 공식 로고, 코랄색, 타이포와 작은 출처 표기를 서버에서 합성합니다. 비주얼을 생성할 때마다 현재 콘텐츠에 맞는 새 에디토리얼 이미지 3장을 생성합니다.')}</p>
+     <p className="admin-help">{t('Roundy logo, coral accents and typography are composed server-side for photo-source cards. Completed 4:5 cards are used without additional design overlays.','사진 소스 카드는 Roundy 로고, 코랄 강조와 타이포를 서버에서 합성합니다. 완성된 4:5 카드는 추가 디자인 합성 없이 그대로 사용합니다.')}</p>
      {basis==='growth_carousel'&&<p className="admin-help">{CONTENT_PROFILES[postType({content_mode:basis,topic_type:topic})].label}: {CONTENT_PROFILES[postType({content_mode:basis,topic_type:topic})].roles.join(' → ')}</p>}
      {basis==='growth_carousel'&&['book_insight','trend_research','dating_myth'].includes(topic)&&<p className="admin-help">{t('High-context research may use up to three targeted searches before one structured writing request. Missing evidence triggers one safe fallback when possible.','고품질 검색으로 목적별 검색을 최대 3회 사용한 뒤 구조화된 문구를 작성합니다. 근거가 부족하면 가능한 경우 안전한 비연구 콘텐츠로 1회 전환합니다.')}</p>}
      <p className="admin-help">{t('Caption order: Korean → English → sources → tagline and 5 relevant tags. Tags are selected for topic relevance; live search volume is not measured.','캡션 순서: 국문 → 영어 → 출처 → 태그라인과 관련 태그 5개. 태그는 주제 관련성으로 선별하며 실시간 검색량 순위는 아닙니다.')}</p>
@@ -205,6 +238,13 @@ export function AdminMarketing({locale}:{locale:Locale}){
      {(draft.quality_report?.issues||[]).map((issue:string)=><p key={issue}>{issue}</p>)}
      {draft.status==='needs_approval'&&<button type="button" className="admin-secondary" disabled={busy||!!running||dirty} onClick={()=>void work(async()=>{const r=await request('/quality/recheck',{draft_id:draft.id,revision:draft.revision});if(!r.ok)throw new Error(r.data.error);selectDraft(r.data.draft);setNotice(t('Quality check finished. No AI request was made.','품질 검사를 마쳤습니다. AI를 호출하지 않았습니다.'));})}>{t('Recheck saved edits — no AI charge','저장한 내용 품질 검사 — AI 비용 없음')}</button>}
     </div>
+    {draft.generation_source==='manual'&&draft.draft_role==='candidate'&&<div className="marketing-setup">
+     <strong>{t('Manual images','직접 이미지')}</strong>
+     <p className="admin-help">{t('Upload 1–6 JPEG, PNG or WebP files (max 10 MB each). Photo source adds Roundy typography; completed card is used as-is. Uploaded rendering makes no image-AI request.','JPEG, PNG, WebP 이미지를 1–6장 업로드할 수 있습니다(장당 최대 10MB). 사진 소스는 Roundy 타이포를 합성하고, 완성 카드는 그대로 사용합니다. 업로드 렌더에서는 이미지 AI를 호출하지 않습니다.')}</p>
+     <div className="admin-two"><label><span>{t('Upload type','업로드 유형')}</span><select value={uploadAssetType} onChange={e=>setUploadAssetType(e.target.value as 'photo'|'completed_card')}><option value="photo">{t('Photo source','사진 소스')}</option><option value="completed_card">{t('Completed 4:5 card','완성 4:5 카드')}</option></select></label><label><span>{t('Add images','이미지 추가')}</span><input type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={busy||!!running} onChange={e=>{const files=Array.from(e.target.files||[]);e.target.value='';void work(()=>uploadMarketingImages(files));}}/></label></div>
+     <div className="ordered-image-list">{uploadedImages.map((img:Row,index:number)=><div key={img.id} className="marketing-draft-card">{img.signed_url?<img src={img.signed_url} alt=""/>:<span className="marketing-draft-thumb placeholder"/>}<div className="marketing-draft-copy"><strong>{index+1}. {img.asset_type==='completed_card'?t('Completed card','완성 카드'):t('Photo source','사진 소스')}</strong><select value={img.role} onChange={e=>void work(()=>updateUpload(img.id,{role:e.target.value}))}><option value="cover">{t('Cover','표지')}</option><option value="body">{t('Body','본문')}</option><option value="flexible">{t('Flexible','자동 배치')}</option></select></div><div className="admin-form-actions"><button type="button" className="admin-secondary" disabled={busy||index===0} onClick={()=>void work(()=>moveUpload(index,-1))}>↑</button><button type="button" className="admin-secondary" disabled={busy||index===uploadedImages.length-1} onClick={()=>void work(()=>moveUpload(index,1))}>↓</button><button type="button" className="admin-secondary" disabled={busy} onClick={()=>void work(()=>deleteUpload(img.id))}>{t('Delete','삭제')}</button></div></div>)}</div>
+     <button type="button" className="admin-primary" disabled={busy||!!running||dirty||uploadedImages.length===0} onClick={()=>void work(renderUploaded)}>{t('Render with uploaded images — $0 image AI','업로드 이미지로 렌더 — 이미지 AI $0')}</button>
+    </div>}
     <label><span>{t('Caption','캡션')}</span><textarea rows={10} value={draft.caption||''} maxLength={2000} disabled={busy||!!running||draft.status!=='needs_approval'} onChange={e=>changeDraft('caption',e.target.value)}/></label>
     <label><span>CTA</span><input value={draft.cta||''} maxLength={70} disabled={busy||!!running||draft.status!=='needs_approval'} onChange={e=>changeDraft('cta',e.target.value)}/></label>
     <label><span>{t('Destination','연결 주소')}</span><input value={draft.destination_url||''} disabled={busy||!!running||draft.status!=='needs_approval'} onChange={e=>changeDraft('destination_url',e.target.value)}/></label>
