@@ -15,7 +15,7 @@ type ContentLanguage='ko'|'en';
 type VisualSource='auto_ai'|'uploaded'|'none';
 export type GenerationInput={request_key:string;revision:number;mode:'text'|'image'|'both';content_mode:'prelaunch'|'live_event'|'growth_carousel';visual_mode:'cards'|'photo';visual_source?:VisualSource;topic_type?:string;instruction?:string;language?:ContentLanguage;confirm_photo?:boolean;render_only?:boolean};
 const topics=['mbti','dating_archetype','book_insight','trend_research','meme_remix','dating_myth','conversation_prompt','seoul_dating','mini_quiz'];
-const researchTopics=new Set(['book_insight','trend_research','dating_myth']);
+const researchTopics=new Set(['book_insight','trend_research','dating_myth','seoul_dating']);
 const COPY_MODEL='gpt-4.1-mini',IMAGE_MODEL='gpt-image-2.5-flare',MAX_INPUT_BYTES=16000;
 export const kstDate=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 const checked=<T extends {error:unknown}>(r:T):T=>{if(r.error)throw r.error;return r;};
@@ -200,10 +200,13 @@ async function generateVisualSet(db:DB,draft:Row,input:GenerationInput,job:Row){
   'People should look like real adults in a natural social moment, not posed romantic partners. Smart-casual styling, natural skin texture, imperfect gestures, genuine conversation, contemporary Seoul atmosphere.',
   'Magazine-editorial photography: restrained, premium, warm, modern, documentary-natural. Avoid exaggerated romance, physical intimacy, flowers-as-romance clichés, hand hearts, wedding/couple-shoot styling, glamour/luxury cues, crowded parties, visible alcohol, stock-photo smiles, repeated café setups, fake signage, text, logos, watermarks, or invented event facts.',
   'Portrait 4:5 composition. Leave useful negative space where editorial typography can be placed by the server. Do not render any words or Roundy branding inside the photographs.',
+  draft.growth_topic_type==='seoul_dating'
+   ?'IMPORTANT FOR SEOUL DATING POSTS: the named venues in the copy are factual recommendations, but these generated photographs are mood/editorial illustrations only. Do NOT attempt to depict, reconstruct or label any named venue as if this were a real photo of that place. Use a generic Seoul date atmosphere that matches the category (park, gallery, street, restaurant, riverside, etc.) with no identifiable venue signage.'
+   :'',
   'Carousel context:',
   visualContext(draft),
   input.instruction||''
- ].join('\n');
+ ].filter(Boolean).join('\n');
  const result=await upstream('images/generations',{model:IMAGE_MODEL,prompt,n:3,size:'1024x1280',quality:'low',output_format:'jpeg',output_compression:85,background:'opaque'},150000);
  const encoded=(Array.isArray(result.data)?result.data:[]).map((row:Row)=>row?.b64_json).filter((value:unknown):value is string=>typeof value==='string'&&value.length>=100&&value.length<=8*1024*1024);
  if(encoded.length<3)throw new Error('INVALID_GENERATED_VISUAL_SET');
