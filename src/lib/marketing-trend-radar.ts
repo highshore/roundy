@@ -185,7 +185,7 @@ export async function trendOverview(){
   db.from('marketing_trends').select('id,status,trend_score,last_seen_at,cooldown_until,material_change,material_change_at,used_at').gte('last_seen_at',freshSince).limit(100)
  ]);
  for(const r of [control,settings,scans,trends,usage,pool])if(r.error)throw r.error;
- const rows=usage.data||[],now=Date.now(),threshold=Number(settings.data.trend_override_score||80),freshRows=(pool.data||[]) as Row[];
+ const rows=usage.data||[],now=Date.now(),threshold=Number(settings.data?.trend_override_score||80),freshRows=(pool.data||[]) as Row[];
  const available=freshRows.filter((row:Row)=>Number(row.trend_score)>=threshold&&(row.status==='emerging'||row.status==='rising'||row.status==='peak'&&Number(row.trend_score)>=90)&&(!row.cooldown_until||Date.parse(row.cooldown_until)<=now||Boolean(row.material_change&&row.material_change_at&&(!row.used_at||Date.parse(row.material_change_at)>Date.parse(row.used_at))))).length;
  return {control:control.data,settings:settings.data,scans:scans.data,trends:trends.data,pool:{fresh_days:TREND_POOL_FRESH_DAYS,target_min:TREND_POOL_TARGET_MIN,target_max:TREND_POOL_TARGET_MAX,refill_threshold:TREND_POOL_REFILL_THRESHOLD,fresh_candidates:freshRows.length,available_candidates:available},usage:{daily_reserved_usd:rows.filter((x:Row)=>Date.parse(x.created_at)>=dayStart).reduce((sum:number,x:Row)=>sum+Number(x.reserved_usd||0),0),monthly_reserved_usd:rows.reduce((sum:number,x:Row)=>sum+Number(x.reserved_usd||0),0),daily_budget_usd:Number(control.data.daily_budget_usd),monthly_budget_usd:Number(control.data.monthly_budget_usd)}};
 }
