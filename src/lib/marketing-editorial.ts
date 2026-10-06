@@ -1,4 +1,4 @@
-import {buildMarketingResearchTask,RESEARCH_TASK_VERSION,type SeoulDatingFormat,type TrendResearchHistory} from './marketing-research-task';
+import {buildMarketingResearchTask,RESEARCH_TASK_VERSION,type SeoulDatingFormat,type TrendResearchHistory,type DatingMythHistory} from './marketing-research-task';
 import {selectVerifiedMarketingBook,verifiedBookEvidence} from './marketing-book-catalog';
 import {captionCtaIssues,isCompactDocument,bilingualCaptionIssues} from './marketing-presentation';
 import {renderCompactEditorial,type EditorialAssets} from './marketing-visuals';
@@ -39,6 +39,42 @@ function trendRepeatReason(study:Row|undefined,items:TrendHistoryItem[]):string{
 function isTrendGroundingFailure(issues:string[]){
  return issues.some(issue=>/실제 인용된 연구 출처|연구 제목과 발표 연도|원 논문|DOI|저널|대학|연구기관 출처/.test(issue));
 }
+type DatingMythHistoryItem={claim:string;myth_key:string;created_at:string};
+function mythSimilarity(a:unknown,b:unknown){
+ const x=trendNorm(a),y=trendNorm(b);if(!x||!y)return 0;if(x===y)return 1;
+ const grams=(value:string)=>new Set(Array.from({length:Math.max(0,value.length-2)},(_,i)=>value.slice(i,i+3)));
+ const A=grams(x),B=grams(y);if(!A.size||!B.size)return 0;let overlap=0;for(const g of A)if(B.has(g))overlap++;
+ return overlap/(A.size+B.size-overlap);
+}
+async function loadDatingMythHistory(db:any):Promise<DatingMythHistoryItem[]>{
+ const since120=new Date(Date.now()-120*86400000).toISOString();
+ const rows=ok(await db.from('marketing_generation_jobs').select('created_at,result_snapshot,status').eq('status','completed').gte('created_at',since120).order('created_at',{ascending:false}).limit(100))||[];
+ return (Array.isArray(rows)?rows:[]).flatMap((row:Row)=>{
+  const snapshot=row?.result_snapshot,document=snapshot?.content_document;
+  if(snapshot?.growth_topic_type!=='dating_myth')return [];
+  const myth=document?.myth,mythSlide=Array.isArray(document?.slides)?document.slides.find((slide:Row)=>slide?.role==='myth'):null;
+  const claim=String(myth?.claim||mythSlide?.title||mythSlide?.body||'').trim();
+  if(!claim)return [];
+  return [{claim,myth_key:String(myth?.myth_key||''),created_at:String(row.created_at||snapshot.saved_at||'')}];
+ });
+}
+function datingMythHistoryPrompt(items:DatingMythHistoryItem[]):DatingMythHistory{
+ const cutoff60=Date.now()-60*86400000;
+ return {
+  claims_120d:[...new Set(items.map(item=>item.claim).filter(Boolean))],
+  myth_keys_60d:[...new Set(items.filter(item=>Date.parse(item.created_at)>=cutoff60).map(item=>item.myth_key).filter(Boolean))]
+ };
+}
+function datingMythRepeatReason(myth:Row|undefined,items:DatingMythHistoryItem[]):string{
+ if(!myth?.claim)return '';
+ const cutoff60=Date.now()-60*86400000,claim=String(myth.claim),key=String(myth.myth_key||'');
+ if(items.some(item=>mythSimilarity(item.claim,claim)>=.72))return 'same_myth_within_120d';
+ if(key&&items.some(item=>item.myth_key===key&&Date.parse(item.created_at)>=cutoff60))return 'similar_myth_topic_within_60d';
+ return '';
+}
+function isDatingMythGroundingFailure(issues:string[]){
+ return issues.some(issue=>/실제 인용된 연구 출처|연구 제목과 발표 연도|원 논문|DOI|저널|대학|연구기관 출처|통념에는 주장|통념 분류|통념 판정/.test(issue));
+}
 
 function parseDocument(result:Row){
  const choice=result.choices?.[0],raw=choice?.message?.content;
@@ -51,7 +87,8 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
  const requestedType=postType(input),language=input.language==='en'?'en':'ko';
  const seoulFormat:SeoulDatingFormat=requestedType==='seoul_dating'?seoulDatingFormat(String(draft.draft_date||'')+':'+String(draft.id||'')):'places';
  const trendItems=requestedType==='trend_research'?await loadTrendHistory(db):[],trendHistory=trendHistoryPrompt(trendItems);
- let effectiveType=requestedType,facts:Row|null=null,fallbackReason='',repairUsed=false,selectedBook:ReturnType<typeof selectVerifiedMarketingBook>|null=null;
+ const mythItems=requestedType==='dating_myth'?await loadDatingMythHistory(db):[],mythHistory=datingMythHistoryPrompt(mythItems);
+ let effectiveType=requestedType,facts:Row|null=null,fallbackReason='',repairUsed=false,mythAlternateUsed=false,selectedBook:ReturnType<typeof selectVerifiedMarketingBook>|null=null;
  if(requestedType==='live_event'){
   let q=db.from('events').select('id,slug,title,starts_at,venue,neighborhood,capacity,seats_remaining,price_gents,price_ladies').eq('status','live').is('deleted_at',null).gt('starts_at',new Date().toISOString());if(draft.event_id)q=q.eq('id',draft.event_id);
   facts=ok(await q.order('starts_at').limit(1).maybeSingle());if(!facts)throw new Error('게시 가능한 정식 이벤트가 없습니다. 이벤트 모집 대신 오픈 전 홍보를 선택하세요.');
@@ -65,15 +102,15 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
   notes=sources[0].evidence;
   ok(await db.from('marketing_generation_jobs').update({stage:'researching',research_cache:{key:'verified-book-catalog-v1:'+book.title,saved_at:new Date().toISOString(),sources,notes,subject:book.title,search_completed:true,verified_catalog:true}}).eq('id',job.id));
  }else if(CONTENT_PROFILES[requestedType].research){
-  const researchTask=buildMarketingResearchTask(requestedType,input.instruction||'',language,requestedType==='seoul_dating'?seoulFormat:'',requestedType==='trend_research'?trendHistory:undefined);
-  const cacheKey=createHash('sha256').update(JSON.stringify([RESEARCH_TASK_VERSION,CONTENT_POLICY_VERSION,requestedType,language,input.instruction||'',requestedType==='seoul_dating'?seoulFormat:'',requestedType==='trend_research'?trendHistory:null])).digest('hex');
+  const researchTask=buildMarketingResearchTask(requestedType,input.instruction||'',language,requestedType==='seoul_dating'?seoulFormat:'',requestedType==='trend_research'?trendHistory:undefined,requestedType==='dating_myth'?mythHistory:undefined);
+  const cacheKey=createHash('sha256').update(JSON.stringify([RESEARCH_TASK_VERSION,CONTENT_POLICY_VERSION,requestedType,language,input.instruction||'',requestedType==='seoul_dating'?seoulFormat:'',requestedType==='trend_research'?trendHistory:null,requestedType==='dating_myth'?mythHistory:null])).digest('hex');
   const own=ok(await db.from('marketing_generation_jobs').select('retry_of_job_id').eq('id',job.id).single());
   const prior=own?.retry_of_job_id?ok(await db.from('marketing_generation_jobs').select('research_cache').eq('id',own.retry_of_job_id).maybeSingle()):null;
   const cache=prior?.research_cache;
   if(cache?.key===cacheKey&&cache.search_completed===true&&Array.isArray(cache.sources)&&cache.sources.length&&Date.now()-Date.parse(cache.saved_at)<86400000){sources=cache.sources;notes=cache.notes;}
   else{
    ok(await db.from('marketing_generation_jobs').update({stage:'researching'}).eq('id',job.id));
-   const research=await call('responses',{model:MODEL,instructions:researchInstructions(requestedType,language,input.instruction||'',requestedType==='seoul_dating'?seoulFormat:''),input:researchTask,tools:[{type:'web_search',search_context_size:'high',external_web_access:true}],tool_choice:'required',max_tool_calls:3,include:['web_search_call.action.sources'],max_output_tokens:['seoul_dating','trend_research'].includes(requestedType)?4200:3000,store:false},95000);
+   const research=await call('responses',{model:MODEL,instructions:researchInstructions(requestedType,language,input.instruction||'',requestedType==='seoul_dating'?seoulFormat:''),input:researchTask,tools:[{type:'web_search',search_context_size:'high',external_web_access:true}],tool_choice:'required',max_tool_calls:3,include:['web_search_call.action.sources'],max_output_tokens:['seoul_dating','trend_research','dating_myth'].includes(requestedType)?4200:3000,store:false},95000);
    await record(research);const evidence=extractResearchEvidence(research);sources=evidence.sources;notes=evidence.notes;
    ok(await db.from('marketing_generation_jobs').update({research_cache:{key:cacheKey,saved_at:new Date().toISOString(),sources,notes,subject:researchTask,search_completed:evidence.completed&&sources.length>0}}).eq('id',job.id));
    if(!evidence.completed||!sources.length){
@@ -89,13 +126,14 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
   }
  }
 
- const write=async(type:PostType,repair?:{document:Row;issues:string[]})=>{
-  const instructions=writingInstructions(type,language,type==='seoul_dating'?seoulFormat:'')+(repair?'\nREPAIR PASS: Fix ONLY the listed quality issues. Preserve all supported facts, source IDs, uncertainty, card roles, and the approved topic. Do not add new claims. Return the complete corrected document in the same strict schema.':'');
-  const payload={editorial_type:type,language,direction:input.instruction||'',evidence:sources,event:facts,...(type==='seoul_dating'?{seoul_format:seoulFormat}:{}),...(type==='trend_research'?{current_year:new Date().getUTCFullYear(),recent_history:trendHistory}:{}),...(repair?{original_document:repair.document,quality_issues:repair.issues}:{})};
+ const write=async(type:PostType,repair?:{document:Row;issues:string[]},candidateVariant:''|'backup'='')=>{
+  const writingVariant=type==='seoul_dating'?seoulFormat:type==='dating_myth'?candidateVariant:'';
+  const instructions=writingInstructions(type,language,writingVariant)+(repair?'\nREPAIR PASS: Fix ONLY the listed quality issues. Preserve all supported facts, source IDs, uncertainty, card roles, and the approved topic. Do not add new claims. Return the complete corrected document in the same strict schema.':'');
+  const payload={editorial_type:type,language,direction:input.instruction||'',evidence:sources,event:facts,...(type==='seoul_dating'?{seoul_format:seoulFormat}:{}),...(type==='trend_research'?{current_year:new Date().getUTCFullYear(),recent_history:trendHistory}:{}),...(type==='dating_myth'?{myth_candidate:candidateVariant==='backup'?'backup':'primary',recent_history:mythHistory}:{}),...(repair?{original_document:repair.document,quality_issues:repair.issues}:{})};
   if(Buffer.byteLength(instructions+JSON.stringify(payload)+JSON.stringify(contentSchema(type,language)),'utf8')>30000)throw new Error('PROMPT_SIZE_LIMIT');
   const control=ok(await db.from('marketing_ai_control').select('enabled,blocked_reason').eq('singleton',true).single());
   if(!control.enabled||control.blocked_reason)throw new Error('AI_PAUSED');
-  ok(await db.from('marketing_generation_jobs').update({stage:repair?'repairing_copy':'writing'}).eq('id',job.id));
+  ok(await db.from('marketing_generation_jobs').update({stage:repair?'repairing_copy':candidateVariant==='backup'?'writing_alternate_myth':'writing'}).eq('id',job.id));
   const result=await call('chat/completions',{model:MODEL,temperature:repair?.3:.6,max_completion_tokens:4096,response_format:{type:'json_schema',json_schema:{name:'roundy_editorial_v2',strict:true,schema:contentSchema(type,language)}},messages:[{role:'system',content:instructions},{role:'user',content:JSON.stringify(payload)}]},55000);
   await record(result);return {...parseDocument(result),result};
  };
@@ -139,6 +177,19 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
    written=await write(effectiveType);prepared=prepareContent(written.document,effectiveType,language,sources);
   }
  }
+ if(requestedType==='dating_myth'&&effectiveType==='dating_myth'){
+  let repeat=datingMythRepeatReason((prepared.document as Row)?.myth,mythItems),mythIssues=classifyQualityIssues(prepared.report.issues);
+  if(repeat||isDatingMythGroundingFailure(mythIssues.critical)){
+   mythAlternateUsed=true;
+   written=await write(effectiveType,undefined,'backup');prepared=prepareContent(written.document,effectiveType,language,sources);
+   repeat=datingMythRepeatReason((prepared.document as Row)?.myth,mythItems);mythIssues=classifyQualityIssues(prepared.report.issues);
+   if(repeat||isDatingMythGroundingFailure(mythIssues.critical)){
+    effectiveType='conversation_prompt';sources=[];fallbackReason=(repeat||'myth_grounding_failed')+':dating_myth->conversation_prompt';
+    ok(await db.from('marketing_generation_jobs').update({stage:'writing_fallback'}).eq('id',job.id));
+    written=await write(effectiveType);prepared=prepareContent(written.document,effectiveType,language,sources);
+   }
+  }
+ }
  if(prepared.report.status!=='passed'){
   const grouped=classifyQualityIssues(prepared.report.issues);
   if(grouped.critical.length){
@@ -161,7 +212,7 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
   if(eventCard){const factsText=[facts.title,new Date(facts.starts_at).toLocaleString(language==='ko'?'ko-KR':'en-GB',{timeZone:'Asia/Seoul'})+' KST',facts.venue||facts.neighborhood].filter(Boolean).join('\n');eventCard.body=factsText;eventCard.body_ko=[facts.title,new Date(facts.starts_at).toLocaleString('ko-KR',{timeZone:'Asia/Seoul'})+' KST',facts.venue||facts.neighborhood].filter(Boolean).join('\n');eventCard.body_en=[new Date(facts.starts_at).toLocaleString('en-GB',{timeZone:'Asia/Seoul'})+' KST',facts.venue||facts.neighborhood].filter(Boolean).join('\n');eventCard.source_label='Roundy에 등록된 행사 정보 / Published event';}
  }
  const effectiveProfile=CONTENT_PROFILES[effectiveType];
- const recovery={requested_type:requestedType,effective_type:effectiveType,fallback_reason:fallbackReason||null,repair_used:repairUsed,search_limit:requestedType==='book_insight'?0:CONTENT_PROFILES[requestedType].research?3:0,...(requestedType==='seoul_dating'?{seoul_format:seoulFormat,seoul_mix_policy:'70_places_30_course'}:{}),...(requestedType==='trend_research'?{trend_study_cooldown_days:180,trend_topic_cooldown_days:60,trend_recent_studies:trendHistory.study_titles_180d.length,trend_recent_topics:trendHistory.topic_keys_60d.length}:{})};
+ const recovery={requested_type:requestedType,effective_type:effectiveType,fallback_reason:fallbackReason||null,repair_used:repairUsed,search_limit:requestedType==='book_insight'?0:CONTENT_PROFILES[requestedType].research?3:0,...(requestedType==='seoul_dating'?{seoul_format:seoulFormat,seoul_mix_policy:'70_places_30_course'}:{}),...(requestedType==='trend_research'?{trend_study_cooldown_days:180,trend_topic_cooldown_days:60,trend_recent_studies:trendHistory.study_titles_180d.length,trend_recent_topics:trendHistory.topic_keys_60d.length}:{}),...(requestedType==='dating_myth'?{myth_claim_cooldown_days:120,myth_topic_cooldown_days:60,myth_recent_claims:mythHistory.claims_120d.length,myth_recent_topics:mythHistory.myth_keys_60d.length,myth_alternate_used:mythAlternateUsed}:{})};
  const finalClassification=classifyQualityIssues(prepared.report.issues);
  const patch={caption:prepared.caption,cta:prepared.cta,content_document:document,quality_report:{...prepared.report,recovery,classification:finalClassification},carousel_slides:prepared.slides,research_sources:prepared.sources,research_status:effectiveProfile.research?'generated':input.content_mode==='growth_carousel'?'generated':'not_required',content_language:language,draft_kind:input.content_mode==='growth_carousel'?'growth_carousel':'brand',growth_topic_type:input.content_mode==='growth_carousel'?effectiveType:null,content_mode:facts?'live_event':'prelaunch',content_pillar:facts?'event':'concept',generation_reason:effectiveProfile.label+' / editorial policy v'+CONTENT_POLICY_VERSION+(requestedType==='seoul_dating'&&!fallbackReason?' / '+seoulFormat:'')+(fallbackReason?' / safe fallback from '+requestedType:''),event_id:facts?.id||null,destination_url:facts?'https://roundy.team/events/'+facts.slug:'https://roundy.team'};
  ok(await db.from('marketing_generation_jobs').update({quality_report:patch.quality_report,result_snapshot:{...patch,draft_id:draft.id,images:[],research_notes:notes,saved_at:new Date().toISOString(),generation_recovery:recovery}}).eq('id',job.id));
