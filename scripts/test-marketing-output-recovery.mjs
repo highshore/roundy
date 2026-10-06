@@ -87,10 +87,10 @@ for(const bad of ['thread','topic','automatic','photo','caption']){
 }
 {
  const h=harness('ko');
- for(const type of ['book_insight','dating_myth','trend_research','seoul_dating']){
+ for(const type of ['book_insight','dating_myth','trend_research','seoul_dating','seoul_trend']){
   const task=h.research.buildMarketingResearchTask(type,'','ko',type==='seoul_dating'?'places':'');
   check(()=>assert.ok(task.includes('THREE targeted')));
-  check(()=>assert.ok(type==='book_insight'?task.includes('published book'):type==='dating_myth'?(task.includes('6–10 concise myth claims')&&task.includes('PRIMARY MYTH')&&task.includes('BACKUP MYTH')):type==='trend_research'?(task.includes('5–10 plausible PRIMARY studies')&&task.includes('Roundy relevance 30')):task.includes('6–10 real candidates')));
+  check(()=>assert.ok(type==='book_insight'?task.includes('published book'):type==='dating_myth'?(task.includes('6–10 concise myth claims')&&task.includes('PRIMARY MYTH')&&task.includes('BACKUP MYTH')):type==='trend_research'?(task.includes('5–10 plausible PRIMARY studies')&&task.includes('Roundy relevance 30')):type==='seoul_trend'?task.includes('emerging/rising Seoul or Korea trend'):task.includes('6–10 real candidates')));
  }
  const course=h.research.buildMarketingResearchTask('seoul_dating','','ko','course');check(()=>assert.ok(course.includes('three sequential stops')));
  const trendTask=h.research.buildMarketingResearchTask('trend_research','','ko','',{study_titles_180d:['Old Study'],topic_keys_60d:['questions_liking']});check(()=>assert.ok(trendTask.includes('Old Study')&&trendTask.includes('questions_liking')&&trendTask.includes('last 180 days')&&trendTask.includes('last 60 days')));
