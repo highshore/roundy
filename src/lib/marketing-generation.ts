@@ -205,10 +205,10 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
   }).eq('id',job.id));
   if(recoveryPatch){
    contentQuality=recoveryPatch.quality_report;await progress(db,job,'restoring_saved_copy');
-   // Preserve failed source snapshots. The recovery is a new zero-cost attempt in the SAME thread.
-   checked(await db.from('marketing_generation_jobs').update({quality_report:contentQuality,result_snapshot:{...recoveryPatch,draft_id:draftId,recovery:{version:SAVED_CTA_RECOVERY_VERSION,source_job_id:recoverySource!.id,additional_paid_calls:0}}}).eq('id',job.id).eq('status','running'));
+   // Preserve failed source snapshots. Recovery reuses copy but generates a fresh paid visual set in the SAME thread.
+   checked(await db.from('marketing_generation_jobs').update({quality_report:contentQuality,result_snapshot:{...recoveryPatch,draft_id:draftId,recovery:{version:SAVED_CTA_RECOVERY_VERSION,source_job_id:recoverySource!.id,additional_paid_calls:1}}}).eq('id',job.id).eq('status','running'));
    draft=await savePartial(db,draft,{...recoveryPatch,last_regeneration_mode:input.mode,last_regeneration_instruction:input.instruction});
-  }else if(operation!=='render'&&operation!=='photo'){
+  }else if(operation!=='photo'){
    const copy=await generateCopy(db,draft,input,job,research);contentQuality=copy.quality_report;await progress(db,job,'saving_copy');
    draft=await savePartial(db,draft,{...copy,last_regeneration_mode:input.mode,last_regeneration_instruction:input.instruction,images:[]});
   }
