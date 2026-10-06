@@ -89,7 +89,7 @@ for(const bad of ['thread','topic','automatic','photo','caption']){
  const chosen=h.research.buildMarketingResearchTask('dating_myth','첫인상과 말의 속도에 대한 연구','ko');check(()=>assert.ok(chosen.includes('첫인상과 말의 속도')));
  check(()=>assert.throws(()=>h.research.buildMarketingResearchTask('mini_quiz','','ko')));
  const source=fs.readFileSync('src/lib/marketing-editorial.ts','utf8');
- check(()=>assert.ok(source.includes('input:researchTask')));check(()=>assert.ok(source.includes('cache.search_completed===true')));check(()=>assert.ok(source.includes('search_completed:evidence.completed&&sources.length>0')));check(()=>assert.ok(source.includes('max_tool_calls:2')));
+ check(()=>assert.ok(source.includes('input:researchTask')));check(()=>assert.ok(source.includes('cache.search_completed===true')));check(()=>assert.ok(source.includes('search_completed:evidence.completed&&sources.length>0')));check(()=>assert.ok(source.includes('max_tool_calls:3')));
  const ui=fs.readFileSync('src/components/admin-marketing.tsx','utf8');check(()=>assert.ok(ui.includes('저장된 결과로 무료 복구')));check(()=>assert.ok(ui.includes('recover_saved_result:freeRecovery')));
  const api=fs.readFileSync('src/lib/marketing.ts','utf8');check(()=>assert.ok(api.includes('confirmation.recover_saved_result===true&&!recoverySourceJobId')));
 }
