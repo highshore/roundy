@@ -79,6 +79,7 @@ create table if not exists public.marketing_trend_scans(
   updated_at timestamptz not null default now()
 );
 create index if not exists marketing_trend_scans_created_idx on public.marketing_trend_scans(created_at desc);
+create index if not exists marketing_trend_scans_selected_trend_idx on public.marketing_trend_scans(selected_trend_id) where selected_trend_id is not null;
 
 alter table public.instagram_post_drafts
   add column if not exists trend_id uuid references public.marketing_trends(id) on delete set null;
