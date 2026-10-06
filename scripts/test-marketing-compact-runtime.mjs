@@ -22,13 +22,13 @@ export function harness(language){
  ]};copy.caption=language==='ko'?copy.caption_ko:copy.caption_en;
  function load(file){if(cache[file])return cache[file];const context={exports:{},Buffer,URL,AbortSignal,Intl,Date,console,setTimeout,clearTimeout,process:{env:{OPENAI_API_KEY:'test-not-real'}},require:n=>{
   if(n==='server-only')return {};if(n==='./supabase/service')return {createServiceRoleClient:()=>db};
-  if(n==='./marketing-render-assets')return {loadEditorialAssets:async()=>({photo:'data:image/jpeg;base64,brand-test-image',fonts:[]})};
+  if(n==='./marketing-render-assets')return {loadEditorialAssets:async()=>({photo:null,photos:[],fonts:[]})};
   if(n==='react')return {createElement:(tag,props,...children)=>({tag,props,children})};
   if(n==='next/og')return {ImageResponse:class{constructor(tree){this.tree=tree;}arrayBuffer(){return Promise.resolve(Buffer.from(JSON.stringify(this.tree)));}}};
   if(n==='sharp')return bytes=>({jpeg:()=>({toBuffer:async()=>Buffer.from(bytes)})});
   if(n.startsWith('./marketing-'))return load('src/lib/'+n.slice(2)+'.ts');return require(n);
  },fetch:async(url,init)=>{const body=JSON.parse(init.body);requests.push({url,body});
-  if(url.endsWith('/images/generations'))return {ok:true,json:async()=>({data:[{b64_json:Buffer.alloc(200).toString('base64')}]})};
+  if(url.endsWith('/images/generations'))return {ok:true,json:async()=>({data:[0,1,2].map(()=>({b64_json:Buffer.alloc(200).toString('base64')}))})};
   assert.ok(url.endsWith('/chat/completions'));check(()=>assert.equal(body.response_format.json_schema.strict,true));check(()=>assert.ok(body.response_format.json_schema.schema.required.includes('caption_ko')));check(()=>assert.ok(body.response_format.json_schema.schema.properties.slides.items.required.includes('secondary_body')));check(()=>assert.equal(body.tools,undefined));
   return {ok:true,json:async()=>({choices:[{finish_reason:'stop',message:{content:JSON.stringify(copy)}}],usage:{prompt_tokens:600,completion_tokens:850}})};
  }};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText,context);return cache[file]=context.exports;}
@@ -38,7 +38,7 @@ for(const language of ['ko','en'])for(const visual_mode of ['cards','photo']){
  const h=harness(language),input={request_key:'manual:compact-runtime-'+language+'-'+visual_mode,revision:1,mode:'both',content_mode:'prelaunch',visual_mode,language,confirm_photo:visual_mode==='photo'};
  const result=await h.api.runGeneration(h.id,input,null);
  check(()=>assert.equal(result.job.status,'completed',JSON.stringify(result)));
- check(()=>assert.equal(h.requests.length,visual_mode==='photo'?2:1));
+ check(()=>assert.equal(h.requests.length,2));
  check(()=>assert.equal(result.draft.images.length,3));
  check(()=>assert.equal(result.draft.content_document.design_preset,'roundy_compact_editorial_v1'));
  check(()=>assert.equal(result.draft.quality_report.status,'passed'));
@@ -52,7 +52,7 @@ for(const language of ['ko','en'])for(const visual_mode of ['cards','photo']){
  else check(()=>assert.ok(!bodyCard.includes('큰 모임에서 말을 끼워 넣기보다')));
  const coverCard=h.stored[0].bytes.toString();check(()=>assert.ok(!coverCard.includes('@roundy.meet')&&!coverCard.includes('roundy.team')&&!coverCard.includes('Roundy Notes')));
  const outro=h.stored.at(-1).bytes.toString();check(()=>assert.ok(outro.includes('@roundy.meet')&&outro.includes('https://roundy.team')));
- if(visual_mode==='photo'){const call=h.requests.find(r=>r.url.endsWith('/images/generations')).body;check(()=>assert.equal(call.model,'gpt-image-2.5-flare'));check(()=>assert.equal(call.n,1));check(()=>assert.equal(call.quality,'low'));check(()=>assert.equal(call.size,'1024x1280'));check(()=>assert.ok(!call.prompt.includes('English-only')));check(()=>assert.ok(call.prompt.includes('NOT automatically a café')&&call.prompt.includes('not a dating-app stock image')));}
+ const call=h.requests.find(r=>r.url.endsWith('/images/generations')).body;check(()=>assert.equal(call.model,'gpt-image-2.5-flare'));check(()=>assert.equal(call.n,3));check(()=>assert.equal(call.quality,'low'));check(()=>assert.equal(call.size,'1024x1280'));check(()=>assert.ok(call.prompt.includes('THREE distinct')&&call.prompt.includes('Carousel context:')));
  const count=h.requests.length,repeated=await h.api.runGeneration(h.id,input,null);check(()=>assert.equal(repeated.deduplicated,true));check(()=>assert.equal(h.requests.length,count));
 }
-console.log('PASS '+assertions+' compact runtime assertions: single-language magazine cards, original logo, idempotency, one image request only. Zero live paid requests.');
+console.log('PASS '+assertions+' compact runtime assertions: fresh three-image visual set, single-language magazine cards, original logo and idempotency. Zero live paid requests.');
