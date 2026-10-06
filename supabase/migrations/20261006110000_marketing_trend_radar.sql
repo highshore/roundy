@@ -197,7 +197,7 @@ end
 $$;
 revoke all on function roundy_private.dispatch_marketing_trend_radar() from public,anon,authenticated,service_role;
 
-do $
+do $trend_scheduler$
 declare existing_job bigint;
 begin
   select jobid into existing_job from cron.job where jobname='roundy-marketing-trend-radar' limit 1;
@@ -208,6 +208,6 @@ begin
     'select roundy_private.dispatch_marketing_trend_radar()'
   );
 end
-$;
+$trend_scheduler$;
 
 commit;
