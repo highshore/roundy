@@ -63,7 +63,10 @@ check(()=>assert.ok(g.includes('return renderCards(db,draft,job,\'data:image/jpe
 check(()=>assert.ok(!g.includes('English-only 1:1 mingle')));check(()=>assert.ok(g.includes('Rotation Dating service')));
 const design=fs.readFileSync('src/lib/marketing-visuals.ts','utf8');
 check(()=>assert.ok(!design.includes('borderLeft')&&!design.includes('visualMotif')));
-check(()=>assert.ok(design.includes("fontFamily:assets.fonts?.length?'Roundy Gothic, sans-serif':'sans-serif'")));
+check(()=>assert.ok(design.includes("'Noto Sans KR, sans-serif'")&&design.includes("'DM Sans, sans-serif'")));
+check(()=>assert.ok(!design.includes("text('Roundy Notes'")&&!design.includes("text('국문본문'")&&!design.includes("text('영어본문'")));
+check(()=>assert.ok(!design.includes("(index+1)+'/'+total")));
+check(()=>assert.ok(design.includes("'https://'+BRAND.website")));
 if(process.argv.includes('--render')){
  const sharp=require('sharp'),assets=await load('src/lib/marketing-render-assets.ts').loadEditorialAssets();
  fs.mkdirSync('quality-artifacts/compact',{recursive:true});
