@@ -30,7 +30,7 @@ export function qualitySeverity(issue:string):QualitySeverity{
   /검색 근거 없이|unsourced|통계|scientifically proven/i,
   /확인되지 않은 모집 정보|event facts|invented event/i,
   /서울 데이트 장소|서울 데이팅 장소|검증 가능한 장소|실제 장소|venue verification|verified Seoul place/i,
-  /연애 통념|통념 판정|myth verdict|myth key|원 논문, DOI, 저널, 대학 또는 연구기관 출처/i,
+  /통념 분류|통념 판정|myth verdict|myth key|원 논문, DOI, 저널, 대학 또는 연구기관 출처/i,
   /검증할 수 없는 출처 참조/i
  ];
  if(critical.some(pattern=>pattern.test(issue)))return 'critical';
@@ -299,8 +299,8 @@ export function evaluateContent(value:unknown,type:PostType,language:string,sour
    const url=source?canonicalSourceUrl(source.url):null,host=url?new URL(url).hostname.toLowerCase():'';
    const scholarly=!!url&&(host==='doi.org'||host.endsWith('.edu')||host.includes('.edu.')||host.endsWith('.ac.kr')||host.includes('.ac.')||/pubmed|pmc\.ncbi|ncbi\.nlm\.nih|journals?\.|springer|sciencedirect|sagepub|tandfonline|wiley|frontiersin|nature\.com|pnas\.org|apa\.org|psycnet|osf\.io|psyarxiv|ssrn|cambridge\.org|oup\.com|academic\.oup/.test(host));
    if(!scholarly)add('연애 통념은 원 논문, DOI, 저널, 대학 또는 연구기관 출처가 최소 하나 필요합니다.');
-   const mythSlide=slides.find((slide:Row)=>slide.role==='myth'),combined=norm(str(mythSlide?.title)+' '+str(mythSlide?.body));
-   if(str(myth.claim)&&combined&&!combined.includes(norm(myth.claim)))add('통념 카드에 선택한 연애 통념 주장을 명확히 표시해야 합니다.');
+   const mythSlide=slides.find((slide:Row)=>slide.role==='myth'),mythCardText=str(mythSlide?.title)+' '+str(mythSlide?.body);
+   if(str(myth.claim)&&mythCardText&&similarity(str(myth.claim),mythCardText)<.34)add('통념 카드에 선택한 연애 통념 주장을 명확히 표시해야 합니다.');
    const allCopy=[c.caption,c.caption_ko,c.caption_en,...slides.flatMap((slide:Row)=>[slide?.title,slide?.body,slide?.secondary_body,slide?.highlight])].map(str).join(' ');
    if(/과학적으로\s*틀렸다|연구가\s*증명했다|무조건\s*사실|완전히\s*거짓|scientifically\s+false|science\s+proves|definitely\s+true|completely\s+false/i.test(allCopy))add('연애 통념을 과학적 사실/거짓으로 단정하는 표현은 사용할 수 없습니다.');
   }
