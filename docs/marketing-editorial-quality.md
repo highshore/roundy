@@ -6,11 +6,11 @@ Search is isolated from brand/event copy. One plain-text Responses research requ
 
 Checks cover role/order/schema, duplicate and near-duplicate titles/bodies, cover density, field lengths, source IDs, book attribution, concrete conversation questions, quiz options, language, excessive promotion and unsupported statistical/trend claims. Failures are classified as Critical, Quality, or Formatting. Safe formatting is normalized locally. Non-critical copy can receive exactly one bounded repair pass using the same evidence. Critical source/fact/event failures still fail closed.
 
-Rendering uses role-specific cover, book attribution, evidence, dialogue, contrast/choices, practice and CTA compositions, not color swaps. Captions carry source URLs; book/claim cards carry server-derived attribution. Paid photos remain opt-in and receive a deterministic cover headline overlay.
+Rendering uses role-specific cover, book attribution, evidence, dialogue, contrast/choices, practice and CTA compositions, not color swaps. Captions carry source URLs; book/claim cards carry server-derived attribution. Every visual generation creates a fresh three-image editorial photo set from the current carousel context; static marketing photography is not reused.
 
 If a research-only topic cannot obtain usable cited evidence, generation falls back at most once to a safe non-research topic (Conversation Prompt or Dating Archetype) instead of repeatedly searching. A database trigger blocks ALL new Instagram publishing queue entries unless the current draft revision passed quality checks. Editing or restoring content invalidates the pass. Free rechecks do not call AI. The old source-less success fallback is no longer used for evidence-dependent content.
 
-Reservations: copy $0.02; research (up to three targeted searches + one writing call, plus at most one copy-only repair when needed) $0.05; photo $0.05; copy+photo $0.07. Existing $0.25/day, $3/month, locks and unknown-outcome protection remain. Identical explicit retries can reuse valid saved research (books 7 days, studies 1 day). Reservations are conservative app accounting, not provider invoice guarantees. No paid API calls are made by CI tests.
+Reservations: copy $0.02; research (up to three targeted searches + one writing call, plus at most one copy-only repair when needed) $0.05; fresh visual set $0.15; copy + fresh visual set $0.20. The normal $0.25/day cap remains; the monthly app guard is $6 to support recurring fresh visual generation. Identical explicit retries can reuse valid saved research (books 7 days, studies 1 day). Reservations are conservative app accounting, not provider invoice guarantees. No paid API calls are made by CI tests.
 
 
 ## Human copy and branded visuals
@@ -19,6 +19,4 @@ Policy v3 explicitly avoids generic AI-ad language. The writing prompt uses type
 
 Copy should prefer observable scenes, concrete actions, usable questions and short natural sentences over motivational abstractions. Growth posts remain editorial-first: Roundy appears only on the final CTA/caption unless the post itself is an event/brand announcement.
 
-Every server-rendered card now includes the real Roundy vector mark. Contextual zero-cost illustrations are chosen deterministically from the editorial type and semantic slide role (book stack, research bars, conversation bubbles, Seoul skyline, quiz cards, or 1:1 meeting motif). This creates visual variety without calling an image model.
-
-When the administrator explicitly chooses Photo for pre-launch/event content, the app uses gpt-image-2.5-flare at low quality in 1024x1280 JPEG. The model is instructed to generate only the candid lifestyle photograph with no text/logo; the real Roundy mark and headline are overlaid server-side. Automatic paid-photo generation remains disabled.
+Every server-rendered card includes the real Roundy vector mark. Photography is generated at content-generation time rather than selected from reusable assets. One bounded gpt-image-2.5-flare request asks for three low-quality 1024x1280 editorial photos tailored to the current carousel. The server then overlays the approved logo and typography. Automatic generation uses the same fresh-visual path.
