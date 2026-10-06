@@ -205,7 +205,8 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
    images:draft.images||[],carousel_slides:draft.carousel_slides||[],research_sources:draft.research_sources||[],
    research_status:draft.research_status,content_language:draft.content_language,draft_kind:draft.draft_kind,
    growth_topic_type:draft.growth_topic_type,content_mode:draft.content_mode,content_pillar:draft.content_pillar,
-   generation_reason:draft.generation_reason,event_id:draft.event_id||null,revision:draft.revision,saved_at:new Date().toISOString()
+   generation_reason:draft.generation_reason,event_id:draft.event_id||null,revision:draft.revision,saved_at:new Date().toISOString(),
+   generation_recovery:(quality as Row).recovery||draft.content_document?.generation_recovery||null
   };
   checked(await db.from('marketing_generation_jobs').update({status:'completed',stage:'complete',quality_report:quality,result_snapshot:resultSnapshot,result_revision:draft.revision,updated_at:new Date().toISOString()}).eq('id',job.id).eq('status','running'));
   return {draft,job:{...job,status:'completed',stage:'complete',result_snapshot:resultSnapshot,result_revision:draft.revision},deduplicated:false};
