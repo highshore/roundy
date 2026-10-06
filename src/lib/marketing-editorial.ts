@@ -1,4 +1,4 @@
-import {buildMarketingResearchTask,RESEARCH_TASK_VERSION} from './marketing-research-task';
+import {buildMarketingResearchTask,RESEARCH_TASK_VERSION,type SeoulDatingFormat} from './marketing-research-task';
 import {selectVerifiedMarketingBook,verifiedBookEvidence} from './marketing-book-catalog';
 import {captionCtaIssues,isCompactDocument,bilingualCaptionIssues} from './marketing-presentation';
 import {renderCompactEditorial,type EditorialAssets} from './marketing-visuals';
@@ -8,7 +8,9 @@ import {CONTENT_PROFILES,CONTENT_POLICY_VERSION,postType,contentSchema,researchI
 type Call=(endpoint:string,body:Row,timeout:number)=>Promise<Row>;
 const ok=(r:any)=>{if(r.error)throw r.error;return r.data;};
 const MODEL='gpt-4.1-mini';
-const FALLBACK_TYPE:Partial<Record<PostType,PostType>>={trend_research:'dating_archetype',dating_myth:'conversation_prompt'};
+const FALLBACK_TYPE:Partial<Record<PostType,PostType>>={trend_research:'dating_archetype',dating_myth:'conversation_prompt',seoul_dating:'conversation_prompt'};
+function seoulDatingFormat(seed:string):SeoulDatingFormat{const value=createHash('sha256').update(seed).digest()[0]%10;return value<7?'places':'course';}
+function isSeoulVenueFailure(issues:string[]){return issues.some(issue=>/서울 데이트 장소|서울 데이팅|실제 장소|가격\/영업시간|장소 추천 카드|검증 가능한 장소/.test(issue));}
 
 function parseDocument(result:Row){
  const choice=result.choices?.[0],raw=choice?.message?.content;
@@ -19,6 +21,7 @@ function parseDocument(result:Row){
 
 export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,call:Call){
  const requestedType=postType(input),language=input.language==='en'?'en':'ko';
+ const seoulFormat:SeoulDatingFormat=requestedType==='seoul_dating'?seoulDatingFormat(String(draft.draft_date||'')+':'+String(draft.id||'')):'places';
  let effectiveType=requestedType,facts:Row|null=null,fallbackReason='',repairUsed=false,selectedBook:ReturnType<typeof selectVerifiedMarketingBook>|null=null;
  if(requestedType==='live_event'){
   let q=db.from('events').select('id,slug,title,starts_at,venue,neighborhood,capacity,seats_remaining,price_gents,price_ladies').eq('status','live').is('deleted_at',null).gt('starts_at',new Date().toISOString());if(draft.event_id)q=q.eq('id',draft.event_id);
@@ -33,15 +36,15 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
   notes=sources[0].evidence;
   ok(await db.from('marketing_generation_jobs').update({stage:'researching',research_cache:{key:'verified-book-catalog-v1:'+book.title,saved_at:new Date().toISOString(),sources,notes,subject:book.title,search_completed:true,verified_catalog:true}}).eq('id',job.id));
  }else if(CONTENT_PROFILES[requestedType].research){
-  const researchTask=buildMarketingResearchTask(requestedType,input.instruction||'',language);
-  const cacheKey=createHash('sha256').update(JSON.stringify([RESEARCH_TASK_VERSION,CONTENT_POLICY_VERSION,requestedType,language,input.instruction||''])).digest('hex');
+  const researchTask=buildMarketingResearchTask(requestedType,input.instruction||'',language,requestedType==='seoul_dating'?seoulFormat:'');
+  const cacheKey=createHash('sha256').update(JSON.stringify([RESEARCH_TASK_VERSION,CONTENT_POLICY_VERSION,requestedType,language,input.instruction||'',requestedType==='seoul_dating'?seoulFormat:''])).digest('hex');
   const own=ok(await db.from('marketing_generation_jobs').select('retry_of_job_id').eq('id',job.id).single());
   const prior=own?.retry_of_job_id?ok(await db.from('marketing_generation_jobs').select('research_cache').eq('id',own.retry_of_job_id).maybeSingle()):null;
   const cache=prior?.research_cache;
   if(cache?.key===cacheKey&&cache.search_completed===true&&Array.isArray(cache.sources)&&cache.sources.length&&Date.now()-Date.parse(cache.saved_at)<86400000){sources=cache.sources;notes=cache.notes;}
   else{
    ok(await db.from('marketing_generation_jobs').update({stage:'researching'}).eq('id',job.id));
-   const research=await call('responses',{model:MODEL,instructions:researchInstructions(requestedType,language,input.instruction||''),input:researchTask,tools:[{type:'web_search',search_context_size:'high',external_web_access:true}],tool_choice:'required',max_tool_calls:3,include:['web_search_call.action.sources'],max_output_tokens:3000,store:false},95000);
+   const research=await call('responses',{model:MODEL,instructions:researchInstructions(requestedType,language,input.instruction||'',requestedType==='seoul_dating'?seoulFormat:''),input:researchTask,tools:[{type:'web_search',search_context_size:'high',external_web_access:true}],tool_choice:'required',max_tool_calls:3,include:['web_search_call.action.sources'],max_output_tokens:requestedType==='seoul_dating'?4200:3000,store:false},95000);
    await record(research);const evidence=extractResearchEvidence(research);sources=evidence.sources;notes=evidence.notes;
    ok(await db.from('marketing_generation_jobs').update({research_cache:{key:cacheKey,saved_at:new Date().toISOString(),sources,notes,subject:researchTask,search_completed:evidence.completed&&sources.length>0}}).eq('id',job.id));
    if(!evidence.completed||!sources.length){
@@ -58,8 +61,8 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
  }
 
  const write=async(type:PostType,repair?:{document:Row;issues:string[]})=>{
-  const instructions=writingInstructions(type,language)+(repair?'\nREPAIR PASS: Fix ONLY the listed quality issues. Preserve all supported facts, source IDs, uncertainty, card roles, and the approved topic. Do not add new claims. Return the complete corrected document in the same strict schema.':'');
-  const payload={editorial_type:type,language,direction:input.instruction||'',evidence:sources,event:facts,...(repair?{original_document:repair.document,quality_issues:repair.issues}:{})};
+  const instructions=writingInstructions(type,language,type==='seoul_dating'?seoulFormat:'')+(repair?'\nREPAIR PASS: Fix ONLY the listed quality issues. Preserve all supported facts, source IDs, uncertainty, card roles, and the approved topic. Do not add new claims. Return the complete corrected document in the same strict schema.':'');
+  const payload={editorial_type:type,language,direction:input.instruction||'',evidence:sources,event:facts,...(type==='seoul_dating'?{seoul_format:seoulFormat}:{}),...(repair?{original_document:repair.document,quality_issues:repair.issues}:{})};
   if(Buffer.byteLength(instructions+JSON.stringify(payload)+JSON.stringify(contentSchema(type,language)),'utf8')>30000)throw new Error('PROMPT_SIZE_LIMIT');
   const control=ok(await db.from('marketing_ai_control').select('enabled,blocked_reason').eq('singleton',true).single());
   if(!control.enabled||control.blocked_reason)throw new Error('AI_PAUSED');
@@ -81,6 +84,14 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
 
  written.document=lockVerifiedBook(written.document);
  let prepared=prepareContent(written.document,effectiveType,language,sources);
+ if(requestedType==='seoul_dating'&&effectiveType==='seoul_dating'&&prepared.report.status!=='passed'){
+  const seoulIssues=classifyQualityIssues(prepared.report.issues);
+  if(isSeoulVenueFailure(seoulIssues.critical)){
+   effectiveType='conversation_prompt';sources=[];fallbackReason='insufficient_verified_places:seoul_dating->conversation_prompt';
+   ok(await db.from('marketing_generation_jobs').update({stage:'writing_fallback'}).eq('id',job.id));
+   written=await write(effectiveType);prepared=prepareContent(written.document,effectiveType,language,sources);
+  }
+ }
  if(prepared.report.status!=='passed'){
   const grouped=classifyQualityIssues(prepared.report.issues);
   if(grouped.critical.length){
@@ -103,9 +114,9 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
   if(eventCard){const factsText=[facts.title,new Date(facts.starts_at).toLocaleString(language==='ko'?'ko-KR':'en-GB',{timeZone:'Asia/Seoul'})+' KST',facts.venue||facts.neighborhood].filter(Boolean).join('\n');eventCard.body=factsText;eventCard.body_ko=[facts.title,new Date(facts.starts_at).toLocaleString('ko-KR',{timeZone:'Asia/Seoul'})+' KST',facts.venue||facts.neighborhood].filter(Boolean).join('\n');eventCard.body_en=[new Date(facts.starts_at).toLocaleString('en-GB',{timeZone:'Asia/Seoul'})+' KST',facts.venue||facts.neighborhood].filter(Boolean).join('\n');eventCard.source_label='Roundy에 등록된 행사 정보 / Published event';}
  }
  const effectiveProfile=CONTENT_PROFILES[effectiveType];
- const recovery={requested_type:requestedType,effective_type:effectiveType,fallback_reason:fallbackReason||null,repair_used:repairUsed,search_limit:requestedType==='book_insight'?0:CONTENT_PROFILES[requestedType].research?3:0};
+ const recovery={requested_type:requestedType,effective_type:effectiveType,fallback_reason:fallbackReason||null,repair_used:repairUsed,search_limit:requestedType==='book_insight'?0:CONTENT_PROFILES[requestedType].research?3:0,...(requestedType==='seoul_dating'?{seoul_format:seoulFormat,seoul_mix_policy:'70_places_30_course'}:{})};
  const finalClassification=classifyQualityIssues(prepared.report.issues);
- const patch={caption:prepared.caption,cta:prepared.cta,content_document:document,quality_report:{...prepared.report,recovery,classification:finalClassification},carousel_slides:prepared.slides,research_sources:prepared.sources,research_status:effectiveProfile.research?'generated':input.content_mode==='growth_carousel'?'generated':'not_required',content_language:language,draft_kind:input.content_mode==='growth_carousel'?'growth_carousel':'brand',growth_topic_type:input.content_mode==='growth_carousel'?effectiveType:null,content_mode:facts?'live_event':'prelaunch',content_pillar:facts?'event':'concept',generation_reason:effectiveProfile.label+' / editorial policy v'+CONTENT_POLICY_VERSION+(fallbackReason?' / safe fallback from '+requestedType:''),event_id:facts?.id||null,destination_url:facts?'https://roundy.team/events/'+facts.slug:'https://roundy.team'};
+ const patch={caption:prepared.caption,cta:prepared.cta,content_document:document,quality_report:{...prepared.report,recovery,classification:finalClassification},carousel_slides:prepared.slides,research_sources:prepared.sources,research_status:effectiveProfile.research?'generated':input.content_mode==='growth_carousel'?'generated':'not_required',content_language:language,draft_kind:input.content_mode==='growth_carousel'?'growth_carousel':'brand',growth_topic_type:input.content_mode==='growth_carousel'?effectiveType:null,content_mode:facts?'live_event':'prelaunch',content_pillar:facts?'event':'concept',generation_reason:effectiveProfile.label+' / editorial policy v'+CONTENT_POLICY_VERSION+(requestedType==='seoul_dating'&&!fallbackReason?' / '+seoulFormat:'')+(fallbackReason?' / safe fallback from '+requestedType:''),event_id:facts?.id||null,destination_url:facts?'https://roundy.team/events/'+facts.slug:'https://roundy.team'};
  ok(await db.from('marketing_generation_jobs').update({quality_report:patch.quality_report,result_snapshot:{...patch,draft_id:draft.id,images:[],research_notes:notes,saved_at:new Date().toISOString(),generation_recovery:recovery}}).eq('id',job.id));
  if(prepared.report.status!=='passed')throw new Error('품질 검토 필요: '+prepared.report.issues.join(' '));
  return patch;
