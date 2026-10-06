@@ -24,6 +24,7 @@ export function captionAction(postType:string,language:string){
   if(postType==='meme_remix')return ko?'떠오르는 친구에게 보내주세요.':'Send this to the friend who came to mind.';
   if(postType==='conversation_prompt')return ko?'저장해두고 다음 대화에서 써보세요.':'Save this for your next conversation.';
   if(postType==='seoul_dating')return ko?'저장해두고 다음 약속 잡을 때 확인하세요.':'Save this for the next time you make plans.';
+  if(postType==='seoul_trend')return ko?'저장해두고 이번 주 데이트 아이디어로 써보세요.':'Save this for a date idea this week.';
   return ko?'저장해두고 천천히 다시 읽어보세요.':'Save this and come back to it later.';
 }
 export function captionCoreIssues(value:unknown,language:string):string[]{
@@ -140,6 +141,7 @@ const TOPIC_TAGS: Record<string, string[]> = {
   dating_archetype:['인간관계','대화법','연애','소통','Relationships'],
   meme_remix:['공감','소개팅','첫만남','연애','Dating'],
   seoul_dating:['서울데이트','서울모임','첫만남','SeoulLife','SeoulDating'],
+  seoul_trend:['서울데이트','서울핫플','서울생활','SeoulLife','SeoulDating'],
   mini_quiz:['심리테스트','대화법','인간관계','첫만남','소통'],
 };
 export function curateHashtags(type: string, suggestions: unknown, _document?: PresentationRow): string[] {
