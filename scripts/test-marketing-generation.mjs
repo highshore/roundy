@@ -33,7 +33,7 @@ function harness({denied=false,network=false,badSources=false,duplicate=false,ph
   if(url.endsWith('/responses')){
    const seoul=String(body.input||'').includes('Seoul dating-location')||String(body.input||'').includes('6–10 real candidates');
    const notes=seoul
-    ?'노들섬 is a Seoul riverside cultural space. 서울공예박물관 is a public craft museum in Jongno. 하늘공원 is a Seoul park known for open views and walking.'
+    ?'노들섬 (Nodeul Island) is a Seoul riverside cultural space. 서울공예박물관 (Seoul Museum of Craft Art) is a public craft museum in Jongno. 하늘공원 (Haneul Park) is a Seoul park known for open views and walking.'
     :'Listening Across Difference by Alex Lee explains attentive listening. Published by Fixture Press. Attentive Conversation Study (2024) observes association, not causation, in a limited sample.';
    const annotations=badSources?[]:seoul?[
     {type:'url_citation',url:'https://official.example/nodeul',title:'노들섬 official',start_index:0,end_index:notes.indexOf('서울공예박물관')-1},
