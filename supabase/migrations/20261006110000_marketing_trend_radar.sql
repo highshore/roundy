@@ -205,13 +205,7 @@ begin
     exception when others then
       null;
     end;
-    execute $schedule$
-      select cron.schedule(
-        'roundy-marketing-trend-radar',
-        '0 */6 * * *',
-        'select roundy_private.dispatch_marketing_trend_radar()'
-      )
-    $schedule$;
+    execute 'select cron.schedule(''roundy-marketing-trend-radar'',''0 */6 * * *'',''select roundy_private.dispatch_marketing_trend_radar()'')';
   end if;
 end
 $radar_cron$;
