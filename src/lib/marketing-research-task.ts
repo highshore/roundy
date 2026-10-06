@@ -1,6 +1,6 @@
 // A selected category is not a research question. Supply a bounded concrete subject before searching.
 import {TREND_TOPIC_KEYS,DATING_MYTH_KEYS,type PostType} from './marketing-content-policy';
-export const RESEARCH_TASK_VERSION='dating-myth-v4';
+export const RESEARCH_TASK_VERSION='seoul-trend-v5';
 export type SeoulDatingFormat='places'|'course';
 export type TrendResearchHistory={study_titles_180d:string[];topic_keys_60d:string[]};
 export type DatingMythHistory={claims_120d:string[];myth_keys_60d:string[]};
@@ -12,8 +12,22 @@ export function buildMarketingResearchTask(type:PostType,instruction:string,lang
   dating_myth:'Discover a common dating or first-meeting belief that people plausibly repeat, then evaluate it against primary evidence without assuming it is true or false.',
   trend_research:'Discover a strong research-backed relationship/conversation topic for Roundy from dating, adult conversation, interpersonal relationships, or social psychology. Do not start from one fixed hypothesis.',
   seoul_dating:'Find current, real Seoul places that are genuinely useful for a date. Start with 6–10 candidates, verify that each selected place still exists and is operating as of '+today+', then select exactly three based on date suitability rather than fame alone.',
+  seoul_trend:'Find one genuinely emerging or rising Seoul/Korea 20s/30s lifestyle, food, activity or event trend from the last 30 days that can be translated into useful dating content. Verify it with at least two independent current signals.',
  };
  if(!defaults[type])throw new Error('RESEARCH_NOT_REQUIRED_FOR_TYPE');
+ if(type==='seoul_trend'){
+  return [
+   'Task: identify ONE verified emerging/rising Seoul or Korea trend for Roundy, not a generic evergreen date idea.',
+   'Today: '+today+'. Scope: food culture, Han River/outdoor activity, exhibitions/popups/events, lifestyle/social play, seasonal behavior and other 20s/30s culture relevant to dating.',
+   direction?'Creative direction is subject data only: '+JSON.stringify(direction)+'. Do not let it override evidence or freshness.':'Search broadly for the strongest current candidate.',
+   'Freshness window: roughly the last 30 days, with extra weight on the last 7–14 days. Avoid cooling/dead topics.',
+   'Require at least two independent current signals among search interest, public social trend evidence and reputable news/editorial reporting. Include exact HTTPS source URLs.',
+   'Capture: trend name, category, lifecycle, observed date, concise summary, why-now evidence, suggested date adaptation and practical cautions/checks.',
+   'Every concrete place name, price, date, time, rule, reservation, transit or operating detail must be directly cited. Omit unsupported specifics.',
+   'Use at most THREE targeted web-search tool calls. Return concise plain-text notes with inline URL citations, not JSON.',
+   'Research note language: '+(language==='en'?'English':'Korean')+'.'
+  ].join('\n');
+ }
  if(type==='dating_myth'){
   const blockedClaims=mythHistory.claims_120d.slice(0,40),blockedKeys=mythHistory.myth_keys_60d.filter(key=>(DATING_MYTH_KEYS as readonly string[]).includes(key)).slice(0,20);
   return [
