@@ -1,9 +1,7 @@
 import {readFile} from 'node:fs/promises';
 import path from 'node:path';
-import sharp from 'sharp';
 import type {EditorialAssets} from './marketing-visuals';
 
-let photoPromise:Promise<string[]>|undefined;
 let fontPromise:Promise<NonNullable<EditorialAssets['fonts']>>|undefined;
 function toArrayBuffer(bytes:Uint8Array):ArrayBuffer {const copy=new Uint8Array(bytes.length);copy.set(bytes);return copy.buffer;}
 async function fetchFont(url:string):Promise<ArrayBuffer>{
@@ -12,12 +10,8 @@ async function fetchFont(url:string):Promise<ArrayBuffer>{
  const data=await response.arrayBuffer();if(data.byteLength>20*1024*1024)throw new Error('FONT_ASSET_TOO_LARGE');return data;
 }
 async function fonts():Promise<NonNullable<EditorialAssets['fonts']>>{
- // Korean marketing cards use Noto Sans KR. English cards and the Roundy wordmark use DM Sans.
- // Fixed upstreams only; generated/admin content can never select a font URL.
  if(!fontPromise)fontPromise=(async()=>{
   const loaded:NonNullable<EditorialAssets['fonts']>=[];
-  // Next/OG cannot reliably parse the current variable Noto Sans KR file,
-  // so use static Korean OTF masters from the official Noto CJK repository.
   const noto=await Promise.allSettled([
    fetchFont('https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/OTF/Korean/NotoSansCJKkr-Regular.otf'),
    fetchFont('https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/OTF/Korean/NotoSansCJKkr-Black.otf'),
@@ -40,25 +34,8 @@ async function fonts():Promise<NonNullable<EditorialAssets['fonts']>>{
  })();
  return fontPromise;
 }
-async function photos():Promise<string[]>{
- if(!photoPromise)photoPromise=(async()=>{
-  const files=[
-   'public/images/discovery-hero-v2-poster.webp',
-   'public/images/discovery-offline.webp',
-   'public/images/roundy-mingle-hero-photo.webp',
-   'public/images/anam-korea-university.webp',
-   'public/images/yeouido.webp',
-  ];
-  const results=await Promise.allSettled(files.map(async file=>{
-   const data=await readFile(path.join(process.cwd(),file));
-   const jpg=await sharp(data).resize({width:1080,withoutEnlargement:true}).jpeg({quality:88}).toBuffer();
-   return 'data:image/jpeg;base64,'+jpg.toString('base64');
-  }));
-  return results.flatMap(result=>result.status==='fulfilled'?[result.value]:[]);
- })();
- return photoPromise;
-}
 export async function loadEditorialAssets():Promise<EditorialAssets>{
- const [brandPhotos,brandFonts]=await Promise.all([photos(),fonts()]);
- return {photo:brandPhotos[0]||null,photos:brandPhotos,fonts:brandFonts};
+ // Photography is intentionally NOT loaded from static/local assets.
+ // Every rendered marketing visual set receives fresh, content-specific generated images.
+ return {photo:null,photos:[],fonts:await fonts()};
 }

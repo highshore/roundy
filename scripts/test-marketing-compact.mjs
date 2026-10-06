@@ -59,7 +59,7 @@ const paths=[...actual.matchAll(/<path d="([^"]+)"/g)].map(m=>m[1]);
 check(()=>assert.deepEqual(Array.from(v.OFFICIAL_ROUNDY_PATHS),paths));
 const css=fs.readFileSync('src/app/globals.css','utf8');check(()=>assert.ok(css.includes('--brand:'+p.ROUNDY_IDENTITY.accent)));
 const g=fs.readFileSync('src/lib/marketing-generation.ts','utf8');
-check(()=>assert.ok(g.includes('return renderCards(db,draft,job,\'data:image/jpeg;base64,\'+encoded)')));
+check(()=>assert.ok(g.includes('generateVisualSet(db,draft,input,job)')&&g.includes("n:3")&&g.includes('FRESH_VISUAL_SET_REQUIRED')));
 check(()=>assert.ok(!g.includes('English-only 1:1 mingle')));check(()=>assert.ok(g.includes('Rotation Dating service')));
 const design=fs.readFileSync('src/lib/marketing-visuals.ts','utf8');
 check(()=>assert.ok(!design.includes('borderLeft')&&!design.includes('visualMotif')));
@@ -71,7 +71,7 @@ if(process.argv.includes('--render')){
  const sharp=require('sharp'),assets=await load('src/lib/marketing-render-assets.ts').loadEditorialAssets();
  assert.ok(assets.fonts?.some(f=>f.name==='Noto Sans KR'),'Noto Sans KR must load for Korean marketing cards');
  assert.ok(assets.fonts?.some(f=>f.name==='DM Sans'),'DM Sans must load for English marketing cards');
- assert.ok((assets.photos||[]).length>=3,'Marketing cards need a varied local photo bank');
+ assert.equal((assets.photos||[]).length,0,'Static marketing photo reuse must stay disabled');
  fs.mkdirSync('quality-artifacts/compact',{recursive:true});
  const thumbs=[];
  for(const lang of ['ko','en']){
@@ -85,6 +85,6 @@ if(process.argv.includes('--render')){
   }
  }
  await sharp({create:{width:810,height:676,channels:3,background:'#e9e9e7'}}).composite(thumbs.map((input,i)=>({input,left:(i%3)*270,top:Math.floor(i/3)*338}))).jpeg({quality:85}).toFile('quality-artifacts/compact/contactsheet.jpg');
- console.log('Rendered 12 branded Gothic cards, both languages. QA fixtures only, no publication. Fonts loaded: '+assets.fonts?.map(f=>f.name+':'+f.weight).join(', '));
+ console.log('Rendered 12 magazine cards without static photography. QA fixtures only, no publication. Fonts loaded: '+assets.fonts?.map(f=>f.name+':'+f.weight).join(', '));
 }
 console.log('PASS '+n+' compact editorial assertions. No paid API calls.');

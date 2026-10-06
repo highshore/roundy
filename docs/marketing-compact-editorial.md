@@ -26,11 +26,9 @@ Generated results stay in Generation history. An administrator explicitly import
 
 ## Photography
 
-The no-cost renderer uses a deterministic local photo bank from existing Roundy assets rather than repeating one café image on every card. The bank currently draws from the discovery hero/offline assets, the Roundy mingle hero photo and Seoul location imagery such as Anam/Korea University and Yeouido.
+Static/local marketing photography is no longer used. Whenever visuals are requested, the generation worker creates one fresh content-specific visual set containing three distinct editorial photographs. The current carousel title/body context is included in the image prompt, so the scenes are created for that post rather than selected from a reusable photo library.
 
-When an administrator explicitly selects the paid photo option, the app still uses one `gpt-image-2.5-flare` low-quality 1024x1280 JPEG. The photo prompt now asks for a natural editorial Seoul lifestyle scene and rotates beyond cafés toward restaurants, lounges, rooftops, riverside, neighborhood streets and hosted social spaces. It explicitly avoids overly romantic couple-ad styling, physical intimacy, stock-photo posing, visible text/logos and invented event details.
-
-The paid photo is used as the cover image; body cards continue to use the local photo bank so a carousel is visually varied without paying for one AI image per slide.
+The three generated photographs are used as a coherent campaign set across the cover and body-card layout variants. The server still adds all typography and the official Roundy logo afterward, so the image model never generates brand text or copy.
 
 ## Copy and caption
 

@@ -74,7 +74,7 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
   const nextAttempt=Math.max(1,Number(latest.attempt_number||1))+1;
   try{
    const result=await runGeneration(currentDraft.id,retryPayload,user.id,false,{threadId,attemptNumber:nextAttempt,retryOfJobId:latest.id,...(recoverySourceJobId?{recoverySourceJobId}:{})});
-   return json({...result,recovered_without_ai:!!recoverySourceJobId,generation_thread_id:threadId,attempt_number:nextAttempt,retry_of_job_id:latest.id},result.error?400:200);
+   return json({...result,recovered_without_ai:false,recovered_saved_copy:!!recoverySourceJobId,fresh_visuals_generated:!!recoverySourceJobId,generation_thread_id:threadId,attempt_number:nextAttempt,retry_of_job_id:latest.id},result.error?400:200);
   }catch(error){return json({error:error instanceof Error?error.message:'Recovery or retry could not start'},400);}
  }
  if(id==='generation'&&path[1]==='jobs'&&path.length===4&&uuid(path[2])&&path[3]==='import'&&req.method==='POST'){

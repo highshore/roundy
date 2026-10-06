@@ -3,7 +3,7 @@ import { createServiceRoleClient } from '@/lib/supabase/service';
 import { automaticGeneration } from '@/lib/marketing-generation';
 export const runtime='nodejs';
 export const dynamic='force-dynamic';
-export const maxDuration=240;
+export const maxDuration=300;
 export async function POST(req:NextRequest){
  const secret=req.headers.get('x-marketing-secret');
  if(!secret||secret.length>512)return NextResponse.json({error:'Unauthorized'},{status:401});

@@ -35,13 +35,15 @@ for(const language of ['ko','en'])for(const topic of ['seoul_dating','dating_arc
  check(()=>assert.deepEqual(prepared.document.slides.slice(0,-1).map(s=>s.body),raw.content_document.slides.slice(0,-1).map(s=>s.body)));
  const result=await h.api.runGeneration(h.id,input,null,false,ctx);
  check(()=>assert.equal(result.job.status,'completed',JSON.stringify(result)));
- check(()=>assert.equal(h.requests.length,0));
- check(()=>assert.equal(h.reservations[0].p_operation,'render'));
- check(()=>assert.equal(result.job.reserved_usd,0));
+ check(()=>assert.equal(h.requests.length,1));
+ check(()=>assert.ok(h.requests[0].url.endsWith('/images/generations')));
+ check(()=>assert.equal(h.requests[0].body.n,3));
+ check(()=>assert.equal(h.reservations[0].p_operation,'photo'));
+ check(()=>assert.equal(result.job.reserved_usd,.15));
  check(()=>assert.equal(result.draft.images.length,6));
  check(()=>assert.equal(result.draft.cta,h.p.generatedCta(language)));
  check(()=>assert.equal(result.job.result_snapshot.recovery.source_job_id,sourceId));
- check(()=>assert.equal(result.job.result_snapshot.recovery.additional_paid_calls,0));
+ check(()=>assert.equal(result.job.result_snapshot.recovery.additional_paid_calls,1));
  check(()=>assert.equal(JSON.stringify(h.source),before));
  const newJob=h.tables.marketing_generation_jobs.at(-1);
  check(()=>assert.equal(newJob.generation_thread_id,sourceId));
@@ -49,7 +51,7 @@ for(const language of ['ko','en'])for(const topic of ['seoul_dating','dating_arc
  check(()=>assert.equal(newJob.request_payload.saved_recovery_of,sourceId));
  const duplicated=await h.api.runGeneration(h.id,input,null,false,ctx);
  check(()=>assert.equal(duplicated.deduplicated,true));
- check(()=>assert.equal(h.requests.length,0));
+ check(()=>assert.equal(h.requests.length,1));
  const schema=h.policy.contentSchema(topic,language);
  check(()=>assert.equal(schema.properties.cta.enum[0],h.p.generatedCta(language)));
  check(()=>assert.equal(schema.properties.cta.maxLength,70));
@@ -90,7 +92,7 @@ for(const bad of ['thread','topic','automatic','photo','caption']){
  check(()=>assert.throws(()=>h.research.buildMarketingResearchTask('mini_quiz','','ko')));
  const source=fs.readFileSync('src/lib/marketing-editorial.ts','utf8');
  check(()=>assert.ok(source.includes('input:researchTask')));check(()=>assert.ok(source.includes('cache.search_completed===true')));check(()=>assert.ok(source.includes('search_completed:evidence.completed&&sources.length>0')));check(()=>assert.ok(source.includes('max_tool_calls:3')));
- const ui=fs.readFileSync('src/components/admin-marketing.tsx','utf8');check(()=>assert.ok(ui.includes('저장된 결과로 무료 복구')));check(()=>assert.ok(ui.includes('recover_saved_result:freeRecovery')));
+ const ui=fs.readFileSync('src/components/admin-marketing.tsx','utf8');check(()=>assert.ok(ui.includes('저장된 문구는 재사용하고 새 이미지 3장을 생성할까요?')));check(()=>assert.ok(ui.includes('recover_saved_result:savedRecovery')));
  const api=fs.readFileSync('src/lib/marketing.ts','utf8');check(()=>assert.ok(api.includes('confirmation.recover_saved_result===true&&!recoverySourceJobId')));
 }
-console.log('PASS '+checks+' CTA/recovery/topic assertions. All provider calls mocked; saved-result recovery makes zero provider requests.');
+console.log('PASS '+checks+' CTA/recovery/topic assertions. All provider calls mocked; saved-copy recovery makes one fresh three-image request.');
