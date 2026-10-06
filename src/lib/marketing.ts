@@ -134,6 +134,9 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
  if(id==='trend-radar'&&path.length===1&&req.method==='GET')return json(await trendOverview());
  if(id==='trend-radar'&&path[1]==='run'&&path.length===2&&req.method==='POST'){
   const body=await req.json().catch(()=>({}));if(body.confirm_paid_scan!==true)return json({error:'TREND_SCAN_CONFIRMATION_REQUIRED'},400);
+  const cooldownSince=new Date(Date.now()-10*60*1000).toISOString();
+  const recentManual=checked(await service.from('marketing_trend_scans').select('id,created_at,status').like('scan_key','radar:manual:%').gte('created_at',cooldownSince).order('created_at',{ascending:false}).limit(1));
+  if(recentManual.length)return json({error:'TREND_SCAN_MANUAL_COOLDOWN_10_MINUTES'},429);
   try{return json(await runTrendRadar('radar:manual:'+randomUUID()));}
   catch(error){return json({error:error instanceof Error?error.message:'Trend radar scan failed'},400);}
  }
