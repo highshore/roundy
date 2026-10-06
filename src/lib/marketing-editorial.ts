@@ -8,7 +8,7 @@ import {trendEvidence} from './marketing-trend-radar';
 
 type Call=(endpoint:string,body:Row,timeout:number)=>Promise<Row>;
 const ok=(r:any)=>{if(r.error)throw r.error;return r.data;};
-const MODEL='gpt-4.1-mini';
+const MODEL='gpt-6-luna';
 const FALLBACK_TYPE:Partial<Record<PostType,PostType>>={trend_research:'conversation_prompt',dating_myth:'conversation_prompt',seoul_dating:'conversation_prompt'};
 function seoulDatingFormat(seed:string):SeoulDatingFormat{const value=createHash('sha256').update(seed).digest()[0]%10;return value<7?'places':'course';}
 function isSeoulVenueFailure(issues:string[]){return issues.some(issue=>/서울 데이트 장소|서울 데이팅|실제 장소|가격\/영업시간|장소 추천 카드|검증 가능한 장소/.test(issue));}
@@ -141,7 +141,7 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
   const control=ok(await db.from('marketing_ai_control').select('enabled,blocked_reason').eq('singleton',true).single());
   if(!control.enabled||control.blocked_reason)throw new Error('AI_PAUSED');
   ok(await db.from('marketing_generation_jobs').update({stage:repair?'repairing_copy':candidateVariant==='backup'?'writing_alternate_myth':'writing'}).eq('id',job.id));
-  const result=await call('chat/completions',{model:MODEL,temperature:repair?.3:.6,max_completion_tokens:4096,response_format:{type:'json_schema',json_schema:{name:'roundy_editorial_v2',strict:true,schema:contentSchema(type,language)}},messages:[{role:'system',content:instructions},{role:'user',content:JSON.stringify(payload)}]},55000);
+  const result=await call('chat/completions',{model:MODEL,reasoning_effort:'none',max_completion_tokens:4096,response_format:{type:'json_schema',json_schema:{name:'roundy_editorial_v2',strict:true,schema:contentSchema(type,language)}},messages:[{role:'system',content:instructions},{role:'user',content:JSON.stringify(payload)}]},55000);
   await record(result);return {...parseDocument(result),result};
  };
 
