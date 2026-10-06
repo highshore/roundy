@@ -145,7 +145,7 @@ export async function runTrendRadar(scanKey:string){
 }
 export function trendEvidence(trend:Row){
  const sources=Array.isArray(trend?.source_urls)?trend.source_urls:[];
- return sources.slice(0,8).map((source:Row,index:number)=>({id:'S'+(index+1),url:String(source.url),title:String(source.title||trend.display_name),evidence:[String(source.why||''),String(trend.summary||''),'Observed '+String(trend.observed_at||'')].filter(Boolean).join(' ')}));
+ return sources.slice(0,8).map((source:Row,index:number)=>({id:'S'+(index+1),url:String(source.url),title:String(source.title||trend.display_name),evidence:[String(trend.display_name||''),String(source.why||''),String(trend.summary||''),'Observed '+String(trend.observed_at||'')].filter(Boolean).join(' ')}));
 }
 export async function selectTrendForAutomaticContent(db:DB,threshold:number){
  const rows=checked(await db.from('marketing_trends').select('*').gte('trend_score',threshold).in('status',['emerging','rising','peak']).order('trend_score',{ascending:false}).limit(30)).data as Row[];
