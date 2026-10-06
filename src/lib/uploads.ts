@@ -17,3 +17,14 @@ export async function uploadFile(file:File,bucket:'wis-event-images'|'wis-verifi
   const {error}=await client.storage.from(bucket).upload(key,file,{contentType:file.type,upsert:false});if(error)throw error;
   return bucket==='wis-event-images'?client.storage.from(bucket).getPublicUrl(key).data.publicUrl:key;
 }
+
+
+export async function uploadMarketingFile(file:File,draftId:string){
+  const types:Record<string,string>={'image/jpeg':'jpg','image/png':'png','image/webp':'webp'};
+  if(!file.size||file.size>10*1024*1024||!types[file.type])throw new Error('Use JPEG, PNG or WebP, max 10 MB.');
+  if(!/^[0-9a-f-]{36}$/i.test(draftId))throw new Error('Invalid draft');
+  const client=createClient();const {data:{user}}=await client.auth.getUser();if(!user)throw new Error('Sign in required');
+  const key=`${user.id}/${draftId}/${crypto.randomUUID()}.${types[file.type]}`;
+  const {error}=await client.storage.from('marketing-images').upload(key,file,{contentType:file.type,upsert:false});if(error)throw error;
+  return key;
+}
