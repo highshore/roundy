@@ -197,6 +197,17 @@ end
 $$;
 revoke all on function roundy_private.dispatch_marketing_trend_radar() from public,anon,authenticated,service_role;
 
--- The production pg_cron schedule is installed after this schema migration.\n
+do $
+declare existing_job bigint;
+begin
+  select jobid into existing_job from cron.job where jobname='roundy-marketing-trend-radar' limit 1;
+  if existing_job is not null then perform cron.unschedule(existing_job); end if;
+  perform cron.schedule(
+    'roundy-marketing-trend-radar',
+    '0 * * * *',
+    'select roundy_private.dispatch_marketing_trend_radar()'
+  );
+end
+$;
 
 commit;
