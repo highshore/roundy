@@ -3,7 +3,7 @@ import {canOfferSavedCtaRecovery} from '@/lib/marketing-output-recovery';
 import { useEffect, useRef, useState } from 'react';
 import { Heading } from './heading';
 import { tr, type Locale } from '@/lib/locale';
-import { uploadFile } from '@/lib/uploads';
+import { uploadFile, uploadMarketingFile } from '@/lib/uploads';
 import { OrderedImages } from './ordered-images';
 import {CONTENT_PROFILES,postType} from '@/lib/marketing-content-policy';
 type Row=Record<string,any>;
@@ -13,10 +13,6 @@ const topicKo=['MBTI 연애 유형','연애 유형','책 속 공감','최신 연
 async function request(path='',body?:unknown,method='POST'){
  const response=await fetch(BASE+path,body===undefined?{cache:'no-store'}:{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(245000)});
  const data=await response.json().catch(()=>({error:'서버 응답을 확인하지 못했습니다. 새로고침으로 작업 기록부터 확인하세요.'}));return {ok:response.ok,data};
-}
-async function requestForm(path:string,form:FormData){
- const response=await fetch(BASE+path,{method:'POST',body:form,signal:AbortSignal.timeout(120000)});
- const data=await response.json().catch(()=>({error:'이미지 업로드 응답을 확인하지 못했습니다.'}));return {ok:response.ok,data};
 }
 const blank=()=>({channel:'koreapas',name:'',title:'',caption:'',cta:'자세히 보기',destination_url:'https://roundy.team',images:[] as string[],days:[] as number[],time_kst:'10:00',enabled:false});
 export function AdminMarketing({locale}:{locale:Locale}){
@@ -147,9 +143,9 @@ export function AdminMarketing({locale}:{locale:Locale}){
  async function uploadMarketingImages(files:File[]){
   if(!draft||draft.generation_source!=='manual')throw new Error('UPLOAD_VISUALS_MANUAL_ONLY');
   if(files.length+uploadedImages.length>6)throw new Error('MAXIMUM_6_MARKETING_IMAGES');
-  for(const file of files){
-   const form=new FormData();form.set('draft_id',draft.id);form.set('file',file);form.set('asset_type',uploadAssetType);form.set('role',uploadedImages.length===0?'cover':'flexible');
-   const r=await requestForm('/uploads',form);if(!r.ok)throw new Error(r.data.error||'Upload failed');
+  for(let i=0;i<files.length;i++){
+   const file=files[i],storagePath=await uploadMarketingFile(file,draft.id);
+   const r=await request('/uploads/register',{draft_id:draft.id,storage_path:storagePath,asset_type:uploadAssetType,role:uploadedImages.length===0&&i===0?'cover':'flexible'});if(!r.ok)throw new Error(r.data.error||'Upload failed');
   }
   await refreshUploads(draft.id);
  }
