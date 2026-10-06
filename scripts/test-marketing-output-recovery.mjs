@@ -83,7 +83,7 @@ for(const bad of ['thread','topic','automatic','photo','caption']){
  const h=harness('ko');
  for(const type of ['book_insight','dating_myth','trend_research']){
   const task=h.research.buildMarketingResearchTask(type,'','ko');
-  check(()=>assert.ok(task.includes('TWO targeted')));
+  check(()=>assert.ok(task.includes('THREE targeted')));
   check(()=>assert.ok(type==='book_insight'?task.includes('published book'):type==='dating_myth'?task.includes('Asking more questions'):task.includes('underestimate')));
  }
  const chosen=h.research.buildMarketingResearchTask('dating_myth','첫인상과 말의 속도에 대한 연구','ko');check(()=>assert.ok(chosen.includes('첫인상과 말의 속도')));
