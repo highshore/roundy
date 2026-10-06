@@ -38,7 +38,7 @@ async function readControl(db:DB){return checked(await db.from('marketing_ai_con
 async function progress(db:DB,job:Row,stage:string){
  const c=await readControl(db);if(job.reserved_usd>0&&(!c.enabled||c.blocked_reason))throw new GenerationError('AI_PAUSED',c.blocked_reason||'AI was paused by an administrator.');
  const r=checked(await db.from('marketing_generation_jobs').update({stage,updated_at:new Date().toISOString()}).eq('id',job.id).eq('status','running').select('id').maybeSingle());
- if(!r.data||Date.now()-Date.parse(job.created_at)>230000)throw new GenerationError('JOB_EXPIRED','Execution expired. No automatic retry will occur.');
+ if(!r.data||Date.now()-Date.parse(job.created_at)>290000)throw new GenerationError('JOB_EXPIRED','Execution expired. No automatic retry will occur.');
 }
 async function upstream(endpoint:string,body:Row,timeout:number):Promise<Row>{
  const key=process.env.OPENAI_API_KEY?.trim();
