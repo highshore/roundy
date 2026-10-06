@@ -23,6 +23,7 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: node scripts/test-marketing-generation.mjs
+      - run: node scripts/test-marketing-trend-radar.mjs
       - run: node scripts/test-marketing-compact.mjs
       - run: node scripts/test-marketing-compact-runtime.mjs
       - run: node scripts/test-marketing-output-recovery.mjs
