@@ -198,21 +198,7 @@ end
 $$;
 revoke all on function roundy_private.dispatch_marketing_trend_radar() from public,anon,authenticated,service_role;
 
-do $trend_scheduler$
-declare existing_job bigint;
-begin
-  if to_regclass('cron.job') is null then
-    return;
-  end if;
-  execute 'select jobid from cron.job where jobname=$1 limit 1'
-    into existing_job
-    using 'roundy-marketing-trend-radar';
-  if existing_job is not null then
-    execute 'select cron.unschedule($1)' using existing_job;
-  end if;
-  execute 'select cron.schedule($1,$2,$3)'
-    using 'roundy-marketing-trend-radar','0 * * * *','select roundy_private.dispatch_marketing_trend_radar()';
-end
-$trend_scheduler$;
+-- Production schedule is provisioned separately because local/CI Postgres does not include pg_cron.
+
 
 commit;
