@@ -7,6 +7,7 @@ import { uploadFile, uploadMarketingFile } from '@/lib/uploads';
 import { OrderedImages } from './ordered-images';
 import {CONTENT_PROFILES,postType} from '@/lib/marketing-content-policy';
 type Row=Record<string,any>;
+type PendingMarketingImage={id:string;file:File;preview:string;asset_type:'photo'|'completed_card';width:number;height:number};
 const BASE='/api/admin/marketing';
 const topics=['mbti','dating_archetype','book_insight','trend_research','meme_remix','dating_myth','conversation_prompt','seoul_dating','mini_quiz'];
 const topicKo=['MBTI 연애 유형','연애 유형','책 속 공감','최신 연구','밈 재해석','연애 통념','첫 대화 질문','서울 데이팅','미니 퀴즈'];
@@ -23,6 +24,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
  const [basis,setBasis]=useState('prelaunch'),[manualVisualSource,setManualVisualSource]=useState<'auto_ai'|'uploaded'|'none'>('auto_ai'),[topic,setTopic]=useState('conversation_prompt'),[contentLanguage,setContentLanguage]=useState<'ko'|'en'>('ko'),[direction,setDirection]=useState(''),[dirty,setDirty]=useState(false);
  const [template,setTemplate]=useState<Row>(blank());
  const [uploadedImages,setUploadedImages]=useState<Row[]>([]),[uploadAssetType,setUploadAssetType]=useState<'photo'|'completed_card'>('photo');
+ const [pendingMarketingImages,setPendingMarketingImages]=useState<PendingMarketingImage[]>([]),[pendingAssetType,setPendingAssetType]=useState<'photo'|'completed_card'>('photo');
  const [resultPreview,setResultPreview]=useState<Row|null>(null);
  const [activeTab,setActiveTab]=useState<'draft'|'generation'|'publishing'|'automation'|'connection'>('draft');
  const [generationFilter,setGenerationFilter]=useState<'all'|'completed'|'failed'|'running'>('all');
@@ -85,12 +87,52 @@ export function AdminMarketing({locale}:{locale:Locale}){
   if(/BUDGET|LIMIT|COOLDOWN|PAUSED/i.test(message+' '+code))return {title:t('Usage limit','사용량/비용 제한'),cause:t('A marketing AI safety limit blocked the request.','마케팅 AI 안전 한도 때문에 요청이 중지됐습니다.'),action:t('Check the budget/limit panel before retrying.','재시도 전에 상단의 비용 및 사용량 상태를 확인하세요.')};
   return {title:t('System/API issue','시스템/API 오류'),cause:t('The provider or application could not complete this step safely.','외부 API 또는 시스템 단계가 안전하게 완료되지 않았습니다.'),action:t('Unknown external outcomes are never retried automatically.','외부 처리 결과가 불명확한 경우 자동 재시도하지 않습니다.')};
  }
+ function clearPendingMarketingImages(){
+  setPendingMarketingImages(current=>{for(const item of current)URL.revokeObjectURL(item.preview);return [];});
+ }
+ async function addPendingMarketingImages(files:File[]){
+  if(!files.length)return;
+  if(files.length+pendingMarketingImages.length>6)throw new Error('MAXIMUM_6_MARKETING_IMAGES');
+  const next:PendingMarketingImage[]=[];
+  for(const file of files){
+   if(!file.size||file.size>10*1024*1024||!['image/jpeg','image/png','image/webp'].includes(file.type))throw new Error('Use JPEG, PNG or WebP, max 10 MB.');
+   const bitmap=await createImageBitmap(file),width=bitmap.width,height=bitmap.height;bitmap.close();
+   if(!width||!height)throw new Error('INVALID_IMAGE_FILE');
+   if(pendingAssetType==='completed_card'&&Math.abs(width/height-.8)>.035)throw new Error('COMPLETED_CARD_MUST_BE_4_5');
+   next.push({id:crypto.randomUUID(),file,preview:URL.createObjectURL(file),asset_type:pendingAssetType,width,height});
+  }
+  setPendingMarketingImages(current=>[...current,...next]);
+ }
+ function removePendingMarketingImage(id:string){
+  setPendingMarketingImages(current=>{const target=current.find(item=>item.id===id);if(target)URL.revokeObjectURL(target.preview);return current.filter(item=>item.id!==id);});
+ }
+ function movePendingMarketingImage(index:number,delta:number){
+  setPendingMarketingImages(current=>{const to=index+delta;if(to<0||to>=current.length)return current;const next=[...current];next.splice(to,0,next.splice(index,1)[0]);return next;});
+ }
+ function updatePendingMarketingImageType(id:string,assetType:'photo'|'completed_card'){
+  setPendingMarketingImages(current=>current.map(item=>{
+   if(item.id!==id)return item;
+   if(assetType==='completed_card'&&Math.abs(item.width/item.height-.8)>.035){setError(friendlyError('COMPLETED_CARD_MUST_BE_4_5'));return item;}
+   return {...item,asset_type:assetType};
+  }));
+ }
+ async function uploadPendingImagesToDraft(targetDraft:Row,items:PendingMarketingImage[]){
+  for(let i=0;i<items.length;i++){
+   const item=items[i],storagePath=await uploadMarketingFile(item.file,targetDraft.id);
+   const registered=await request('/uploads/register',{draft_id:targetDraft.id,storage_path:storagePath,asset_type:item.asset_type,role:i===0?'cover':'flexible'});
+   if(!registered.ok)throw new Error(registered.data.error||'Upload failed');
+  }
+  const rendered=await request('/draft/'+targetDraft.id+'/render-uploaded',{revision:targetDraft.revision,request_key:'upload-render:'+crypto.randomUUID()});
+  if(!rendered.ok||rendered.data.error)throw new Error(rendered.data.error||'Render failed');
+  return rendered.data.draft||targetDraft;
+ }
  async function work(fn:()=>Promise<void>){if(inFlight.current)return;inFlight.current=true;setBusy(true);setError('');setNotice('');try{await fn();}catch(e){setError(friendlyError(e instanceof Error?e.message:'Request failed'));}finally{inFlight.current=false;if(mounted.current)setBusy(false);}}
  async function mutate(path:string,body:Row,method='POST'){const r=await request(path,body,method);if(r.data.draft)selectDraft(r.data.draft);if(!r.ok||r.data.error)throw new Error(r.data.error||'Request failed');return r.data;}
  async function generate(today=false,renderOnly=false){
   if(renderOnly&&!draft)return;
   if(renderOnly&&dirty&&!window.confirm(t('Discard unsaved edits before rendering?','저장하지 않은 수정을 버리고 이미지를 다시 렌더할까요?')))return;
   const source=today?'auto_ai':renderOnly?(draft?.visual_source||'auto_ai'):manualVisualSource;
+  if(!today&&!renderOnly&&source==='uploaded'&&!pendingMarketingImages.length){setError(t('Add at least one image before generating with uploads.','직접 업로드 방식은 이미지를 1장 이상 추가한 뒤 생성하세요.'));return;}
   const research=basis==='growth_carousel'&&['book_insight','trend_research','dating_myth'].includes(topic),requestedMode=renderOnly?'image':source==='auto_ai'?'both':'text';
   const cost=renderOnly?(source==='uploaded'?'$0':'$0.15'):source==='auto_ai'?'$0.20':research?'$0.05':'$0.02';
   const message=source==='auto_ai'
@@ -106,10 +148,24 @@ export function AdminMarketing({locale}:{locale:Locale}){
    if(!r.ok||r.data.error)throw new Error(r.data.error||'Generation failed');
    if(r.data.job?.status==='running'){setNotice(t('This request already exists. Check Generation history; it was not billed again.','이미 접수된 요청입니다. 생성 기록을 확인하세요. 추가 호출하지 않았습니다.'));return;}
    if(['failed','uncertain'].includes(r.data.job?.status))throw new Error(r.data.job?.error_message||'Previous attempt stopped; no retry was sent.');
-   await load(renderOnly?draft?.id:undefined);
-   if(renderOnly&&r.data.draft)selectDraft(r.data.draft);
-   else setActiveTab('generation');
-   setNotice(renderOnly?t('Fresh visuals generated and cards rendered from the current draft.','현재 초안에 맞는 새 이미지를 생성하고 카드를 다시 렌더했습니다.'):t('Generation complete. Open the result in Generation history and choose Add to Drafts.','생성이 완료됐습니다. 생성 기록에서 결과를 확인한 뒤 초안으로 가져오세요.'));
+   if(!today&&!renderOnly&&source==='uploaded'){
+    const jobId=String(r.data.job?.id||'');if(!jobId)throw new Error('RESULT_SNAPSHOT_UNAVAILABLE');
+    const imported=await request('/generation/jobs/'+jobId+'/import',{confirm_import:true});
+    if(!imported.ok||imported.data.error||!imported.data.draft)throw new Error(imported.data.error||'Import failed');
+    const candidate=imported.data.draft as Row;
+    try{
+     await uploadPendingImagesToDraft(candidate,[...pendingMarketingImages]);
+    }finally{
+     clearPendingMarketingImages();
+    }
+    await load(candidate.id);setActiveTab('draft');
+    setNotice(t('Copy, uploaded images, and final cards are ready in Drafts. No image AI was used.','문구 생성, 이미지 업로드, 최종 카드 렌더까지 완료했습니다. 이미지 AI는 사용하지 않았습니다.'));
+   }else{
+    await load(renderOnly?draft?.id:undefined);
+    if(renderOnly&&r.data.draft)selectDraft(r.data.draft);
+    else setActiveTab('generation');
+    setNotice(renderOnly?t('Fresh visuals generated and cards rendered from the current draft.','현재 초안에 맞는 새 이미지를 생성하고 카드를 다시 렌더했습니다.'):t('Generation complete. Open the result in Generation history and choose Add to Drafts.','생성이 완료됐습니다. 생성 기록에서 결과를 확인한 뒤 초안으로 가져오세요.'));
+   }
    setDirection('');
   });
  }
@@ -221,13 +277,19 @@ export function AdminMarketing({locale}:{locale:Locale}){
      <div className="admin-two"><label><span>{t('Content basis','콘텐츠 기준')}</span><select value={basis} onChange={e=>setBasis(e.target.value)}><option value="prelaunch">{t('Pre-launch','오픈 전 홍보')}</option><option value="live_event">{t('Live event','정식 이벤트')}</option><option value="growth_carousel">Growth Carousel</option></select></label><label><span>{t('Manual generation method','수동 생성 방식')}</span><select value={manualVisualSource} onChange={e=>setManualVisualSource(e.target.value as 'auto_ai'|'uploaded'|'none')}><option value="auto_ai">{t('Copy + AI images','문구 + AI 이미지')}</option><option value="uploaded">{t('Copy + my uploads','문구 + 직접 업로드')}</option><option value="none">{t('Copy only','문구만')}</option></select></label></div>
      <label><span>{t('Cover / headline language','표지 / 제목 언어')}</span><select value={contentLanguage} onChange={e=>setContentLanguage(e.target.value as 'ko'|'en')}><option value="ko">{t('Korean post','한국어 콘텐츠')}</option><option value="en">{t('English post','영어 콘텐츠')}</option></select></label>
      {basis==='growth_carousel'?<label><span>{t('Topic','주제')}</span><select value={topic} onChange={e=>setTopic(e.target.value)}>{topics.map((x,i)=><option key={x} value={x}>{t(x.replaceAll('_',' '),topicKo[i])}</option>)}</select></label>:null}
-     {manualVisualSource==='auto_ai'?<p className="admin-help">{t('AI images: three new content-specific editorial images are generated. Existing Roundy photo assets are not reused.','AI 이미지: 콘텐츠에 맞는 새 에디토리얼 이미지 3장을 생성합니다. 기존 Roundy 사진 에셋은 재사용하지 않습니다.')}</p>:manualVisualSource==='uploaded'?<p className="admin-help">{t('Upload mode: generate the copy first, add the result to Drafts, then upload your own images. Image AI is not called.','직접 업로드: 문구를 먼저 생성해 초안으로 가져온 뒤 이미지를 업로드합니다. 이미지 AI는 호출하지 않습니다.')}</p>:<p className="admin-help">{t('Copy only: no images are generated. You can add visuals later.','문구만: 이미지를 생성하지 않습니다. 나중에 비주얼을 추가할 수 있습니다.')}</p>}
+     {manualVisualSource==='auto_ai'?<p className="admin-help">{t('AI images: three new content-specific editorial images are generated. Existing Roundy photo assets are not reused.','AI 이미지: 콘텐츠에 맞는 새 에디토리얼 이미지 3장을 생성합니다. 기존 Roundy 사진 에셋은 재사용하지 않습니다.')}</p>:manualVisualSource==='uploaded'?<div className="marketing-setup">
+      <strong>{t('Add images now','이미지 바로 추가')}</strong>
+      <p className="admin-help">{t('Select 1–6 images here. When you generate, Roundy will create the copy, create a Draft, upload these files, and render the final cards automatically. Image AI is not called.','여기서 이미지를 1–6장 선택하세요. 콘텐츠 생성 시 문구 생성 → 초안 생성 → 이미지 업로드 → 최종 카드 렌더까지 자동으로 이어집니다. 이미지 AI는 호출하지 않습니다.')}</p>
+      <div className="admin-two"><label><span>{t('New files are','새 파일 유형')}</span><select value={pendingAssetType} onChange={e=>setPendingAssetType(e.target.value as 'photo'|'completed_card')}><option value="photo">{t('Photo source','사진 소스')}</option><option value="completed_card">{t('Completed 4:5 card','완성 4:5 카드')}</option></select></label><label><span>{t('Choose images','이미지 선택')}</span><input type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={busy||!!running} onChange={e=>{const files=Array.from(e.target.files||[]);e.target.value='';void work(()=>addPendingMarketingImages(files));}}/></label></div>
+      <div className="marketing-draft-inbox">{pendingMarketingImages.map((item,index)=><article className="marketing-draft-card" key={item.id}><img src={item.preview} alt={item.file.name}/><div className="marketing-draft-copy"><strong>{index+1}. {item.file.name}</strong><small>{Math.round(item.file.size/1024)} KB · {item.width}×{item.height}</small><select value={item.asset_type} onChange={e=>updatePendingMarketingImageType(item.id,e.target.value as 'photo'|'completed_card')}><option value="photo">{t('Photo source','사진 소스')}</option><option value="completed_card">{t('Completed 4:5 card','완성 4:5 카드')}</option></select></div><div className="admin-form-actions"><button type="button" className="admin-secondary" disabled={busy||index===0} onClick={()=>movePendingMarketingImage(index,-1)}>↑</button><button type="button" className="admin-secondary" disabled={busy||index===pendingMarketingImages.length-1} onClick={()=>movePendingMarketingImage(index,1)}>↓</button><button type="button" className="admin-secondary" disabled={busy} onClick={()=>removePendingMarketingImage(item.id)}>{t('Remove','제거')}</button></div></article>)}</div>
+      {!pendingMarketingImages.length&&<p className="admin-help">{t('No images selected yet. JPEG, PNG or WebP, max 10 MB each.','아직 선택한 이미지가 없습니다. JPEG, PNG, WebP, 장당 최대 10MB입니다.')}</p>}
+     </div>:<p className="admin-help">{t('Copy only: no images are generated. You can add visuals later.','문구만: 이미지를 생성하지 않습니다. 나중에 비주얼을 추가할 수 있습니다.')}</p>}
      <label><span>{t('Creative direction','커스텀 지시문')}</span><textarea value={direction} maxLength={500} rows={4} onChange={e=>setDirection(e.target.value)}/><small>{direction.length}/500</small></label>
      <p className="admin-help">{t('Roundy logo, coral accents and typography are composed server-side for photo-source cards. Completed 4:5 cards are used without additional design overlays.','사진 소스 카드는 Roundy 로고, 코랄 강조와 타이포를 서버에서 합성합니다. 완성된 4:5 카드는 추가 디자인 합성 없이 그대로 사용합니다.')}</p>
      {basis==='growth_carousel'&&<p className="admin-help">{CONTENT_PROFILES[postType({content_mode:basis,topic_type:topic})].label}: {CONTENT_PROFILES[postType({content_mode:basis,topic_type:topic})].roles.join(' → ')}</p>}
      {basis==='growth_carousel'&&['book_insight','trend_research','dating_myth'].includes(topic)&&<p className="admin-help">{t('High-context research may use up to three targeted searches before one structured writing request. Missing evidence triggers one safe fallback when possible.','고품질 검색으로 목적별 검색을 최대 3회 사용한 뒤 구조화된 문구를 작성합니다. 근거가 부족하면 가능한 경우 안전한 비연구 콘텐츠로 1회 전환합니다.')}</p>}
      <p className="admin-help">{t('Caption order: Korean → English → sources → tagline and 5 relevant tags. Tags are selected for topic relevance; live search volume is not measured.','캡션 순서: 국문 → 영어 → 출처 → 태그라인과 관련 태그 5개. 태그는 주제 관련성으로 선별하며 실시간 검색량 순위는 아닙니다.')}</p>
-     <button type="button" className="admin-primary" disabled={busy||!!running||blocked} onClick={()=>void generate(false)}>{t('Generate content','콘텐츠 생성')}</button>
+     <button type="button" className="admin-primary" disabled={busy||!!running||blocked||(manualVisualSource==='uploaded'&&!pendingMarketingImages.length)} onClick={()=>void generate(false)}>{manualVisualSource==='uploaded'?t('Generate with my images','내 이미지로 콘텐츠 생성'):t('Generate content','콘텐츠 생성')}</button>
     </div>
    </section>
    <div className="admin-section-title"><div><p className="admin-kicker">{t('Working inbox','작업함')}</p><Heading level={2}>{t('Drafts','초안')}</Heading><p>{t('Only editable drafts appear here. Scheduled and published posts move to Publishing history.','편집 가능한 초안만 표시됩니다. 예약 또는 게시된 콘텐츠는 게시 기록으로 이동합니다.')}</p></div><button type="button" className="admin-secondary" onClick={()=>setActiveTab('generation')}>{t('Add from generated results','생성 결과에서 가져오기')}</button></div>
