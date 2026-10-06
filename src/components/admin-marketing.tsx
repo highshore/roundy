@@ -20,7 +20,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
  const [data,setData]=useState<Row>({drafts:[],runs:[],templates:[]});
  const [draft,setDraft]=useState<Row|null>(null),[settings,setSettings]=useState<Row|null>(null),[generation,setGeneration]=useState<Row|null>(null);
  const [channel,setChannel]=useState<'instagram'|'koreapas'>('instagram'),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[error,setError]=useState(''),[notice,setNotice]=useState('');
- const [basis,setBasis]=useState('prelaunch'),[mode,setMode]=useState('both'),[visual]=useState('cards'),[topic,setTopic]=useState('conversation_prompt'),[contentLanguage,setContentLanguage]=useState<'ko'|'en'>('ko'),[direction,setDirection]=useState(''),[dirty,setDirty]=useState(false);
+ const [basis,setBasis]=useState('prelaunch'),[mode,setMode]=useState('both'),[topic,setTopic]=useState('conversation_prompt'),[contentLanguage,setContentLanguage]=useState<'ko'|'en'>('ko'),[direction,setDirection]=useState(''),[dirty,setDirty]=useState(false);
  const [template,setTemplate]=useState<Row>(blank());
  const [resultPreview,setResultPreview]=useState<Row|null>(null);
  const [activeTab,setActiveTab]=useState<'draft'|'generation'|'publishing'|'automation'|'connection'>('draft');
@@ -84,7 +84,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
  async function generate(today=false,renderOnly=false){
   if(renderOnly&&!draft)return;
   if(renderOnly&&dirty&&!window.confirm(t('Discard unsaved edits before rendering?','저장하지 않은 수정을 버리고 이미지를 다시 렌더할까요?')))return;
-  const actualVisual='cards',photo=false;
+  const actualVisual='cards';
   const research=basis==='growth_carousel'&&['book_insight','trend_research','dating_myth'].includes(topic);
   const cost=renderOnly?'$0.15':mode==='text'?(research?'$0.05':'$0.02'):'$0.20';
   const message=mode==='text'&&!renderOnly
@@ -101,7 +101,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
    await load(renderOnly?draft?.id:undefined);
    if(renderOnly&&r.data.draft)selectDraft(r.data.draft);
    else setActiveTab('generation');
-   setNotice(renderOnly?t('Cards rendered from the current draft.','현재 초안의 카드를 다시 렌더했습니다.'):t('Generation complete. Open the result in Generation history and choose Add to Drafts.','생성이 완료됐습니다. 생성 기록에서 결과를 확인한 뒤 초안으로 가져오세요.'));
+   setNotice(renderOnly?t('Fresh visuals generated and cards rendered from the current draft.','현재 초안에 맞는 새 이미지를 생성하고 카드를 다시 렌더했습니다.'):t('Generation complete. Open the result in Generation history and choose Add to Drafts.','생성이 완료됐습니다. 생성 기록에서 결과를 확인한 뒤 초안으로 가져오세요.'));
    setDirection('');
   });
  }
@@ -190,9 +190,9 @@ export function AdminMarketing({locale}:{locale:Locale}){
      {basis==='growth_carousel'?<label><span>{t('Topic','주제')}</span><select value={topic} onChange={e=>setTopic(e.target.value)}>{topics.map((x,i)=><option key={x} value={x}>{t(x.replaceAll('_',' '),topicKo[i])}</option>)}</select></label>:null}
      {mode!=='text'&&<p className="admin-help">{t('Visuals: three new content-specific editorial images are generated for every carousel. Existing Roundy photo assets are not reused.','비주얼: 캐러셀을 만들 때마다 콘텐츠에 맞는 새 에디토리얼 이미지 3장을 생성합니다. 기존 Roundy 사진 에셋은 재사용하지 않습니다.')}</p>}
      <label><span>{t('Creative direction','커스텀 지시문')}</span><textarea value={direction} maxLength={500} rows={4} onChange={e=>setDirection(e.target.value)}/><small>{direction.length}/500</small></label>
-     <p className="admin-help">{t('Default: photo-led cover, compact Korean/English content, and Roundy outro with Instagram + website. Official logo, coral and Gothic typography are composed server-side. Brand photography is reused; only New Flare requests a paid image.','사진형 표지 → 짧은 한영 본문 → 라운디 소개 카드로 구성합니다. 공식 로고, 코랄색, 고딕체와 작은 출처 표기를 서버에서 합성합니다. 기본은 기존 브랜드 사진을 재사용하며 새 Flare 사진을 선택할 때만 이미지 API를 호출합니다.')}</p>
+     <p className="admin-help">{t('Default: photo-led cover, compact Korean/English content, and Roundy outro with Instagram + website. Official logo, coral and typography are composed server-side. Every visual generation creates a fresh three-image editorial set from the current content.','사진형 표지 → 짧은 한영 본문 → 라운디 소개 카드로 구성합니다. 공식 로고, 코랄색, 타이포와 작은 출처 표기를 서버에서 합성합니다. 비주얼을 생성할 때마다 현재 콘텐츠에 맞는 새 에디토리얼 이미지 3장을 생성합니다.')}</p>
      {basis==='growth_carousel'&&<p className="admin-help">{CONTENT_PROFILES[postType({content_mode:basis,topic_type:topic})].label}: {CONTENT_PROFILES[postType({content_mode:basis,topic_type:topic})].roles.join(' → ')}</p>}
-     {basis==='growth_carousel'&&['book_insight','trend_research','dating_myth'].includes(topic)&&<p className="admin-help">{t('High-context research may use up to two targeted searches before one structured writing request. Missing evidence blocks publication.','고품질 검색으로 목적별 검색을 최대 2회 사용한 뒤 구조화된 문구를 작성합니다. 근거가 부족하면 게시가 차단됩니다.')}</p>}
+     {basis==='growth_carousel'&&['book_insight','trend_research','dating_myth'].includes(topic)&&<p className="admin-help">{t('High-context research may use up to three targeted searches before one structured writing request. Missing evidence triggers one safe fallback when possible.','고품질 검색으로 목적별 검색을 최대 3회 사용한 뒤 구조화된 문구를 작성합니다. 근거가 부족하면 가능한 경우 안전한 비연구 콘텐츠로 1회 전환합니다.')}</p>}
      <p className="admin-help">{t('Caption order: Korean → English → sources → tagline and 5 relevant tags. Tags are selected for topic relevance; live search volume is not measured.','캡션 순서: 국문 → 영어 → 출처 → 태그라인과 관련 태그 5개. 태그는 주제 관련성으로 선별하며 실시간 검색량 순위는 아닙니다.')}</p>
      <button type="button" className="admin-primary" disabled={busy||!!running||blocked} onClick={()=>void generate(false)}>{t('Generate content','콘텐츠 생성')}</button>
     </div>
