@@ -132,7 +132,7 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
   }
  }
  if(requestedType==='trend_research'&&effectiveType==='trend_research'){
-  const repeat=trendRepeatReason(prepared.document?.study,trendItems),trendIssues=classifyQualityIssues(prepared.report.issues);
+  const repeat=trendRepeatReason((prepared.document as Row)?.study,trendItems),trendIssues=classifyQualityIssues(prepared.report.issues);
   if(repeat||isTrendGroundingFailure(trendIssues.critical)){
    effectiveType='conversation_prompt';sources=[];fallbackReason=(repeat||'research_grounding_failed')+':trend_research->conversation_prompt';
    ok(await db.from('marketing_generation_jobs').update({stage:'writing_fallback'}).eq('id',job.id));
