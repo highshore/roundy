@@ -9,7 +9,7 @@ function harness(){
  const now=new Date().toISOString();
  const tables={
   marketing_trend_control:[{singleton:true,enabled:true,blocked_reason:null,scan_reservation_usd:.03,daily_budget_usd:.12,monthly_budget_usd:4}],
-  marketing_automation_settings:[{singleton:true,trend_radar_enabled:true,trend_scan_interval_hours:6,trend_override_enabled:true,trend_override_score:80}],
+  marketing_automation_settings:[{singleton:true,trend_radar_enabled:true,trend_scan_interval_hours:168,trend_override_enabled:true,trend_override_score:80}],
   marketing_trends:[],
   marketing_trend_scans:[]
  };
@@ -86,6 +86,9 @@ function harness(){
  check(()=>assert.equal(result.deduplicated,false));
  check(()=>assert.equal(h.requests.length,1));
  check(()=>assert.equal(h.requests[0].body.max_tool_calls,1));
+ check(()=>assert.equal(h.requests[0].body.max_output_tokens,10000));
+ check(()=>assert.match(h.requests[0].body.input,/15–30/));
+ check(()=>assert.match(h.requests[0].body.input,/previous 7 days/));
  check(()=>assert.equal(result.candidates.length,1,'news-only candidate must be rejected'));
  const trend=result.candidates[0];
  check(()=>assert.equal(trend.trend_key,'hoe-picnic'));
@@ -110,5 +113,11 @@ function harness(){
  h.tables.marketing_trends.push({id:'recent-category',trend_key:'other-food',display_name:'다른 먹거리',category:'food',scope:'seoul',status:'rising',first_seen_at:new Date().toISOString(),last_seen_at:new Date().toISOString(),observed_at:new Date().toISOString(),momentum_score:80,roundy_relevance_score:80,target_relevance_score:80,seoul_relevance_score:80,visual_potential_score:80,source_confidence_score:80,trend_score:80,signal_types:['search','news'],source_urls:[],summary:'',content_angle:'',angle_key:'other-angle',route_type:'seoul_trend',material_change:false,used_at:new Date().toISOString(),cooldown_until:null,created_at:new Date().toISOString(),updated_at:new Date().toISOString()});
  const selected=await h.radar.selectTrendForAutomaticContent(h.db,90);
  check(()=>assert.equal(selected,null,'14-day category penalty must be able to push a candidate below threshold'));
+}
+{
+ const h=harness();await h.radar.runTrendRadar('radar:test:003');const trend=h.tables.marketing_trends[0];
+ trend.last_seen_at=new Date(Date.now()-8*86400000).toISOString();
+ const selected=await h.radar.selectTrendForAutomaticContent(h.db,80);
+ check(()=>assert.equal(selected,null,'candidates older than the 7-day pool must not be selected'));
 }
 console.log('PASS '+checks+' Seoul Trend Radar assertions; provider calls mocked.');

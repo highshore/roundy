@@ -441,7 +441,7 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
    growth_posts_per_week:growthCount,
    growth_days:growthDays,
    trend_radar_enabled:trendRadar,
-   trend_scan_interval_hours:6,
+   trend_scan_interval_hours:168,
    trend_override_enabled:trendOverride,
    trend_override_score:trendThreshold
   }).eq('singleton',true).select('*').single();
