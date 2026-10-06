@@ -9,8 +9,8 @@ import {CONTENT_PROFILES,postType} from '@/lib/marketing-content-policy';
 type Row=Record<string,any>;
 type PendingMarketingImage={id:string;file:File;preview:string;asset_type:'photo'|'completed_card';width:number;height:number};
 const BASE='/api/admin/marketing';
-const topics=['mbti','dating_archetype','book_insight','trend_research','meme_remix','dating_myth','conversation_prompt','seoul_dating','mini_quiz'];
-const topicKo=['MBTI 연애 유형','연애 유형','책 속 공감','최신 연구','밈 재해석','연애 통념','첫 대화 질문','서울 데이팅','미니 퀴즈'];
+const topics=['mbti','dating_archetype','book_insight','trend_research','meme_remix','dating_myth','conversation_prompt','seoul_dating','seoul_trend','mini_quiz'];
+const topicKo=['MBTI 연애 유형','연애 유형','책 속 공감','최신 연구','밈 재해석','연애 통념','첫 대화 질문','서울 데이팅','서울 트렌드','미니 퀴즈'];
 async function request(path='',body?:unknown,method='POST'){
  const response=await fetch(BASE+path,body===undefined?{cache:'no-store'}:{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(245000)});
  const data=await response.json().catch(()=>({error:'서버 응답을 확인하지 못했습니다. 새로고침으로 작업 기록부터 확인하세요.'}));return {ok:response.ok,data};
@@ -54,6 +54,9 @@ export function AdminMarketing({locale}:{locale:Locale}){
    GENERATION_COOLDOWN_30_SECONDS:['Please wait 30 seconds before starting another generation.','연속 생성 방지를 위해 30초 후 다시 시도하세요.'],
    GENERATION_BUDGET_REACHED:['Today’s marketing AI safety budget has been reached.','오늘 마케팅 AI 안전 한도에 도달했습니다.'],
    GENERATION_CALL_LIMIT:['Today’s generation call limit has been reached.','오늘 생성 횟수 안전 한도에 도달했습니다.'],
+   TREND_RADAR_BUDGET_REACHED:['The Trend Radar safety budget has been reached.','Trend Radar 안전 예산 한도에 도달했습니다.'],
+   TREND_SCAN_ALREADY_RUNNING:['A Trend Radar scan is already running.','Trend Radar 스캔이 이미 진행 중입니다.'],
+   TREND_RADAR_PAUSED:['Trend Radar is paused.','Trend Radar가 일시 중지되어 있습니다.'],
    GENERATION_ALREADY_RUNNING:['Another generation is still running. Wait for it to finish or refresh status.','다른 생성 작업이 진행 중입니다. 완료될 때까지 기다리거나 상태를 새로고침하세요.'],
    DRAFT_CHANGED_REFRESH_FIRST:['This draft changed. Refresh status before trying again.','초안이 변경됐습니다. 상태를 새로고침한 뒤 다시 시도하세요.'],
    DRAFT_NOT_EDITABLE:['This draft is no longer editable. Refresh status.','이 초안은 더 이상 수정할 수 없습니다. 상태를 새로고침하세요.'],
@@ -133,7 +136,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
   if(renderOnly&&dirty&&!window.confirm(t('Discard unsaved edits before rendering?','저장하지 않은 수정을 버리고 이미지를 다시 렌더할까요?')))return;
   const source=today?'auto_ai':renderOnly?(draft?.visual_source||'auto_ai'):manualVisualSource;
   if(!today&&!renderOnly&&source==='uploaded'&&!pendingMarketingImages.length){setError(t('Add at least one image before generating with uploads.','직접 업로드 방식은 이미지를 1장 이상 추가한 뒤 생성하세요.'));return;}
-  const research=basis==='growth_carousel'&&['book_insight','trend_research','dating_myth'].includes(topic),requestedMode=renderOnly?'image':source==='auto_ai'?'both':'text';
+  const research=basis==='growth_carousel'&&['book_insight','trend_research','dating_myth','seoul_trend'].includes(topic),requestedMode=renderOnly?'image':source==='auto_ai'?'both':'text';
   const cost=renderOnly?(source==='uploaded'?'$0':'$0.15'):source==='auto_ai'?'$0.20':research?'$0.05':'$0.02';
   const message=source==='auto_ai'
    ?t('Generate copy with three fresh AI editorial images? This reserves '+cost+'.','문구와 새 AI 에디토리얼 이미지 3장을 생성할까요? 앱 예산 '+cost+'를 예약합니다.')
@@ -257,7 +260,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
   ['connection',t('Connection','연결')]
  ] as const;
  function statusText(status:string){const labels:Record<string,[string,string]>={completed:['Completed','완료'],failed:['Failed','실패'],running:['Running','진행 중'],uncertain:['Needs review','확인 필요'],sent:['Published','게시됨'],queued:['Scheduled','예약됨'],sending:['Publishing','게시 중'],needs_review:['Needs review','확인 필요'],scheduled:['Scheduled','예약됨']};return labels[status]?t(...labels[status]):status;}
- function contentLabel(row:Row){const request=row.request_payload||{},snapshot=row.result_snapshot||row.snapshot||{},growth=request.content_mode==='growth_carousel'||snapshot.draft_kind==='growth_carousel',kind=growth?(request.topic_type||snapshot.growth_topic_type||'growth_carousel'):(request.content_mode||snapshot.content_mode||snapshot.draft_kind||row.operation||'content');const ko:Record<string,string>={prelaunch:'오픈 전 홍보',live_event:'이벤트 모집',book_insight:'책 속 공감',trend_research:'연구로 보는 관계',mbti:'MBTI와 대화',dating_archetype:'대화 스타일',meme_remix:'공감 상황극',dating_myth:'연애 통념 점검',conversation_prompt:'첫 대화 질문',seoul_dating:'서울에서 만나기',mini_quiz:'대화 미니 퀴즈',growth_carousel:'Growth Carousel',brand:'브랜드 콘텐츠',copy:'일반 콘텐츠',research:'검색 콘텐츠'};return locale==='ko'?(ko[kind]||String(kind).replaceAll('_',' ')):String(kind).replaceAll('_',' ');}
+ function contentLabel(row:Row){const request=row.request_payload||{},snapshot=row.result_snapshot||row.snapshot||{},growth=request.content_mode==='growth_carousel'||snapshot.draft_kind==='growth_carousel',kind=growth?(request.topic_type||snapshot.growth_topic_type||'growth_carousel'):(request.content_mode||snapshot.content_mode||snapshot.draft_kind||row.operation||'content');const ko:Record<string,string>={prelaunch:'오픈 전 홍보',live_event:'이벤트 모집',book_insight:'책 속 공감',trend_research:'연구로 보는 관계',mbti:'MBTI와 대화',dating_archetype:'대화 스타일',meme_remix:'공감 상황극',dating_myth:'연애 통념 점검',conversation_prompt:'첫 대화 질문',seoul_dating:'서울에서 만나기',seoul_trend:'서울 트렌드',mini_quiz:'대화 미니 퀴즈',growth_carousel:'Growth Carousel',brand:'브랜드 콘텐츠',copy:'일반 콘텐츠',research:'검색 콘텐츠'};return locale==='ko'?(ko[kind]||String(kind).replaceAll('_',' ')):String(kind).replaceAll('_',' ');}
  if(loading)return <p role="status">{t('Loading marketing workspace…','마케팅 정보를 불러오는 중입니다…')}</p>;
  return <section className="admin-panel marketing-panel">
   <div className="admin-heading"><p className="admin-kicker">ROUNDY ADMIN</p><Heading level={1}>{t('Marketing','마케팅')}</Heading><p>{t('Generate safely. Review once. Publish only after approval.','안전하게 생성하고 검토한 뒤, 승인한 콘텐츠만 게시합니다.')}</p></div>
@@ -354,6 +357,16 @@ export function AdminMarketing({locale}:{locale:Locale}){
       [[0,1,2,3,4,5,6],t('Every day','매일')],
       [[],t('Clear','해제')]
      ].map(([days,label]:any)=><button key={label} type="button" onClick={()=>setSettings({...settings,growth_days:days,growth_posts_per_week:days.length})}>{label}</button>)}</div>
+    </div>
+    <div className="marketing-setup">
+     <strong>{t('Seoul Trend Radar','서울 트렌드 레이더')}</strong>
+     <p className="admin-help">{t('Scans Seoul/Korea 20s–30s culture every 6 hours. A verified emerging/rising trend with an adjusted score at or above the threshold can replace that day’s normal rotation.','6시간마다 서울/한국 2030 문화를 탐색합니다. 검증된 emerging/rising 트렌드의 조정 점수가 기준 이상이면 그날의 기존 순환 콘텐츠를 대체합니다.')}</p>
+     <label className="check-row"><input type="checkbox" checked={settings.trend_radar_enabled??true} onChange={e=>setSettings({...settings,trend_radar_enabled:e.target.checked})}/>{t('Enable Trend Radar','Trend Radar 활성화')}</label>
+     <label className="check-row"><input type="checkbox" checked={settings.trend_override_enabled??true} onChange={e=>setSettings({...settings,trend_override_enabled:e.target.checked})}/>{t('Let strong trends replace the daily rotation','강한 트렌드가 일일 순환 콘텐츠를 대체')}</label>
+     <label><span>{t('Override score threshold','대체 점수 기준')}</span><input type="number" min={60} max={100} step={1} value={settings.trend_override_score??80} onChange={e=>setSettings({...settings,trend_override_score:Number(e.target.value)})}/></label>
+     <p className="admin-help">{t('Radar budget','Radar 예산')}: $\{Number(data.trend?.usage?.daily_reserved_usd||0).toFixed(2)} / $\{Number(data.trend?.usage?.daily_budget_usd||.12).toFixed(2)} {t('today','오늘')} · $\{Number(data.trend?.usage?.monthly_reserved_usd||0).toFixed(2)} / $\{Number(data.trend?.usage?.monthly_budget_usd||4).toFixed(2)} {t('this month','이번 달')}.</p>
+     <div className="admin-form-actions"><button type="button" className="admin-secondary" disabled={busy} onClick={()=>{if(window.confirm(t('Run one paid Trend Radar scan now? It uses the separate Radar safety budget.','지금 유료 Trend Radar 스캔을 1회 실행할까요? 별도 Radar 안전 예산을 사용합니다.')))void work(async()=>{const r=await mutate('/trend-radar/run',{confirm_paid_scan:true});await load(draft?.id);setNotice(t('Trend Radar scan completed.','Trend Radar 스캔을 완료했습니다.'));return r;});}}>{t('Scan trends now','지금 트렌드 스캔')}</button></div>
+     {!!data.trend?.trends?.length&&<div className="marketing-log-list">{data.trend.trends.slice(0,5).map((item:Row)=><div className="marketing-log-row" key={item.id}><div className="marketing-log-main"><div><strong>{item.display_name}</strong><small>{item.status} · {item.route_type?.replaceAll('_',' ')} · {Number(item.trend_score||0).toFixed(0)}/100</small></div></div></div>)}</div>}
     </div>
     <label className="check-row"><input type="checkbox" checked={settings.optimization_enabled} onChange={e=>setSettings({...settings,optimization_enabled:e.target.checked})}/>{t('Optimize posting time','게시 시간 최적화')}</label><label>{t('Fallback posting time KST','기본 게시 시간 KST')}<input type="time" value={settings.daily_time_kst.slice(0,5)} onChange={e=>setSettings({...settings,daily_time_kst:e.target.value})}/></label><label className="check-row"><input type="checkbox" checked={settings.auto_reply_enabled} onChange={e=>setSettings({...settings,auto_reply_enabled:e.target.checked})}/>{t('Existing comments/DM auto-replies','기존 댓글 및 DM 자동 응답')}</label><button disabled={busy} className="admin-primary">{t('Save automation','자동화 저장')}</button>
    </form></div>}
