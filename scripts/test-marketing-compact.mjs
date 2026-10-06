@@ -69,6 +69,9 @@ check(()=>assert.ok(!design.includes("(index+1)+'/'+total")));
 check(()=>assert.ok(design.includes("'https://'+BRAND.website")));
 if(process.argv.includes('--render')){
  const sharp=require('sharp'),assets=await load('src/lib/marketing-render-assets.ts').loadEditorialAssets();
+ assert.ok(assets.fonts?.some(f=>f.name==='Noto Sans KR'),'Noto Sans KR must load for Korean marketing cards');
+ assert.ok(assets.fonts?.some(f=>f.name==='DM Sans'),'DM Sans must load for English marketing cards');
+ assert.ok((assets.photos||[]).length>=3,'Marketing cards need a varied local photo bank');
  fs.mkdirSync('quality-artifacts/compact',{recursive:true});
  const thumbs=[];
  for(const lang of ['ko','en']){
