@@ -3448,3 +3448,28 @@ html:lang(ko) .legal-intro h1{word-break:keep-all}
  .marketing-day-presets{gap:6px}
  .marketing-day-presets button{flex:1 1 auto}
 }
+
+
+/* Seoul Trend candidate cards */
+.trend-candidates-card{gap:18px}
+.trend-candidate-list{display:grid;gap:10px}
+.trend-candidate-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:16px;padding:16px;border:1px solid var(--border);border-radius:18px;background:var(--paper)}
+.trend-candidate-copy{display:grid;gap:7px;min-width:0}
+.trend-candidate-title{display:flex;align-items:center;gap:8px;min-width:0}
+.trend-candidate-title strong{font-size:15px;line-height:1.3;overflow:hidden;text-overflow:ellipsis}
+.trend-lifecycle{flex:none;padding:4px 8px;border-radius:999px;background:var(--surface);font-size:10px;font-weight:800;text-transform:capitalize;color:var(--muted)}
+.trend-lifecycle.rising,.trend-lifecycle.emerging{background:#fff0f2;color:#b9485a}
+.trend-candidate-meta{display:flex;flex-wrap:wrap;gap:6px}
+.trend-candidate-meta span{padding:3px 7px;border-radius:999px;background:var(--surface);font-size:10px;font-weight:700;color:var(--muted)}
+.trend-candidate-copy p{margin:0;color:var(--muted);font-size:13px;line-height:1.45}
+.trend-create-button{min-height:42px;padding:9px 15px;border:1px solid var(--ink);border-radius:999px;background:var(--ink);color:var(--paper);font-size:12px;font-weight:800;white-space:nowrap}
+.trend-create-button:disabled{opacity:.45}
+@media(max-width:600px){
+ .trend-candidates-card{padding:16px}
+ .trend-candidate-list{gap:9px}
+ .trend-candidate-row{grid-template-columns:minmax(0,1fr);gap:12px;padding:14px}
+ .trend-candidate-title{align-items:flex-start}
+ .trend-candidate-title strong{white-space:normal;font-size:14px}
+ .trend-candidate-copy p{font-size:12px}
+ .trend-create-button{width:100%;min-height:44px}
+}
