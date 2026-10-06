@@ -26,7 +26,7 @@ create table if not exists public.marketing_uploaded_images (
   created_by uuid references auth.users(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  unique (draft_id, sort_order)
+  constraint marketing_uploaded_images_draft_sort_unique unique (draft_id, sort_order) deferrable initially immediate
 );
 
 create index if not exists marketing_uploaded_images_draft_idx
@@ -81,7 +81,6 @@ set search_path=''
 as $$
 declare
   expected_count integer;
-  i integer;
 begin
   if p_draft is null or p_ids is null or cardinality(p_ids) not between 1 and 6 then
     raise exception 'INVALID_MARKETING_IMAGE_ORDER';
@@ -102,17 +101,13 @@ begin
     raise exception 'MARKETING_IMAGE_ORDER_MISMATCH';
   end if;
 
-  for i in 1..cardinality(p_ids) loop
-    update public.marketing_uploaded_images
-    set sort_order=20+i,updated_at=now()
-    where id=p_ids[i] and draft_id=p_draft;
-  end loop;
+  set constraints marketing_uploaded_images_draft_sort_unique deferred;
 
-  for i in 1..cardinality(p_ids) loop
-    update public.marketing_uploaded_images
-    set sort_order=i-1,updated_at=now()
-    where id=p_ids[i] and draft_id=p_draft;
-  end loop;
+  update public.marketing_uploaded_images m
+  set sort_order=x.ord-1,
+      updated_at=now()
+  from unnest(p_ids) with ordinality as x(id,ord)
+  where m.id=x.id and m.draft_id=p_draft;
 
   return (
     select coalesce(jsonb_agg(to_jsonb(m) order by m.sort_order),'[]'::jsonb)
