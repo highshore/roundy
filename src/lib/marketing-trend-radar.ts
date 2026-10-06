@@ -36,8 +36,8 @@ function sourceSignal(url:string,claimed:unknown){
  if((host.includes('tiktok.com')||host.includes('instagram.com')||host.includes('youtube.com')||host==='x.com'||host.endsWith('.x.com')||host.includes('threads.net'))&&kind==='social')return 'social';
  if((host.includes('trends.google.')||host.includes('datalab.naver.')||host.includes('search.naver.')||host.includes('trend.naver.'))&&kind==='search')return 'search';
  if(kind==='news')return 'news';
- // A broad web-search discovery signal is still distinct from current social/news corroboration.
- return kind==='search'?'search':'news';
+ // Do not trust model labels to turn an ordinary article into an independent search/social signal.
+ return 'news';
 }
 function routeFor(category:string,suggested:unknown):TrendRoute{
  if(category==='place')return 'seoul_dating';
@@ -166,15 +166,15 @@ export async function markTrendUsed(db:DB,trendId:string){
  checked(await db.from('marketing_trends').update({used_at:new Date().toISOString(),cooldown_until:new Date(Date.now()+60*86400000).toISOString(),material_change:false,updated_at:new Date().toISOString()}).eq('id',trendId)); 
 }
 export async function trendOverview(){
- const db=createServiceRoleClient(),day=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Seoul'}));day.setHours(0,0,0,0);const month=new Date(day);month.setDate(1);
+ const db=createServiceRoleClient(),date=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()),dayStart=Date.parse(date+'T00:00:00+09:00'),monthStart=Date.parse(date.slice(0,7)+'-01T00:00:00+09:00');
  const [control,settings,scans,trends,usage]=await Promise.all([
   db.from('marketing_trend_control').select('*').eq('singleton',true).single(),
   db.from('marketing_automation_settings').select('trend_radar_enabled,trend_scan_interval_hours,trend_override_enabled,trend_override_score').eq('singleton',true).single(),
   db.from('marketing_trend_scans').select('*').order('created_at',{ascending:false}).limit(20),
   db.from('marketing_trends').select('*').order('trend_score',{ascending:false}).limit(20),
-  db.from('marketing_trend_scans').select('reserved_usd,created_at,status').gte('created_at',month.toISOString())
+  db.from('marketing_trend_scans').select('reserved_usd,created_at,status').gte('created_at',new Date(monthStart).toISOString())
  ]);
  for(const r of [control,settings,scans,trends,usage])if(r.error)throw r.error;
- const rows=usage.data||[],dayStart=day.getTime();
+ const rows=usage.data||[];
  return {control:control.data,settings:settings.data,scans:scans.data,trends:trends.data,usage:{daily_reserved_usd:rows.filter((x:Row)=>Date.parse(x.created_at)>=dayStart).reduce((sum:number,x:Row)=>sum+Number(x.reserved_usd||0),0),monthly_reserved_usd:rows.reduce((sum:number,x:Row)=>sum+Number(x.reserved_usd||0),0),daily_budget_usd:Number(control.data.daily_budget_usd),monthly_budget_usd:Number(control.data.monthly_budget_usd)}};
 }
