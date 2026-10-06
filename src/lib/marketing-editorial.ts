@@ -19,7 +19,7 @@ function parseDocument(result:Row){
 
 export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,call:Call){
  const requestedType=postType(input),language=input.language==='en'?'en':'ko';
- let effectiveType=requestedType,facts:Row|null=null,fallbackReason='',repairUsed=false;
+ let effectiveType=requestedType,facts:Row|null=null,fallbackReason='',repairUsed=false,selectedBook:ReturnType<typeof selectVerifiedMarketingBook>|null=null;
  if(requestedType==='live_event'){
   let q=db.from('events').select('id,slug,title,starts_at,venue,neighborhood,capacity,seats_remaining,price_gents,price_ladies').eq('status','live').is('deleted_at',null).gt('starts_at',new Date().toISOString());if(draft.event_id)q=q.eq('id',draft.event_id);
   facts=ok(await q.order('starts_at').limit(1).maybeSingle());if(!facts)throw new Error('게시 가능한 정식 이벤트가 없습니다. 이벤트 모집 대신 오픈 전 홍보를 선택하세요.');
@@ -28,7 +28,7 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
  const record=async(result:Row)=>{inputTokens+=Number(result.usage?.input_tokens||result.usage?.prompt_tokens||0);outputTokens+=Number(result.usage?.output_tokens||result.usage?.completion_tokens||0);ok(await db.from('marketing_generation_jobs').update({input_tokens:inputTokens,output_tokens:outputTokens}).eq('id',job.id));};
 
  if(requestedType==='book_insight'){
-  const book=selectVerifiedMarketingBook(input.instruction||'',String(draft.draft_date||draft.id)+':'+String(input.instruction||''));
+  const book=selectVerifiedMarketingBook(input.instruction||'',String(draft.draft_date||draft.id)+':'+String(input.instruction||''));selectedBook=book;
   sources=verifiedBookEvidence(book);
   notes=sources[0].evidence;
   ok(await db.from('marketing_generation_jobs').update({stage:'researching',research_cache:{key:'verified-book-catalog-v1:'+book.title,saved_at:new Date().toISOString(),sources,notes,subject:book.title,search_completed:true,verified_catalog:true}}).eq('id',job.id));
@@ -68,9 +68,18 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
   await record(result);return {...parseDocument(result),result};
  };
 
+ const lockVerifiedBook=(document:Row)=>{
+  if(effectiveType!=='book_insight'||!selectedBook)return document;
+  return {...document,
+   book:{...document.book,title:selectedBook.title,author:selectedBook.author,source_id:'S1',source_context:String(document.book?.source_context||'Paraphrased from the verified publisher/author description.')},
+   slides:Array.isArray(document.slides)?document.slides.map((slide:Row)=>['book','insight'].includes(slide.role)?{...slide,source_ids:['S1']}:slide):document.slides
+  };
+ };
+
  let written=await write(effectiveType);
  ok(await db.from('marketing_generation_jobs').update({result_snapshot:{draft_id:draft.id,content_language:language,growth_topic_type:input.content_mode==='growth_carousel'?effectiveType:null,raw_content:written.raw.slice(0,24000),research_sources:sources,images:[],carousel_slides:[],caption:'',quality_report:{version:3,status:'unchecked',issues:[]},generation_recovery:{fallback_reason:fallbackReason||null,repair_used:false}}}).eq('id',job.id));
 
+ written.document=lockVerifiedBook(written.document);
  let prepared=prepareContent(written.document,effectiveType,language,sources);
  if(prepared.report.status!=='passed'){
   const grouped=classifyQualityIssues(prepared.report.issues);
@@ -79,6 +88,7 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
   if(repairIssues.length){
    repairUsed=true;
    written=await write(effectiveType,{document:prepared.document,issues:repairIssues});
+   written.document=lockVerifiedBook(written.document);
    prepared=prepareContent(written.document,effectiveType,language,sources);
   }
  }
