@@ -3481,3 +3481,16 @@ html:lang(ko) .legal-intro h1{word-break:keep-all}
 .trend-language-picker button{min-height:32px;padding:5px 11px;border:0;border-radius:999px;background:transparent;color:var(--muted);font-size:11px;font-weight:800}
 .trend-language-picker button[aria-pressed=true]{background:var(--ink);color:var(--paper)}
 @media(max-width:600px){.trend-candidates-card>.admin-section-title{align-items:flex-start}.trend-language-picker{justify-items:start;width:100%}}
+
+
+/* Seoul Trend mobile header containment */
+.trend-candidates-card>.admin-section-title>div:first-child{min-width:0}
+.trend-candidates-card>.admin-section-title>div:first-child>p{max-width:680px}
+@media(max-width:600px){
+ .trend-candidates-card>.admin-section-title{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;width:100%}
+ .trend-candidates-card>.admin-section-title>div:first-child{width:100%;min-width:0}
+ .trend-candidates-card>.admin-section-title h3{font-size:22px;line-height:1.15;white-space:normal;word-break:keep-all}
+ .trend-candidates-card>.admin-section-title>div:first-child>p:last-child{font-size:12px;line-height:1.55;word-break:keep-all;overflow-wrap:normal}
+ .trend-language-picker{width:auto;justify-items:start}
+ .trend-language-picker>div{width:max-content;max-width:100%}
+}
