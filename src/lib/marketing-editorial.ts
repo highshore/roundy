@@ -78,11 +78,21 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
    slides:Array.isArray(document.slides)?document.slides.map((slide:Row)=>['book','insight'].includes(slide.role)?{...slide,source_ids:['S1']}:slide):document.slides
   };
  };
+ const lockSeoulGrounding=(document:Row)=>{
+  if(effectiveType!=='seoul_dating'||!document?.seoul||!Array.isArray(document.seoul.venues))return document;
+  const roles=['scenario','etiquette','plan'],venues=document.seoul.venues.slice(0,3);
+  const slides=Array.isArray(document.slides)?document.slides.map((slide:Row)=>{
+   const index=roles.indexOf(slide.role);if(index<0||!venues[index])return slide;
+   const venue=venues[index],name=String(venue.name||'').trim(),combined=(String(slide.title||'')+' '+String(slide.body||'')).normalize('NFKC');
+   return {...slide,title:name&&!combined.includes(name)?name:slide.title,source_ids:Array.isArray(venue.source_ids)?venue.source_ids:slide.source_ids};
+  }):document.slides;
+  return {...document,seoul:{...document.seoul,format:seoulFormat,verified_at:new Date().toISOString().slice(0,10),venues},slides};
+ };
 
  let written=await write(effectiveType);
  ok(await db.from('marketing_generation_jobs').update({result_snapshot:{draft_id:draft.id,content_language:language,growth_topic_type:input.content_mode==='growth_carousel'?effectiveType:null,raw_content:written.raw.slice(0,24000),research_sources:sources,images:[],carousel_slides:[],caption:'',quality_report:{version:3,status:'unchecked',issues:[]},generation_recovery:{fallback_reason:fallbackReason||null,repair_used:false}}}).eq('id',job.id));
 
- written.document=lockVerifiedBook(written.document);
+ written.document=lockSeoulGrounding(lockVerifiedBook(written.document));
  let prepared=prepareContent(written.document,effectiveType,language,sources);
  if(requestedType==='seoul_dating'&&effectiveType==='seoul_dating'&&prepared.report.status!=='passed'){
   const seoulIssues=classifyQualityIssues(prepared.report.issues);
@@ -103,7 +113,7 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
   if(repairIssues.length){
    repairUsed=true;
    written=await write(effectiveType,{document:prepared.document,issues:repairIssues});
-   written.document=lockVerifiedBook(written.document);
+   written.document=lockSeoulGrounding(lockVerifiedBook(written.document));
    prepared=prepareContent(written.document,effectiveType,language,sources);
   }
  }
