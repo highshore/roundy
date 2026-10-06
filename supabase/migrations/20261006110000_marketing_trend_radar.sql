@@ -197,22 +197,6 @@ end
 $$;
 revoke all on function roundy_private.dispatch_marketing_trend_radar() from public,anon,authenticated,service_role;
 
-do $radar_cron$
-begin
-  if to_regnamespace('cron') is not null then
-    begin
-      execute 'select cron.unschedule($1)' using 'roundy-marketing-trend-radar';
-    exception when others then
-      null;
-    end;
-    execute format(
-      'select cron.schedule(%L,%L,%L)',
-      'roundy-marketing-trend-radar',
-      '0 '||chr(42)||'/6 '||chr(42)||' '||chr(42)||' '||chr(42),
-      'select roundy_private.dispatch_marketing_trend_radar()'
-    );
-  end if;
-end
-$radar_cron$;
+-- The production pg_cron schedule is installed after this schema migration.\n
 
 commit;
