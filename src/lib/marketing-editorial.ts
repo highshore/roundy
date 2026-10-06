@@ -7,7 +7,7 @@ import {CONTENT_PROFILES,CONTENT_POLICY_VERSION,postType,contentSchema,researchI
 
 type Call=(endpoint:string,body:Row,timeout:number)=>Promise<Row>;
 const ok=(r:any)=>{if(r.error)throw r.error;return r.data;};
-const MODEL='gpt-4.1-mini';
+const MODEL='gpt-6-luna';
 const FALLBACK_TYPE:Partial<Record<PostType,PostType>>={trend_research:'conversation_prompt',dating_myth:'conversation_prompt',seoul_dating:'conversation_prompt'};
 function seoulDatingFormat(seed:string):SeoulDatingFormat{const value=createHash('sha256').update(seed).digest()[0]%10;return value<7?'places':'course';}
 function isSeoulVenueFailure(issues:string[]){return issues.some(issue=>/서울 데이트 장소|서울 데이팅|실제 장소|가격\/영업시간|장소 추천 카드|검증 가능한 장소/.test(issue));}
