@@ -1,6 +1,7 @@
 import {savedCtaRecoverySource} from './marketing-output-recovery';
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
+import sharp from 'sharp';
 import {draftQuality} from './marketing-editorial';
 import type { createClient } from './supabase/server';
 import { createServiceRoleClient } from './supabase/service';
@@ -41,6 +42,79 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
   return json(result);
  }
 
+ async function manualCandidate(draftId:string){
+  const draft=checked(await service.from('instagram_post_drafts').select('id,status,revision,draft_role,generation_source,visual_source,content_mode,draft_kind,growth_topic_type,content_language').eq('id',draftId).maybeSingle());
+  if(!draft)return null;
+  if(draft.status!=='needs_approval'||draft.draft_role!=='candidate')throw new Error('DRAFT_NOT_EDITABLE');
+  if(draft.generation_source!=='manual')throw new Error('UPLOAD_VISUALS_MANUAL_ONLY');
+  return draft;
+ }
+ async function signedUploads(draftId:string){
+  const rows=checked(await service.from('marketing_uploaded_images').select('*').eq('draft_id',draftId).order('sort_order',{ascending:true})) as Row[];
+  return await Promise.all(rows.map(async(row:Row)=>{
+   const signed=await service.storage.from('marketing-images').createSignedUrl(row.storage_path,3600);
+   return {...row,signed_url:signed.data?.signedUrl||null};
+  }));
+ }
+ if(id==='uploads'&&path.length===1&&req.method==='GET'){
+  const draftId=req.nextUrl.searchParams.get('draft_id')||'';
+  if(!uuid(draftId))return json({error:'INVALID_DRAFT_ID'},400);
+  await manualCandidate(draftId);
+  return json({images:await signedUploads(draftId)});
+ }
+ if(id==='uploads'&&path.length===1&&req.method==='POST'){
+  const form=await req.formData(),draftId=String(form.get('draft_id')||''),assetType=String(form.get('asset_type')||'photo'),role=String(form.get('role')||'flexible');
+  if(!uuid(draftId)||!['photo','completed_card'].includes(assetType)||!['cover','body','flexible'].includes(role))return json({error:'INVALID_UPLOAD_METADATA'},400);
+  await manualCandidate(draftId);
+  const active=checked(await service.from('marketing_generation_jobs').select('id').eq('draft_id',draftId).eq('status','running').gt('created_at',new Date(Date.now()-300000).toISOString()).limit(1));
+  if(active.length)return json({error:'GENERATION_ALREADY_RUNNING'},409);
+  const existing=checked(await service.from('marketing_uploaded_images').select('id').eq('draft_id',draftId).order('sort_order',{ascending:true})) as Row[];
+  if(existing.length>=6)return json({error:'MAXIMUM_6_MARKETING_IMAGES'},400);
+  const file=form.get('file');
+  if(!(file instanceof File)||!file.size||file.size>10*1024*1024||!['image/jpeg','image/png','image/webp'].includes(file.type))return json({error:'Use JPEG, PNG or WebP, max 10 MB.'},400);
+  const raw=Buffer.from(await file.arrayBuffer()),meta=await sharp(raw).metadata(),width=Number(meta.width||0),height=Number(meta.height||0);
+  if(!width||!height)return json({error:'INVALID_IMAGE_FILE'},400);
+  if(assetType==='completed_card'&&Math.abs(width/height-.8)>.035)return json({error:'COMPLETED_CARD_MUST_BE_4_5'},400);
+  const ext=file.type==='image/png'?'png':file.type==='image/webp'?'webp':'jpg',storagePath=draftId+'/originals/'+randomUUID()+'.'+ext;
+  checked(await service.storage.from('marketing-images').upload(storagePath,raw,{contentType:file.type,upsert:false}));
+  const user=(await db.auth.getUser()).data.user;
+  try{
+   const row=checked(await service.from('marketing_uploaded_images').insert({draft_id:draftId,storage_path:storagePath,sort_order:existing.length,role,asset_type:assetType,width,height,file_size:file.size,mime_type:file.type,created_by:user?.id||null}).select('*').single());
+   const signed=await service.storage.from('marketing-images').createSignedUrl(storagePath,3600);
+   const warnings:string[]=[];if(Math.min(width,height)<800)warnings.push('IMAGE_RESOLUTION_LOW');
+   return json({image:{...row,signed_url:signed.data?.signedUrl||null},warnings},201);
+  }catch(error){
+   await service.storage.from('marketing-images').remove([storagePath]);
+   throw error;
+  }
+ }
+ if(id==='uploads'&&path[1]==='order'&&path.length===2&&req.method==='PATCH'){
+  const body=await req.json().catch(()=>({})),draftId=String(body.draft_id||''),ids=Array.isArray(body.ids)?body.ids.map(String):[];
+  if(!uuid(draftId)||!ids.length||ids.length>6||ids.some((x:string)=>!uuid(x)))return json({error:'INVALID_MARKETING_IMAGE_ORDER'},400);
+  await manualCandidate(draftId);
+  checked(await service.rpc('reorder_marketing_uploaded_images',{p_draft:draftId,p_ids:ids}));
+  return json({images:await signedUploads(draftId)});
+ }
+ if(id==='uploads'&&path.length===2&&uuid(path[1])&&req.method==='PATCH'){
+  const body=await req.json().catch(()=>({})),row=checked(await service.from('marketing_uploaded_images').select('*').eq('id',path[1]).maybeSingle());
+  if(!row)return json({error:'MARKETING_IMAGE_NOT_FOUND'},404);
+  await manualCandidate(row.draft_id);
+  const role=body.role===undefined?row.role:String(body.role),assetType=body.asset_type===undefined?row.asset_type:String(body.asset_type);
+  if(!['cover','body','flexible'].includes(role)||!['photo','completed_card'].includes(assetType))return json({error:'INVALID_UPLOAD_METADATA'},400);
+  if(assetType==='completed_card'&&Math.abs(Number(row.width)/Number(row.height)-.8)>.035)return json({error:'COMPLETED_CARD_MUST_BE_4_5'},400);
+  checked(await service.from('marketing_uploaded_images').update({role,asset_type:assetType,updated_at:new Date().toISOString()}).eq('id',row.id));
+  return json({images:await signedUploads(row.draft_id)});
+ }
+ if(id==='uploads'&&path.length===2&&uuid(path[1])&&req.method==='DELETE'){
+  const row=checked(await service.from('marketing_uploaded_images').select('*').eq('id',path[1]).maybeSingle());
+  if(!row)return json({error:'MARKETING_IMAGE_NOT_FOUND'},404);
+  await manualCandidate(row.draft_id);
+  checked(await service.storage.from('marketing-images').remove([row.storage_path]));
+  checked(await service.from('marketing_uploaded_images').delete().eq('id',row.id));
+  const remaining=checked(await service.from('marketing_uploaded_images').select('id').eq('draft_id',row.draft_id).order('sort_order',{ascending:true})) as Row[];
+  if(remaining.length)checked(await service.rpc('reorder_marketing_uploaded_images',{p_draft:row.draft_id,p_ids:remaining.map((x:Row)=>x.id)}));
+  return json({images:await signedUploads(row.draft_id)});
+ }
  if(!id&&req.method==='GET'){
   const response=await legacyMarketingApi(req,db,path);if(!response.ok)return response;
   const data=await response.json();return json({...data,generation:await generationOverview()});
@@ -95,6 +169,27 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
   const restored=checked(await service.rpc('restore_marketing_generation_snapshot',{p_job_id:path[2]}));
   return json({draft:restored});
  }
+ if(id==='draft'&&path.length===3&&uuid(path[1])&&path[2]==='render-uploaded'&&req.method==='POST'){
+  const body=await req.json().catch(()=>({})),draft=await manualCandidate(path[1]);
+  if(!draft)return json({error:'Draft not found'},404);
+  if(!Number.isInteger(body.revision)||body.revision!==draft.revision)return json({error:'DRAFT_CHANGED_REFRESH_FIRST'},409);
+  const count=checked(await service.from('marketing_uploaded_images').select('id',{count:'exact',head:true}).eq('draft_id',draft.id));
+  if(!count||Number(count.count||0)<1)return json({error:'UPLOADED_IMAGES_REQUIRED'},400);
+  const user=(await db.auth.getUser()).data.user;if(!user)return json({error:'Sign in required'},401);
+  const result=await runGeneration(draft.id,{
+   request_key:typeof body.request_key==='string'?body.request_key:'upload-render:'+randomUUID(),
+   revision:draft.revision,
+   mode:'image',
+   render_only:true,
+   visual_mode:'cards',
+   visual_source:'uploaded',
+   content_mode:draft.draft_kind==='growth_carousel'?'growth_carousel':draft.content_mode,
+   topic_type:draft.growth_topic_type||undefined,
+   language:draft.content_language==='en'?'en':'ko',
+   instruction:''
+  },user.id,false);
+  return json(result,result.error?400:200);
+ }
  if(id==='draft'&&path[1]==='generate'&&path.length===2&&req.method==='POST'){
   const body=await req.json().catch(()=>null);
   if(!body||typeof body.request_key!=='string')return json({error:'Refresh this page to use the cost-protected generator.'},400);
@@ -108,7 +203,7 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
   const body=await req.json(),user=(await db.auth.getUser()).data.user;
   const result=await runGeneration(path[1],path[2]==='growth-generate'?{...body,content_mode:'growth_carousel',visual_mode:'cards'}:body,user?.id||null);return json(result,result.error?400:200);
  }
- if(path.some(p=>['generate','regenerate','growth-generate','generation'].includes(p)))return json({error:'Invalid generation route'},404);
+ if(path.some(p=>['generate','regenerate','growth-generate','render-uploaded','generation'].includes(p)))return json({error:'Invalid generation route'},404);
  if(id==='draft'&&path[1]&&uuid(path[1])){
   if(req.method!=='GET'){
    const active=checked(await service.from('marketing_generation_jobs').select('id').eq('draft_id',path[1]).eq('status','running').gt('created_at',new Date(Date.now()-300000).toISOString()).limit(1));
