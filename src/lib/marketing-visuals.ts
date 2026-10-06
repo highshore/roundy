@@ -51,7 +51,7 @@ function paragraph(value:string,size:number,width=940,style:Row={}){
   ...linesFor(value,size,width).map(line=>line?text(line,size,{lineHeight:1.48,whiteSpace:'nowrap',flexShrink:0}):box({height:size*.5}))
  );
 }
-function accentedHeadline(value:string,baseSize:number,width:number,color=BRAND.ink){
+function accentedHeadline(value:string,baseSize:number,width:number,color:string=BRAND.ink){
  let size=baseSize;
  const longest=Math.max(1,...value.split(/\s+/).filter(Boolean).map(textUnits));
  size=Math.min(size,Math.floor(width/longest));
