@@ -16,7 +16,7 @@ type VisualSource='auto_ai'|'uploaded'|'none';
 export type GenerationInput={request_key:string;revision:number;mode:'text'|'image'|'both';content_mode:'prelaunch'|'live_event'|'growth_carousel';visual_mode:'cards'|'photo';visual_source?:VisualSource;topic_type?:string;instruction?:string;language?:ContentLanguage;confirm_photo?:boolean;render_only?:boolean};
 const topics=['mbti','dating_archetype','book_insight','trend_research','meme_remix','dating_myth','conversation_prompt','seoul_dating','mini_quiz'];
 const researchTopics=new Set(['book_insight','trend_research','dating_myth','seoul_dating']);
-const COPY_MODEL='gpt-4.1-mini',IMAGE_MODEL='gpt-image-2.5-flare',MAX_INPUT_BYTES=16000;
+const COPY_MODEL='gpt-6-luna',IMAGE_MODEL='gpt-image-2.5-flare',MAX_INPUT_BYTES=16000;
 export const kstDate=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 const checked=<T extends {error:unknown}>(r:T):T=>{if(r.error)throw r.error;return r;};
 const safeError=(error:unknown)=>(error instanceof Error?error.message:String((error as Row)?.message||'Generation failed')).replace(/sk-[A-Za-z0-9_-]+/g,'[redacted]').replace(/Bearer\s+\S+/gi,'Bearer [redacted]').slice(0,500);
