@@ -205,7 +205,12 @@ begin
     exception when others then
       null;
     end;
-    execute 'select cron.schedule(''roundy-marketing-trend-radar'',''0 */6 * * *'',''select roundy_private.dispatch_marketing_trend_radar()'')';
+    execute format(
+      'select cron.schedule(%L,%L,%L)',
+      'roundy-marketing-trend-radar',
+      '0 '||chr(42)||'/6 '||chr(42)||' '||chr(42)||' '||chr(42),
+      'select roundy_private.dispatch_marketing_trend_radar()'
+    );
   end if;
 end
 $radar_cron$;
