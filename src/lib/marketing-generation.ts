@@ -125,10 +125,11 @@ async function storeImage(db:DB,job:Row,bytes:Buffer,index:number){
  const suffix=createHash('sha256').update(job.id+':'+index).digest('hex'),id=suffix.slice(0,8)+'-'+suffix.slice(8,12)+'-'+suffix.slice(12,16)+'-'+suffix.slice(16,20)+'-'+suffix.slice(20,32),path=job.id+'/'+id+'.jpg';
  checked(await db.storage.from('wis-event-images').upload(path,bytes,{contentType:'image/jpeg',upsert:true}));return db.storage.from('wis-event-images').getPublicUrl(path).data.publicUrl;
 }
-async function renderCards(db:DB,draft:Row,job:Row,photoOverride?:string){
+async function renderCards(db:DB,draft:Row,job:Row,freshPhotos:string[]){
  const cards=draft.carousel_slides||[];
  if(!draft.content_document||!cards.length||cards.length>6)throw new Error('유형별 카드 문구가 없습니다. 품질 재작업 후 렌더하세요.');
- const assets=await loadEditorialAssets();if(photoOverride){assets.photo=photoOverride;assets.photos=[photoOverride,...(assets.photos||[])];}
+ if(!Array.isArray(freshPhotos)||freshPhotos.length<3)throw new Error('FRESH_VISUAL_SET_REQUIRED');
+ const assets=await loadEditorialAssets();assets.photo=freshPhotos[0];assets.photos=freshPhotos;
  const urls:string[]=[];
  for(let i=0;i<cards.length;i++){
   await progress(db,job,'rendering_'+(i+1)+'_of_'+cards.length);
@@ -140,18 +141,37 @@ async function renderCards(db:DB,draft:Row,job:Row,photoOverride?:string){
  }
  return urls;
 }
-async function generatePhoto(db:DB,draft:Row,input:GenerationInput,job:Row){
- await progress(db,job,'generating_photo');
- const prompt=['One candid editorial lifestyle photograph for Roundy, a Seoul-based Rotation Dating service for Korean and international adults. Korean-Korean meetings are also part of the service. Choose a believable Seoul setting that is NOT automatically a café: rotate naturally among a restaurant, lounge, rooftop, riverside, neighborhood street, hosted social venue, quiet bar-like interior without visible alcohol, or café only when it genuinely fits. Show two adults in a natural social moment rather than a posed couple portrait. Smart-casual styling, natural skin texture, imperfect human gestures, genuine conversation, and a lived-in Seoul atmosphere. Compose vertically for Instagram 4:5 with useful negative space for editorial typography. The photograph should feel like a modern lifestyle magazine, not a dating-app stock image. No text or logo. Avoid posed stock-photo smiles, symmetrical corporate staging, glamour/luxury cues, exaggerated romance, physical intimacy, flowers-as-romance clichés, crowded parties, visible alcohol, watermarks or invented event details. The server adds the real Roundy logo and typography afterward.',String(draft.caption||'').slice(0,700),input.instruction||''].join('\n');
- const result=await upstream('images/generations',{model:IMAGE_MODEL,prompt,n:1,size:'1024x1280',quality:'low',output_format:'jpeg',output_compression:85,background:'opaque'},120000),encoded=result.data?.[0]?.b64_json;
- if(typeof encoded!=='string'||encoded.length<100||encoded.length>8*1024*1024)throw new Error('INVALID_GENERATED_PHOTO');
- await progress(db,job,'saving_photo');
- // One paid background, a complete server-rendered carousel. Never pay per card.
- return renderCards(db,draft,job,'data:image/jpeg;base64,'+encoded);
+function visualContext(draft:Row){
+ const slides=Array.isArray(draft.carousel_slides)?draft.carousel_slides:[];
+ return slides.slice(0,5).map((slide:Row,index:number)=>[
+  'Card '+(index+1),
+  String(slide.role||'content'),
+  String(slide.title||'').slice(0,100),
+  String(slide.body||'').slice(0,220)
+ ].filter(Boolean).join(' | ')).join('\n');
+}
+async function generateVisualSet(db:DB,draft:Row,input:GenerationInput,job:Row){
+ await progress(db,job,'generating_visual_set');
+ const prompt=[
+  'Generate THREE distinct but visually coherent editorial lifestyle photographs for one Roundy Instagram carousel. Each returned image is a separate photograph from the same campaign, not a collage.',
+  'Roundy is a Seoul-based Rotation Dating service for Korean and international adults, including Korean-Korean meetings. The images should support the specific carousel content below instead of reusing a generic dating stock photo.',
+  'Vary locations naturally across believable Seoul settings such as a neighborhood street, riverside, restaurant, lounge, rooftop, gallery-like social space, or café only when it genuinely fits. Vary framing as well: one strong cover composition with negative space, one natural conversational medium shot, and one detail/environmental lifestyle shot.',
+  'People should look like real adults in a natural social moment, not posed romantic partners. Smart-casual styling, natural skin texture, imperfect gestures, genuine conversation, contemporary Seoul atmosphere.',
+  'Magazine-editorial photography: restrained, premium, warm, modern, documentary-natural. Avoid exaggerated romance, physical intimacy, flowers-as-romance clichés, hand hearts, wedding/couple-shoot styling, glamour/luxury cues, crowded parties, visible alcohol, stock-photo smiles, repeated café setups, fake signage, text, logos, watermarks, or invented event facts.',
+  'Portrait 4:5 composition. Leave useful negative space where editorial typography can be placed by the server. Do not render any words or Roundy branding inside the photographs.',
+  'Carousel context:',
+  visualContext(draft),
+  input.instruction||''
+ ].join('\n');
+ const result=await upstream('images/generations',{model:IMAGE_MODEL,prompt,n:3,size:'1024x1280',quality:'low',output_format:'jpeg',output_compression:85,background:'opaque'},150000);
+ const encoded=(Array.isArray(result.data)?result.data:[]).map((row:Row)=>row?.b64_json).filter((value:unknown):value is string=>typeof value==='string'&&value.length>=100&&value.length<=8*1024*1024);
+ if(encoded.length<3)throw new Error('INVALID_GENERATED_VISUAL_SET');
+ await progress(db,job,'saving_visual_set');
+ return encoded.slice(0,3).map(value=>'data:image/jpeg;base64,'+value);
 }
 type GenerationThreadContext={threadId:string;attemptNumber:number;retryOfJobId:string;recoverySourceJobId?:string};
 export async function runGeneration(draftId:string,value:unknown,actor:string|null,automatic=false,thread?:GenerationThreadContext){
- const input=validateGenerationInput(value),db=createServiceRoleClient();if(automatic&&input.visual_mode==='photo')throw new Error('AUTOMATIC_PAID_PHOTOS_DISABLED');
+ const input=validateGenerationInput(value),db=createServiceRoleClient();
  let draft=await readDraft(db,draftId);
  let recoveryPatch:Row|null=null,recoverySource:Row|null=null;
  if(thread?.recoverySourceJobId){
@@ -167,7 +187,8 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
  if(input.mode==='image'&&!recoveryPatch){const q=draftQuality(draft);if(q.status!=='passed')throw new Error('품질 검토 필요: '+q.issues.join(' '));}
  input.language=input.mode==='image'?(draft.content_language==='en'?'en':draft.content_language==='ko'?'ko':await nextContentLanguage(db,draft.id)):await resolveContentLanguage(db,draft,input.language);
  const growth=input.content_mode==='growth_carousel',research=growth&&researchTopics.has(input.topic_type||'')&&!input.render_only&&input.mode!=='image';
- const operation=recoveryPatch?'render':input.render_only||input.mode==='image'&&input.visual_mode==='cards'?'render':input.visual_mode==='photo'?(input.mode==='both'?'copy_photo':'photo'):research?'research':'copy';
+ const needsVisuals=recoveryPatch||input.render_only||input.mode==='image'||input.mode==='both'||automatic;
+ const operation=needsVisuals?(input.mode==='image'||input.render_only||recoveryPatch?'photo':'copy_photo'):research?'research':'copy';
  const fingerprint=createHash('sha256').update(JSON.stringify({id:draftId,revision:input.revision,mode:input.mode,content:input.content_mode,language:input.language,visual:input.visual_mode,topic:input.topic_type||'',instruction:input.instruction,render:!!input.render_only,saved_recovery_of:thread?.recoverySourceJobId||null})).digest('hex');
  const reservation=checked(await db.rpc('reserve_marketing_generation',{p_key:input.request_key,p_fingerprint:fingerprint,p_draft:draftId,p_revision:input.revision,p_operation:operation,p_actor:actor,p_automatic:automatic})).data as Row,job=reservation.job as Row;
  if(!reservation.accepted)return {draft,job,deduplicated:true};
@@ -192,7 +213,8 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
    draft=await savePartial(db,draft,{...copy,last_regeneration_mode:input.mode,last_regeneration_instruction:input.instruction,images:[]});
   }
   if(recoveryPatch||input.mode!=='text'||automatic){
-   const images=input.visual_mode==='photo'?await generatePhoto(db,draft,input,job):await renderCards(db,draft,job);await progress(db,job,'saving_images');
+   const freshPhotos=await generateVisualSet(db,draft,input,job);
+   const images=await renderCards(db,draft,job,freshPhotos);await progress(db,job,'saving_images');
    draft=await savePartial(db,draft,{images,last_regeneration_mode:input.mode,last_regeneration_instruction:input.instruction});
   }
   const quality=contentQuality||draftQuality(draft);
@@ -225,7 +247,7 @@ export async function generationOverview(){
  checked(jobs);checked(usage);checked(dispatch);const rows=usage.data||[],dayStart=Date.parse(date+'T00:00:00+09:00'),todayRows=rows.filter(r=>Date.parse(r.created_at)>=dayStart);
  const temporaryActive=Boolean(control.temporary_daily_budget_usd&&control.temporary_daily_budget_expires_at&&Date.parse(control.temporary_daily_budget_expires_at)>Date.now());
  const dailyBudget=temporaryActive?Number(control.temporary_daily_budget_usd):Number(control.daily_budget_usd);
- return {control,jobs:jobs.data,dispatch:dispatch.data,usage:{daily_reserved_usd:todayRows.reduce((sum,r)=>sum+Number(r.reserved_usd),0),daily_budget_usd:dailyBudget,daily_budget_override_expires_at:temporaryActive?control.temporary_daily_budget_expires_at:null,monthly_reserved_usd:rows.reduce((sum,r)=>sum+Number(r.reserved_usd),0),daily_attempts:todayRows.filter(r=>Number(r.reserved_usd)>0).length,daily_calls:todayRows.filter(r=>Number(r.reserved_usd)>0&&['running','completed','uncertain'].includes(r.status)).length,daily_call_limit:5,monthly_call_limit:90,photo_daily_limit:1,photo_monthly_limit:10},provider:{configured:!!process.env.OPENAI_API_KEY?.trim(),copy_model:COPY_MODEL,image_model:IMAGE_MODEL,automatic_photos:false,external_retries:0,copy_repair_limit:1,research_search_limit:3,verified_book_catalog:true,research_fallback:true,content_policy_version:CONTENT_POLICY_VERSION,research_reservation_usd:0.05}};
+ return {control,jobs:jobs.data,dispatch:dispatch.data,usage:{daily_reserved_usd:todayRows.reduce((sum,r)=>sum+Number(r.reserved_usd),0),daily_budget_usd:dailyBudget,daily_budget_override_expires_at:temporaryActive?control.temporary_daily_budget_expires_at:null,monthly_reserved_usd:rows.reduce((sum,r)=>sum+Number(r.reserved_usd),0),daily_attempts:todayRows.filter(r=>Number(r.reserved_usd)>0).length,daily_calls:todayRows.filter(r=>Number(r.reserved_usd)>0&&['running','completed','uncertain'].includes(r.status)).length,daily_call_limit:5,monthly_call_limit:90,photo_daily_limit:5,photo_monthly_limit:90},provider:{configured:!!process.env.OPENAI_API_KEY?.trim(),copy_model:COPY_MODEL,image_model:IMAGE_MODEL,automatic_photos:true,fresh_visuals_per_generation:3,static_photo_reuse:false,external_retries:0,copy_repair_limit:1,research_search_limit:3,verified_book_catalog:true,research_fallback:true,content_policy_version:CONTENT_POLICY_VERSION,research_reservation_usd:0.05}};
 }
 export async function todayDraft(){
  const db=createServiceRoleClient(),today=kstDate();
