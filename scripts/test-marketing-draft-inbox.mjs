@@ -10,6 +10,9 @@ const generation=fs.readFileSync(new URL('../src/lib/marketing-generation.ts',im
 check(()=>assert.ok(legacy.includes(".eq('draft_role','candidate').eq('status','needs_approval')")));
 check(()=>assert.ok(api.includes("path[3]==='import'")));
 check(()=>assert.ok(ui.includes('marketing-draft-inbox')));
+check(()=>assert.ok(ui.includes("Add images now")&&ui.includes("이미지 바로 추가")));
+check(()=>assert.ok(ui.includes("uploadPendingImagesToDraft")&&ui.includes("'/generation/jobs/'+jobId+'/import'")&&ui.includes("'/draft/'+targetDraft.id+'/render-uploaded'")));
+check(()=>assert.ok(ui.includes("manualVisualSource==='uploaded'&&!pendingMarketingImages.length")));
 check(()=>assert.ok(ui.includes('Add to Drafts')));
 check(()=>assert.ok(!ui.includes("Choose draft")));
 check(()=>assert.ok(migration.includes("where draft_role='workspace'")));
