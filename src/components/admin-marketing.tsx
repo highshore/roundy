@@ -26,7 +26,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
  const [uploadedImages,setUploadedImages]=useState<Row[]>([]),[uploadAssetType,setUploadAssetType]=useState<'photo'|'completed_card'>('photo');
  const [pendingMarketingImages,setPendingMarketingImages]=useState<PendingMarketingImage[]>([]),[pendingAssetType,setPendingAssetType]=useState<'photo'|'completed_card'>('photo');
  const [resultPreview,setResultPreview]=useState<Row|null>(null);
- const [activeTab,setActiveTab]=useState<'draft'|'generation'|'publishing'|'automation'|'connection'>('draft');
+ const [activeTab,setActiveTab]=useState<'draft'|'generation'|'trend'|'publishing'|'automation'|'connection'>('draft');
  const [generationFilter,setGenerationFilter]=useState<'all'|'completed'|'failed'|'running'>('all');
  const [generationVisible,setGenerationVisible]=useState(20),[publishVisible,setPublishVisible]=useState(20);
  const inFlight=useRef(false),mounted=useRef(true);
@@ -255,6 +255,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
  const tabItems=[
   ['draft',t('Draft','초안')],
   ['generation',t('Generation','생성 기록')],
+  ['trend',t('Seoul Trend','서울 트렌드')],
   ['publishing',t('Publishing','게시 기록')],
   ['automation',t('Automation','자동화')],
   ['connection',t('Connection','연결')]
@@ -341,6 +342,20 @@ export function AdminMarketing({locale}:{locale:Locale}){
     </details>;
    }):<p className="admin-empty">{t('No generation threads match this filter.','해당 조건의 생성 스레드가 없습니다.')}</p>}</div>
    {filteredGenerationThreads.length>generationVisible&&<button type="button" className="marketing-load-more" onClick={()=>setGenerationVisible(v=>v+20)}>{t('Load 20 more','20개 더 보기')}</button>}
+  </section>}
+  {channel==='instagram'&&activeTab==='trend'&&<section className="marketing-tab-panel">
+   <div className="admin-section-title"><div><p className="admin-kicker">Trend Radar</p><Heading level={2}>{t('Seoul Trend','서울 트렌드')}</Heading><p>{t('Track verified Seoul/Korea 20s–30s culture signals and turn strong trends into date-focused Roundy content.','서울/한국 2030 문화 신호를 검증하고 강한 트렌드를 데이트 중심 Roundy 콘텐츠로 연결합니다.')}</p></div><button type="button" className="admin-secondary" disabled={busy} onClick={()=>void work(()=>load(draft?.id))}>{t('Refresh','새로고침')}</button></div>
+   {settings&&<div className="marketing-settings-card"><form className="admin-form" onSubmit={e=>{e.preventDefault();void work(async()=>{await mutate('/settings',settings,'PUT');await load(draft?.id);setNotice(t('Seoul Trend settings saved.','서울 트렌드 설정을 저장했습니다.'));});}}>
+    <label className="check-row"><input type="checkbox" checked={settings.trend_radar_enabled??true} onChange={e=>setSettings({...settings,trend_radar_enabled:e.target.checked})}/>{t('Enable Trend Radar','Trend Radar 활성화')}</label>
+    <label className="check-row"><input type="checkbox" checked={settings.trend_override_enabled??true} onChange={e=>setSettings({...settings,trend_override_enabled:e.target.checked})}/>{t('Let strong trends replace the daily rotation','강한 트렌드가 일일 순환 콘텐츠를 대체')}</label>
+    <label><span>{t('Override score threshold','대체 점수 기준')}</span><input type="number" min={60} max={100} step={1} value={settings.trend_override_score??80} onChange={e=>setSettings({...settings,trend_override_score:Number(e.target.value)})}/></label>
+    <p className="admin-help">{t('Radar scans every 6 hours. A candidate needs at least two independent signals, passes lifecycle/cooldown checks, and must clear the adjusted score threshold before it can override the normal rotation.','Radar는 6시간마다 탐색합니다. 후보는 최소 2개의 독립 신호가 필요하며 lifecycle/cooldown 검사를 통과하고 조정 점수가 기준 이상이어야 기존 순환 콘텐츠를 대체할 수 있습니다.')}</p>
+    <p className="admin-help">{t('Radar budget','Radar 예산')}: ${Number(data.trend?.usage?.daily_reserved_usd||0).toFixed(2)} / ${Number(data.trend?.usage?.daily_budget_usd||.12).toFixed(2)} {t('today','오늘')} · ${Number(data.trend?.usage?.monthly_reserved_usd||0).toFixed(2)} / ${Number(data.trend?.usage?.monthly_budget_usd||4).toFixed(2)} {t('this month','이번 달')}.</p>
+    <div className="admin-form-actions"><button className="admin-primary" disabled={busy}>{t('Save Seoul Trend settings','서울 트렌드 설정 저장')}</button><button type="button" className="admin-secondary" disabled={busy} onClick={()=>{if(window.confirm(t('Run one paid Trend Radar scan now? It uses the separate Radar safety budget.','지금 유료 Trend Radar 스캔을 1회 실행할까요? 별도 Radar 안전 예산을 사용합니다.')))void work(async()=>{const r=await mutate('/trend-radar/run',{confirm_paid_scan:true});await load(draft?.id);setNotice(t('Trend Radar scan completed.','Trend Radar 스캔을 완료했습니다.'));return r;});}}>{t('Scan trends now','지금 트렌드 스캔')}</button></div>
+   </form></div>}
+   <div className="marketing-settings-card"><div className="admin-section-title"><div><p className="admin-kicker">{t('Candidates','후보')}</p><Heading level={3}>{t('Detected trends','감지된 트렌드')}</Heading></div></div>
+    {!!data.trend?.trends?.length?<div className="marketing-log-list">{data.trend.trends.map((item:Row)=><div className="marketing-log-row" key={item.id}><div className="marketing-log-main"><div><strong>{item.display_name}</strong><small>{item.status} · {item.route_type?.replaceAll('_',' ')} · {Number(item.trend_score||0).toFixed(0)}/100{item.adjusted_trend_score!=null?' · adjusted '+Number(item.adjusted_trend_score).toFixed(0):''}</small><p>{item.content_angle||item.summary}</p></div></div></div>)}</div>:<p className="admin-empty">{t('No trend candidates yet. Run a scan or wait for the next scheduled scan.','아직 트렌드 후보가 없습니다. 지금 스캔을 실행하거나 다음 자동 스캔을 기다리세요.')}</p>}
+   </div>
   </section>}
   {channel==='instagram'&&activeTab==='automation'&&<section className="marketing-tab-panel">   {settings&&<div className="marketing-settings-card"><div className="admin-section-title"><div><p className="admin-kicker">{t('Schedule','스케줄')}</p><Heading level={2}>{t('Automation settings','자동화 설정')}</Heading></div></div><form className="admin-form" onSubmit={e=>{e.preventDefault();void work(async()=>{await mutate('/settings',settings,'PUT');await load(draft?.id);setNotice(t('Automation saved.','자동화 설정을 저장했습니다.'));});}}>
     <label className="check-row"><input type="checkbox" checked={settings.daily_instagram_enabled} onChange={e=>setSettings({...settings,daily_instagram_enabled:e.target.checked})}/>{t('One automatic draft per day','매일 완성된 초안 1개 자동 생성')}</label><label>{t('Generation time KST','생성 시간 KST')}<input type="time" value={settings.draft_generation_time_kst.slice(0,5)} onChange={e=>setSettings({...settings,draft_generation_time_kst:e.target.value})}/></label><p className="admin-help">{t('Checked every 15 minutes after this time. One dispatch per date, even on failure.','이 시간 이후 15분 간격으로 확인합니다. 실패해도 해당 날짜에는 자동 호출을 반복하지 않습니다.')}</p>
