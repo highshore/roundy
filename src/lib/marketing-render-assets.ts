@@ -9,7 +9,7 @@ function toArrayBuffer(bytes:Uint8Array):ArrayBuffer {const copy=new Uint8Array(
 async function fetchFont(url:string):Promise<ArrayBuffer>{
  const response=await fetch(url,{signal:AbortSignal.timeout(8000),redirect:'error',cache:'force-cache'});
  if(!response.ok)throw new Error('FONT_ASSET_UNAVAILABLE');
- const data=await response.arrayBuffer();if(data.byteLength>8*1024*1024)throw new Error('FONT_ASSET_TOO_LARGE');return data;
+ const data=await response.arrayBuffer();if(data.byteLength>16*1024*1024)throw new Error('FONT_ASSET_TOO_LARGE');return data;
 }
 async function fonts():Promise<NonNullable<EditorialAssets['fonts']>>{
  // Korean marketing cards use Noto Sans KR. English cards and the Roundy wordmark use DM Sans.
