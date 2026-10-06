@@ -94,7 +94,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
  async function generate(today=false,renderOnly=false){
   if(renderOnly&&!draft)return;
   if(renderOnly&&dirty&&!window.confirm(t('Discard unsaved edits before rendering?','저장하지 않은 수정을 버리고 이미지를 다시 렌더할까요?')))return;
-  const actualVisual='cards',source=today?'auto_ai':renderOnly?(draft?.visual_source||'auto_ai'):manualVisualSource;
+  const source=today?'auto_ai':renderOnly?(draft?.visual_source||'auto_ai'):manualVisualSource;
   const research=basis==='growth_carousel'&&['book_insight','trend_research','dating_myth'].includes(topic),requestedMode=renderOnly?'image':source==='auto_ai'?'both':'text';
   const cost=renderOnly?(source==='uploaded'?'$0':'$0.15'):source==='auto_ai'?'$0.20':research?'$0.05':'$0.02';
   const message=source==='auto_ai'
