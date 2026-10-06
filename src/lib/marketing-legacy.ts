@@ -427,8 +427,9 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
   const body=await req.json().catch(()=>null);
   const timePattern=/^([01]\d|2[0-3]):[0-5]\d(:00)?$/;
   const growthDays:number[]=Array.isArray(body?.growth_days)?body.growth_days.map((value:unknown)=>Number(value)):[];
-  const growthCount=Number(body?.growth_posts_per_week);
-  if(!body||typeof body.daily_instagram_enabled!=='boolean'||typeof body.auto_reply_enabled!=='boolean'||typeof body.optimization_enabled!=='boolean'||typeof body.growth_carousel_enabled!=='boolean'||typeof body.daily_time_kst!=='string'||typeof body.draft_generation_time_kst!=='string'||!['prelaunch','live_event'].includes(body.content_mode)||!timePattern.test(body.daily_time_kst)||!timePattern.test(body.draft_generation_time_kst)||!Number.isInteger(growthCount)||growthCount<0||growthCount>7||growthDays.some(day=>!Number.isInteger(day)||day<0||day>6)||new Set(growthDays).size!==growthDays.length||growthDays.length!==growthCount)return json({error:'Invalid automation settings'},400);
+  const growthCount=Number(body?.growth_posts_per_week),trendThreshold=Number(body?.trend_override_score??80);
+  const trendRadar=body?.trend_radar_enabled??true,trendOverride=body?.trend_override_enabled??true;
+  if(!body||typeof body.daily_instagram_enabled!=='boolean'||typeof body.auto_reply_enabled!=='boolean'||typeof body.optimization_enabled!=='boolean'||typeof body.growth_carousel_enabled!=='boolean'||typeof trendRadar!=='boolean'||typeof trendOverride!=='boolean'||typeof body.daily_time_kst!=='string'||typeof body.draft_generation_time_kst!=='string'||!['prelaunch','live_event'].includes(body.content_mode)||!timePattern.test(body.daily_time_kst)||!timePattern.test(body.draft_generation_time_kst)||!Number.isInteger(growthCount)||growthCount<0||growthCount>7||growthDays.some(day=>!Number.isInteger(day)||day<0||day>6)||new Set(growthDays).size!==growthDays.length||growthDays.length!==growthCount||!Number.isInteger(trendThreshold)||trendThreshold<60||trendThreshold>100)return json({error:'Invalid automation settings'},400);
   const {data,error}=await db.from('marketing_automation_settings').update({
    daily_instagram_enabled:body.daily_instagram_enabled,
    daily_time_kst:body.daily_time_kst.slice(0,5),
@@ -438,7 +439,11 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
    content_mode:body.content_mode,
    growth_carousel_enabled:body.growth_carousel_enabled,
    growth_posts_per_week:growthCount,
-   growth_days:growthDays
+   growth_days:growthDays,
+   trend_radar_enabled:trendRadar,
+   trend_scan_interval_hours:6,
+   trend_override_enabled:trendOverride,
+   trend_override_score:trendThreshold
   }).eq('singleton',true).select('*').single();
   if(error)throw error;return json({settings:data});
  }
