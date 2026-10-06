@@ -63,7 +63,7 @@ for(const language of ['en','ko'])for(const type of Object.keys(harness().policy
  check(()=>assert.equal(new Set(h.stored.map(x=>x.bytes.toString())).size,h.stored.length));
  check(()=>assert.ok(h.tables.marketing_generation_jobs[0].result_snapshot.content_document));
  const write=h.requests.find(x=>x.url.endsWith('chat/completions')).body;
- check(()=>assert.equal(write.response_format.json_schema.strict,true));check(()=>assert.equal(write.tools,undefined));
+ check(()=>assert.equal(write.response_format.json_schema.strict,true));check(()=>assert.equal(write.tools,undefined));check(()=>assert.equal(write.temperature,undefined));check(()=>assert.equal(write.reasoning_effort,'none'));
  if(['trend_research','dating_myth','seoul_dating'].includes(type)){check(()=>assert.equal(h.requests[0].body.max_tool_calls,3));check(()=>assert.equal(h.requests[0].body.tools?.[0]?.search_context_size,'high'));check(()=>assert.equal(h.requests[0].body.tools?.[0]?.external_web_access,true));check(()=>assert.equal(h.requests[0].body.text,undefined));}
  if(type==='trend_research'){check(()=>assert.match(String(h.requests[0].body.input),/5[–-]10 candidate|5–10 plausible PRIMARY studies/i));check(()=>assert.match(String(h.requests[0].body.input),/Roundy relevance 30/));}
  if(type==='dating_myth'){check(()=>assert.match(String(h.requests[0].body.input),/6[–-]10 concise myth claims|6–10 plausible myth claims/i));check(()=>assert.match(String(h.requests[0].body.input),/PRIMARY MYTH/));check(()=>assert.match(String(h.requests[0].body.input),/BACKUP MYTH/));}
