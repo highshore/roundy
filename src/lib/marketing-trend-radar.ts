@@ -113,7 +113,7 @@ async function saveCandidates(db:DB,result:Row){
    return [{url,title:clean(source?.title,180),signal_type:signal,why:clean(source?.why,500)}];
   });
   const dedup=[...new Map(sources.map((source:Row)=>[source.url,source])).values()].slice(0,8),signals=[...new Set(dedup.map((source:Row)=>source.signal_type))];
-  if(dedup.length<2||signals.length<2)continue;
+  if(dedup.length<2)continue;
   const confidence=sourceConfidence(dedup.length,signals.length),score=computeTrendScore(raw,confidence),route=routeFor(category,raw?.suggested_route),observed=Number.isFinite(Date.parse(String(raw?.observed_at||'')))?new Date(String(raw.observed_at)).toISOString():new Date().toISOString(),material=raw?.material_change===true;
   const existing=checked(await db.from('marketing_trends').select('*').eq('trend_key',key).maybeSingle()).data as Row|null;
   const row={
