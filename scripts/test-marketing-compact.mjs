@@ -59,7 +59,7 @@ const paths=[...actual.matchAll(/<path d="([^"]+)"/g)].map(m=>m[1]);
 check(()=>assert.deepEqual(Array.from(v.OFFICIAL_ROUNDY_PATHS),paths));
 const css=fs.readFileSync('src/app/globals.css','utf8');check(()=>assert.ok(css.includes('--brand:'+p.ROUNDY_IDENTITY.accent)));
 const g=fs.readFileSync('src/lib/marketing-generation.ts','utf8');
-check(()=>assert.ok(g.includes('return renderCards(db,draft,job,\'data:image/jpeg;base64,\'+encoded)')));
+check(()=>assert.ok(g.includes('generateVisualSet(db,draft,input,job)')&&g.includes("n:3")&&g.includes('FRESH_VISUAL_SET_REQUIRED')));
 check(()=>assert.ok(!g.includes('English-only 1:1 mingle')));check(()=>assert.ok(g.includes('Rotation Dating service')));
 const design=fs.readFileSync('src/lib/marketing-visuals.ts','utf8');
 check(()=>assert.ok(!design.includes('borderLeft')&&!design.includes('visualMotif')));
