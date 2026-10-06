@@ -20,7 +20,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
  const [data,setData]=useState<Row>({drafts:[],runs:[],templates:[]});
  const [draft,setDraft]=useState<Row|null>(null),[settings,setSettings]=useState<Row|null>(null),[generation,setGeneration]=useState<Row|null>(null);
  const [channel,setChannel]=useState<'instagram'|'koreapas'>('instagram'),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[error,setError]=useState(''),[notice,setNotice]=useState('');
- const [basis,setBasis]=useState('prelaunch'),[mode,setMode]=useState('both'),[visual,setVisual]=useState('cards'),[topic,setTopic]=useState('conversation_prompt'),[contentLanguage,setContentLanguage]=useState<'ko'|'en'>('ko'),[direction,setDirection]=useState(''),[dirty,setDirty]=useState(false);
+ const [basis,setBasis]=useState('prelaunch'),[mode,setMode]=useState('both'),[visual]=useState('cards'),[topic,setTopic]=useState('conversation_prompt'),[contentLanguage,setContentLanguage]=useState<'ko'|'en'>('ko'),[direction,setDirection]=useState(''),[dirty,setDirty]=useState(false);
  const [template,setTemplate]=useState<Row>(blank());
  const [resultPreview,setResultPreview]=useState<Row|null>(null);
  const [activeTab,setActiveTab]=useState<'draft'|'generation'|'publishing'|'automation'|'connection'>('draft');
@@ -84,12 +84,15 @@ export function AdminMarketing({locale}:{locale:Locale}){
  async function generate(today=false,renderOnly=false){
   if(renderOnly&&!draft)return;
   if(renderOnly&&dirty&&!window.confirm(t('Discard unsaved edits before rendering?','저장하지 않은 수정을 버리고 이미지를 다시 렌더할까요?')))return;
-  const actualVisual=today||renderOnly||basis==='growth_carousel'||mode==='text'?'cards':visual,photo=actualVisual==='photo';
-  const cost=renderOnly?'$0':photo?(mode==='both'?'$0.07':'$0.05'):basis==='growth_carousel'&&['book_insight','trend_research','dating_myth'].includes(topic)?'$0.05':'$0.02';
-  const message=photo?t('Generate one Flare AI photo at low quality? No retries. This reserves '+cost+' from the app budget.','Flare AI 사진 1장을 low 품질로 생성할까요? 자동 재시도는 없으며 앱 예산 '+cost+'를 예약합니다.'):t('Generate a new immutable content result with a '+cost+' budget reservation? It will not enter Drafts until you choose Add to Drafts.','앱 예산 '+cost+'를 예약하고 새 생성 결과를 만들까요? 생성 후 직접 초안으로 가져오기 전에는 초안 목록에 들어가지 않습니다.');
+  const actualVisual='cards',photo=false;
+  const research=basis==='growth_carousel'&&['book_insight','trend_research','dating_myth'].includes(topic);
+  const cost=renderOnly?'$0.15':mode==='text'?(research?'$0.05':'$0.02'):'$0.20';
+  const message=mode==='text'&&!renderOnly
+   ?t('Generate copy with a '+cost+' budget reservation? It will not publish automatically.','앱 예산 '+cost+'를 예약하고 문구를 생성할까요? 자동 게시되지는 않습니다.')
+   :t('Generate this content with three fresh AI editorial images? This reserves '+cost+' from the app budget. No existing photo library will be reused.','이 콘텐츠에 맞는 새 AI 에디토리얼 이미지 3장을 함께 생성할까요? 앱 예산 '+cost+'를 예약하며 기존 사진 라이브러리는 재사용하지 않습니다.');
   if(!window.confirm(message))return;
   await work(async()=>{
-   const payload={request_key:'manual:'+crypto.randomUUID(),revision:renderOnly?draft!.revision:1,mode:renderOnly?'image':today?'both':mode,content_mode:basis,language:today?undefined:contentLanguage,visual_mode:today?'cards':actualVisual,...(basis==='growth_carousel'?{topic_type:topic}:{}),instruction:direction.trim(),confirm_photo:photo,render_only:renderOnly};
+   const payload={request_key:'manual:'+crypto.randomUUID(),revision:renderOnly?draft!.revision:1,mode:renderOnly?'image':today?'both':mode,content_mode:basis,language:today?undefined:contentLanguage,visual_mode:today?'cards':actualVisual,...(basis==='growth_carousel'?{topic_type:topic}:{}),instruction:direction.trim(),confirm_photo:false,render_only:renderOnly};
    const path=renderOnly?'/draft/'+draft!.id+'/regenerate':'/draft/generate';
    const r=await request(path,payload);
    if(!r.ok||r.data.error)throw new Error(r.data.error||'Generation failed');
@@ -102,22 +105,22 @@ export function AdminMarketing({locale}:{locale:Locale}){
    setDirection('');
   });
  }
- function retryCost(job:Row){if(canOfferSavedCtaRecovery(job))return 0;return job.operation==='render'?0:job.operation==='photo'?0.05:job.operation==='copy_photo'?0.07:job.operation==='research'?0.05:0.02;}
+ function retryCost(job:Row){return job.operation==='render'?0:job.operation==='photo'?0.15:job.operation==='copy_photo'?0.20:job.operation==='research'?0.05:0.02;}
  async function retryJob(job:Row){
   if(!job.request_payload)throw new Error('RETRY_PAYLOAD_UNAVAILABLE');
-  const freeRecovery=canOfferSavedCtaRecovery(job),cost=retryCost(job),photo=['photo','copy_photo'].includes(job.operation),budget=cost.toFixed(2)+' USD';
-  const confirmMessage=freeRecovery?t('Recover the saved content and render cards without calling any AI? No additional AI charge; it will not publish automatically.','저장된 본문을 재사용해 카드만 복구할까요? AI를 호출하지 않아 추가 AI 비용이 없으며 자동 게시하지 않습니다.'):t(
+  const savedRecovery=canOfferSavedCtaRecovery(job),cost=savedRecovery?0.15:retryCost(job),photo=['photo','copy_photo'].includes(job.operation)||savedRecovery,budget=cost.toFixed(2)+' USD';
+  const confirmMessage=savedRecovery?t('Recover the saved copy and generate a fresh three-image visual set? This reserves '+budget+' and does not publish automatically.','저장된 문구는 재사용하고 새 이미지 3장을 생성할까요? 앱 예산 '+budget+'를 예약하며 자동 게시되지는 않습니다.'):t(
    'Retry this failed generation with the same saved settings? This starts one generation attempt (research uses up to three targeted searches and one writing request, plus at most one copy-only repair when quality checks fail) and reserves '+budget+'. It will not publish automatically.',
    '이 실패 작업을 저장된 동일 설정으로 재시도할까요? 생성 시도 1회를 시작합니다. 검색형은 목적별 검색 최대 3회와 문구 작성 1회, 품질 문제 시 문구 수정 최대 1회까지 사용하며, 앱 예산 '+budget+'를 예약합니다. 자동 게시되지는 않습니다.'
   );
   if(!window.confirm(confirmMessage))return;
   await work(async()=>{
-   const r=await request('/generation/jobs/'+job.id+'/retry',{confirm_retry:true,confirm_paid_photo:photo,recover_saved_result:freeRecovery});
+   const r=await request('/generation/jobs/'+job.id+'/retry',{confirm_retry:true,confirm_paid_photo:photo,recover_saved_result:savedRecovery});
    await load();
    if(!r.ok||r.data.error)throw new Error(r.data.error||'Retry failed');
    if(['failed','uncertain'].includes(r.data.job?.status))throw new Error(r.data.job?.error_message||'Retry stopped');
    setActiveTab('generation');
-   setNotice(r.data.recovered_without_ai?t('Recovered the saved result without any AI request. Review it, then add it to Drafts.','AI를 호출하지 않고 저장된 결과를 복구했습니다. 결과를 검토한 뒤 초안으로 가져오세요.'):t('Retry complete. Open the result and choose Add to Drafts.','재시도가 완료됐습니다. 결과를 확인한 뒤 초안으로 가져오세요.'));
+   setNotice(savedRecovery?t('Saved copy recovered with a fresh visual set. Review it, then add it to Drafts.','저장된 문구를 복구하고 새 이미지 세트를 생성했습니다. 결과를 검토한 뒤 초안으로 가져오세요.'):t('Retry complete. Open the result and choose Add to Drafts.','재시도가 완료됐습니다. 결과를 확인한 뒤 초안으로 가져오세요.'));
   });
  }
  function openThreadResult(thread:Row){
@@ -139,7 +142,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
   });
  }
   const running=(generation?.jobs||[]).find((j:Row)=>j.status==='running'&&Date.now()-Date.parse(j.created_at)<300000),blocked=Boolean(generation?.control?.blocked_reason||generation?.control?.enabled===false);
- function stage(s:string){const labels:Record<string,string>={reserved:t('Reserved; duplicate checks passed','예산 예약 및 중복 검사 완료'),writing:t('Writing copy','문구 작성 중'),writing_fallback:t('Writing safe fallback','안전한 대체 콘텐츠 작성 중'),repairing_copy:t('Repairing copy once','문구 1회 수정 중'),researching:t('Researching sources','출처 조사 중'),saving_copy:t('Saving copy','문구 저장 중'),generating_photo:t('Generating one photo','사진 1장 생성 중'),saving_photo:t('Saving photo','사진 저장 중'),saving_images:t('Saving images','이미지 저장 중'),complete:t('Complete','완료'),stopped:t('Stopped','중지')};return labels[s]||s.replace('rendering_','카드 생성 ').replace('_of_',' / ');}
+ function stage(s:string){const labels:Record<string,string>={reserved:t('Reserved; duplicate checks passed','예산 예약 및 중복 검사 완료'),writing:t('Writing copy','문구 작성 중'),writing_fallback:t('Writing safe fallback','안전한 대체 콘텐츠 작성 중'),repairing_copy:t('Repairing copy once','문구 1회 수정 중'),researching:t('Researching sources','출처 조사 중'),saving_copy:t('Saving copy','문구 저장 중'),generating_visual_set:t('Generating 3 fresh visuals','새 이미지 3장 생성 중'),saving_visual_set:t('Saving fresh visuals','새 이미지 세트 저장 중'),saving_images:t('Saving images','이미지 저장 중'),complete:t('Complete','완료'),stopped:t('Stopped','중지')};return labels[s]||s.replace('rendering_','카드 생성 ').replace('_of_',' / ');}
  function changeDraft(key:string,value:string){setDraft(d=>d?{...d,[key]:value}:d);setDirty(true);}
  const allGenerationJobs=((generation?.jobs||[]) as Row[]);
  const threadMap=new Map<string,Row[]>();
@@ -173,7 +176,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
   {error&&<p className="admin-error" role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}
   {channel==='instagram'&&<nav className="marketing-subtabs" aria-label={t('Marketing sections','마케팅 메뉴')} role="tablist">{tabItems.map(([value,label])=><button key={value} type="button" role="tab" aria-selected={activeTab===value} className={activeTab===value?'active':''} onClick={()=>setActiveTab(value)}>{label}{value==='generation'&&generationThreads.some((thread:Row)=>thread.status==='failed')&&<span className="marketing-tab-dot" aria-label={t('Failed generation exists','실패한 생성 있음')}/>}</button>)}</nav>}
   {channel==='instagram'&&activeTab==='draft'&&<>
-   <div className="marketing-setup"><strong>{t('API cost guard','API 비용 안전장치')}</strong><p>{t('Reserved today','오늘 예약액')} ${Number(generation?.usage?.daily_reserved_usd||0).toFixed(2)} / ${Number(generation?.usage?.daily_budget_usd||0.25).toFixed(2)}. {t('This month','이번 달')} ${Number(generation?.usage?.monthly_reserved_usd||0).toFixed(2)} / $3.00. {t('Paid generation attempts','오늘 유료 생성 시도')} {generation?.usage?.daily_attempts||0}. {t('Safety-counted jobs','안전 카운트')} {generation?.usage?.daily_calls||0}/5.</p><p className="admin-help">{t('No automatic retries or paid-provider fallback. Failed/unknown attempts retain reservations. Automatic posts use cards, not paid photos. Photos: 1/day, 10/month. External account spending is separate.','자동 재시도와 다른 유료 API로의 전환은 없습니다. 실패하거나 응답이 불명확한 작업도 예약액을 유지합니다. 자동 생성은 카드 이미지이며 유료 사진은 하루 1장, 월 10장까지만 가능합니다. 다른 서비스의 API 사용액은 이 한도에 포함되지 않습니다.')}</p>{generation?.usage?.daily_budget_override_expires_at&&<p className="admin-help">{t('Temporary daily limit is active until midnight KST. It will automatically fall back to the normal $0.25 limit.','오늘만 임시 한도가 적용 중입니다. KST 자정이 지나면 기본 $0.25 한도로 자동 복귀합니다.')}</p>}
+   <div className="marketing-setup"><strong>{t('API cost guard','API 비용 안전장치')}</strong><p>{t('Reserved today','오늘 예약액')} ${Number(generation?.usage?.daily_reserved_usd||0).toFixed(2)} / ${Number(generation?.usage?.daily_budget_usd||0.25).toFixed(2)}. {t('This month','이번 달')} ${Number(generation?.usage?.monthly_reserved_usd||0).toFixed(2)} / ${Number(generation?.usage?.monthly_budget_usd||6).toFixed(2)}. {t('Paid generation attempts','오늘 유료 생성 시도')} {generation?.usage?.daily_attempts||0}. {t('Safety-counted jobs','안전 카운트')} {generation?.usage?.daily_calls||0}/5.</p><p className="admin-help">{t('No automatic retries or paid-provider fallback. Failed/unknown attempts retain reservations. Automatic posts also generate a fresh three-image visual set. Static marketing photos are not reused. Overall daily/monthly AI budgets and generation limits remain the safety controls. External account spending is separate.','자동 재시도와 다른 유료 API로의 전환은 없습니다. 실패하거나 응답이 불명확한 작업도 예약액을 유지합니다. 자동 생성도 콘텐츠에 맞는 새 이미지 3장을 생성하며 기존 마케팅 사진을 재사용하지 않습니다. 전체 일/월 AI 예산과 생성 횟수 한도가 비용 안전장치로 적용됩니다. 다른 서비스의 API 사용액은 이 한도에 포함되지 않습니다.')}</p>{generation?.usage?.daily_budget_override_expires_at&&<p className="admin-help">{t('Temporary daily limit is active until midnight KST. It will automatically fall back to the normal $0.25 limit.','오늘만 임시 한도가 적용 중입니다. KST 자정이 지나면 기본 $0.25 한도로 자동 복귀합니다.')}</p>}
     {!generation?.provider?.configured&&<p className="admin-error">{t('OPENAI_API_KEY is missing from this deployment. Configure Vercel Production and redeploy.','이 배포에 OPENAI_API_KEY가 없습니다. Vercel Production 설정 후 재배포가 필요합니다.')}</p>}
     {generation?.control?.blocked_reason&&<p className="admin-error" role="alert">{generation.control.blocked_reason}</p>}
     <button type="button" className="admin-secondary" onClick={()=>void (async()=>{try{const enable=blocked;if(enable&&!window.confirm(t('Resume after checking API configuration? Budgets are not reset and failed jobs are not retried.','API 설정을 확인했나요? 사용 한도를 초기화하거나 실패 작업을 재시도하지 않고 AI를 재개합니다.')))return;const r=await request('/generation/control',{enabled:enable,confirm_resume:enable},'PUT');if(!r.ok)throw new Error(r.data.error);setGeneration(r.data);}catch(e){setError(e instanceof Error?e.message:'Could not update AI control');}})()}>{blocked?t('Resume after checking configuration','설정 확인 후 AI 재개'):t('Pause paid AI','유료 AI 일시 중지')}</button>
@@ -184,7 +187,8 @@ export function AdminMarketing({locale}:{locale:Locale}){
     <div className="admin-form">
      <div className="admin-two"><label><span>{t('Content basis','콘텐츠 기준')}</span><select value={basis} onChange={e=>setBasis(e.target.value)}><option value="prelaunch">{t('Pre-launch','오픈 전 홍보')}</option><option value="live_event">{t('Live event','정식 이벤트')}</option><option value="growth_carousel">Growth Carousel</option></select></label><label><span>{t('Generation scope','생성 범위')}</span><select value={mode} onChange={e=>setMode(e.target.value)}><option value="both">{t('Copy + visuals','문구 + 비주얼')}</option><option value="text">{t('Copy only','문구만')}</option></select></label></div>
      <label><span>{t('Cover / headline language','표지 / 제목 언어')}</span><select value={contentLanguage} onChange={e=>setContentLanguage(e.target.value as 'ko'|'en')}><option value="ko">{t('Korean post','한국어 콘텐츠')}</option><option value="en">{t('English post','영어 콘텐츠')}</option></select></label>
-     {basis==='growth_carousel'?<label><span>{t('Topic','주제')}</span><select value={topic} onChange={e=>setTopic(e.target.value)}>{topics.map((x,i)=><option key={x} value={x}>{t(x.replaceAll('_',' '),topicKo[i])}</option>)}</select></label>:mode!=='text'&&<label><span>{t('Visual method','비주얼 방식')}</span><select value={visual} onChange={e=>setVisual(e.target.value)}><option value="cards">{t('Approved coral editorial + brand photo — no image AI charge','승인한 코랄 에디토리얼 + 브랜드 사진 — 이미지 AI 비용 없음')}</option><option value="photo">{t('New Flare background + full branded carousel','새 Flare 배경 사진 + 전체 브랜드 캐러셀')}</option></select></label>}
+     {basis==='growth_carousel'?<label><span>{t('Topic','주제')}</span><select value={topic} onChange={e=>setTopic(e.target.value)}>{topics.map((x,i)=><option key={x} value={x}>{t(x.replaceAll('_',' '),topicKo[i])}</option>)}</select></label>:null}
+     {mode!=='text'&&<p className="admin-help">{t('Visuals: three new content-specific editorial images are generated for every carousel. Existing Roundy photo assets are not reused.','비주얼: 캐러셀을 만들 때마다 콘텐츠에 맞는 새 에디토리얼 이미지 3장을 생성합니다. 기존 Roundy 사진 에셋은 재사용하지 않습니다.')}</p>}
      <label><span>{t('Creative direction','커스텀 지시문')}</span><textarea value={direction} maxLength={500} rows={4} onChange={e=>setDirection(e.target.value)}/><small>{direction.length}/500</small></label>
      <p className="admin-help">{t('Default: photo-led cover, compact Korean/English content, and Roundy outro with Instagram + website. Official logo, coral and Gothic typography are composed server-side. Brand photography is reused; only New Flare requests a paid image.','사진형 표지 → 짧은 한영 본문 → 라운디 소개 카드로 구성합니다. 공식 로고, 코랄색, 고딕체와 작은 출처 표기를 서버에서 합성합니다. 기본은 기존 브랜드 사진을 재사용하며 새 Flare 사진을 선택할 때만 이미지 API를 호출합니다.')}</p>
      {basis==='growth_carousel'&&<p className="admin-help">{CONTENT_PROFILES[postType({content_mode:basis,topic_type:topic})].label}: {CONTENT_PROFILES[postType({content_mode:basis,topic_type:topic})].roles.join(' → ')}</p>}
