@@ -37,6 +37,32 @@ export function captionCoreIssues(value:unknown,language:string):string[]{
   if(/저장(?:해|하고|하세요|해두)|공유(?:해|하세요)|댓글(?:로|에)|팔로우|참가\s*신청|프로필\s*링크|링크에서\s*신청|라운디\s*둘러보기|save\s+(?:this|it)|share\s+(?:this|it)|tell\s+us\s+in\s+the\s+comments|comment\s+below|follow\s+(?:@?roundy|the\s+profile)|book\s+(?:now|through)|sign\s*up|link\s+in\s+bio|visit\s+roundy/i.test(text))issues.push('캡션 본문에는 CTA를 직접 넣지 마세요. 콘텐츠 유형에 맞는 CTA를 서버가 하나만 자동으로 추가합니다.');
   return [...new Set(issues)];
 }
+
+const CAPTION_CORE_CTA_LINE=/저장(?:해|하고|하세요|해두)|공유(?:해|하세요)|댓글(?:로|에)|팔로우|참가\s*신청|프로필\s*링크|링크에서\s*신청|라운디\s*둘러보기|save\s+(?:this|it)|share\s+(?:this|it)|tell\s+us\s+in\s+the\s+comments|comment\s+below|follow\s+(?:@?roundy|the\s+profile)|book\s+(?:now|through)|sign\s+up|link\s+in\s+bio|visit\s+roundy/i;
+export function normalizeCaptionCore(value:unknown,language:string):string{
+  let text=clean(value)
+    .replace(/https?:\/\/\S+|www\.\S+/gi,'')
+    .replace(/@roundy(?:\.meet)?/gi,'')
+    .replace(/roundy\.team/gi,'')
+    .replace(/#[\p{L}\p{N}_]+/gu,'')
+    .replace(/[ \t]+\n/g,'\n')
+    .trim();
+  let emojiSeen=0;
+  text=text.replace(/\p{Extended_Pictographic}/gu,m=>(++emojiSeen<=2?m:''));
+  let parts=text.split(/\n\s*\n|\n+/).map(x=>x.trim()).filter(Boolean).filter(p=>!CAPTION_CORE_CTA_LINE.test(p));
+  if(!parts.length)return '';
+  const first=parts[0];
+  if(language==='en'){
+    const words=first.split(/\s+/).filter(Boolean);
+    if(words.length>12){parts=[words.slice(0,12).join(' '),words.slice(12).join(' '),...parts.slice(1)];}
+  }else if(first.length>30){
+    let cut=first.lastIndexOf(' ',30);if(cut<10)cut=30;
+    parts=[first.slice(0,cut).trim(),first.slice(cut).trim(),...parts.slice(1)].filter(Boolean);
+  }
+  if(parts.length>4)parts=[parts[0],parts[1],parts[2],parts.slice(3).join(' ')].filter(Boolean);
+  return parts.join('\n');
+}
+
 export function isCompactDocument(v: PresentationRow) { return v?.design_preset === EDITORIAL_PRESET; }
 export function hasObsoletePositioning(text: string) {
   return /english[\s\u2010-\u2015-]*only|영어\s*(?:온리|전용|로만|만\s*(?:사용|진행))|영어로\s*진행되는\s*1\s*:\s*1|1\s*:\s*1\s*밍글|1\s*:\s*1\s*mingle/i.test(text);
@@ -87,7 +113,7 @@ export function compactWritingInstructions(language: string) {
 export function normalizeCompactDocument(raw: PresentationRow, language: string) {
   if (!isCompactDocument(raw)) return raw; // Legacy snapshots remain readable, not silently rewritten.
   const ko = language !== 'en';
-  const caption_ko = clean(raw.caption_ko), caption_en = clean(raw.caption_en);
+  const caption_ko = normalizeCaptionCore(raw.caption_ko,'ko'), caption_en = normalizeCaptionCore(raw.caption_en,'en');
   const inputSlides = Array.isArray(raw.slides) ? raw.slides : [];
   const slides = inputSlides.map((s: PresentationRow, index: number) => {
     const main = clean(s.body), secondary = clean(s.secondary_body), final=index===inputSlides.length-1;

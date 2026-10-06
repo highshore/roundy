@@ -69,6 +69,16 @@ export function AdminMarketing({locale}:{locale:Locale}){
   };
   return map[message]?t(...map[message]):message;
  }
+
+ function failureGuide(attempt:Row){
+  const message=String(attempt.error_message||'');
+  const code=String(attempt.error_code||'');
+  if(/출처|research|source|책 제목|저자/i.test(message+' '+code))return {title:t('Research issue','자료 조사 실패'),cause:t('A reliable source could not be verified.','검증 가능한 출처를 확보하지 못했습니다.'),action:t('The system now falls back once to a safe non-research topic when possible.','가능한 경우 안전한 비연구 콘텐츠로 1회 자동 전환합니다.')};
+  if(/품질|quality|중복|카드|캡션|문구/i.test(message+' '+code))return {title:t('Copy quality issue','문구 품질 실패'),cause:t('The draft did not pass editorial rules.','문구가 편집 품질 기준을 통과하지 못했습니다.'),action:t('Formatting is fixed locally first, then copy gets one bounded repair pass.','형식은 서버가 먼저 보정하고 문구는 최대 1회만 자동 수정합니다.')};
+  if(/image|photo|render|CARD_RENDER/i.test(message+' '+code))return {title:t('Image issue','이미지 생성 실패'),cause:t('The image generation or card rendering step stopped.','사진 생성 또는 카드 렌더링 단계에서 중지됐습니다.'),action:t('Saved copy is preserved so image work can be retried separately.','문구는 보존되므로 이미지만 별도로 다시 만들 수 있습니다.')};
+  if(/BUDGET|LIMIT|COOLDOWN|PAUSED/i.test(message+' '+code))return {title:t('Usage limit','사용량/비용 제한'),cause:t('A marketing AI safety limit blocked the request.','마케팅 AI 안전 한도 때문에 요청이 중지됐습니다.'),action:t('Check the budget/limit panel before retrying.','재시도 전에 상단의 비용 및 사용량 상태를 확인하세요.')};
+  return {title:t('System/API issue','시스템/API 오류'),cause:t('The provider or application could not complete this step safely.','외부 API 또는 시스템 단계가 안전하게 완료되지 않았습니다.'),action:t('Unknown external outcomes are never retried automatically.','외부 처리 결과가 불명확한 경우 자동 재시도하지 않습니다.')};
+ }
  async function work(fn:()=>Promise<void>){if(inFlight.current)return;inFlight.current=true;setBusy(true);setError('');setNotice('');try{await fn();}catch(e){setError(friendlyError(e instanceof Error?e.message:'Request failed'));}finally{inFlight.current=false;if(mounted.current)setBusy(false);}}
  async function mutate(path:string,body:Row,method='POST'){const r=await request(path,body,method);if(r.data.draft)selectDraft(r.data.draft);if(!r.ok||r.data.error)throw new Error(r.data.error||'Request failed');return r.data;}
  async function generate(today=false,renderOnly=false){
@@ -97,8 +107,8 @@ export function AdminMarketing({locale}:{locale:Locale}){
   if(!job.request_payload)throw new Error('RETRY_PAYLOAD_UNAVAILABLE');
   const freeRecovery=canOfferSavedCtaRecovery(job),cost=retryCost(job),photo=['photo','copy_photo'].includes(job.operation),budget=cost.toFixed(2)+' USD';
   const confirmMessage=freeRecovery?t('Recover the saved content and render cards without calling any AI? No additional AI charge; it will not publish automatically.','저장된 본문을 재사용해 카드만 복구할까요? AI를 호출하지 않아 추가 AI 비용이 없으며 자동 게시하지 않습니다.'):t(
-   'Retry this failed generation with the same saved settings? This starts one generation attempt (research uses up to two targeted searches and one writing request) and reserves '+budget+'. It will not publish automatically.',
-   '이 실패 작업을 저장된 동일 설정으로 재시도할까요? 생성 시도 1회를 시작합니다. 검색형은 목적별 검색 최대 2회와 문구 작성 1회까지 사용하며, 앱 예산 '+budget+'를 예약합니다. 자동 게시되지는 않습니다.'
+   'Retry this failed generation with the same saved settings? This starts one generation attempt (research uses up to three targeted searches and one writing request, plus at most one copy-only repair when quality checks fail) and reserves '+budget+'. It will not publish automatically.',
+   '이 실패 작업을 저장된 동일 설정으로 재시도할까요? 생성 시도 1회를 시작합니다. 검색형은 목적별 검색 최대 3회와 문구 작성 1회, 품질 문제 시 문구 수정 최대 1회까지 사용하며, 앱 예산 '+budget+'를 예약합니다. 자동 게시되지는 않습니다.'
   );
   if(!window.confirm(confirmMessage))return;
   await work(async()=>{
@@ -129,7 +139,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
   });
  }
   const running=(generation?.jobs||[]).find((j:Row)=>j.status==='running'&&Date.now()-Date.parse(j.created_at)<300000),blocked=Boolean(generation?.control?.blocked_reason||generation?.control?.enabled===false);
- function stage(s:string){const labels:Record<string,string>={reserved:t('Reserved; duplicate checks passed','예산 예약 및 중복 검사 완료'),writing:t('Writing copy','문구 작성 중'),researching:t('Researching sources','출처 조사 중'),saving_copy:t('Saving copy','문구 저장 중'),generating_photo:t('Generating one photo','사진 1장 생성 중'),saving_photo:t('Saving photo','사진 저장 중'),saving_images:t('Saving images','이미지 저장 중'),complete:t('Complete','완료'),stopped:t('Stopped','중지')};return labels[s]||s.replace('rendering_','카드 생성 ').replace('_of_',' / ');}
+ function stage(s:string){const labels:Record<string,string>={reserved:t('Reserved; duplicate checks passed','예산 예약 및 중복 검사 완료'),writing:t('Writing copy','문구 작성 중'),writing_fallback:t('Writing safe fallback','안전한 대체 콘텐츠 작성 중'),repairing_copy:t('Repairing copy once','문구 1회 수정 중'),researching:t('Researching sources','출처 조사 중'),saving_copy:t('Saving copy','문구 저장 중'),generating_photo:t('Generating one photo','사진 1장 생성 중'),saving_photo:t('Saving photo','사진 저장 중'),saving_images:t('Saving images','이미지 저장 중'),complete:t('Complete','완료'),stopped:t('Stopped','중지')};return labels[s]||s.replace('rendering_','카드 생성 ').replace('_of_',' / ');}
  function changeDraft(key:string,value:string){setDraft(d=>d?{...d,[key]:value}:d);setDirty(true);}
  const allGenerationJobs=((generation?.jobs||[]) as Row[]);
  const threadMap=new Map<string,Row[]>();
@@ -212,7 +222,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
      <div className="marketing-log-detail generation-thread-detail">
       <div className="generation-attempts">{attempts.map((attempt:Row,index:number)=><div className={'generation-attempt '+attempt.status} key={attempt.id}>
        <span className={'marketing-status-dot '+attempt.status}/>
-       <div className="generation-attempt-copy"><div><strong>{t('Attempt','시도')} {Number(attempt.attempt_number||index+1)}</strong><span className={'marketing-status-pill '+attempt.status}>{statusText(attempt.status)}</span></div><small>{new Date(attempt.created_at).toLocaleString(locale,{timeZone:'Asia/Seoul'})} · {'$'+Number(attempt.reserved_usd||0).toFixed(2)} · {Number(attempt.input_tokens||0).toLocaleString()} in / {Number(attempt.output_tokens||0).toLocaleString()} out</small>{attempt.error_message&&<p className="admin-error">{friendlyError(attempt.error_message)}</p>}</div>
+       <div className="generation-attempt-copy"><div><strong>{t('Attempt','시도')} {Number(attempt.attempt_number||index+1)}</strong><span className={'marketing-status-pill '+attempt.status}>{statusText(attempt.status)}</span></div><small>{new Date(attempt.created_at).toLocaleString(locale,{timeZone:'Asia/Seoul'})} · {'$'+Number(attempt.reserved_usd||0).toFixed(2)} · {Number(attempt.input_tokens||0).toLocaleString()} in / {Number(attempt.output_tokens||0).toLocaleString()} out</small>{attempt.error_message&&(()=>{const guide=failureGuide(attempt);return <div className="admin-error"><strong>{guide.title}</strong><p>{guide.cause}</p><p>{guide.action}</p><small>{friendlyError(attempt.error_message)}</small></div>;})()}</div>
       </div>)}</div>
       <dl><div><dt>{t('Thread ID','스레드 ID')}</dt><dd>{thread.id}</dd></div><div><dt>{t('Attempts','시도 횟수')}</dt><dd>{attempts.length}</dd></div><div><dt>{t('Total reserved','총 예약액')}</dt><dd>{'$'+Number(thread.total_reserved_usd).toFixed(2)}</dd></div></dl>
       {attempts.some((a:Row)=>a.result_snapshot)&&<button type="button" className="admin-primary" onClick={e=>{e.preventDefault();openThreadResult(thread);}}>{t('View result / review notes','결과 및 검토 내용 보기')}</button>}
