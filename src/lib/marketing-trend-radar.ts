@@ -101,7 +101,8 @@ async function saveCandidates(db:DB,result:Row){
  for(const raw of items){
   const display=clean(raw?.display_name,120),key=normalizeTrendKey(raw?.trend_key||display),category=CATEGORIES.has(String(raw?.category))?String(raw.category):'other',status=STATUSES.has(String(raw?.status) as TrendStatus)?String(raw.status) as TrendStatus:'dead';
   if(!display||key.length<2)continue;
-  const sources=(Array.isArray(raw?.sources)?raw.sources:[]).flatMap((source:Row)=>{
+  const rawSources:Row[]=Array.isArray(raw?.sources)?raw.sources as Row[]:[];
+  const sources=rawSources.flatMap(source=>{
    const url=canonical(source?.url);if(!url||!provider.has(url))return [];
    const signal=sourceSignal(url,source?.signal_type);if(!SIGNALS.has(signal))return [];
    return [{url,title:clean(source?.title,180),signal_type:signal,why:clean(source?.why,500)}];
@@ -151,15 +152,16 @@ export async function selectTrendForAutomaticContent(db:DB,threshold:number){
  const rows=checked(await db.from('marketing_trends').select('*').gte('trend_score',threshold).in('status',['emerging','rising','peak']).order('trend_score',{ascending:false}).limit(30)).data as Row[];
  if(!rows?.length)return null;
  const since30=new Date(Date.now()-30*86400000).toISOString(),recent=checked(await db.from('marketing_trends').select('id,category,angle_key,used_at').not('used_at','is',null).gte('used_at',since30).order('used_at',{ascending:false}).limit(50)).data as Row[];
- const now=Date.now(),eligible=rows.flatMap(row=>{
-  if(row.status==='peak'&&Number(row.trend_score)<90)return [];
+ const now=Date.now(),eligible:Row[]=[];
+ for(const row of rows){
+  if(row.status==='peak'&&Number(row.trend_score)<90)continue;
   const materialNew=Boolean(row.material_change&&row.material_change_at&&(!row.used_at||Date.parse(row.material_change_at)>Date.parse(row.used_at)));
-  if(row.cooldown_until&&Date.parse(row.cooldown_until)>now&&!materialNew)return [];
+  if(row.cooldown_until&&Date.parse(row.cooldown_until)>now&&!materialNew)continue;
   let adjusted=Number(row.trend_score);
   if(recent.some(x=>x.id!==row.id&&x.category===row.category&&Date.parse(x.used_at)>=now-14*86400000))adjusted-=10;
   if(row.angle_key&&recent.some(x=>x.id!==row.id&&x.angle_key===row.angle_key&&Date.parse(x.used_at)>=now-30*86400000))adjusted-=15;
-  return adjusted>=threshold?[{...row,adjusted_trend_score:Number(adjusted.toFixed(2))}]:[];
- });
+  if(adjusted>=threshold)eligible.push({...row,adjusted_trend_score:Number(adjusted.toFixed(2))});
+ }
  return eligible.sort((a,b)=>Number(b.adjusted_trend_score)-Number(a.adjusted_trend_score))[0]||null;
 }
 export async function markTrendUsed(db:DB,trendId:string){
