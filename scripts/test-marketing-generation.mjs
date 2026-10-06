@@ -25,7 +25,7 @@ function harness({denied=false,network=false,badSources=false,duplicate=false,ph
   if(name==='./marketing-render-assets')return {loadEditorialAssets:async()=>({photo:null,photos:[],fonts:[]})};if(name==='server-only')return {};if(name==='./supabase/service')return {createServiceRoleClient:()=>db};
   if(name==='react')return {createElement:(tag,props,...children)=>({tag,props,children})};
   if(name==='next/og')return {ImageResponse:class{constructor(tree){this.tree=tree;}arrayBuffer(){return Promise.resolve(Buffer.from(JSON.stringify(this.tree)));}}};
-  if(name==='sharp')return bytes=>({jpeg:()=>({toBuffer:async()=>Buffer.from(bytes)})});
+  if(name==='sharp')return bytes=>{const api={metadata:async()=>({width:1080,height:1350}),rotate:()=>api,resize:()=>api,jpeg:()=>api,toBuffer:async()=>Buffer.from(bytes)};return api;};
   if(name.startsWith('./marketing-'))return load('src/lib/'+name.slice(2)+'.ts');return require(name);
  },fetch:async(url,init)=>{
   const body=JSON.parse(init.body);requests.push({url,body});if(network)throw new Error('timeout');
