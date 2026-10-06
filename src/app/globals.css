@@ -3473,3 +3473,11 @@ html:lang(ko) .legal-intro h1{word-break:keep-all}
  .trend-candidate-copy p{font-size:12px}
  .trend-create-button{width:100%;min-height:44px}
 }
+
+
+.trend-language-picker{display:grid;justify-items:end;gap:6px;flex:none}
+.trend-language-picker>span{font-size:10px;font-weight:750;color:var(--muted)}
+.trend-language-picker>div{display:flex;padding:3px;border:1px solid var(--border);border-radius:999px;background:var(--surface)}
+.trend-language-picker button{min-height:32px;padding:5px 11px;border:0;border-radius:999px;background:transparent;color:var(--muted);font-size:11px;font-weight:800}
+.trend-language-picker button[aria-pressed=true]{background:var(--ink);color:var(--paper)}
+@media(max-width:600px){.trend-candidates-card>.admin-section-title{align-items:flex-start}.trend-language-picker{justify-items:start;width:100%}}
