@@ -8,6 +8,7 @@ import { createServiceRoleClient } from './supabase/service';
 import { marketingApi as legacyMarketingApi } from './marketing-legacy';
 import { generationOverview, runGeneration, todayDraft } from './marketing-generation';
 type Client=Awaited<ReturnType<typeof createClient>>;
+type Row=Record<string,any>;
 const json=(value:unknown,status=200)=>NextResponse.json(value,{status,headers:{'Cache-Control':'private, no-store'}});
 const uuid=(value:string)=>/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 const checked=(r:any)=>{if(r.error)throw r.error;return r.data;};
@@ -173,8 +174,9 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
   const body=await req.json().catch(()=>({})),draft=await manualCandidate(path[1]);
   if(!draft)return json({error:'Draft not found'},404);
   if(!Number.isInteger(body.revision)||body.revision!==draft.revision)return json({error:'DRAFT_CHANGED_REFRESH_FIRST'},409);
-  const count=checked(await service.from('marketing_uploaded_images').select('id',{count:'exact',head:true}).eq('draft_id',draft.id));
-  if(!count||Number(count.count||0)<1)return json({error:'UPLOADED_IMAGES_REQUIRED'},400);
+  const countResult=await service.from('marketing_uploaded_images').select('id',{count:'exact',head:true}).eq('draft_id',draft.id);
+  if(countResult.error)throw countResult.error;
+  if(Number(countResult.count||0)<1)return json({error:'UPLOADED_IMAGES_REQUIRED'},400);
   const user=(await db.auth.getUser()).data.user;if(!user)return json({error:'Sign in required'},401);
   const result=await runGeneration(draft.id,{
    request_key:typeof body.request_key==='string'?body.request_key:'upload-render:'+randomUUID(),
