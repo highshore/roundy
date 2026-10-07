@@ -51,7 +51,7 @@ from recoverable r
 where d.id=r.draft_id;
 
 with recoverable as (
-  select j.id,d.*
+  select j.id as job_id,d.*
   from public.marketing_generation_jobs j
   join public.instagram_post_drafts d on d.id=j.draft_id
   where j.status='failed'
@@ -72,7 +72,7 @@ set status='completed',
     error_code=null,
     error_message=null,
     result_revision=r.revision,
-    result_snapshot=to_jsonb(r) || jsonb_build_object('saved_at',now(),'quality_revision',r.revision),
+    result_snapshot=(to_jsonb(r)-'job_id') || jsonb_build_object('saved_at',now(),'quality_revision',r.revision),
     updated_at=now()
 from recoverable r
-where j.id=r.id;
+where j.id=r.job_id;
