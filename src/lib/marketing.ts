@@ -9,6 +9,7 @@ import { marketingApi as legacyMarketingApi } from './marketing-legacy';
 import { generationOverview, kstDate, runGeneration, validateGenerationInput } from './marketing-generation';
 import {runTrendRadar,trendOverview} from './marketing-trend-radar';
 import {CAMPAIGN_VERSION} from './marketing-campaign';
+import {EVENT_CAMPAIGN_VERSION} from './marketing-event-campaign';
 type Client=Awaited<ReturnType<typeof createClient>>;
 type Row=Record<string,any>;
 const json=(value:unknown,status=200)=>NextResponse.json(value,{status,headers:{'Cache-Control':'private, no-store'}});
@@ -267,6 +268,13 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
   if(old)return json({job:old,deduplicated:true});
   const user=(await db.auth.getUser()).data.user;if(!user)return json({error:'Sign in required'},401);
   const input=validateGenerationInput(body);
+  let selectedEvent:Row|null=null;
+  if(input.content_mode==='live_event'){
+   const eventId=String(input.event_id||'');
+   if(!uuid(eventId))return json({error:'Choose a live event to promote.'},400);
+   selectedEvent=checked(await service.from('events').select('id,slug,title,title_ko,starts_at,status,deleted_at,marketing_enabled').eq('id',eventId).maybeSingle());
+   if(!selectedEvent||selectedEvent.deleted_at||selectedEvent.status!=='live'||selectedEvent.marketing_enabled===false||Date.parse(selectedEvent.starts_at)<=Date.now())return json({error:'EVENT_NOT_MARKETABLE'},409);
+  }
   // All manual generations use an isolated hidden candidate. Only an explicit import makes it visible in Drafts.
   const today=kstDate(),dow=new Date(today+'T12:00:00+09:00').getUTCDay();
   const [settings,rec]=await Promise.all([
@@ -278,9 +286,13 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
    draft_date:today,draft_role:'candidate',status:'needs_approval',generation_source:'manual',visual_source:input.visual_source,
    content_language:input.language||null,content_mode:growth?String(s.content_mode||'prelaunch'):input.content_mode,
    draft_kind:growth?'growth_carousel':'brand',growth_topic_type:growth?String(input.topic_type||'conversation_prompt'):null,
-   trend_id:null,content_pillar:'concept',caption:'',cta:'Follow @roundy.meet',destination_url:'https://roundy.team',images:[],carousel_slides:[],
+   trend_id:null,event_id:selectedEvent?.id||null,content_pillar:input.content_mode==='live_event'?'event':'concept',caption:'',cta:'Follow @roundy.meet',destination_url:selectedEvent?'https://roundy.team/events/'+selectedEvent.slug:'https://roundy.team',images:[],carousel_slides:[],
    research_sources:[],research_status:growth?'pending':'not_required',generation_reason:'Manual generation workspace',
-   render_style:growth?'editorial':input.content_mode==='prelaunch'?'campaign':null,
+   render_style:growth?'editorial':['prelaunch','live_event'].includes(input.content_mode)?'campaign':null,
+   event_campaign_stage:input.content_mode==='live_event'&&input.event_campaign_stage&&input.event_campaign_stage!=='auto'?input.event_campaign_stage:null,
+   event_campaign_pattern:null,
+   event_campaign_version:input.content_mode==='live_event'?EVENT_CAMPAIGN_VERSION:null,
+   event_facts_snapshot:null,
    campaign_pattern:input.content_mode==='prelaunch'&&input.campaign_pattern&&input.campaign_pattern!=='auto'?input.campaign_pattern:null,
    campaign_tone:input.content_mode==='prelaunch'?(input.campaign_tone||'modern_premium'):null,
    campaign_version:input.content_mode==='prelaunch'?CAMPAIGN_VERSION:null,
