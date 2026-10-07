@@ -20,6 +20,12 @@ function campaignMetaFromSnapshot(snapshot:Row|null|undefined){
  if(!['poster','problem_solution','how_it_works','benefit_stack','countdown'].includes(pattern)||!['modern_premium','soft_romantic','bold_teaser'].includes(tone))return null;
  return {render_style:'campaign',campaign_pattern:pattern,campaign_tone:tone,campaign_version:String(snapshot?.campaign_version||doc.campaign_version||CAMPAIGN_VERSION),launch_date:snapshot?.launch_date||doc.launch_date||null};
 }
+function eventCampaignMetaFromSnapshot(snapshot:Row|null|undefined){
+ const doc=snapshot?.content_document||{},stage=String(snapshot?.event_campaign_stage||doc.event_campaign_stage||''),pattern=String(snapshot?.event_campaign_pattern||doc.event_campaign_pattern||'');
+ if(doc.design_preset!=='roundy_live_event_campaign_v1'&&!stage)return null;
+ if(!['launch','experience','venue','participants','momentum','imminent','last_call'].includes(stage)||!['event_poster','experience','social_proof','offer','last_call'].includes(pattern))return null;
+ return {render_style:'campaign',event_campaign_stage:stage,event_campaign_pattern:pattern,event_campaign_version:String(snapshot?.event_campaign_version||doc.campaign_version||'live_event_campaign_v1'),event_facts_snapshot:snapshot?.event_facts_snapshot||doc.event_facts||null,event_id:snapshot?.event_id||doc.event_id||null};
+}
 async function invokeMarketingWorker(db:Client,body:Record<string,unknown>,timeout=140000){
  const {data:{session},error:sessionError}=await db.auth.getSession();
  if(sessionError||!session?.access_token)throw new Error('Sign in required');
