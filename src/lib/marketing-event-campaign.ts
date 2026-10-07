@@ -301,7 +301,7 @@ export function evaluateEventCampaign(document:EventCampaignRow,language:string)
  if(/\b(?:qualified|screened|vetted|elite)\b|검증된\s*사람|선별된|엘리트/i.test(all))add('확인되지 않은 참가자 선별 표현을 사용할 수 없습니다.');
  if(language!=='en'&&all.includes('·'))add('한국어 이벤트 홍보 문구에는 가운데점을 사용하지 않습니다.');
  if(!facts?.id||!facts?.event_url||!Array.isArray(facts?.images))add('이벤트 서버 사실 스냅샷이 없습니다.');
- const caption=buildCaption(document,stage,facts);if(caption.length>1100)add('이벤트 홍보 캡션은 최종 1,100자 이하로 작성해야 합니다.');
+ const caption=buildCaption(document,resolvedStage,facts);if(caption.length>1100)add('이벤트 홍보 캡션은 최종 1,100자 이하로 작성해야 합니다.');
  return {version:1,status:issues.length?'rejected':'passed',issues,review_required:true};
 }
 export function eventCampaignDraftQuality(draft:EventCampaignRow){
