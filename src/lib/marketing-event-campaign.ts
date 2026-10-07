@@ -367,7 +367,7 @@ export async function createAutomaticEventDraft(db:any,opportunity:EventCampaign
   scheduled_for:today+'T'+recommended+':00+09:00',revision:1,imported_at:null
  }).select('*').single());
 }
-export async function recordAutomaticEventCampaign(db:any,eventId:string,stage:string,pattern:string,jobId:string,draftId:string,facts:EventCampaignRow){
+export async function recordAutomaticEventCampaign(db:any,eventId:string,stage:string,pattern:string,jobId:string,draftId:string,facts:EventCampaignRow,language:string){
  const trigger=createHash('sha256').update(JSON.stringify({eventId,stage,kind:facts.status.kind,seats:facts.status.seats_remaining,occupancy:facts.status.occupancy,offer:facts.offers,roster:facts.roster.total})).digest('hex');
- return ok(await db.from('marketing_event_campaign_history').upsert({event_id:eventId,stage,pattern,generation_job_id:jobId,draft_id:draftId,trigger_key:trigger,trigger_snapshot:facts,status:'generated',generated_at:new Date().toISOString()},{onConflict:'event_id,stage'}).select('*').single());
+ return ok(await db.from('marketing_event_campaign_history').upsert({event_id:eventId,stage,pattern,content_language:language,generation_job_id:jobId,draft_id:draftId,trigger_key:trigger,trigger_snapshot:facts,status:'generated',generated_at:new Date().toISOString()},{onConflict:'event_id,stage'}).select('*').single());
 }
