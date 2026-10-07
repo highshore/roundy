@@ -67,12 +67,16 @@ function hashNumber(seed:string){
  const bytes=createHash('sha256').update(seed).digest();return bytes.readUInt32BE(0);
 }
 async function recentCampaignHistory(db:any){
- const rows=ok(await db.from('marketing_generation_jobs').select('created_at,result_snapshot,status').eq('status','completed').order('created_at',{ascending:false}).limit(40))||[];
- return (Array.isArray(rows)?rows:[]).flatMap((row:CampaignRow)=>{
+ const rows=ok(await db.from('marketing_generation_jobs').select('id,content_workflow_id,generation_thread_id,draft_id,created_at,result_snapshot,status').eq('status','completed').order('created_at',{ascending:false}).limit(60))||[];
+ const seen=new Set<string>(),history:CampaignRow[]=[];
+ for(const row of Array.isArray(rows)?rows:[]){
   const doc=row?.result_snapshot?.content_document;
-  if(doc?.design_preset!==CAMPAIGN_PRESET||doc?.post_type!=='prelaunch')return [];
-  return [{pattern:String(doc.campaign_pattern||''),hook:String(doc.slides?.[0]?.title||''),created_at:String(row.created_at||'')}];
- });
+  if(doc?.design_preset!==CAMPAIGN_PRESET||doc?.post_type!=='prelaunch')continue;
+  const workflow=String(row.content_workflow_id||row.generation_thread_id||row.result_snapshot?.draft_id||row.draft_id||row.id);
+  if(seen.has(workflow))continue;seen.add(workflow);
+  history.push({workflow,pattern:String(doc.campaign_pattern||''),hook:String(doc.slides?.[0]?.title||''),created_at:String(row.created_at||'')});
+ }
+ return history;
 }
 function choosePattern(requested:unknown,history:CampaignRow[],launchDate:string|null,seed:string):CampaignPattern{
  if(requested&&requested!=='auto'){
