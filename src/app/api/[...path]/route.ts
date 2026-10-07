@@ -1,3 +1,4 @@
+import { bankSettings } from '@/lib/payments/bank-transfer.server';
 import { isRoundyEvent } from '@/lib/event-scope';
 import { isMemberUser } from '@/lib/auth-user';
 import { validFeedback } from '@/lib/feedback';
@@ -280,7 +281,7 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
     const eventId=typeof body.eventId==='string'?body.eventId:'';
     const code=typeof body.code==='string'?body.code.trim().toUpperCase():'';
     if(!/^[0-9a-f-]{36}$/i.test(eventId)||(code&&!/^[A-Z0-9_-]{4,24}$/.test(code)))return json({error:'Invalid pricing request'},400);
-    const {data:activeOrder,error:activeOrderError}=await supabase.from('event_payment_orders').select('order_number,status,pricing_snapshot,discount_code').eq('event_id',eventId).eq('user_id',user.id).in('status',['pending_auth','charging']).maybeSingle();
+    const {data:activeOrder,error:activeOrderError}=await supabase.from('event_payment_orders').select('order_number,status,provider,pricing_snapshot,discount_code').eq('event_id',eventId).eq('user_id',user.id).in('status',['pending_auth','charging']).maybeSingle();
     if(activeOrderError)throw activeOrderError;
     let raw:Record<string,unknown>;
     let paymentPending=false;
@@ -325,6 +326,7 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
      payment_pending:paymentPending,
      payment_status:paymentStatus,
      payment_order_number:orderNumber,
+     payment_method:activeOrder?.provider??(bankSettings().enabled?'kb_transfer':'payapp'),
      locked:paymentPending
     };
     return json({quote});
@@ -348,6 +350,10 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
    if(action==='abandon'){
     const eventId=typeof body.eventId==='string'?body.eventId:'';
     if(!/^[0-9a-f-]{36}$/i.test(eventId))return json({error:'Invalid payment cancellation request'},400);
+    const service=createServiceRoleClient();
+    const active=await service.from('event_payment_orders').select('provider,order_number').eq('event_id',eventId).eq('user_id',user.id).in('status',['charging','pending_auth']).maybeSingle();
+    if(active.error)throw active.error;
+    if(active.data?.provider==='kb_transfer'){const result=await service.rpc('bank_transfer_abandon',{p_order:active.data.order_number,p_user:user.id});if(result.error)throw result.error;return json({abandoned:true});}
     return json(await invokeRoundyCheckout(supabase,{action:'abandon',eventId}));
    }
    return json({error:'Invalid checkout action'},400);
@@ -370,6 +376,10 @@ async function handle(req:NextRequest,{params}:{params:Promise<{path:string[]}>}
     const body=await req.json();const eventId=typeof body.eventId==='string'?body.eventId:'';if(!/^[0-9a-f-]{36}$/i.test(eventId))return json({error:'Invalid event ID'},400);
     const {data:booking,error:bookingError}=await supabase.from('bookings').select('payment_order_number').eq('event_id',eventId).eq('user_id',user.id).maybeSingle();if(bookingError)throw bookingError;
     if(!booking?.payment_order_number)return json({error:'Paid booking not found'},404);
+    const bankPayment=await createServiceRoleClient().from('event_payment_orders').select('order_number,amount').eq('event_id',eventId).eq('user_id',user.id).eq('provider','kb_transfer').in('status',['completed','refunding']).maybeSingle();
+    if(bankPayment.error)throw bankPayment.error;
+    if(bankPayment.data?.amount===0){const service=createServiceRoleClient();const prep=await service.rpc('prepare_event_refund',{p_order:bankPayment.data.order_number,p_user:user.id});if(prep.error)throw prep.error;const result=await service.rpc('complete_event_refund',{p_order:bankPayment.data.order_number,p_user:user.id,p_refund_response:{free_checkout:true}});if(result.error)throw result.error;return json({cancelled:true,refundAmount:0,paid:true});}
+    if(bankPayment.data)return json({error:'계좌이체 환불은 고객지원에 요청해 주세요. 환불 송금과 현금영수증 취소를 함께 처리합니다.'},409);
     const result=await invokeRoundyCheckout(supabase,{action:'cancel',eventId});return json({cancelled:true,refundAmount:Number(result.refundAmount||0),paid:true});
    }
    return json({error:'Method not allowed'},405);
