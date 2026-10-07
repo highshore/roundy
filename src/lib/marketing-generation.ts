@@ -135,10 +135,13 @@ async function resolveContentLanguage(db:DB,draft:Row,requested?:ContentLanguage
 }
 async function generateCopy(db:DB,draft:Row,input:GenerationInput,job:Row,_research:boolean){
  if(input.content_mode==='prelaunch')return generateCampaignCopy(db,draft,input,job,upstream);
+ if(input.content_mode==='live_event')return generateEventCampaignCopy(db,draft,input,job,upstream);
  return generateEditorialCopy(db,draft,input,job,upstream);
 }
 function qualityForDraft(draft:Row){
- return draft.content_document?.design_preset===CAMPAIGN_PRESET?campaignDraftQuality(draft):draftQuality(draft);
+ if(draft.content_document?.design_preset===CAMPAIGN_PRESET)return campaignDraftQuality(draft);
+ if(draft.content_document?.design_preset===EVENT_CAMPAIGN_PRESET)return eventCampaignDraftQuality(draft);
+ return draftQuality(draft);
 }
 async function savePartial(db:DB,draft:Row,patch:Row){
  const r=checked(await db.from('instagram_post_drafts').update({...patch,revision:draft.revision+1,regenerated_at:new Date().toISOString()}).eq('id',draft.id).eq('status','needs_approval').eq('revision',draft.revision).select('*').maybeSingle());if(!r.data)throw new Error('DRAFT_CHANGED_DURING_GENERATION');return r.data as Row;
@@ -156,7 +159,11 @@ async function renderCardsWithAssets(db:DB,draft:Row,job:Row,assets:Awaited<Retu
   await progress(db,job,'rendering_'+(i+1)+'_of_'+cards.length);
   if(directCards[i]){urls.push(await storeImage(db,job,directCards[i],i));continue;}
   const document={...draft.content_document,slides:cards};
-  const image=document.design_preset===CAMPAIGN_PRESET?renderPrelaunchCampaign(cards[i],i,cards.length,document,assets):editorialCard(cards[i],i,cards.length,document,assets);
+  const image=document.design_preset===CAMPAIGN_PRESET
+   ?renderPrelaunchCampaign(cards[i],i,cards.length,document,assets)
+   :document.design_preset===EVENT_CAMPAIGN_PRESET
+    ?renderLiveEventCampaign(cards[i],i,cards.length,document,assets)
+    :editorialCard(cards[i],i,cards.length,document,assets);
   let timer:ReturnType<typeof setTimeout>|undefined;
   try{const bytes=await Promise.race([image.arrayBuffer(),new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(new Error('CARD_RENDER_TIMEOUT')),20000);})]);
    urls.push(await storeImage(db,job,await sharp(Buffer.from(bytes)).jpeg({quality:88}).toBuffer(),i));
