@@ -131,12 +131,25 @@ function campaignSchema(pattern:CampaignPattern,tone:CampaignTone,language:strin
 }
 function campaignInstructions(pattern:CampaignPattern,tone:CampaignTone,language:string,launchDate:string|null){
  const limits=language==='en'?'headline <= 45 characters; subcopy <= 80 characters':'headline <= 24 characters; subcopy <= 42 characters';
+ const patternGuide:Record<CampaignPattern,string>={
+  poster:'POSTER: hook = one arresting brand statement; benefit = one supporting product truth; CTA = a clean launch/follow invitation. Treat every card like a campaign poster, not a page of information.',
+  problem_solution:'PROBLEM -> SOLUTION: hook names a recognisable friction; problem makes it concrete without attacking other apps; solution introduces Roundy\'s offline-first format; benefit states the user-facing payoff; CTA closes the launch campaign.',
+  how_it_works:'HOW IT WORKS: hook introduces the flow; step 1 = meet one-on-one; step 2 = rotate / have the next conversation; step 3 = choose privately and only match when mutual; CTA closes. Keep each step visually and verbally independent.',
+  benefit_stack:'BENEFIT STACK: hook sets the proposition; each benefit card contains exactly one distinct benefit with no repeated explanation; CTA closes. Prefer crisp fragments over explanatory prose.',
+  countdown:'COUNTDOWN: hook creates anticipation without invented scarcity; countdown uses only the server-supplied timing; CTA tells people where to follow for the launch. Do not invent an event, venue, ticket, or application deadline.',
+ };
+ const toneGuide:Record<CampaignTone,string>={
+  modern_premium:'MODERN PREMIUM: clean, confident, urban, minimal, restrained. No luxury-status language.',
+  soft_romantic:'SOFT ROMANTIC: warm and human, but never sentimental, destiny-based, wedding-like, or cliché.',
+  bold_teaser:'BOLD TEASER: high-impact, few words, strong contrast, curiosity first. Do not become aggressive or sensational.',
+ };
  return [
   'Create a PRE-LAUNCH ADVERTISING CAMPAIGN for Roundy, a Seoul-based offline-first Rotation Dating service.',
   'This is NOT editorial content, NOT a magazine carousel, NOT an article, and NOT educational long-form content.',
   'Goal: stop the scroll, explain one idea quickly, create curiosity, and make Roundy feel like a real consumer brand launch.',
   'Use ONLY the selected campaign pattern: '+pattern+'. Exact card roles in order: '+ROLE_MAP[pattern].join(' -> ')+'.',
-  'Campaign tone: '+tone+'. Keep it contemporary, premium, restrained, and human. Avoid generic luxury language.',
+  patternGuide[pattern],
+  'Campaign tone: '+tone+'. '+toneGuide[tone],
   'ONE message per card. '+limits+'. body is optional short subcopy, never a paragraph. Do not fill the maximum just because it exists.',
   'Use strong ad-copy compression. No magazine-style eyebrow/title/body hierarchy, no essays, no bullet-heavy explainer cards.',
   'Core product truths you MAY use: offline-first; meet people one-on-one; rotate between conversations; choose privately; match only when interest is mutual; Seoul-based social format.',
