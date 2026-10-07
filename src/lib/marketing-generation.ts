@@ -218,7 +218,16 @@ async function generateVisualSet(db:DB,draft:Row,input:GenerationInput,job:Row){
  await progress(db,job,'saving_visual_set');
  return encoded.slice(0,3).map(value=>'data:image/jpeg;base64,'+value);
 }
-type GenerationThreadContext={threadId:string;attemptNumber:number;retryOfJobId:string;recoverySourceJobId?:string};
+type GenerationThreadContext={threadId:string;attemptNumber:number;retryOfJobId:string;recoverySourceJobId?:string;workflowId?:string};
+async function resolveContentWorkflowId(db:DB,draft:Row,job:Row,thread?:GenerationThreadContext){
+ if(thread?.workflowId)return thread.workflowId;
+ const sourceJobId=String(draft.source_generation_job_id||'');
+ if(sourceJobId){
+  const source=checked(await db.from('marketing_generation_jobs').select('id,content_workflow_id,generation_thread_id').eq('id',sourceJobId).maybeSingle()).data as Row|null;
+  if(source)return String(source.content_workflow_id||source.generation_thread_id||source.id);
+ }
+ return String(job.id);
+}
 export async function runGeneration(draftId:string,value:unknown,actor:string|null,automatic=false,thread?:GenerationThreadContext){
  const input=validateGenerationInput(value),db=createServiceRoleClient();
  const visualSource:VisualSource=automatic?'auto_ai':input.visual_source!;
@@ -248,10 +257,11 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
  let contentQuality:Row|null=null;
  try{
   const requestPayload={mode:input.mode,content_mode:input.content_mode,language:input.language,visual_mode:input.visual_mode,visual_source:visualSource,topic_type:input.topic_type||null,instruction:input.instruction||'',confirm_photo:input.confirm_photo===true,render_only:input.render_only===true,...(recoverySource?{saved_recovery_of:recoverySource.id}: {})};
-  const threadId=thread?.threadId||job.id,attemptNumber=thread?.attemptNumber||1;
+  const threadId=thread?.threadId||job.id,attemptNumber=thread?.attemptNumber||1,workflowId=await resolveContentWorkflowId(db,draft,job,thread);
   checked(await db.from('marketing_generation_jobs').update({
    request_payload:requestPayload,
    generation_thread_id:threadId,
+   content_workflow_id:workflowId,
    attempt_number:attemptNumber,
    retry_of_job_id:thread?.retryOfJobId||null,
    updated_at:new Date().toISOString()
