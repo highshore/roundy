@@ -1,7 +1,7 @@
 import {captionCtaIssues,EDITORIAL_PRESET, compactContentSchema, compactWritingInstructions, normalizeCompactDocument, compactQualityIssues, buildBilingualCaption, isCompactDocument, hasObsoletePositioning} from './marketing-presentation';
 // Shared deterministic content contracts. This module never calls a paid API.
 export type Row = Record<string, any>;
-export const CONTENT_POLICY_VERSION = 10;
+export const CONTENT_POLICY_VERSION = 11;
 export const CONTENT_PROFILES = {
  prelaunch:{roles:['cover','concept','cta'],research:false,label:'오픈 전 홍보',brief:'A concrete social friction, the in-person Rotation Dating format, then launch-update CTA. No invented dates, bookings, testimonials, seats or discounts.'},
  live_event:{roles:['cover','event','cta'],research:false,label:'이벤트 모집',brief:'Invite around the actual supplied event. The event card uses only server-supplied date/location/prices. No fabricated participants, scarcity or discounts.'},
