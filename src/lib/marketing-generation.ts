@@ -199,16 +199,28 @@ async function renderUploadedCards(db:DB,draft:Row,job:Row){
 }
 function visualContext(draft:Row){
  const slides=Array.isArray(draft.carousel_slides)?draft.carousel_slides:[];
- return slides.slice(0,5).map((slide:Row,index:number)=>[
+ return slides.slice(0,6).map((slide:Row,index:number)=>[
   'Card '+(index+1),
   String(slide.role||'content'),
   String(slide.title||'').slice(0,100),
-  String(slide.body||'').slice(0,220)
+  String(slide.body||'').slice(0,220),
+  slide.visual_direction?'Visual: '+String(slide.visual_direction).slice(0,180):''
  ].filter(Boolean).join(' | ')).join('\n');
 }
 async function generateVisualSet(db:DB,draft:Row,input:GenerationInput,job:Row){
  await progress(db,job,'generating_visual_set');
- const prompt=[
+ const campaign=draft.content_document?.design_preset===CAMPAIGN_PRESET;
+ const prompt=(campaign?[
+  'Generate THREE distinct but visually coherent premium lifestyle PHOTOGRAPHS for one Roundy pre-launch advertising campaign. Each returned image is a separate photograph, not a collage.',
+  'This is campaign photography, not a magazine spread. The server will add all typography later.',
+  'Roundy is a Seoul-based offline-first Rotation Dating service. Show believable contemporary Seoul social moments that support the supplied card directions.',
+  'Use three complementary framings: one strong environmental/cover image with negative space, one natural one-on-one conversational medium shot, and one detail or social-atmosphere lifestyle shot.',
+  'People should look like real adults in natural social situations, not posed romantic partners. Smart-casual styling, natural skin texture, contemporary Seoul atmosphere, restrained premium lighting.',
+  'Avoid wedding/couple-shoot styling, exaggerated romance, physical intimacy, hand hearts, staged luxury, crowded nightlife, visible alcohol as the focal point, stock-photo smiles, repeated café compositions, and fake event details.',
+  'ABSOLUTELY NO text, letters, typography, logos, signs, watermarks, UI, screenshots, cards, posters, or branded objects inside the photographs.',
+  'Portrait 4:5 composition. Leave useful negative space for server-rendered campaign copy.',
+  'Campaign pattern: '+String(draft.campaign_pattern||draft.content_document?.campaign_pattern||'poster')+'. Tone: '+String(draft.campaign_tone||draft.content_document?.campaign_tone||'modern_premium')+'.'
+ ]:[
   'Generate THREE distinct but visually coherent editorial lifestyle photographs for one Roundy Instagram carousel. Each returned image is a separate photograph from the same campaign, not a collage.',
   'Roundy is a Seoul-based Rotation Dating service for Korean and international adults, including Korean-Korean meetings. The images should support the specific carousel content below instead of reusing a generic dating stock photo.',
   'Vary locations naturally across believable Seoul settings such as a neighborhood street, riverside, restaurant, lounge, rooftop, gallery-like social space, or café only when it genuinely fits. Vary framing as well: one strong cover composition with negative space, one natural conversational medium shot, and one detail/environmental lifestyle shot.',
@@ -220,11 +232,8 @@ async function generateVisualSet(db:DB,draft:Row,input:GenerationInput,job:Row){
    :'',
   draft.growth_topic_type==='seoul_trend'
    ?'IMPORTANT FOR SEOUL TREND POSTS: generate an ORIGINAL Roundy editorial interpretation of the activity/culture described in the cards. Never reproduce a source article photo, social post, screenshot, creator identity, watermark, meme asset, or exact identifiable composition. Do not pretend a generated image is documentary evidence of the trend.'
-   :'',
-  'Carousel context:',
-  visualContext(draft),
-  input.instruction||''
- ].filter(Boolean).join('\n');
+   :''
+ ]).concat(['Carousel context:',visualContext(draft),input.instruction||'']).filter(Boolean).join('\n');
  const result=await upstream('images/generations',{model:IMAGE_MODEL,prompt,n:3,size:'1024x1280',quality:'low',output_format:'jpeg',output_compression:85,background:'opaque'},150000);
  const encoded=(Array.isArray(result.data)?result.data:[]).map((row:Row)=>row?.b64_json).filter((value:unknown):value is string=>typeof value==='string'&&value.length>=100&&value.length<=8*1024*1024);
  if(encoded.length<3)throw new Error('INVALID_GENERATED_VISUAL_SET');
