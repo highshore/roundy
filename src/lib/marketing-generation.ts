@@ -433,7 +433,8 @@ export async function automaticEventGeneration(){
  const draft=await createAutomaticEventDraft(db,opportunity,language,rec||{});
  const result=await runGeneration(draft.id,{request_key:key,revision:draft.revision,mode:'both',visual_mode:'cards',visual_source:'auto_ai',content_mode:'live_event',language,event_id:opportunity.event_id,event_campaign_stage:opportunity.stage,event_campaign_pattern:opportunity.pattern,instruction:''},null,true);
  if(result.job?.status==='completed'){
-  await recordAutomaticEventCampaign(db,opportunity.event_id,opportunity.stage,opportunity.pattern,result.job.id,draft.id,result.draft.event_facts_snapshot||result.draft.content_document?.event_facts||opportunity.facts,language);
+  const completedJob=result.job as Row;
+  await recordAutomaticEventCampaign(db,opportunity.event_id,opportunity.stage,opportunity.pattern,String(completedJob.id),draft.id,result.draft.event_facts_snapshot||result.draft.content_document?.event_facts||opportunity.facts,language);
  }
  return {...result,event_campaign:{event_id:opportunity.event_id,stage:opportunity.stage,pattern:opportunity.pattern,score:opportunity.score}};
 }
