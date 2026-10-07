@@ -1,6 +1,6 @@
 import {createElement as h} from 'react';
 import {ImageResponse} from 'next/og';
-import {ROUNDY_IDENTITY as BRAND, EDITORIAL_PRESET, type PresentationRow as Row} from './marketing-presentation';
+import {ROUNDY_IDENTITY as BRAND, EDITORIAL_PRESET, CAMPAIGN_PRESET, type PresentationRow as Row} from './marketing-presentation';
 
 export type EditorialAssets = {
  photo?: string|null;
@@ -219,5 +219,83 @@ export function renderCompactEditorial(slide:Row,index:number,total:number,docum
   height:1350,
   ...(assets.fonts?.length?{fonts:assets.fonts}:{}),
   headers:{'x-roundy-design-preset':EDITORIAL_PRESET}
+ });
+}
+
+
+function campaignOverlay(tone:string){
+ if(tone==='soft_romantic')return 'linear-gradient(180deg,rgba(24,20,20,.22) 0%,rgba(24,20,20,.06) 34%,rgba(24,20,20,.70) 100%)';
+ if(tone==='bold_teaser')return 'linear-gradient(180deg,rgba(12,12,11,.52) 0%,rgba(12,12,11,.20) 34%,rgba(12,12,11,.84) 100%)';
+ return 'linear-gradient(180deg,rgba(20,20,18,.36) 0%,rgba(20,20,18,.10) 38%,rgba(20,20,18,.76) 100%)';
+}
+function campaignPoster(slide:Row,index:number,document:Row,assets:EditorialAssets){
+ const language=document.content_language==='en'?'en':'ko',src=selectedPhoto(assets,index,index===0),body=selectedBody(slide,language);
+ return box({position:'relative',width:1080,height:1350,background:BRAND.ink,color:BRAND.paper,overflow:'hidden'},
+  photo(src),
+  box({position:'absolute',inset:0,background:campaignOverlay(String(document.campaign_tone||'modern_premium'))}),
+  box({position:'absolute',left:64,top:58},officialRoundyLogo(true,52)),
+  box({position:'absolute',left:72,right:72,bottom:96,flexDirection:'column',gap:22},
+   accentedHeadline(String(slide.title||''),language==='ko'?106:94,900,BRAND.paper),
+   body?paragraph(body,language==='ko'?32:30,850,{color:'#f6f2eb',fontWeight:500}):null
+  )
+ );
+}
+function campaignSplit(slide:Row,index:number,document:Row,assets:EditorialAssets){
+ const language=document.content_language==='en'?'en':'ko',src=selectedPhoto(assets,index,index===0),body=selectedBody(slide,language);
+ return box({position:'relative',width:1080,height:1350,background:BRAND.paper,color:BRAND.ink,overflow:'hidden'},
+  box({position:'absolute',left:0,right:0,top:0,height:820,overflow:'hidden'},photo(src,{objectPosition:index%2?'center 42%':'center 52%'})),
+  box({position:'absolute',left:0,right:0,top:0,height:180,background:'linear-gradient(180deg,rgba(20,20,18,.40),transparent)'}),
+  box({position:'absolute',left:56,top:52},officialRoundyLogo(true,46)),
+  box({position:'absolute',left:72,right:72,top:860,bottom:72,flexDirection:'column',justifyContent:'center',gap:22},
+   accentedHeadline(String(slide.title||''),language==='ko'?78:70,900),
+   body?paragraph(body,language==='ko'?31:29,860,{color:'#454740'}):null
+  )
+ );
+}
+function campaignStep(slide:Row,index:number,document:Row,assets:EditorialAssets){
+ const language=document.content_language==='en'?'en':'ko',src=selectedPhoto(assets,index),body=selectedBody(slide,language),step=Math.max(1,Number(slide.step_number||index));
+ return box({position:'relative',width:1080,height:1350,background:BRAND.paper,color:BRAND.ink,overflow:'hidden'},
+  box({position:'absolute',right:0,top:0,width:520,height:1350,overflow:'hidden'},photo(src,{objectPosition:'center'})),
+  box({position:'absolute',right:0,top:0,width:520,height:1350,background:'linear-gradient(90deg,rgba(255,254,250,.20),rgba(32,33,31,.12))'}),
+  box({position:'absolute',left:62,top:56},miniLogo()),
+  box({position:'absolute',left:76,top:220,width:470,bottom:120,flexDirection:'column',justifyContent:'center',gap:26},
+   text(String(step).padStart(2,'0'),116,{fontWeight:900,color:BRAND.accent,lineHeight:1,letterSpacing:-4}),
+   accentedHeadline(String(slide.title||''),language==='ko'?72:64,455),
+   body?paragraph(body,language==='ko'?31:29,440,{color:'#454740'}):null
+  )
+ );
+}
+function campaignOutro(slide:Row,index:number,document:Row,assets:EditorialAssets){
+ const language=document.content_language==='en'?'en':'ko',src=selectedPhoto(assets,index),body=selectedBody(slide,language);
+ return box({position:'relative',width:1080,height:1350,background:BRAND.ink,color:BRAND.paper,overflow:'hidden',alignItems:'center',justifyContent:'center'},
+  photo(src),
+  box({position:'absolute',inset:0,background:'rgba(20,20,18,.68)'}),
+  box({position:'absolute',left:90,right:90,top:210,bottom:150,flexDirection:'column',alignItems:'center',justifyContent:'center',gap:34,textAlign:'center'},
+   officialRoundyLogo(true,88),
+   box({width:86,height:5,background:BRAND.accent}),
+   paragraph(String(slide.title||''),language==='ko'?58:52,860,{fontWeight:900,textAlign:'center',alignItems:'center',color:BRAND.paper}),
+   body?paragraph(body,language==='ko'?30:28,760,{textAlign:'center',alignItems:'center',color:'#f3eee8'}):null,
+   box({flexDirection:'column',alignItems:'center',gap:8,marginTop:18},
+    text(BRAND.instagram,28,{fontWeight:700,color:BRAND.paper}),
+    text(BRAND.website,28,{fontWeight:700,color:BRAND.paper})
+   )
+  )
+ );
+}
+export function prelaunchCampaignTree(slide:Row,index:number,total:number,document:Row,assets:EditorialAssets={}){
+ const language=document.content_language==='en'?'en':'ko',pattern=String(document.campaign_pattern||'poster');
+ let tree;
+ if(slide.role==='cta'||index===total-1)tree=campaignOutro(slide,index,document,assets);
+ else if(pattern==='how_it_works'&&slide.role==='step')tree=campaignStep(slide,index,document,assets);
+ else if(pattern==='problem_solution'||pattern==='benefit_stack')tree=campaignSplit(slide,index,document,assets);
+ else tree=campaignPoster(slide,index,document,assets);
+ return box({width:1080,height:1350,fontFamily:language==='ko'?(assets.fonts?.length?'Noto Sans KR, sans-serif':'sans-serif'):(assets.fonts?.length?'DM Sans, sans-serif':'sans-serif')},tree);
+}
+export function renderPrelaunchCampaign(slide:Row,index:number,total:number,document:Row,assets:EditorialAssets={}){
+ return new ImageResponse(prelaunchCampaignTree(slide,index,total,document,assets),{
+  width:1080,
+  height:1350,
+  ...(assets.fonts?.length?{fonts:assets.fonts}:{}),
+  headers:{'x-roundy-design-preset':CAMPAIGN_PRESET}
  });
 }
