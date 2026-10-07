@@ -145,7 +145,13 @@ export async function loadEventCampaignFacts(db:any,eventId:string){
  if(event.marketing_enabled===false||/^\s*\((?:test|테스트)\)/i.test(String(event.title||event.title_ko||'')))throw new Error('EVENT_MARKETING_DISABLED');
  const roster=ok(await db.rpc('event_public_roster',{p_event:event.id}))||{women:[],men:[],women_count:0,men_count:0,total:0};
  const status=statusSnapshot(event,roster),offers=publicOffers(event,roster),rosterKo=aggregateRoster(roster,'ko'),rosterEn=aggregateRoster(roster,'en');
- const images=Array.isArray(event.images)?event.images.filter((x:unknown)=>typeof x==='string'&&x.startsWith('https://')).slice(0,10):[];
+ const images=Array.isArray(event.images)?event.images.flatMap((x:unknown)=>{
+  if(typeof x!=='string'||!x.trim())return [];
+  const value=x.trim();
+  if(value.startsWith('https://'))return [value];
+  if(value.startsWith('/'))return ['https://roundy.team'+value];
+  return [];
+ }).slice(0,10):[];
  return {
   id:event.id,slug:event.slug,title_en:event.title,title_ko:event.title_ko||event.title,
   description_en:event.description||'',description_ko:event.description_ko||'',
