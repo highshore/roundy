@@ -135,7 +135,15 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
  }
  if(!id&&req.method==='GET'){
   const response=await legacyMarketingApi(req,db,path);if(!response.ok)return response;
-  const data=await response.json();const [generation,trend]=await Promise.all([generationOverview(),trendOverview()]);return json({...data,generation,trend});
+  const data=await response.json();
+  const [generation,trend,liveEvents,eventCampaignHistory]=await Promise.all([
+   generationOverview(),
+   trendOverview(),
+   service.from('events').select('id,slug,title,title_ko,starts_at,venue,capacity,seats_remaining,price_gents,price_ladies,event_language,images,marketing_enabled').eq('status','live').is('deleted_at',null).eq('marketing_enabled',true).gt('starts_at',new Date().toISOString()).order('starts_at').limit(20),
+   service.from('marketing_event_campaign_history').select('*').order('generated_at',{ascending:false}).limit(100)
+  ]);
+  if(liveEvents.error)throw liveEvents.error;if(eventCampaignHistory.error)throw eventCampaignHistory.error;
+  return json({...data,generation,trend,live_events:(liveEvents.data||[]).filter((event:Row)=>!/^\s*\((?:test|테스트)\)/i.test(String(event.title||event.title_ko||''))),event_campaign_history:eventCampaignHistory.data||[]});
  }
  if(id==='generation'&&path.length===1&&req.method==='GET')return json(await generationOverview());
  if(id==='generation'&&path[1]==='control'&&path.length===2&&req.method==='PUT'){
