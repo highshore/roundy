@@ -8,11 +8,18 @@ import { createServiceRoleClient } from './supabase/service';
 import { marketingApi as legacyMarketingApi } from './marketing-legacy';
 import { generationOverview, kstDate, runGeneration, validateGenerationInput } from './marketing-generation';
 import {runTrendRadar,trendOverview} from './marketing-trend-radar';
+import {CAMPAIGN_VERSION} from './marketing-campaign';
 type Client=Awaited<ReturnType<typeof createClient>>;
 type Row=Record<string,any>;
 const json=(value:unknown,status=200)=>NextResponse.json(value,{status,headers:{'Cache-Control':'private, no-store'}});
 const uuid=(value:string)=>/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 const checked=(r:any)=>{if(r.error)throw r.error;return r.data;};
+function campaignMetaFromSnapshot(snapshot:Row|null|undefined){
+ const doc=snapshot?.content_document||{},pattern=String(snapshot?.campaign_pattern||doc.campaign_pattern||''),tone=String(snapshot?.campaign_tone||doc.campaign_tone||'');
+ if(String(snapshot?.render_style||'')!=='campaign'&&doc.design_preset!=='roundy_prelaunch_campaign_v1')return null;
+ if(!['poster','problem_solution','how_it_works','benefit_stack','countdown'].includes(pattern)||!['modern_premium','soft_romantic','bold_teaser'].includes(tone))return null;
+ return {render_style:'campaign',campaign_pattern:pattern,campaign_tone:tone,campaign_version:String(snapshot?.campaign_version||doc.campaign_version||CAMPAIGN_VERSION),launch_date:snapshot?.launch_date||doc.launch_date||null};
+}
 async function invokeMarketingWorker(db:Client,body:Record<string,unknown>,timeout=140000){
  const {data:{session},error:sessionError}=await db.auth.getSession();
  if(sessionError||!session?.access_token)throw new Error('Sign in required');
@@ -256,6 +263,11 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
    draft_kind:growth?'growth_carousel':'brand',growth_topic_type:growth?String(input.topic_type||'conversation_prompt'):null,
    trend_id:null,content_pillar:'concept',caption:'',cta:'Follow @roundy.meet',destination_url:'https://roundy.team',images:[],carousel_slides:[],
    research_sources:[],research_status:growth?'pending':'not_required',generation_reason:'Manual generation workspace',
+   render_style:growth?'editorial':input.content_mode==='prelaunch'?'campaign':null,
+   campaign_pattern:input.content_mode==='prelaunch'&&input.campaign_pattern&&input.campaign_pattern!=='auto'?input.campaign_pattern:null,
+   campaign_tone:input.content_mode==='prelaunch'?(input.campaign_tone||'modern_premium'):null,
+   campaign_version:input.content_mode==='prelaunch'?CAMPAIGN_VERSION:null,
+   launch_date:input.content_mode==='prelaunch'?(input.launch_date||null):null,
    recommended_time_kst:recommended,window_start_kst:r?.window_start_kst||'20:30',window_end_kst:r?.window_end_kst||'21:30',
    scheduled_for:today+'T'+recommended+':00+09:00',revision:1,imported_at:null
   }).select('*').single());
