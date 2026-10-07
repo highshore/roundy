@@ -115,7 +115,16 @@ function publicOffers(event:EventCampaignRow,roster:EventCampaignRow,now=Date.no
 }
 function statusSnapshot(event:EventCampaignRow,roster:EventCampaignRow,now=Date.now()){
  const counts={total:Number(roster?.total||0),women_count:Number(roster?.women_count||0),men_count:Number(roster?.men_count||0)};
- const status=eventStatus(event,counts,now),capacity=Math.max(1,Number(event.capacity||1)),seats=Math.max(0,Number(event.seats_remaining||0));
+ const status=eventStatus({
+  starts_at:String(event.starts_at||''),
+  ends_at:String(event.ends_at||event.starts_at||''),
+  capacity:Number(event.capacity||0),
+  seats_remaining:Number(event.seats_remaining||0),
+  status:String(event.status||''),
+  lockdown_minutes:Number(event.lockdown_minutes??4320),
+  early_bird_hours:Number(event.early_bird_hours??240),
+  last_minute_hours:Number(event.last_minute_hours??72)
+ },counts,now),capacity=Math.max(1,Number(event.capacity||1)),seats=Math.max(0,Number(event.seats_remaining||0));
  const occupancy=Math.min(1,Math.max(0,(capacity-seats)/capacity)),start=Date.parse(event.starts_at),hours=(start-now)/3600000;
  const ladiesCapacity=Math.floor(capacity/2),gentsCapacity=capacity-ladiesCapacity;
  return {
