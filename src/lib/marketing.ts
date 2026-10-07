@@ -241,8 +241,24 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
   if(!body||typeof body.request_key!=='string')return json({error:'Refresh this page to use the cost-protected generator.'},400);
   const old=checked(await service.from('marketing_generation_jobs').select('*').eq('request_key',body.request_key).maybeSingle());
   if(old)return json({job:old,deduplicated:true});
-  const draft=await todayDraft(),user=(await db.auth.getUser()).data.user;
-  const result=await runGeneration(draft.id,{...body,revision:draft.revision},user?.id||null);return json(result,result.error?400:200);
+  const user=(await db.auth.getUser()).data.user;if(!user)return json({error:'Sign in required'},401);
+  // All manual generations use an isolated hidden candidate. Only an explicit import makes it visible in Drafts.
+  const today=kstDate(),dow=new Date(today+'T12:00:00+09:00').getUTCDay();
+  const [settings,rec]=await Promise.all([
+   service.from('marketing_automation_settings').select('*').eq('singleton',true).single(),
+   service.from('instagram_posting_time_recommendations').select('*').eq('dow',dow).maybeSingle()
+  ]);
+  const s=checked(settings),r=checked(rec),growth=body.content_mode==='growth_carousel',recommended=String(r?.recommended_time_kst||'21:00').slice(0,5);
+  const draft=checked(await service.from('instagram_post_drafts').insert({
+   draft_date:today,draft_role:'candidate',status:'needs_approval',generation_source:'manual',visual_source:body.visual_source==='uploaded'?'uploaded':body.visual_source==='none'?'none':'auto_ai',
+   content_language:body.language==='en'?'en':body.language==='ko'?'ko':null,content_mode:growth?String(s.content_mode||'prelaunch'):body.content_mode,
+   draft_kind:growth?'growth_carousel':'brand',growth_topic_type:growth?String(body.topic_type||'conversation_prompt'):null,
+   trend_id:null,content_pillar:'concept',caption:'',cta:'Follow @roundy.meet',destination_url:'https://roundy.team',images:[],carousel_slides:[],
+   research_sources:[],research_status:growth?'pending':'not_required',generation_reason:'Manual generation workspace',
+   recommended_time_kst:recommended,window_start_kst:r?.window_start_kst||'20:30',window_end_kst:r?.window_end_kst||'21:30',
+   scheduled_for:today+'T'+recommended+':00+09:00',revision:1,imported_at:null
+  }).select('*').single());
+  const result=await runGeneration(draft.id,{...body,revision:draft.revision},user.id,false);return json(result,result.error?400:200);
  }
  if(id==='draft'&&path.length===3&&['regenerate','growth-generate'].includes(path[2])&&req.method==='POST'){
   if(!uuid(path[1]))return json({error:'Invalid draft'},400);
