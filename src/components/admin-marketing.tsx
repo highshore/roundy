@@ -78,7 +78,8 @@ export function AdminMarketing({locale}:{locale:Locale}){
    IMPORT_CONFIRMATION_REQUIRED:['Confirm before adding this generated result to Drafts.','생성 결과를 초안으로 가져오기 전에 확인하세요.'],
    SAVED_RESULT_RECOVERY_UNAVAILABLE:['This saved result cannot be recovered automatically. No paid retry was started.','이 저장 결과는 자동 복구할 수 없습니다. 유료 재시도는 시작하지 않았습니다.'],
    SAVED_RESULT_RECOVERY_MISMATCH:['The saved result does not match this thread. Refresh before retrying.','저장 결과와 스레드가 일치하지 않습니다. 새로고침 후 확인하세요.'],
-   RESULT_ALREADY_USED:['This generated result has already moved beyond the editable Drafts inbox.','이 생성 결과는 이미 초안으로 사용되어 편집 가능한 초안 목록을 벗어났습니다.']
+   RESULT_ALREADY_USED:['This generated result has already moved beyond the editable Drafts inbox.','이 생성 결과는 이미 초안으로 사용되어 편집 가능한 초안 목록을 벗어났습니다.'],
+   INVALID_QUALITY_REPORT:['The generated content passed copy checks, but the saved quality-report schema was out of date. The schema has been aligned; no paid copy retry is required.','생성 문구는 품질 검사를 통과했지만 저장 품질 리포트의 버전이 맞지 않았습니다. 스키마를 통일했으며 유료 문구 재생성은 필요하지 않습니다.']
   };
   return map[message]?t(...map[message]):message;
  }
@@ -86,6 +87,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
  function failureGuide(attempt:Row){
   const message=String(attempt.error_message||'');
   const code=String(attempt.error_code||'');
+  if(message==='INVALID_QUALITY_REPORT')return {title:t('Quality schema issue','품질 시스템 버전 오류'),cause:t('The generated copy passed its editorial checks, but the app and database used different quality-report versions.','생성 문구는 편집 품질 검사를 통과했지만 앱과 데이터베이스의 품질 리포트 버전이 달랐습니다.'),action:t('The schema is aligned now. Recover the saved result instead of paying for another copy generation.','스키마를 통일했습니다. 문구를 다시 유료 생성하지 말고 저장된 결과를 복구하면 됩니다.')};
   if(/출처|research|source|책 제목|저자/i.test(message+' '+code))return {title:t('Research issue','자료 조사 실패'),cause:t('A reliable source could not be verified.','검증 가능한 출처를 확보하지 못했습니다.'),action:t('The system now falls back once to a safe non-research topic when possible.','가능한 경우 안전한 비연구 콘텐츠로 1회 자동 전환합니다.')};
   if(/품질|quality|중복|카드|캡션|문구/i.test(message+' '+code))return {title:t('Copy quality issue','문구 품질 실패'),cause:t('The draft did not pass editorial rules.','문구가 편집 품질 기준을 통과하지 못했습니다.'),action:t('Formatting is fixed locally first, then copy gets one bounded repair pass.','형식은 서버가 먼저 보정하고 문구는 최대 1회만 자동 수정합니다.')};
   if(/image|photo|render|CARD_RENDER/i.test(message+' '+code))return {title:t('Image issue','이미지 생성 실패'),cause:t('The image generation or card rendering step stopped.','사진 생성 또는 카드 렌더링 단계에서 중지됐습니다.'),action:t('Saved copy is preserved so image work can be retried separately.','문구는 보존되므로 이미지만 별도로 다시 만들 수 있습니다.')};

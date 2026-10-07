@@ -100,6 +100,13 @@ for(const language of ['en','ko'])for(const type of Object.keys(harness().policy
 const adminMarketingSource=fs.readFileSync(new URL('../src/components/admin-marketing.tsx',import.meta.url),'utf8');
 check(()=>assert.ok(adminMarketingSource.includes("...(basis==='growth_carousel'?{topic_type:topic}:{})")));
 check(()=>assert.ok(adminMarketingSource.includes("request.content_mode==='growth_carousel'")));
+check(()=>assert.ok(adminMarketingSource.includes("message==='INVALID_QUALITY_REPORT'")));
+const campaignSource=fs.readFileSync(new URL('../src/lib/marketing-campaign.ts',import.meta.url),'utf8');
+const eventCampaignSource=fs.readFileSync(new URL('../src/lib/marketing-event-campaign.ts',import.meta.url),'utf8');
+check(()=>assert.ok(campaignSource.includes("schema_version:{type:'integer',enum:[2]}")));
+check(()=>assert.ok(campaignSource.includes("return {version:2,status:issues.length?'rejected':'passed'")));
+check(()=>assert.ok(eventCampaignSource.includes("schema_version:{type:'integer',enum:[2]}")));
+check(()=>assert.ok(eventCampaignSource.includes("return {version:2,status:issues.length?'rejected':'passed'")));
 const generationSource=fs.readFileSync(new URL('../src/lib/marketing-generation.ts',import.meta.url),'utf8');
 check(()=>assert.ok(generationSource.includes("IMAGE_MODEL='gpt-image-2.5-flare'")));
 check(()=>assert.ok(generationSource.includes("size:'1024x1280'")));

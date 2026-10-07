@@ -243,7 +243,7 @@ function schema(pattern:EventCampaignPattern,stage:EventCampaignStage,language:s
  return {
   type:'object',additionalProperties:false,
   properties:{
-   schema_version:{type:'integer',enum:[1]},
+   schema_version:{type:'integer',enum:[2]},
    campaign_version:{type:'string',enum:[EVENT_CAMPAIGN_VERSION]},
    design_preset:{type:'string',enum:[EVENT_CAMPAIGN_PRESET]},
    post_type:{type:'string',enum:['live_event']},
@@ -294,13 +294,13 @@ function normalize(raw:EventCampaignRow,language:string,stage:EventCampaignStage
   return {role,eyebrow:clean(source.eyebrow),title,body:main,secondary_body:secondary,body_ko:ko?main:secondary,body_en:ko?secondary:main,visual_direction:clean(source.visual_direction),step_number:step,source_ids:[],variant:role==='hook'?'hook':role==='cta'?'roundy':role,...(role==='cta'?{instagram:ROUNDY_IDENTITY.instagram,website:ROUNDY_IDENTITY.website}:{})};
  });
  const caption_ko=normalizeCaptionCore(raw.caption_ko,'ko'),caption_en=normalizeCaptionCore(raw.caption_en,'en');
- const doc={...raw,schema_version:1,campaign_version:EVENT_CAMPAIGN_VERSION,design_preset:EVENT_CAMPAIGN_PRESET,post_type:'live_event',event_campaign_stage:stage,event_campaign_pattern:pattern,event_id:facts.id,event_facts:facts,content_language:language,caption_ko,caption_en,caption:ko?caption_ko:caption_en,cta:ctaCopy(stage,language),slides,hashtags:curateHashtags('live_event',[],raw)};
+ const doc={...raw,schema_version:2,campaign_version:EVENT_CAMPAIGN_VERSION,design_preset:EVENT_CAMPAIGN_PRESET,post_type:'live_event',event_campaign_stage:stage,event_campaign_pattern:pattern,event_id:facts.id,event_facts:facts,content_language:language,caption_ko,caption_en,caption:ko?caption_ko:caption_en,cta:ctaCopy(stage,language),slides,hashtags:curateHashtags('live_event',[],raw)};
  return doc;
 }
 export function evaluateEventCampaign(document:EventCampaignRow,language:string){
  const issues:string[]=[],add=(x:string)=>{if(!issues.includes(x))issues.push(x);};
  const stage=document?.event_campaign_stage as EventCampaignStage,pattern=document?.event_campaign_pattern as EventCampaignPattern,roles=PATTERN_ROLES[pattern]||[],slides=Array.isArray(document?.slides)?document.slides:[];
- if(document?.design_preset!==EVENT_CAMPAIGN_PRESET||document?.campaign_version!==EVENT_CAMPAIGN_VERSION||document?.post_type!=='live_event')add('이벤트 캠페인 버전 또는 렌더 프리셋이 맞지 않습니다.');
+ if(document?.design_preset!==EVENT_CAMPAIGN_PRESET||document?.campaign_version!==EVENT_CAMPAIGN_VERSION||document?.post_type!=='live_event'||document?.schema_version!==2)add('이벤트 캠페인 버전 또는 렌더 프리셋이 맞지 않습니다.');
  if(!(EVENT_CAMPAIGN_STAGES as readonly string[]).includes(stage)||!(EVENT_CAMPAIGN_PATTERNS as readonly string[]).includes(pattern))add('이벤트 캠페인 단계 또는 패턴이 올바르지 않습니다.');
  if(slides.length!==roles.length)add('이벤트 캠페인 카드 수가 패턴과 맞지 않습니다.');
  slides.forEach((slide:EventCampaignRow,index:number)=>{
@@ -317,11 +317,11 @@ export function evaluateEventCampaign(document:EventCampaignRow,language:string)
  if(language!=='en'&&all.includes('·'))add('한국어 이벤트 홍보 문구에는 가운데점을 사용하지 않습니다.');
  if(!facts?.id||!facts?.event_url||!Array.isArray(facts?.images))add('이벤트 서버 사실 스냅샷이 없습니다.');
  const caption=buildCaption(document,stage,facts);if(caption.length>1100)add('이벤트 홍보 캡션은 최종 1,100자 이하로 작성해야 합니다.');
- return {version:1,status:issues.length?'rejected':'passed',issues,review_required:true};
+ return {version:2,status:issues.length?'rejected':'passed',issues,review_required:true};
 }
 export function eventCampaignDraftQuality(draft:EventCampaignRow){
  const doc=draft?.content_document;
- if(!doc||doc.design_preset!==EVENT_CAMPAIGN_PRESET)return {version:1,status:'rejected' as const,issues:['이벤트 캠페인 콘텐츠 구조가 없습니다.'],review_required:true};
+ if(!doc||doc.design_preset!==EVENT_CAMPAIGN_PRESET)return {version:2,status:'rejected' as const,issues:['이벤트 캠페인 콘텐츠 구조가 없습니다.'],review_required:true};
  const report=evaluateEventCampaign(doc,draft.content_language==='en'?'en':'ko');
  if(!clean(draft.caption)||clean(draft.caption).length>1100)report.issues.push('저장된 이벤트 캡션을 확인하세요.');
  if(!clean(draft.cta)||clean(draft.cta).length>70)report.issues.push('저장된 이벤트 CTA를 확인하세요.');

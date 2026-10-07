@@ -116,7 +116,7 @@ function campaignSchema(pattern:CampaignPattern,tone:CampaignTone,language:strin
   type:'object',
   additionalProperties:false,
   properties:{
-   schema_version:{type:'integer',enum:[1]},
+   schema_version:{type:'integer',enum:[2]},
    campaign_version:{type:'string',enum:[CAMPAIGN_VERSION]},
    design_preset:{type:'string',enum:[CAMPAIGN_PRESET]},
    post_type:{type:'string',enum:['prelaunch']},
@@ -196,7 +196,7 @@ function normalizeCampaignDocument(raw:CampaignRow,language:string,pattern:Campa
  const caption_ko=normalizeCaptionCore(raw.caption_ko,'ko'),caption_en=normalizeCaptionCore(raw.caption_en,'en');
  return {
   ...raw,
-  schema_version:1,
+  schema_version:2,
   campaign_version:CAMPAIGN_VERSION,
   design_preset:CAMPAIGN_PRESET,
   post_type:'prelaunch',
@@ -224,7 +224,7 @@ export function evaluateCampaignDocument(document:CampaignRow,language:string,re
  const issues:string[]=[],add=(value:string)=>{if(!issues.includes(value))issues.push(value);};
  const pattern=document?.campaign_pattern as CampaignPattern,tone=document?.campaign_tone as CampaignTone,roles=(CAMPAIGN_PATTERNS as readonly string[]).includes(pattern)?ROLE_MAP[pattern]:[];
  const slides=Array.isArray(document?.slides)?document.slides:[];
- if(document?.design_preset!==CAMPAIGN_PRESET||document?.campaign_version!==CAMPAIGN_VERSION||document?.post_type!=='prelaunch'||document?.schema_version!==1)add('오픈 전 캠페인 버전 또는 렌더 프리셋이 맞지 않습니다.');
+ if(document?.design_preset!==CAMPAIGN_PRESET||document?.campaign_version!==CAMPAIGN_VERSION||document?.post_type!=='prelaunch'||document?.schema_version!==2)add('오픈 전 캠페인 버전 또는 렌더 프리셋이 맞지 않습니다.');
  if(!(CAMPAIGN_PATTERNS as readonly string[]).includes(pattern))add('허용되지 않은 오픈 전 캠페인 패턴입니다.');
  if(!(CAMPAIGN_TONES as readonly string[]).includes(tone))add('허용되지 않은 캠페인 톤입니다.');
  if(slides.length!==roles.length)add('캠페인 패턴에 맞는 카드 수가 필요합니다.');
@@ -254,7 +254,7 @@ export function evaluateCampaignDocument(document:CampaignRow,language:string,re
  if(pattern==='countdown'&&!launchDate)add('카운트다운 패턴에는 확인된 런칭 날짜가 필요합니다.');
  if(language!=='en'&&all.includes('·'))add('한국어 오픈 전 홍보 문구에는 가운데점을 사용하지 않습니다.');
  const caption=buildCampaignCaption(document);if(caption.length>900)add('오픈 전 홍보 캡션은 최종 900자 이하로 작성해야 합니다.');
- return {version:1,status:issues.length?'rejected':'passed',issues,review_required:true};
+ return {version:2,status:issues.length?'rejected':'passed',issues,review_required:true};
 }
 function prepareCampaign(document:CampaignRow,language:string,pattern:CampaignPattern,tone:CampaignTone,launchDate:string|null,draftDate:string,recentHooks:string[]){
  const normalized=normalizeCampaignDocument(document,language,pattern,tone,launchDate,draftDate);
@@ -263,7 +263,7 @@ function prepareCampaign(document:CampaignRow,language:string,pattern:CampaignPa
 }
 export function campaignDraftQuality(draft:CampaignRow){
  const document=draft?.content_document;
- if(!document||document.design_preset!==CAMPAIGN_PRESET)return {version:1,status:'rejected' as const,issues:['오픈 전 캠페인 콘텐츠 구조가 없습니다.'],review_required:true};
+ if(!document||document.design_preset!==CAMPAIGN_PRESET)return {version:2,status:'rejected' as const,issues:['오픈 전 캠페인 콘텐츠 구조가 없습니다.'],review_required:true};
  const report=evaluateCampaignDocument(document,draft.content_language==='en'?'en':'ko',[],validDate(draft.launch_date||document.launch_date));
  const savedCaption=clean(draft.caption),savedCta=clean(draft.cta);
  if(!savedCaption||savedCaption.length>900)report.issues.push('오픈 전 홍보의 저장된 캡션은 1~900자여야 합니다.');

@@ -3392,6 +3392,10 @@ html:lang(ko) .legal-intro h1{word-break:keep-all}
 .generation-attempt-copy strong{font-size:12px}
 .generation-attempt-copy>small{font-size:10px;color:var(--muted);line-height:1.45}
 .generation-attempt-copy .admin-error{margin:2px 0 0;padding:9px 10px;font-size:11px;line-height:1.45}
+.generation-attempt-copy>.admin-error{display:grid;align-items:start;justify-content:stretch;gap:5px}
+.generation-attempt-copy>.admin-error>strong,.generation-attempt-copy>.admin-error>p,.generation-attempt-copy>.admin-error>small{display:block;min-width:0;margin:0;white-space:normal;overflow-wrap:anywhere}
+.generation-attempt-copy>.admin-error>strong{font-size:12px;line-height:1.35}
+.generation-attempt-copy>.admin-error>small{font-size:10px;color:#7b2c1b;opacity:.78;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 .marketing-thread-success{padding:10px 12px;border-radius:12px;background:#e9f3e8;color:#35673b;font-size:11px;line-height:1.5}
 
 /* Immutable generation result viewer (2026-10-05). */
@@ -3601,4 +3605,18 @@ html:lang(ko) .legal-intro h1{word-break:keep-all}
   font:inherit;
   font-weight:750;
  }
+}
+
+
+/* Admin mobile navigation and marketing log containment (2026-10-07). */
+@media(max-width:600px){
+ .route-admin .admin-topbar-actions>a{max-width:none;white-space:nowrap}
+ .route-admin .admin-sidebar{overflow:hidden;padding:8px 12px}
+ .route-admin .admin-sidebar nav{display:flex;grid-template-columns:none;gap:6px;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none;padding-bottom:1px}
+ .route-admin .admin-sidebar nav::-webkit-scrollbar{display:none}
+ .route-admin .admin-sidebar nav a{flex:0 0 auto;flex-direction:row;gap:7px;min-height:42px;padding:9px 13px;font-size:12px;white-space:nowrap}
+ .route-admin .admin-sidebar nav svg{width:16px;height:16px}
+ .route-admin .marketing-subtabs{position:static;top:auto;z-index:auto;margin:0 -20px;padding:8px 20px;background:var(--paper);border-top:0;border-bottom:1px solid var(--border);backdrop-filter:none;-webkit-backdrop-filter:none}
+ .generation-thread-detail{gap:13px}
+ .generation-attempt-copy>small{overflow-wrap:anywhere}
 }
