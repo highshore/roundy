@@ -6,7 +6,7 @@ import {draftQuality} from './marketing-editorial';
 import type { createClient } from './supabase/server';
 import { createServiceRoleClient } from './supabase/service';
 import { marketingApi as legacyMarketingApi } from './marketing-legacy';
-import { generationOverview, runGeneration, todayDraft } from './marketing-generation';
+import { generationOverview, kstDate, runGeneration } from './marketing-generation';
 import {runTrendRadar,trendOverview} from './marketing-trend-radar';
 type Client=Awaited<ReturnType<typeof createClient>>;
 type Row=Record<string,any>;
@@ -151,14 +151,17 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
   const recent=checked(await service.from('marketing_generation_jobs').select('id,status').contains('request_payload',{trend_id:trendId}).gte('created_at',recentSince).limit(1));
   if(recent.length)return json({error:'GENERATION_COOLDOWN_30_SECONDS'},429);
   const user=(await db.auth.getUser()).data.user;if(!user)return json({error:'Sign in required'},401);
-  const workspace=await todayDraft(trend);
-  const draft=workspace.trend_id===trendId&&workspace.content_language===language?workspace:checked(await service.from('instagram_post_drafts').insert({
-   draft_date:workspace.draft_date,draft_role:'candidate',status:'needs_approval',generation_source:'manual',visual_source:'auto_ai',
+  // Manual Trend Radar generation must never reuse or create the daily automation workspace.
+  const today=kstDate(),dow=new Date(today+'T12:00:00+09:00').getUTCDay();
+  const rec=checked(await service.from('instagram_posting_time_recommendations').select('*').eq('dow',dow).maybeSingle());
+  const recommended=String(rec?.recommended_time_kst||'21:00').slice(0,5);
+  const draft=checked(await service.from('instagram_post_drafts').insert({
+   draft_date:today,draft_role:'candidate',status:'needs_approval',generation_source:'manual',visual_source:'auto_ai',
    content_language:language,content_mode:'prelaunch',draft_kind:'growth_carousel',growth_topic_type:String(trend.route_type||'seoul_trend'),
    trend_id:trendId,content_pillar:'seoul',caption:'',cta:'Follow @roundy.meet',destination_url:'https://roundy.team',images:[],carousel_slides:[],
    research_sources:[],research_status:'pending',generation_reason:'Manual Trend Radar content: '+String(trend.display_name),
-   recommended_time_kst:workspace.recommended_time_kst||'21:00',window_start_kst:workspace.window_start_kst||'20:30',window_end_kst:workspace.window_end_kst||'21:30',
-   scheduled_for:workspace.scheduled_for||null,revision:1
+   recommended_time_kst:recommended,window_start_kst:rec?.window_start_kst||'20:30',window_end_kst:rec?.window_end_kst||'21:30',
+   scheduled_for:today+'T'+recommended+':00+09:00',revision:1
   }).select('*').single());
   const instruction=[String(trend.display_name),String(trend.content_angle||trend.summary||'')].filter(Boolean).join(': ').slice(0,500);
   const result=await runGeneration(draft.id,{request_key:'trend-manual:'+trendId+':'+language+':'+randomUUID(),revision:draft.revision,mode:'both',visual_mode:'cards',visual_source:'auto_ai',content_mode:'growth_carousel',topic_type:String(trend.route_type||'seoul_trend'),language,instruction},user.id,false);
