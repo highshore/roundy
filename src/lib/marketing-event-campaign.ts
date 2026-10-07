@@ -279,7 +279,7 @@ function normalize(raw:EventCampaignRow,language:string,stage:EventCampaignStage
   return {role,eyebrow:clean(source.eyebrow),title,body:main,secondary_body:secondary,body_ko:ko?main:secondary,body_en:ko?secondary:main,visual_direction:clean(source.visual_direction),step_number:step,source_ids:[],variant:role==='hook'?'hook':role==='cta'?'roundy':role,...(role==='cta'?{instagram:ROUNDY_IDENTITY.instagram,website:ROUNDY_IDENTITY.website}:{})};
  });
  const caption_ko=normalizeCaptionCore(raw.caption_ko,'ko'),caption_en=normalizeCaptionCore(raw.caption_en,'en');
- const doc={...raw,schema_version:1,campaign_version:EVENT_CAMPAIGN_VERSION,design_preset:EVENT_CAMPAIGN_PRESET,post_type:'live_event',event_campaign_stage:stage,event_campaign_pattern:pattern,event_id:facts.id,event_facts:facts,content_language:language,caption_ko,caption_en,caption:ko?caption_ko:caption_en,cta:ctaCopy(stage,language),slides,hashtags:curateHashtags('live_event',[],raw)};
+ const doc={...raw,schema_version:1,campaign_version:EVENT_CAMPAIGN_VERSION,design_preset:EVENT_CAMPAIGN_PRESET,post_type:'live_event',event_campaign_stage:resolvedStage,event_campaign_pattern:pattern,event_id:facts.id,event_facts:facts,content_language:language,caption_ko,caption_en,caption:ko?caption_ko:caption_en,cta:ctaCopy(resolvedStage,language),slides,hashtags:curateHashtags('live_event',[],raw)};
  return doc;
 }
 export function evaluateEventCampaign(document:EventCampaignRow,language:string){
@@ -329,27 +329,28 @@ export async function generateEventCampaignCopy(db:any,draft:EventCampaignRow,in
   );
  }
  if(!(EVENT_CAMPAIGN_STAGES as readonly string[]).includes(stage))throw new Error('INVALID_EVENT_CAMPAIGN_STAGE');
- const pattern=STAGE_PATTERN[stage],eventSchema=schema(pattern,stage,language);
+ const resolvedStage=stage as EventCampaignStage;
+ const pattern=STAGE_PATTERN[resolvedStage],eventSchema=schema(pattern,resolvedStage,language);
  let inputTokens=0,outputTokens=0;
  const record=async(result:EventCampaignRow)=>{inputTokens+=Number(result.usage?.input_tokens||result.usage?.prompt_tokens||0);outputTokens+=Number(result.usage?.output_tokens||result.usage?.completion_tokens||0);ok(await db.from('marketing_generation_jobs').update({input_tokens:inputTokens,output_tokens:outputTokens}).eq('id',job.id));};
  const write=async(repair?:{document:EventCampaignRow;issues:string[]})=>{
-  const payload={language,event_campaign_stage:stage,event_campaign_pattern:pattern,event_facts:facts,direction:clean(input.instruction).slice(0,500),...(repair?{original_document:repair.document,quality_issues:repair.issues}:{})};
-  const system=instructions(stage,pattern,language)+(repair?'\nREPAIR PASS: Fix ONLY the listed quality issues. Do not alter server facts or invent new claims. Return complete corrected JSON.':'');
+  const payload={language,event_campaign_stage:resolvedStage,event_campaign_pattern:pattern,event_facts:facts,direction:clean(input.instruction).slice(0,500),...(repair?{original_document:repair.document,quality_issues:repair.issues}:{})};
+  const system=instructions(resolvedStage,pattern,language)+(repair?'\nREPAIR PASS: Fix ONLY the listed quality issues. Do not alter server facts or invent new claims. Return complete corrected JSON.':'');
   if(Buffer.byteLength(system+JSON.stringify(payload)+JSON.stringify(eventSchema),'utf8')>30000)throw new Error('PROMPT_SIZE_LIMIT');
   ok(await db.from('marketing_generation_jobs').update({stage:repair?'repairing_copy':'writing'}).eq('id',job.id));
   const result=await call('chat/completions',{model:MODEL,reasoning_effort:'none',max_completion_tokens:3000,response_format:{type:'json_schema',json_schema:{name:'roundy_live_event_campaign_v1',strict:true,schema:eventSchema}},messages:[{role:'system',content:system},{role:'user',content:JSON.stringify(payload)}]},55000);
   await record(result);return parse(result);
  };
- let written=await write(),document=normalize(written.document,language,stage,pattern,facts),report=evaluateEventCampaign(document,language),repairUsed=false;
- if(report.status!=='passed'){repairUsed=true;written=await write({document,issues:report.issues});document=normalize(written.document,language,stage,pattern,facts);report=evaluateEventCampaign(document,language);}
- const recovery={requested_type:'live_event',effective_type:'live_event',fallback_reason:null,repair_used:repairUsed,event_campaign_stage:stage,event_campaign_pattern:pattern};
+ let written=await write(),document=normalize(written.document,language,resolvedStage,pattern,facts),report=evaluateEventCampaign(document,language),repairUsed=false;
+ if(report.status!=='passed'){repairUsed=true;written=await write({document,issues:report.issues});document=normalize(written.document,language,resolvedStage,pattern,facts);report=evaluateEventCampaign(document,language);}
+ const recovery={requested_type:'live_event',effective_type:'live_event',fallback_reason:null,repair_used:repairUsed,event_campaign_stage:resolvedStage,event_campaign_pattern:pattern};
  const caption=buildCaption(document,stage,facts),quality={...report,recovery};
  const patch={
-  caption,cta:ctaCopy(stage,language),content_document:{...document,generation_recovery:recovery},quality_report:quality,
+  caption,cta:ctaCopy(resolvedStage,language),content_document:{...document,generation_recovery:recovery},quality_report:quality,
   carousel_slides:document.slides,research_sources:[],research_status:'not_required',content_language:language,
-  draft_kind:'brand',growth_topic_type:null,content_mode:'live_event',content_pillar:stage==='imminent'||stage==='last_call'?'urgency':'event',
-  generation_reason:'이벤트 홍보 / '+stage+' / '+EVENT_CAMPAIGN_VERSION,event_id:facts.id,trend_id:null,destination_url:facts.event_url,
-  render_style:'campaign',event_campaign_stage:stage,event_campaign_pattern:pattern,event_campaign_version:EVENT_CAMPAIGN_VERSION,event_facts_snapshot:facts,
+  draft_kind:'brand',growth_topic_type:null,content_mode:'live_event',content_pillar:resolvedStage==='imminent'||resolvedStage==='last_call'?'urgency':'event',
+  generation_reason:'이벤트 홍보 / '+resolvedStage+' / '+EVENT_CAMPAIGN_VERSION,event_id:facts.id,trend_id:null,destination_url:facts.event_url,
+  render_style:'campaign',event_campaign_stage:resolvedStage,event_campaign_pattern:pattern,event_campaign_version:EVENT_CAMPAIGN_VERSION,event_facts_snapshot:facts,
  };
  ok(await db.from('marketing_generation_jobs').update({quality_report:quality,result_snapshot:{...patch,draft_id:draft.id,images:[],saved_at:new Date().toISOString(),generation_recovery:recovery}}).eq('id',job.id));
  if(report.status!=='passed')throw new Error('품질 검토 필요: '+report.issues.join(' '));
