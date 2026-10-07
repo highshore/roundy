@@ -288,7 +288,7 @@ function normalize(raw:EventCampaignRow,language:string,stage:EventCampaignStage
   return {role,eyebrow:clean(source.eyebrow),title,body:main,secondary_body:secondary,body_ko:ko?main:secondary,body_en:ko?secondary:main,visual_direction:clean(source.visual_direction),step_number:step,source_ids:[],variant:role==='hook'?'hook':role==='cta'?'roundy':role,...(role==='cta'?{instagram:ROUNDY_IDENTITY.instagram,website:ROUNDY_IDENTITY.website}:{})};
  });
  const caption_ko=normalizeCaptionCore(raw.caption_ko,'ko'),caption_en=normalizeCaptionCore(raw.caption_en,'en');
- const doc={...raw,schema_version:1,campaign_version:EVENT_CAMPAIGN_VERSION,design_preset:EVENT_CAMPAIGN_PRESET,post_type:'live_event',event_campaign_stage:resolvedStage,event_campaign_pattern:pattern,event_id:facts.id,event_facts:facts,content_language:language,caption_ko,caption_en,caption:ko?caption_ko:caption_en,cta:ctaCopy(resolvedStage,language),slides,hashtags:curateHashtags('live_event',[],raw)};
+ const doc={...raw,schema_version:1,campaign_version:EVENT_CAMPAIGN_VERSION,design_preset:EVENT_CAMPAIGN_PRESET,post_type:'live_event',event_campaign_stage:stage,event_campaign_pattern:pattern,event_id:facts.id,event_facts:facts,content_language:language,caption_ko,caption_en,caption:ko?caption_ko:caption_en,cta:ctaCopy(stage,language),slides,hashtags:curateHashtags('live_event',[],raw)};
  return doc;
 }
 export function evaluateEventCampaign(document:EventCampaignRow,language:string){
@@ -310,7 +310,7 @@ export function evaluateEventCampaign(document:EventCampaignRow,language:string)
  if(/\b(?:qualified|screened|vetted|elite)\b|검증된\s*사람|선별된|엘리트/i.test(all))add('확인되지 않은 참가자 선별 표현을 사용할 수 없습니다.');
  if(language!=='en'&&all.includes('·'))add('한국어 이벤트 홍보 문구에는 가운데점을 사용하지 않습니다.');
  if(!facts?.id||!facts?.event_url||!Array.isArray(facts?.images))add('이벤트 서버 사실 스냅샷이 없습니다.');
- const caption=buildCaption(document,resolvedStage,facts);if(caption.length>1100)add('이벤트 홍보 캡션은 최종 1,100자 이하로 작성해야 합니다.');
+ const caption=buildCaption(document,stage,facts);if(caption.length>1100)add('이벤트 홍보 캡션은 최종 1,100자 이하로 작성해야 합니다.');
  return {version:1,status:issues.length?'rejected':'passed',issues,review_required:true};
 }
 export function eventCampaignDraftQuality(draft:EventCampaignRow){
