@@ -222,9 +222,9 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
   try{
    let imported=checked(await service.rpc('create_marketing_candidate_from_generation',{p_job_id:path[2]}));
    if(imported.status!=='needs_approval')return json({error:'RESULT_ALREADY_USED'},409);
-   const source=checked(await service.from('marketing_generation_jobs').select('result_snapshot').eq('id',path[2]).single()),snapshot=source?.result_snapshot||{},trendId=snapshot.trend_id,campaignMeta=campaignMetaFromSnapshot(snapshot);
-   const importedPatch={...(trendId?{trend_id:trendId}:{}),...(campaignMeta||{}),updated_at:new Date().toISOString()};
-   if(trendId||campaignMeta)imported=checked(await service.from('instagram_post_drafts').update(importedPatch).eq('id',imported.id).select('*').single());
+   const source=checked(await service.from('marketing_generation_jobs').select('result_snapshot').eq('id',path[2]).single()),snapshot=source?.result_snapshot||{},trendId=snapshot.trend_id,campaignMeta=campaignMetaFromSnapshot(snapshot),eventMeta=eventCampaignMetaFromSnapshot(snapshot);
+   const importedPatch={...(trendId?{trend_id:trendId}:{}),...(campaignMeta||{}),...(eventMeta||{}),updated_at:new Date().toISOString()};
+   if(trendId||campaignMeta||eventMeta)imported=checked(await service.from('instagram_post_drafts').update(importedPatch).eq('id',imported.id).select('*').single());
    return json({draft:imported});
   }catch(error){
    const message=error instanceof Error?error.message:String((error as {message?:unknown})?.message||'Import failed');
@@ -235,8 +235,8 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
   const body=await req.json().catch(()=>({}));
   if(body.confirm_restore!==true)return json({error:'RESTORE_CONFIRMATION_REQUIRED'},400);
   let restored=checked(await service.rpc('restore_marketing_generation_snapshot',{p_job_id:path[2]}));
-  const source=checked(await service.from('marketing_generation_jobs').select('result_snapshot').eq('id',path[2]).single()),campaignMeta=campaignMetaFromSnapshot(source?.result_snapshot);
-  if(campaignMeta)restored=checked(await service.from('instagram_post_drafts').update({...campaignMeta,updated_at:new Date().toISOString()}).eq('id',restored.id).select('*').single());
+  const source=checked(await service.from('marketing_generation_jobs').select('result_snapshot').eq('id',path[2]).single()),campaignMeta=campaignMetaFromSnapshot(source?.result_snapshot),eventMeta=eventCampaignMetaFromSnapshot(source?.result_snapshot);
+  if(campaignMeta||eventMeta)restored=checked(await service.from('instagram_post_drafts').update({...campaignMeta,...eventMeta,updated_at:new Date().toISOString()}).eq('id',restored.id).select('*').single());
   return json({draft:restored});
  }
  if(id==='draft'&&path.length===3&&uuid(path[1])&&path[2]==='render-uploaded'&&req.method==='POST'){
