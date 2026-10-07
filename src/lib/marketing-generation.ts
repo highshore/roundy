@@ -308,12 +308,25 @@ export async function generationOverview(){
 export async function todayDraft(selectedTrend:Row|null=null){
  const db=createServiceRoleClient(),today=kstDate();
  const existing=checked(await db.from('instagram_post_drafts').select('*').eq('draft_date',today).eq('draft_role','workspace').eq('status','needs_approval').maybeSingle()).data as Row|null;
- if(existing)return existing;
  const settings=checked(await db.from('marketing_automation_settings').select('*').eq('singleton',true).single()).data as Row,dow=new Date(today+'T12:00:00+09:00').getUTCDay();
- const rec=checked(await db.from('instagram_posting_time_recommendations').select('*').eq('dow',dow).maybeSingle()).data as Row|null,isGrowth=Boolean(selectedTrend||settings.growth_carousel_enabled&&settings.growth_days.includes(dow)),rotated=topics[Math.floor(Date.parse(today+'T00:00:00Z')/86400000)%topics.length],topic=selectedTrend?String(selectedTrend.route_type):rotated,language=await nextContentLanguage(db);
+ const rec=checked(await db.from('instagram_posting_time_recommendations').select('*').eq('dow',dow).maybeSingle()).data as Row|null,isGrowth=Boolean(selectedTrend||settings.growth_carousel_enabled&&settings.growth_days.includes(dow)),rotated=topics[Math.floor(Date.parse(today+'T00:00:00Z')/86400000)%topics.length],topic=selectedTrend?String(selectedTrend.route_type):rotated,language=await nextContentLanguage(db,existing?.id);
  const reason=selectedTrend?'Trend Radar override: '+String(selectedTrend.display_name)+' · score '+Number(selectedTrend.adjusted_trend_score||selectedTrend.trend_score).toFixed(1)+' · '+String(selectedTrend.status):'Hidden generation workspace. Results are imported into independent drafts.';
- const base={draft_date:today,draft_role:'workspace',status:'needs_approval',generation_source:'automation',visual_source:'auto_ai',content_language:language,content_mode:settings.content_mode,draft_kind:isGrowth?'growth_carousel':'brand',growth_topic_type:isGrowth?topic:null,trend_id:selectedTrend?.id||null,content_pillar:selectedTrend?'seoul':'concept',caption:'',cta:'Follow @roundy.meet',destination_url:'https://roundy.team',images:[],carousel_slides:[],research_sources:[],research_status:isGrowth?'pending':'not_required',generation_reason:reason,recommended_time_kst:rec?.recommended_time_kst||'21:00',window_start_kst:rec?.window_start_kst||'20:30',window_end_kst:rec?.window_end_kst||'21:30',scheduled_for:today+'T'+String(rec?.recommended_time_kst||'21:00').slice(0,5)+':00+09:00',revision:1};
- const inserted=await db.from('instagram_post_drafts').insert(base).select('id').maybeSingle();
+ const base={draft_date:today,draft_role:'workspace',status:'needs_approval',generation_source:'automation',visual_source:'auto_ai',content_language:language,content_mode:settings.content_mode,draft_kind:isGrowth?'growth_carousel':'brand',growth_topic_type:isGrowth?topic:null,trend_id:selectedTrend?.id||null,content_pillar:selectedTrend?'seoul':'concept',caption:'',cta:'Follow @roundy.meet',destination_url:'https://roundy.team',images:[],carousel_slides:[],research_sources:[],research_status:isGrowth?'pending':'not_required',generation_reason:reason,recommended_time_kst:rec?.recommended_time_kst||'21:00',window_start_kst:rec?.window_start_kst||'20:30',window_end_kst:rec?.window_end_kst||'21:30',scheduled_for:today+'T'+String(rec?.recommended_time_kst||'21:00').slice(0,5)+':00+09:00'};
+ if(existing){
+  // Defensive reset: an automation workspace must reflect today's selected route only.
+  // This prevents any stale/manual trend_id or copy from being reused by the daily job.
+  const refreshed=checked(await db.from('instagram_post_drafts').update({
+   ...base,
+   content_document:null,
+   quality_report:{version:CONTENT_POLICY_VERSION,status:'unchecked',issues:[],review_required:true},
+   quality_revision:null,
+   revision:Number(existing.revision||1)+1,
+   regenerated_at:null,
+   updated_at:new Date().toISOString()
+  }).eq('id',existing.id).eq('status','needs_approval').select('*').single()).data as Row;
+  return refreshed;
+ }
+ const inserted=await db.from('instagram_post_drafts').insert({...base,revision:1}).select('id').maybeSingle();
  if(inserted.error&&String((inserted.error as any).code||'')!=='23505')throw inserted.error;
  const id=inserted.data?.id||checked(await db.from('instagram_post_drafts').select('id').eq('draft_date',today).eq('draft_role','workspace').eq('status','needs_approval').single()).data!.id;
  return readDraft(db,id);

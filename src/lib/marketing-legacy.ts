@@ -402,8 +402,8 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
    db.from('marketing_automation_settings').select('*').eq('singleton',true).single(),
    db.from('instagram_inbox').select('*').in('status',['new','needs_review','failed']).order('received_at',{ascending:false}).limit(100),
    createServiceRoleClient().rpc('instagram_webhook_setup_service'),
-   db.from('instagram_post_drafts').select('*').eq('draft_role','candidate').eq('status','needs_approval').order('imported_at',{ascending:false}).order('updated_at',{ascending:false}).limit(100),
-   createServiceRoleClient().from('instagram_post_drafts').select('id,status,source_generation_job_id,marketing_run_id,content_language,content_mode,draft_kind,growth_topic_type,caption,content_document,carousel_slides,images,imported_at,updated_at,scheduled_for,approved_at').eq('draft_role','candidate').order('updated_at',{ascending:false}).limit(200),
+   db.from('instagram_post_drafts').select('*').eq('draft_role','candidate').eq('status','needs_approval').not('imported_at','is',null).order('imported_at',{ascending:false}).order('updated_at',{ascending:false}).limit(100),
+   createServiceRoleClient().from('instagram_post_drafts').select('id,status,source_generation_job_id,marketing_run_id,content_language,content_mode,draft_kind,growth_topic_type,caption,content_document,carousel_slides,images,imported_at,updated_at,scheduled_for,approved_at').eq('draft_role','candidate').not('imported_at','is',null).order('updated_at',{ascending:false}).limit(200),
    db.from('instagram_posting_time_recommendations').select('*').order('dow'),
    db.from('instagram_post_insights').select('*').order('captured_at',{ascending:false}).limit(30)
   ]);
