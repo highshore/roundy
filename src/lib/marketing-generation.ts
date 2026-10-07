@@ -412,6 +412,31 @@ export async function todayDraft(selectedTrend:Row|null=null){
  const id=inserted.data?.id||checked(await db.from('instagram_post_drafts').select('id').eq('draft_date',today).eq('draft_role','workspace').eq('status','needs_approval').single()).data!.id;
  return readDraft(db,id);
 }
+async function nextEventCampaignLanguage(db:DB,eventId:string):Promise<ContentLanguage>{
+ const history=checked(await db.from('marketing_event_campaign_history').select('content_language,generated_at').eq('event_id',eventId).eq('status','generated').order('generated_at',{ascending:false}).limit(1)).data as Row[];
+ const previous=history?.[0]?.content_language;
+ if(previous==='ko')return 'en';
+ if(previous==='en')return 'ko';
+ return nextContentLanguage(db);
+}
+export async function automaticEventGeneration(){
+ if(process.env.VERCEL_ENV&&process.env.VERCEL_ENV!=='production')throw new Error('PRODUCTION_ONLY');
+ const db=createServiceRoleClient(),settings=checked(await db.from('marketing_automation_settings').select('*').eq('singleton',true).single()).data as Row;
+ if(settings.event_campaign_enabled===false)return {skipped:true,reason:'EVENT_CAMPAIGN_DISABLED'};
+ const opportunity=await selectAutomaticEventCampaign(db,Number(settings.event_campaign_max_posts||5));
+ if(!opportunity)return {skipped:true,reason:'NO_EVENT_CAMPAIGN_OPPORTUNITY'};
+ const key='auto:event:'+opportunity.event_id+':'+opportunity.stage;
+ const existing=checked(await db.from('marketing_generation_jobs').select('id,status').eq('request_key',key).maybeSingle()).data;
+ if(existing)return {deduplicated:true,job:existing,event_campaign:{event_id:opportunity.event_id,stage:opportunity.stage}};
+ const language=await nextEventCampaignLanguage(db,opportunity.event_id),today=kstDate(),dow=new Date(today+'T12:00:00+09:00').getUTCDay();
+ const rec=checked(await db.from('instagram_posting_time_recommendations').select('*').eq('dow',dow).maybeSingle()).data as Row|null;
+ const draft=await createAutomaticEventDraft(db,opportunity,language,rec||{});
+ const result=await runGeneration(draft.id,{request_key:key,revision:draft.revision,mode:'both',visual_mode:'cards',visual_source:'auto_ai',content_mode:'live_event',language,event_id:opportunity.event_id,event_campaign_stage:opportunity.stage,event_campaign_pattern:opportunity.pattern,instruction:''},null,true);
+ if(result.job?.status==='completed'){
+  await recordAutomaticEventCampaign(db,opportunity.event_id,opportunity.stage,opportunity.pattern,result.job.id,draft.id,result.draft.event_facts_snapshot||result.draft.content_document?.event_facts||opportunity.facts,language);
+ }
+ return {...result,event_campaign:{event_id:opportunity.event_id,stage:opportunity.stage,pattern:opportunity.pattern,score:opportunity.score}};
+}
 export async function automaticGeneration(){
  if(process.env.VERCEL_ENV&&process.env.VERCEL_ENV!=='production')throw new Error('PRODUCTION_ONLY');
  const db=createServiceRoleClient(),settings=checked(await db.from('marketing_automation_settings').select('*').eq('singleton',true).single()).data as Row,time=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date());
