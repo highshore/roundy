@@ -179,7 +179,7 @@ export async function selectAutomaticEventCampaign(db:any,maxPosts=5){
   if(/^\s*\((?:test|테스트)\)/i.test(String(event.title||event.title_ko||'')))continue;
   const history=ok(await db.from('marketing_event_campaign_history').select('stage,pattern,generated_at,status').eq('event_id',event.id).eq('status','generated').order('generated_at',{ascending:false}).limit(10))||[];
   if(history.length>=maxPosts)continue;
-  const facts=await loadEventCampaignFacts(db,event.id),used=new Set(history.map((row:EventCampaignRow)=>String(row.stage))),last=history[0]?.generated_at||null;
+  const facts=await loadEventCampaignFacts(db,event.id),used=new Set<string>(history.map((row:EventCampaignRow)=>String(row.stage))),last=history[0]?.generated_at||null;
   const stages=allowedStages(facts,used,history.length,last);
   for(const stage of stages){
    const recencyPenalty=Math.min(30,history.length*6),score=STAGE_SCORE[stage]+Math.round(Number(facts.status.occupancy)*30)-recencyPenalty;
@@ -328,7 +328,7 @@ export async function generateEventCampaignCopy(db:any,draft:EventCampaignRow,in
  let stage=String(input.event_campaign_stage||'auto') as EventCampaignStage|'auto';
  if(stage==='auto'){
   const history=ok(await db.from('marketing_event_campaign_history').select('stage,generated_at,status').eq('event_id',facts.id).eq('status','generated').order('generated_at',{ascending:false}).limit(10))||[];
-  const allowed=allowedStages(facts,new Set(history.map((x:EventCampaignRow)=>String(x.stage))),history.length,history[0]?.generated_at||null);
+  const allowed=allowedStages(facts,new Set<string>(history.map((x:EventCampaignRow)=>String(x.stage))),history.length,history[0]?.generated_at||null);
   stage=allowed[0]||(
    Number(facts.status.hours_until_event)<=24?'last_call':
    Number(facts.status.hours_until_event)<=72?'imminent':
