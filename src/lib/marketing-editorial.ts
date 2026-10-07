@@ -1,7 +1,8 @@
 import {buildMarketingResearchTask,RESEARCH_TASK_VERSION,type SeoulDatingFormat,type TrendResearchHistory,type DatingMythHistory} from './marketing-research-task';
 import {selectVerifiedMarketingBook,verifiedBookEvidence} from './marketing-book-catalog';
-import {captionCtaIssues,isCompactDocument,bilingualCaptionIssues,CAMPAIGN_PRESET} from './marketing-presentation';
+import {captionCtaIssues,isCompactDocument,bilingualCaptionIssues,CAMPAIGN_PRESET,EVENT_CAMPAIGN_PRESET} from './marketing-presentation';
 import {campaignDraftQuality} from './marketing-campaign';
+import {eventCampaignDraftQuality} from './marketing-event-campaign';
 import {renderCompactEditorial,type EditorialAssets} from './marketing-visuals';
 import {createHash} from 'node:crypto';
 import {CONTENT_PROFILES,CONTENT_POLICY_VERSION,postType,contentSchema,researchInstructions,writingInstructions,extractResearchEvidence,prepareContent,evaluateContent,classifyQualityIssues,type PostType,type Evidence,type Row} from './marketing-content-policy';
@@ -235,6 +236,7 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
 
 export function draftQuality(draft:Row){
  if(draft.content_document?.design_preset===CAMPAIGN_PRESET)return campaignDraftQuality(draft);
+ if(draft.content_document?.design_preset===EVENT_CAMPAIGN_PRESET)return eventCampaignDraftQuality(draft);
  const input={content_mode:draft.draft_kind==='growth_carousel'?'growth_carousel':draft.content_mode,topic_type:draft.growth_topic_type};
  const type=postType(input),document=draft.content_document;
  if(!document)return {version:3,status:'rejected' as const,issues:['이전 생성본에는 유형별 콘텐츠 구조가 없습니다. 같은 스레드에서 품질 재작업하세요.'],review_required:true};
