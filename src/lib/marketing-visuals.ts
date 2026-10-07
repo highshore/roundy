@@ -1,6 +1,6 @@
 import {createElement as h} from 'react';
 import {ImageResponse} from 'next/og';
-import {ROUNDY_IDENTITY as BRAND, EDITORIAL_PRESET, CAMPAIGN_PRESET, type PresentationRow as Row} from './marketing-presentation';
+import {ROUNDY_IDENTITY as BRAND, EDITORIAL_PRESET, CAMPAIGN_PRESET, EVENT_CAMPAIGN_PRESET, type PresentationRow as Row} from './marketing-presentation';
 
 export type EditorialAssets = {
  photo?: string|null;
@@ -297,5 +297,74 @@ export function renderPrelaunchCampaign(slide:Row,index:number,total:number,docu
   height:1350,
   ...(assets.fonts?.length?{fonts:assets.fonts}:{}),
   headers:{'x-roundy-design-preset':CAMPAIGN_PRESET}
+ });
+}
+
+
+function eventFactsCard(slide:Row,index:number,document:Row,assets:EditorialAssets){
+ const language=document.content_language==='en'?'en':'ko',src=selectedPhoto(assets,index),body=selectedBody(slide,language);
+ return box({position:'relative',width:1080,height:1350,background:BRAND.paper,color:BRAND.ink,overflow:'hidden'},
+  box({position:'absolute',left:0,right:0,top:0,height:690,overflow:'hidden'},photo(src,{objectPosition:'center 48%'})),
+  box({position:'absolute',left:0,right:0,top:0,height:160,background:'linear-gradient(180deg,rgba(20,20,18,.44),transparent)'}),
+  box({position:'absolute',left:58,top:52},officialRoundyLogo(true,48)),
+  box({position:'absolute',left:72,right:72,top:748,bottom:72,flexDirection:'column',justifyContent:'center',gap:24},
+   text(String(slide.eyebrow||'ROUNDY EVENT').toUpperCase(),20,{fontWeight:700,color:BRAND.accent,letterSpacing:1.2}),
+   accentedHeadline(String(slide.title||''),language==='ko'?68:62,900),
+   body?paragraph(body,language==='ko'?30:28,870,{color:'#454740',fontWeight:600}):null
+  )
+ );
+}
+function eventExperienceCard(slide:Row,index:number,document:Row,assets:EditorialAssets){
+ const language=document.content_language==='en'?'en':'ko',src=selectedPhoto(assets,index),body=selectedBody(slide,language),step=Math.max(1,Number(slide.step_number||index));
+ return box({position:'relative',width:1080,height:1350,background:BRAND.paper,color:BRAND.ink,overflow:'hidden'},
+  box({position:'absolute',left:0,top:0,width:1080,height:520,overflow:'hidden'},photo(src,{objectPosition:'center 45%'})),
+  box({position:'absolute',left:58,top:52},officialRoundyLogo(true,46)),
+  box({position:'absolute',left:72,right:72,top:570,bottom:82,flexDirection:'column',justifyContent:'center',gap:26},
+   text(String(step).padStart(2,'0'),100,{fontWeight:900,color:BRAND.accent,lineHeight:1,letterSpacing:-3}),
+   accentedHeadline(String(slide.title||''),language==='ko'?72:64,880),
+   body?paragraph(body,language==='ko'?31:29,850,{color:'#454740'}):null
+  )
+ );
+}
+function eventStatusCard(slide:Row,index:number,document:Row,assets:EditorialAssets){
+ const language=document.content_language==='en'?'en':'ko',src=selectedPhoto(assets,index),body=selectedBody(slide,language);
+ return box({position:'relative',width:1080,height:1350,background:BRAND.ink,color:BRAND.paper,overflow:'hidden'},
+  photo(src),
+  box({position:'absolute',inset:0,background:'linear-gradient(180deg,rgba(18,18,17,.40),rgba(18,18,17,.18) 34%,rgba(18,18,17,.86) 100%)'}),
+  box({position:'absolute',left:58,top:52},officialRoundyLogo(true,48)),
+  box({position:'absolute',left:74,right:74,bottom:104,flexDirection:'column',gap:22},
+   text(String(slide.eyebrow||'ROUNDY EVENT').toUpperCase(),19,{fontWeight:700,color:'#f0ddd8',letterSpacing:1.2}),
+   accentedHeadline(String(slide.title||''),language==='ko'?100:88,900,BRAND.paper),
+   body?paragraph(body,language==='ko'?31:29,850,{color:'#f5f0e9',fontWeight:600}):null
+  )
+ );
+}
+function eventOutro(slide:Row,index:number,document:Row,assets:EditorialAssets){
+ const language=document.content_language==='en'?'en':'ko',src=selectedPhoto(assets,index),body=selectedBody(slide,language);
+ return box({position:'relative',width:1080,height:1350,background:BRAND.ink,color:BRAND.paper,overflow:'hidden',alignItems:'center',justifyContent:'center'},
+  photo(src),
+  box({position:'absolute',inset:0,background:'rgba(20,20,18,.70)'}),
+  box({position:'absolute',left:90,right:90,top:190,bottom:140,flexDirection:'column',alignItems:'center',justifyContent:'center',gap:32,textAlign:'center'},
+   officialRoundyLogo(true,86),
+   box({width:88,height:5,background:BRAND.accent}),
+   paragraph(String(slide.title||''),language==='ko'?58:50,850,{fontWeight:900,textAlign:'center',alignItems:'center',color:BRAND.paper}),
+   body?paragraph(body,language==='ko'?30:28,760,{textAlign:'center',alignItems:'center',color:'#f3eee8'}):null,
+   text(BRAND.instagram+'  |  '+BRAND.website,27,{fontWeight:700,color:BRAND.paper,marginTop:16})
+  )
+ );
+}
+export function liveEventCampaignTree(slide:Row,index:number,total:number,document:Row,assets:EditorialAssets={}){
+ const language=document.content_language==='en'?'en':'ko',pattern=String(document.event_campaign_pattern||'event_poster');
+ let tree;
+ if(slide.role==='cta'||index===total-1)tree=eventOutro(slide,index,document,assets);
+ else if(pattern==='experience'&&slide.role==='step')tree=eventExperienceCard(slide,index,document,assets);
+ else if(['status','offer'].includes(String(slide.role)))tree=eventStatusCard(slide,index,document,assets);
+ else tree=eventFactsCard(slide,index,document,assets);
+ return box({width:1080,height:1350,fontFamily:language==='ko'?(assets.fonts?.length?'Noto Sans KR, sans-serif':'sans-serif'):(assets.fonts?.length?'DM Sans, sans-serif':'sans-serif')},tree);
+}
+export function renderLiveEventCampaign(slide:Row,index:number,total:number,document:Row,assets:EditorialAssets={}){
+ return new ImageResponse(liveEventCampaignTree(slide,index,total,document,assets),{
+  width:1080,height:1350,...(assets.fonts?.length?{fonts:assets.fonts}:{}),
+  headers:{'x-roundy-design-preset':EVENT_CAMPAIGN_PRESET}
  });
 }
