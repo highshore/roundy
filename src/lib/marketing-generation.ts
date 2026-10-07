@@ -129,7 +129,11 @@ async function resolveContentLanguage(db:DB,draft:Row,requested?:ContentLanguage
  return nextContentLanguage(db,draft.id);
 }
 async function generateCopy(db:DB,draft:Row,input:GenerationInput,job:Row,_research:boolean){
+ if(input.content_mode==='prelaunch')return generateCampaignCopy(db,draft,input,job,upstream);
  return generateEditorialCopy(db,draft,input,job,upstream);
+}
+function qualityForDraft(draft:Row){
+ return draft.content_document?.design_preset===CAMPAIGN_PRESET?campaignDraftQuality(draft):draftQuality(draft);
 }
 async function savePartial(db:DB,draft:Row,patch:Row){
  const r=checked(await db.from('instagram_post_drafts').update({...patch,revision:draft.revision+1,regenerated_at:new Date().toISOString()}).eq('id',draft.id).eq('status','needs_approval').eq('revision',draft.revision).select('*').maybeSingle());if(!r.data)throw new Error('DRAFT_CHANGED_DURING_GENERATION');return r.data as Row;
@@ -146,7 +150,8 @@ async function renderCardsWithAssets(db:DB,draft:Row,job:Row,assets:Awaited<Retu
  for(let i=0;i<cards.length;i++){
   await progress(db,job,'rendering_'+(i+1)+'_of_'+cards.length);
   if(directCards[i]){urls.push(await storeImage(db,job,directCards[i],i));continue;}
-  const image=editorialCard(cards[i],i,cards.length,{...draft.content_document,slides:cards},assets);
+  const document={...draft.content_document,slides:cards};
+  const image=document.design_preset===CAMPAIGN_PRESET?renderPrelaunchCampaign(cards[i],i,cards.length,document,assets):editorialCard(cards[i],i,cards.length,document,assets);
   let timer:ReturnType<typeof setTimeout>|undefined;
   try{const bytes=await Promise.race([image.arrayBuffer(),new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(new Error('CARD_RENDER_TIMEOUT')),20000);})]);
    urls.push(await storeImage(db,job,await sharp(Buffer.from(bytes)).jpeg({quality:88}).toBuffer(),i));
@@ -252,7 +257,7 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
  }
  // Verify the schema before reserving or calling any provider.
  checked(await db.from('instagram_post_drafts').select('content_document,quality_report,quality_revision').eq('id',draftId).single());
- if(input.mode==='image'&&!recoveryPatch){const q=draftQuality(draft);if(q.status!=='passed')throw new Error('품질 검토 필요: '+q.issues.join(' '));}
+ if(input.mode==='image'&&!recoveryPatch){const q=qualityForDraft(draft);if(q.status!=='passed')throw new Error('품질 검토 필요: '+q.issues.join(' '));}
  input.language=input.mode==='image'?(draft.content_language==='en'?'en':draft.content_language==='ko'?'ko':await nextContentLanguage(db,draft.id)):await resolveContentLanguage(db,draft,input.language);
  const growth=input.content_mode==='growth_carousel',research=growth&&researchTopics.has(input.topic_type||'')&&!input.render_only&&input.mode!=='image';
  const wantsVisuals=recoveryPatch||input.render_only||input.mode==='image'||input.mode==='both'||automatic;
@@ -291,7 +296,7 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
    const images=await renderUploadedCards(db,draft,job);await progress(db,job,'saving_images');
    draft=await savePartial(db,draft,{images,generation_source:'manual',visual_source:'uploaded',last_regeneration_mode:input.mode,last_regeneration_instruction:input.instruction});
   }
-  const quality=contentQuality||draftQuality(draft);
+  const quality=contentQuality||qualityForDraft(draft);
   if(quality.status!=='passed')throw new Error('품질 검토 필요: '+quality.issues.join(' '));
   draft=checked(await db.rpc('set_marketing_quality',{p_draft:draft.id,p_revision:draft.revision,p_report:quality})).data as Row;
   const resultSnapshot={
