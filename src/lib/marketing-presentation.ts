@@ -2,6 +2,7 @@
 export type PresentationRow = Record<string, any>;
 export const EDITORIAL_PRESET = 'roundy_compact_editorial_v1';
 export const CAMPAIGN_PRESET = 'roundy_prelaunch_campaign_v1';
+export const EVENT_CAMPAIGN_PRESET = 'roundy_live_event_campaign_v1';
 export const ROUNDY_IDENTITY = {
   accent: '#ff6666', ink: '#20211f', paper: '#fffefa', muted: '#6b6f65',
   instagram: '@roundy.meet', website: 'roundy.team',
