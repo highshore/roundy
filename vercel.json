@@ -1,1 +1,13 @@
-{"framework":"nextjs","buildCommand":"npm run build","regions":["icn1"]}
+{
+  "framework": "nextjs",
+  "buildCommand": "npm run build",
+  "regions": [
+    "icn1"
+  ],
+  "crons": [
+    {
+      "path": "/api/internal/bank-transfer",
+      "schedule": "*/5 * * * *"
+    }
+  ]
+}

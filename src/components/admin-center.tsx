@@ -4,6 +4,7 @@ import { Heading } from '@/components/heading';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowUpRight, CalendarDays, Headphones, LayoutDashboard, Megaphone, TicketPercent, UsersRound } from 'lucide-react';
+import { AdminPayments } from './admin-payments';
 import { AdminReports } from './admin-reports';
 import { AdminCustomerSupport } from './admin-customer-support';
 import { AdminMarketing } from './admin-marketing';
@@ -60,6 +61,7 @@ export function AdminCenter({ path }: { path: string[] }) {
     return()=>{active=false;window.clearInterval(timer);window.removeEventListener('roundy:admin-support-updated',refresh);};
   },[]);
   const links = [
+    {href:'/admin/payments',label:tr(locale,'Payments','입금 및 영수증'),icon:TicketPercent,active:path[0]==='payments',badge:0},
     { href: '/admin', label: tr(locale, 'Overview', '개요'), icon: LayoutDashboard, active: !path.length, badge: 0 },
     { href: '/admin/members', label: tr(locale, 'Members', '회원'), icon: UsersRound, active: path[0] === 'members', badge: 0 },
     { href: '/admin/events', label: tr(locale, 'Events', '이벤트'), icon: CalendarDays, active: path[0] === 'events', badge: 0 },
@@ -70,7 +72,7 @@ export function AdminCenter({ path }: { path: string[] }) {
   return <div className="experience route-admin admin-center"><a className="skip" href="#admin-main">{tr(locale, 'Skip to content', '본문으로 건너뛰기')}</a>
     <header className="admin-topbar"><Link href="/admin" className="admin-brand"><RoundyBrand/><span>Admin</span></Link><div className="admin-topbar-actions"><LocaleToggle locale={locale} onChange={next => { setLocale(next); try { localStorage.setItem('roundy-locale', next); } catch {} }}/><Link href="/me">{tr(locale, 'Back to Roundy', 'Roundy로 돌아가기')}<ArrowUpRight size={16}/></Link></div></header>
     <div className="admin-workspace"><aside className="admin-sidebar"><nav aria-label={tr(locale, 'Admin navigation', '관리자 내비게이션')}>{links.map(link => <Link key={link.href} href={link.href} aria-current={link.active ? 'page' : undefined}><link.icon size={20}/><span>{link.label}</span>{link.badge>0&&<span className="admin-nav-badge" aria-label={tr(locale,`${link.badge} items need attention`,`확인 필요한 항목 ${link.badge}개`)}>{link.badge>99?'99+':link.badge}</span>}</Link>)}</nav><p>{tr(locale, 'Admin access only', '관리자 전용')}</p></aside>
-      <main id="admin-main" className="admin-main">{path[0] === 'promo-codes' ? <AdminPromoCodes locale={locale}/> : path[0] === 'support' ? <AdminCustomerSupport locale={locale}/> : path[0] === 'reports' ? <AdminReports locale={locale}/> : path[0] === 'marketing' ? <AdminMarketing locale={locale}/> : path[0] === 'members' ? <AdminMembers key={path.join('/')} locale={locale} memberId={path[1]}/> : path[0] === 'events' ? <AdminEvents key={path.join('/')} locale={locale} eventId={path[1] === 'new' ? undefined : path[1]} createNew={path[1] === 'new'}/> : <AdminOverview locale={locale}/>}</main>
+      <main id="admin-main" className="admin-main">{path[0] === 'payments' ? <AdminPayments locale={locale}/> : path[0] === 'promo-codes' ? <AdminPromoCodes locale={locale}/> : path[0] === 'support' ? <AdminCustomerSupport locale={locale}/> : path[0] === 'reports' ? <AdminReports locale={locale}/> : path[0] === 'marketing' ? <AdminMarketing locale={locale}/> : path[0] === 'members' ? <AdminMembers key={path.join('/')} locale={locale} memberId={path[1]}/> : path[0] === 'events' ? <AdminEvents key={path.join('/')} locale={locale} eventId={path[1] === 'new' ? undefined : path[1]} createNew={path[1] === 'new'}/> : <AdminOverview locale={locale}/>}</main>
     </div>
   </div>;
 }

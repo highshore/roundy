@@ -11,6 +11,7 @@
     "@types/react-dom": "19.3.0",
     "lucide-react": "1.47.0",
     "next": "16.3.6",
+    "popbill": "1.60.0",
     "qrcode": "1.5.4",
     "react": "19.3.0",
     "react-dom": "19.3.0",
@@ -30,7 +31,8 @@
     "test": "node scripts/test-auth.mjs && node scripts/test-auth-security.mjs && node scripts/test-admin-routing.mjs && node scripts/test-event-scope.mjs && node scripts/test-match-flow.mjs && node scripts/test-event-status.mjs && node scripts/test-event-pricing.mjs",
     "test:event-management": "node scripts/test-event-management.mjs",
     "test:auth-security": "node scripts/test-auth-security.mjs",
-    "configure:stream": "node --env-file-if-exists=.env.local scripts/configure-stream-channel-types.mjs"
+    "configure:stream": "node --env-file-if-exists=.env.local scripts/configure-stream-channel-types.mjs",
+    "test:bank-transfer": "node scripts/test-bank-transfer.mjs && node scripts/test-bank-receipt-recovery.mjs && node scripts/test-popbill-contract.mjs"
   },
   "engines": {
     "node": ">=22"
