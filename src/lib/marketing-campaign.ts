@@ -247,8 +247,10 @@ export function campaignDraftQuality(draft:CampaignRow){
  const document=draft?.content_document;
  if(!document||document.design_preset!==CAMPAIGN_PRESET)return {version:1,status:'rejected' as const,issues:['오픈 전 캠페인 콘텐츠 구조가 없습니다.'],review_required:true};
  const report=evaluateCampaignDocument(document,draft.content_language==='en'?'en':'ko',[],validDate(draft.launch_date||document.launch_date));
- const caption=buildCampaignCaption(document);
- if(clean(draft.caption)!==clean(caption))report.issues.push('저장된 캡션과 캠페인 문서의 캡션이 일치하지 않습니다.');
+ const savedCaption=clean(draft.caption),savedCta=clean(draft.cta);
+ if(!savedCaption||savedCaption.length>900)report.issues.push('오픈 전 홍보의 저장된 캡션은 1~900자여야 합니다.');
+ if(savedCaption&&(!savedCaption.includes(ROUNDY_IDENTITY.instagram)||!savedCaption.includes(ROUNDY_IDENTITY.website)))report.issues.push('오픈 전 홍보 캡션에는 Roundy 공식 계정과 웹사이트가 필요합니다.');
+ if(!savedCta||savedCta.length>70)report.issues.push('CTA 안내 문구를 확인하세요.');
  if(report.issues.length)report.status='rejected';
  return report;
 }
