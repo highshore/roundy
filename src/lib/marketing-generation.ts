@@ -176,6 +176,15 @@ async function renderCards(db:DB,draft:Row,job:Row,freshPhotos:string[]){
  const assets=await loadEditorialAssets();assets.photo=freshPhotos[0];assets.photos=freshPhotos;assets.reusePhotos=true;
  return renderCardsWithAssets(db,draft,job,assets);
 }
+function eventPhotoUrls(draft:Row){
+ const source=draft.content_document?.event_facts?.images||draft.event_facts_snapshot?.images||[];
+ return Array.isArray(source)?source.filter((x:unknown):x is string=>typeof x==='string'&&x.startsWith('https://')).slice(0,10):[];
+}
+async function renderEventCards(db:DB,draft:Row,job:Row,photos:string[]){
+ if(!photos.length)throw new Error('EVENT_VISUALS_REQUIRED');
+ const assets=await loadEditorialAssets();assets.photo=photos[0];assets.photos=photos;assets.reusePhotos=true;
+ return renderCardsWithAssets(db,draft,job,assets);
+}
 async function renderUploadedCards(db:DB,draft:Row,job:Row){
  if(draft.draft_role!=='candidate'||draft.generation_source!=='manual')throw new Error('UPLOAD_VISUALS_MANUAL_ONLY');
  const rows=checked(await db.from('marketing_uploaded_images').select('*').eq('draft_id',draft.id).order('sort_order',{ascending:true})).data as Row[];
@@ -221,8 +230,15 @@ function visualContext(draft:Row){
 }
 async function generateVisualSet(db:DB,draft:Row,input:GenerationInput,job:Row){
  await progress(db,job,'generating_visual_set');
- const campaign=draft.content_document?.design_preset===CAMPAIGN_PRESET;
- const prompt=(campaign?[
+ const campaign=draft.content_document?.design_preset===CAMPAIGN_PRESET,eventCampaign=draft.content_document?.design_preset===EVENT_CAMPAIGN_PRESET;
+ const prompt=(eventCampaign?[
+  'Generate THREE distinct premium TEXT-FREE fallback lifestyle photographs for a real Roundy event campaign. These are used only when the event does not have enough real event/venue photos.',
+  'The server supplies all event facts and adds all typography later. Do not render any date, price, venue name, seat count, logo, sign, watermark, text, letters, UI, ticket, poster, or branded object.',
+  'Show believable contemporary Seoul social-event atmosphere: natural one-on-one conversation, arrival/venue atmosphere, or a neutral detail/environmental frame. Do not pretend the generated image depicts the named real venue.',
+  'People should look like real adults in a respectful social setting, smart-casual and candid. Avoid staged romance, physical intimacy, nightlife excess, alcohol focus, hand hearts, wedding styling, stock-photo smiles, or fake signage.',
+  'Portrait 4:5. Leave negative space for server-rendered campaign copy.',
+  'Event campaign stage: '+String(draft.event_campaign_stage||draft.content_document?.event_campaign_stage||'launch')+'. Pattern: '+String(draft.event_campaign_pattern||draft.content_document?.event_campaign_pattern||'event_poster')+'.'
+ ]:campaign?[
   'Generate THREE distinct but visually coherent premium lifestyle PHOTOGRAPHS for one Roundy pre-launch advertising campaign. Each returned image is a separate photograph, not a collage.',
   'This is campaign photography, not a magazine spread. The server will add all typography later.',
   'Roundy is a Seoul-based offline-first Rotation Dating service. Show believable contemporary Seoul social moments that support the supplied card directions.',
