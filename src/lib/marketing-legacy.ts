@@ -396,17 +396,18 @@ async function regenerateDraftAI(db:Client,draftId:string,body:Record<string,unk
 export async function marketingApi(req:NextRequest,db:Client,path:string[]){
  const id=path[0];
  if(!id&&req.method==='GET'){
-  const [templates,runs,settings,inbox,webhook,drafts,recommendations,insights]=await Promise.all([
+  const [templates,runs,settings,inbox,webhook,drafts,contentRecords,recommendations,insights]=await Promise.all([
    db.from('marketing_templates').select('*').order('updated_at',{ascending:false}),
    db.from('marketing_runs').select('*').order('created_at',{ascending:false}).limit(100),
    db.from('marketing_automation_settings').select('*').eq('singleton',true).single(),
    db.from('instagram_inbox').select('*').in('status',['new','needs_review','failed']).order('received_at',{ascending:false}).limit(100),
    createServiceRoleClient().rpc('instagram_webhook_setup_service'),
    db.from('instagram_post_drafts').select('*').eq('draft_role','candidate').eq('status','needs_approval').order('imported_at',{ascending:false}).order('updated_at',{ascending:false}).limit(100),
+   createServiceRoleClient().from('instagram_post_drafts').select('id,status,source_generation_job_id,marketing_run_id,content_language,content_mode,draft_kind,growth_topic_type,caption,content_document,carousel_slides,images,imported_at,updated_at,scheduled_for,approved_at').eq('draft_role','candidate').order('updated_at',{ascending:false}).limit(200),
    db.from('instagram_posting_time_recommendations').select('*').order('dow'),
    db.from('instagram_post_insights').select('*').order('captured_at',{ascending:false}).limit(30)
   ]);
-  for(const result of [templates,runs,settings,inbox,webhook,drafts,recommendations,insights])if(result.error)throw result.error;
+  for(const result of [templates,runs,settings,inbox,webhook,drafts,contentRecords,recommendations,insights])if(result.error)throw result.error;
   const {data:{session}}=await db.auth.getSession();
   const connection=await fetch(process.env.NEXT_PUBLIC_SUPABASE_URL+'/functions/v1/roundy-marketing',{headers:{Authorization:'Bearer '+session?.access_token,apikey:process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!},signal:AbortSignal.timeout(8000)}).then(r=>r.ok?r.json():null).catch(()=>null);
   const setup=webhook.data as {callback_key?:string;verify_token?:string;verified_at?:string|null;last_received_at?:string|null}|null;
@@ -416,6 +417,7 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
    runs:runs.data,
    settings:settings.data,
    drafts:drafts.data,
+   content_records:contentRecords.data,
    recommendations:recommendations.data,
    insights:insights.data,
    inbox:inbox.data,
