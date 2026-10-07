@@ -240,14 +240,15 @@ export function AdminMarketing({locale}:{locale:Locale}){
  const allGenerationJobs=((generation?.jobs||[]) as Row[]);
  const threadMap=new Map<string,Row[]>();
  for(const job of [...allGenerationJobs].reverse()){
-  const threadId=String(job.generation_thread_id||job.id);
+  const threadId=String(job.content_workflow_id||job.generation_thread_id||job.id);
   const attempts=threadMap.get(threadId)||[];attempts.push(job);threadMap.set(threadId,attempts);
  }
  const generationThreads=[...threadMap.entries()].map(([id,attempts])=>{
-  attempts.sort((a:Row,b:Row)=>Number(a.attempt_number||0)-Number(b.attempt_number||0)||Date.parse(a.created_at)-Date.parse(b.created_at));
+  attempts.sort((a:Row,b:Row)=>Date.parse(a.created_at)-Date.parse(b.created_at)||Number(a.attempt_number||0)-Number(b.attempt_number||0));
   const latest=attempts[attempts.length-1],root=attempts[0];
   const status=latest.quality_report?.status==='rejected'?'failed':latest.status;
-  return {id,attempts,latest,root,status,total_reserved_usd:attempts.reduce((sum:number,a:Row)=>sum+Number(a.reserved_usd||0),0),created_at:root.created_at,updated_at:latest.updated_at||latest.created_at};
+  const retryCount=attempts.filter((a:Row)=>Boolean(a.retry_of_job_id)).length,stepCount=Math.max(1,attempts.length-retryCount);
+  return {id,attempts,latest,root,status,retryCount,stepCount,total_reserved_usd:attempts.reduce((sum:number,a:Row)=>sum+Number(a.reserved_usd||0),0),created_at:root.created_at,updated_at:latest.updated_at||latest.created_at};
  }).sort((a:Row,b:Row)=>Date.parse(b.updated_at)-Date.parse(a.updated_at));
  const filteredGenerationThreads=generationThreads.filter((thread:Row)=>generationFilter==='all'||thread.status===generationFilter);
  const visibleGenerationThreads=filteredGenerationThreads.slice(0,generationVisible);
