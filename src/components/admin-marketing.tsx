@@ -22,6 +22,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
  const [draft,setDraft]=useState<Row|null>(null),[settings,setSettings]=useState<Row|null>(null),[generation,setGeneration]=useState<Row|null>(null);
  const [channel,setChannel]=useState<'instagram'|'koreapas'>('instagram'),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[error,setError]=useState(''),[notice,setNotice]=useState('');
  const [basis,setBasis]=useState('prelaunch'),[manualVisualSource,setManualVisualSource]=useState<'auto_ai'|'uploaded'|'none'>('auto_ai'),[topic,setTopic]=useState('conversation_prompt'),[contentLanguage,setContentLanguage]=useState<'ko'|'en'>('ko'),[direction,setDirection]=useState(''),[dirty,setDirty]=useState(false);
+ const [eventId,setEventId]=useState(''),[eventCampaignStage,setEventCampaignStage]=useState('auto');
  const [template,setTemplate]=useState<Row>(blank());
  const [uploadedImages,setUploadedImages]=useState<Row[]>([]),[uploadAssetType,setUploadAssetType]=useState<'photo'|'completed_card'>('photo');
  const [pendingMarketingImages,setPendingMarketingImages]=useState<PendingMarketingImage[]>([]),[pendingAssetType,setPendingAssetType]=useState<'photo'|'completed_card'>('photo');
@@ -31,10 +32,10 @@ export function AdminMarketing({locale}:{locale:Locale}){
  const [trendLanguage,setTrendLanguage]=useState<'ko'|'en'>('ko');
  const [generationVisible,setGenerationVisible]=useState(20),[publishVisible,setPublishVisible]=useState(20);
  const inFlight=useRef(false),mounted=useRef(true);
- function selectDraft(next:Row|null){setDraft(next?structuredClone(next):null);setDirty(false);if(next){setBasis(next.draft_kind==='growth_carousel'?'growth_carousel':next.content_mode);setTopic(next.growth_topic_type||'conversation_prompt');setContentLanguage(next.content_language==='en'?'en':'ko');}}
+ function selectDraft(next:Row|null){setDraft(next?structuredClone(next):null);setDirty(false);if(next){setBasis(next.draft_kind==='growth_carousel'?'growth_carousel':next.content_mode);setTopic(next.growth_topic_type||'conversation_prompt');setContentLanguage(next.content_language==='en'?'en':'ko');if(next.event_id)setEventId(String(next.event_id));if(next.event_campaign_stage)setEventCampaignStage(String(next.event_campaign_stage));}}
  async function load(preferredId?:string){
   const r=await request();if(!r.ok)throw new Error(r.data.error||'Could not load marketing');if(!mounted.current)return;
-  setData(r.data);setSettings(r.data.settings);setGeneration(r.data.generation);const rows=r.data.drafts||[];
+  setData(r.data);setSettings(r.data.settings);setGeneration(r.data.generation);if(!eventId&&r.data.live_events?.[0]?.id)setEventId(String(r.data.live_events[0].id));const rows=r.data.drafts||[];
   selectDraft(rows.find((x:Row)=>x.id===preferredId)||rows.find((x:Row)=>x.status==='needs_approval')||rows[0]||null);
  }
  useEffect(()=>{mounted.current=true;load().catch(e=>{if(mounted.current)setError(e.message);}).finally(()=>{if(mounted.current)setLoading(false);});return()=>{mounted.current=false;};},[]);
