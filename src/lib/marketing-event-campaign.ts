@@ -353,7 +353,7 @@ export async function generateEventCampaignCopy(db:any,draft:EventCampaignRow,in
  let written=await write(),document=normalize(written.document,language,resolvedStage,pattern,facts),report=evaluateEventCampaign(document,language),repairUsed=false;
  if(report.status!=='passed'){repairUsed=true;written=await write({document,issues:report.issues});document=normalize(written.document,language,resolvedStage,pattern,facts);report=evaluateEventCampaign(document,language);}
  const recovery={requested_type:'live_event',effective_type:'live_event',fallback_reason:null,repair_used:repairUsed,event_campaign_stage:resolvedStage,event_campaign_pattern:pattern};
- const caption=buildCaption(document,stage,facts),quality={...report,recovery};
+ const caption=buildCaption(document,resolvedStage,facts),quality={...report,recovery};
  const patch={
   caption,cta:ctaCopy(resolvedStage,language),content_document:{...document,generation_recovery:recovery},quality_report:quality,
   carousel_slides:document.slides,research_sources:[],research_status:'not_required',content_language:language,
