@@ -297,16 +297,23 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
  if(input.mode==='image'&&!recoveryPatch){const q=qualityForDraft(draft);if(q.status!=='passed')throw new Error('품질 검토 필요: '+q.issues.join(' '));}
  input.language=input.mode==='image'?(draft.content_language==='en'?'en':draft.content_language==='ko'?'ko':await nextContentLanguage(db,draft.id)):await resolveContentLanguage(db,draft,input.language);
  const growth=input.content_mode==='growth_carousel',research=growth&&researchTopics.has(input.topic_type||'')&&!input.render_only&&input.mode!=='image';
+ const eventFacts=input.content_mode==='live_event'?await loadEventCampaignFacts(db,String(input.event_id||draft.event_id||'')):null;
+ const eventRealPhotos=eventFacts?.images||[];
  const wantsVisuals=recoveryPatch||input.render_only||input.mode==='image'||input.mode==='both'||automatic;
  const autoVisuals=wantsVisuals&&visualSource==='auto_ai';
  const uploadedVisuals=(input.render_only||input.mode==='image')&&visualSource==='uploaded';
- const operation=autoVisuals?(input.mode==='image'||input.render_only||recoveryPatch?'photo':'copy_photo'):uploadedVisuals?'render':research?'research':'copy';
- const fingerprint=createHash('sha256').update(JSON.stringify({id:draftId,revision:input.revision,mode:input.mode,content:input.content_mode,language:input.language,visual:input.visual_mode,visual_source:visualSource,topic:input.topic_type||'',instruction:input.instruction,campaign_pattern:input.campaign_pattern||null,campaign_tone:input.campaign_tone||null,launch_date:input.launch_date||null,render:!!input.render_only,saved_recovery_of:thread?.recoverySourceJobId||null})).digest('hex');
+ const eventNeedsAiFallback=input.content_mode==='live_event'&&autoVisuals&&eventRealPhotos.length<3;
+ const operation=autoVisuals
+  ?(input.content_mode==='live_event'&&!eventNeedsAiFallback
+    ?(input.mode==='image'||input.render_only?'render':research?'research':'copy')
+    :(input.mode==='image'||input.render_only||recoveryPatch?'photo':'copy_photo'))
+  :uploadedVisuals?'render':research?'research':'copy';
+ const fingerprint=createHash('sha256').update(JSON.stringify({id:draftId,revision:input.revision,mode:input.mode,content:input.content_mode,language:input.language,visual:input.visual_mode,visual_source:visualSource,topic:input.topic_type||'',instruction:input.instruction,campaign_pattern:input.campaign_pattern||null,campaign_tone:input.campaign_tone||null,launch_date:input.launch_date||null,event_id:input.event_id||draft.event_id||null,event_campaign_stage:input.event_campaign_stage||null,event_campaign_pattern:input.event_campaign_pattern||null,render:!!input.render_only,saved_recovery_of:thread?.recoverySourceJobId||null})).digest('hex');
  const reservation=checked(await db.rpc('reserve_marketing_generation',{p_key:input.request_key,p_fingerprint:fingerprint,p_draft:draftId,p_revision:input.revision,p_operation:operation,p_actor:actor,p_automatic:automatic})).data as Row,job=reservation.job as Row;
  if(!reservation.accepted)return {draft,job,deduplicated:true};
  let contentQuality:Row|null=null;
  try{
-  const requestPayload={mode:input.mode,content_mode:input.content_mode,language:input.language,visual_mode:input.visual_mode,visual_source:visualSource,topic_type:input.topic_type||null,instruction:input.instruction||'',campaign_pattern:input.campaign_pattern||null,campaign_tone:input.campaign_tone||null,launch_date:input.launch_date||null,confirm_photo:input.confirm_photo===true,render_only:input.render_only===true,...(recoverySource?{saved_recovery_of:recoverySource.id}: {})};
+  const requestPayload={mode:input.mode,content_mode:input.content_mode,language:input.language,visual_mode:input.visual_mode,visual_source:visualSource,topic_type:input.topic_type||null,instruction:input.instruction||'',campaign_pattern:input.campaign_pattern||null,campaign_tone:input.campaign_tone||null,launch_date:input.launch_date||null,event_id:input.event_id||draft.event_id||null,event_campaign_stage:input.event_campaign_stage||null,event_campaign_pattern:input.event_campaign_pattern||null,confirm_photo:input.confirm_photo===true,render_only:input.render_only===true,...(recoverySource?{saved_recovery_of:recoverySource.id}: {})};
   const threadId=thread?.threadId||job.id,attemptNumber=thread?.attemptNumber||1,workflowId=await resolveContentWorkflowId(db,draft,job,thread);
   checked(await db.from('marketing_generation_jobs').update({
    request_payload:requestPayload,
@@ -326,8 +333,20 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
    draft=await savePartial(db,draft,{...copy,generation_source:automatic?'automation':'manual',visual_source:visualSource,last_regeneration_mode:input.mode,last_regeneration_instruction:input.instruction,images:[]});
   }
   if(autoVisuals){
-   const freshPhotos=await generateVisualSet(db,draft,input,job);
-   const images=await renderCards(db,draft,job,freshPhotos);await progress(db,job,'saving_images');
+   let images:string[];
+   if(input.content_mode==='live_event'){
+    const currentEventPhotos=eventPhotoUrls(draft).length?eventPhotoUrls(draft):eventRealPhotos;
+    let photos=[...currentEventPhotos];
+    if(photos.length<3){
+     const fallback=await generateVisualSet(db,draft,input,job);
+     photos=[...photos,...fallback].slice(0,Math.max(3,photos.length));
+    }
+    images=await renderEventCards(db,draft,job,photos);
+   }else{
+    const freshPhotos=await generateVisualSet(db,draft,input,job);
+    images=await renderCards(db,draft,job,freshPhotos);
+   }
+   await progress(db,job,'saving_images');
    draft=await savePartial(db,draft,{images,generation_source:automatic?'automation':'manual',visual_source:'auto_ai',last_regeneration_mode:input.mode,last_regeneration_instruction:input.instruction});
   }else if(uploadedVisuals){
    const images=await renderUploadedCards(db,draft,job);await progress(db,job,'saving_images');
@@ -345,6 +364,7 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
    growth_topic_type:draft.growth_topic_type,content_mode:draft.content_mode,content_pillar:draft.content_pillar,
    generation_reason:draft.generation_reason,event_id:draft.event_id||null,generation_source:automatic?'automation':'manual',visual_source:visualSource,revision:draft.revision,saved_at:new Date().toISOString(),
    render_style:draft.render_style||null,campaign_pattern:draft.campaign_pattern||draft.content_document?.campaign_pattern||null,campaign_tone:draft.campaign_tone||draft.content_document?.campaign_tone||null,campaign_version:draft.campaign_version||draft.content_document?.campaign_version||null,launch_date:draft.launch_date||draft.content_document?.launch_date||null,
+   event_campaign_stage:draft.event_campaign_stage||draft.content_document?.event_campaign_stage||null,event_campaign_pattern:draft.event_campaign_pattern||draft.content_document?.event_campaign_pattern||null,event_campaign_version:draft.event_campaign_version||draft.content_document?.campaign_version||null,event_facts_snapshot:draft.event_facts_snapshot||draft.content_document?.event_facts||null,
    generation_recovery:(quality as Row).recovery||draft.content_document?.generation_recovery||null
   };
   checked(await db.from('marketing_generation_jobs').update({status:'completed',stage:'complete',quality_report:quality,result_snapshot:resultSnapshot,result_revision:draft.revision,updated_at:new Date().toISOString()}).eq('id',job.id).eq('status','running'));
