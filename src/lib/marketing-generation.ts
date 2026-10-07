@@ -9,15 +9,16 @@ import { ImageResponse } from 'next/og';
 import sharp from 'sharp';
 import {generateEditorialCopy,draftQuality,editorialCard,editorialPhotoCover} from './marketing-editorial';
 import {generateCampaignCopy,campaignDraftQuality,CAMPAIGN_VERSION,CAMPAIGN_PATTERNS,CAMPAIGN_TONES} from './marketing-campaign';
-import {CAMPAIGN_PRESET} from './marketing-presentation';
-import {renderPrelaunchCampaign} from './marketing-visuals';
+import {generateEventCampaignCopy,eventCampaignDraftQuality,EVENT_CAMPAIGN_VERSION,EVENT_CAMPAIGN_STAGES,EVENT_CAMPAIGN_PATTERNS,selectAutomaticEventCampaign,createAutomaticEventDraft,recordAutomaticEventCampaign,loadEventCampaignFacts} from './marketing-event-campaign';
+import {CAMPAIGN_PRESET,EVENT_CAMPAIGN_PRESET} from './marketing-presentation';
+import {renderPrelaunchCampaign,renderLiveEventCampaign} from './marketing-visuals';
 // EDITORIAL_V2_INTEGRATED
 import { createServiceRoleClient } from './supabase/service';
 type Row=Record<string,any>;
 type DB=ReturnType<typeof createServiceRoleClient>;
 type ContentLanguage='ko'|'en';
 type VisualSource='auto_ai'|'uploaded'|'none';
-export type GenerationInput={request_key:string;revision:number;mode:'text'|'image'|'both';content_mode:'prelaunch'|'live_event'|'growth_carousel';visual_mode:'cards'|'photo';visual_source?:VisualSource;topic_type?:string;instruction?:string;language?:ContentLanguage;confirm_photo?:boolean;render_only?:boolean;campaign_pattern?:'auto'|'poster'|'problem_solution'|'how_it_works'|'benefit_stack'|'countdown';campaign_tone?:'modern_premium'|'soft_romantic'|'bold_teaser';launch_date?:string};
+export type GenerationInput={request_key:string;revision:number;mode:'text'|'image'|'both';content_mode:'prelaunch'|'live_event'|'growth_carousel';visual_mode:'cards'|'photo';visual_source?:VisualSource;topic_type?:string;instruction?:string;language?:ContentLanguage;confirm_photo?:boolean;render_only?:boolean;campaign_pattern?:'auto'|'poster'|'problem_solution'|'how_it_works'|'benefit_stack'|'countdown';campaign_tone?:'modern_premium'|'soft_romantic'|'bold_teaser';launch_date?:string;event_id?:string;event_campaign_stage?:'auto'|'launch'|'experience'|'venue'|'participants'|'momentum'|'imminent'|'last_call';event_campaign_pattern?:'auto'|'event_poster'|'experience'|'social_proof'|'offer'|'last_call'};
 const topics=['mbti','dating_archetype','book_insight','trend_research','meme_remix','dating_myth','conversation_prompt','seoul_dating','mini_quiz'];
 const allowedTopics=[...topics,'seoul_trend'];
 const researchTopics=new Set(['book_insight','trend_research','dating_myth','seoul_dating','seoul_trend']);
@@ -40,12 +41,16 @@ export function validateGenerationInput(value:unknown):GenerationInput{
  if(v.launch_date!==undefined&&(!/^\d{4}-\d{2}-\d{2}$/.test(v.launch_date)||!Number.isFinite(Date.parse(v.launch_date+'T00:00:00+09:00'))))throw new Error('INVALID_LAUNCH_DATE');
  if(v.content_mode!=='prelaunch'&&(v.campaign_pattern!==undefined||v.campaign_tone!==undefined||v.launch_date!==undefined))throw new Error('CAMPAIGN_OPTIONS_PRELAUNCH_ONLY');
  if(v.content_mode==='prelaunch'&&v.campaign_pattern==='countdown'&&!v.launch_date)throw new Error('COUNTDOWN_REQUIRES_LAUNCH_DATE');
+ if(v.event_id!==undefined&&!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v.event_id))throw new Error('INVALID_EVENT_ID');
+ if(v.event_campaign_stage!==undefined&&!['auto',...EVENT_CAMPAIGN_STAGES].includes(v.event_campaign_stage as any))throw new Error('INVALID_EVENT_CAMPAIGN_STAGE');
+ if(v.event_campaign_pattern!==undefined&&!['auto',...EVENT_CAMPAIGN_PATTERNS].includes(v.event_campaign_pattern as any))throw new Error('INVALID_EVENT_CAMPAIGN_PATTERN');
+ if(v.content_mode!=='live_event'&&(v.event_id!==undefined||v.event_campaign_stage!==undefined||v.event_campaign_pattern!==undefined))throw new Error('EVENT_OPTIONS_LIVE_EVENT_ONLY');
  if(v.visual_mode==='photo'&&(v.content_mode==='growth_carousel'||v.mode==='text'||v.render_only))throw new Error('PHOTO_OPTION_NOT_APPLICABLE');
  if(v.visual_mode==='photo'&&v.confirm_photo!==true)throw new Error('CONFIRM_PAID_PHOTO_FIRST');
  if(v.render_only&&v.mode!=='image')throw new Error('INVALID_RENDER_OPTIONS');
  const visualSource:VisualSource=v.visual_source||(v.mode==='text'?'none':'auto_ai');
  if(v.mode==='image'&&visualSource==='none')throw new Error('IMAGE_SOURCE_REQUIRED');
- return {...v,visual_source:visualSource,topic_type:topicType,instruction:v.instruction?.trim()||'',...(v.content_mode==='prelaunch'?{campaign_pattern:v.campaign_pattern||'auto',campaign_tone:v.campaign_tone||'modern_premium'}:{})};
+ return {...v,visual_source:visualSource,topic_type:topicType,instruction:v.instruction?.trim()||'',...(v.content_mode==='prelaunch'?{campaign_pattern:v.campaign_pattern||'auto',campaign_tone:v.campaign_tone||'modern_premium'}:{}),...(v.content_mode==='live_event'?{event_campaign_stage:v.event_campaign_stage||'auto',event_campaign_pattern:v.event_campaign_pattern||'auto'}:{})};
 }
 async function readDraft(db:DB,id:string){return checked(await db.from('instagram_post_drafts').select('*').eq('id',id).single()).data as Row;}
 async function readControl(db:DB){return checked(await db.from('marketing_ai_control').select('*').eq('singleton',true).single()).data as Row;}
