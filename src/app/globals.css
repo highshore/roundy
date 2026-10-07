@@ -3494,3 +3494,111 @@ html:lang(ko) .legal-intro h1{word-break:keep-all}
  .trend-language-picker{width:auto;justify-items:start}
  .trend-language-picker>div{width:max-content;max-width:100%}
 }
+
+
+/* Marketing manual image cards: keep upload controls usable on mobile (2026-10-07). */
+.ordered-image-list>.marketing-draft-card{
+ flex:1 1 100%;
+ width:100%;
+ max-width:100%;
+ box-sizing:border-box;
+}
+.marketing-draft-card>.admin-form-actions{
+ position:static!important;
+ bottom:auto!important;
+ z-index:auto!important;
+ display:flex;
+ flex-wrap:nowrap;
+ align-items:center;
+ gap:8px;
+ margin:0;
+ padding:0!important;
+ border-top:0!important;
+ background:transparent!important;
+}
+.marketing-draft-card>.admin-form-actions>button{
+ flex:0 0 auto!important;
+ width:auto!important;
+ min-width:44px!important;
+ min-height:44px!important;
+ padding:9px 12px!important;
+}
+.marketing-draft-card .marketing-draft-copy select{
+ width:100%;
+ max-width:220px;
+ min-width:0;
+ box-sizing:border-box;
+}
+.marketing-setup input[type=file]{
+ width:100%;
+ max-width:100%;
+ min-width:0;
+ box-sizing:border-box;
+ overflow:hidden;
+}
+
+@media(max-width:600px){
+ .ordered-image-list>.marketing-draft-card{
+  flex-basis:100%;
+  width:100%;
+ }
+ .marketing-draft-card{
+  grid-template-columns:56px minmax(0,1fr);
+  align-items:start;
+  gap:10px 12px;
+  padding:12px;
+ }
+ .marketing-draft-card>img,.marketing-draft-thumb{
+  width:56px;
+  height:70px;
+ }
+ .marketing-draft-card .marketing-draft-copy{
+  align-self:start;
+  gap:8px;
+ }
+ .marketing-draft-card .marketing-draft-copy strong{
+  white-space:normal;
+  overflow:visible;
+  text-overflow:clip;
+  line-height:1.35;
+ }
+ .marketing-draft-card .marketing-draft-copy select{
+  width:100%;
+  max-width:none;
+  min-height:44px;
+ }
+ .marketing-draft-card>.admin-form-actions{
+  grid-column:1/-1;
+  display:grid;
+  grid-template-columns:44px 44px minmax(0,1fr);
+  width:100%;
+  gap:8px;
+  padding-top:10px!important;
+  border-top:1px solid var(--border)!important;
+ }
+ .marketing-draft-card>.admin-form-actions>button{
+  width:100%!important;
+  min-width:0!important;
+  min-height:44px!important;
+  padding:8px 10px!important;
+ }
+ .marketing-setup input[type=file]{
+  min-height:48px;
+  padding:5px;
+  border:1px solid var(--border);
+  border-radius:12px;
+  background:var(--paper);
+  font-size:12px;
+ }
+ .marketing-setup input[type=file]::file-selector-button{
+  min-height:38px;
+  margin-right:8px;
+  padding:8px 12px;
+  border:0;
+  border-radius:9px;
+  background:var(--ink);
+  color:var(--paper);
+  font:inherit;
+  font-weight:750;
+ }
+}
