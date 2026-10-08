@@ -6,7 +6,7 @@ import { tr, type Locale } from '@/lib/locale';
 import { uploadFile, uploadMarketingFile } from '@/lib/uploads';
 import { OrderedImages } from './ordered-images';
 import {CONTENT_PROFILES,postType} from '@/lib/marketing-content-policy';
-import {factPackReady} from '@/lib/marketing-trend-guide';
+import {factPackReady,groupTrendsByUsage} from '@/lib/marketing-trend-guide';
 type Row=Record<string,any>;
 type PendingMarketingImage={id:string;file:File;preview:string;asset_type:'photo'|'completed_card';width:number;height:number};
 const BASE='/api/admin/marketing';
@@ -40,6 +40,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
  const [activeTab,setActiveTab]=useState<'draft'|'generation'|'trend'|'publishing'|'automation'|'connection'>('draft');
  const [generationFilter,setGenerationFilter]=useState<'all'|'completed'|'failed'|'running'>('all');
  const [trendLanguage,setTrendLanguage]=useState<'ko'|'en'>('ko');
+ const [trendUsageView,setTrendUsageView]=useState<'unused'|'used'>('unused');
  const [generationVisible,setGenerationVisible]=useState(20),[publishVisible,setPublishVisible]=useState(20);
  const inFlight=useRef(false),mounted=useRef(true);
  function selectDraft(next:Row|null){setDraft(next?structuredClone(next):null);setDirty(false);if(next){setBasis(next.draft_kind==='growth_carousel'?'growth_carousel':next.content_mode);setTopic(next.growth_topic_type||'conversation_prompt');setContentLanguage(next.content_language==='en'?'en':'ko');if(next.event_id)setEventId(String(next.event_id));if(next.event_campaign_stage)setEventCampaignStage(String(next.event_campaign_stage));}}
@@ -295,6 +296,8 @@ export function AdminMarketing({locale}:{locale:Locale}){
  }).sort((a:Row,b:Row)=>Date.parse(b.updated_at)-Date.parse(a.updated_at));
  const filteredGenerationThreads=generationThreads.filter((thread:Row)=>generationFilter==='all'||thread.status===generationFilter);
  const visibleGenerationThreads=filteredGenerationThreads.slice(0,generationVisible);
+ const trendGroups=groupTrendsByUsage((data.trend?.trends||[]) as Row[]);
+ const visibleTrendRows=trendUsageView==='used'?trendGroups.used:trendGroups.unused;
  const channelRuns=((data.runs||[]) as Row[]).filter((r:Row)=>r.channel===channel);
  const contentRecords=((data.content_records||[]) as Row[]);
  const visibleRuns=channelRuns.slice(0,publishVisible);
@@ -411,20 +414,26 @@ export function AdminMarketing({locale}:{locale:Locale}){
     <div className="admin-form-actions"><button className="admin-primary" disabled={busy}>{t('Save Seoul Trend settings','서울 트렌드 설정 저장')}</button><button type="button" className="admin-secondary" disabled={busy} onClick={()=>{if(window.confirm(t('Refresh the weekly trend pool now with one paid scan? It uses the separate Radar safety budget.','지금 유료 스캔 1회로 주간 트렌드 후보 풀을 새로고침할까요? 별도 Radar 안전 예산을 사용합니다.')))void work(async()=>{try{const r=await mutate('/trend-radar/run',{confirm_paid_scan:true});setNotice(t('Trend Radar scan completed.','Trend Radar 스캔을 완료했습니다.'));return r;}finally{await loadTrend().catch(()=>{});}});}}>{t('Refresh trend pool now','트렌드 후보 풀 새로고침')}</button></div>
    </form></div>}
    <div className="marketing-settings-card trend-candidates-card"><div className="admin-section-title"><div><p className="admin-kicker">{t('Candidates','후보')}</p><Heading level={3}>{t('Detected trends','감지된 트렌드')}</Heading><p>{t('Turn a verified trend into a Roundy carousel without searching the web again.','검증된 트렌드를 추가 웹 검색 없이 바로 Roundy 캐러셀로 만듭니다.')}</p></div><div className="trend-language-picker" role="group" aria-label={t('Content language','콘텐츠 언어')}><span>{t('Content language','콘텐츠 언어')}</span><div><button type="button" aria-pressed={trendLanguage==='ko'} onClick={()=>setTrendLanguage('ko')}>한국어</button><button type="button" aria-pressed={trendLanguage==='en'} onClick={()=>setTrendLanguage('en')}>English</button></div></div></div>
-    {!!data.trend?.trends?.length?<div className="trend-candidate-list">{data.trend.trends.map((item:Row)=>{
+    <div className="trend-usage-tabs" role="group" aria-label={t('Trend usage filter','트렌드 사용 여부')}>
+     <button type="button" aria-pressed={trendUsageView==='unused'} onClick={()=>setTrendUsageView('unused')}>{t('Not used yet','미사용')} <span>{trendGroups.unused.length}</span></button>
+     <button type="button" aria-pressed={trendUsageView==='used'} onClick={()=>setTrendUsageView('used')}>{t('Previously used','사용한 트렌드')} <span>{trendGroups.used.length}</span></button>
+    </div>
+    <p className="trend-usage-description">{trendUsageView==='unused'?t('Trends without a completed generation record, sorted by relevance.','아직 콘텐츠 생성에 사용하지 않은 후보입니다. 점수가 높은 순서로 표시됩니다.'):t('Previously used topics, newest first. “Used” means generated, not necessarily published.','콘텐츠 생성에 사용했던 주제를 최근 사용 순으로 보여줍니다. 사용 기록과 인스타그램 게시는 구분됩니다.')}</p>
+    {!!visibleTrendRows.length?<div className="trend-candidate-list">{visibleTrendRows.map((item:Row)=>{
      const ready=factPackReady(item),facts=Array.isArray(item.fact_pack?.facts)?item.fact_pack.facts as Row[]:[],sourceLinks=Array.isArray(item.source_urls)?item.source_urls as Row[]:[];
      const expires=item.fact_pack?.expires_at?Date.parse(String(item.fact_pack.expires_at)):NaN,expired=Number.isFinite(expires)&&expires<=Date.now();
+     const previouslyUsed=!!item.used_at||item.published===true;
      return <article className="trend-candidate-row" key={item.id}><div className="trend-candidate-copy">
       <div className="trend-candidate-title"><strong>{item.display_name}</strong><span className={'trend-lifecycle '+item.status}>{item.status}</span></div>
-      <div className="trend-candidate-meta"><span>{item.route_type?.replaceAll('_',' ')}</span><span>{Number(item.trend_score||0).toFixed(0)}/100</span><span>{facts.length} {t('sourced facts','개 출처 기반 사실')}</span>{item.used_at&&<span>{t('Used','사용됨')}</span>}</div>
+      <div className="trend-candidate-meta"><span>{item.route_type?.replaceAll('_',' ')}</span><span>{Number(item.trend_score||0).toFixed(0)}/100</span><span>{facts.length} {t('sourced facts','개 출처 기반 사실')}</span>{previouslyUsed&&<span>{item.published?t('Published','게시됨'):item.publication_known===false?t('Generation recorded','생성 기록 있음'):t('Content generated','콘텐츠 생성됨')}</span>}{item.used_at&&<span>{t('Last used','최근 사용')}: {new Date(item.used_at).toLocaleDateString(locale,{timeZone:'Asia/Seoul',year:'numeric',month:'short',day:'numeric'})}</span>}</div>
       <p>{item.content_angle||item.summary}</p>
       {ready?<details className="trend-fact-preview"><summary>{t('View Fact Pack / sources','팩트팩 및 출처 보기')}</summary>
        <div className="trend-fact-list">{facts.map((fact:Row,index:number)=><p key={index}><strong>{String(fact.kind||'').toUpperCase()}</strong> {trendLanguage==='en'?fact.value_en:fact.value_ko} <small>{(fact.source_ids||[]).join(', ')}</small></p>)}</div>
        <div className="trend-fact-sources">{sourceLinks.map((source:Row,index:number)=><a key={index} href={source.url} target="_blank" rel="noreferrer">{'S'+(index+1)}: {source.title||source.url}</a>)}</div>
       </details>:<p className="trend-fact-warning">{expired?t('Expired event — requires refreshed facts','기간이 지난 행사 — 정보 갱신 필요'):t('Missing verified facts — generation disabled','검증된 정보 부족 — 생성 비활성화')}</p>}
      </div>
-     <button type="button" className="trend-create-button" disabled={busy||!ready} onClick={()=>{if(window.confirm(t('Generate a fact-checked carousel from the stored Fact Pack? No new trend web search; AI copy and visuals may incur generation costs.','저장된 팩트팩으로 '+(trendLanguage==='ko'?'한국어':'영어')+' 캐러셀을 생성할까요? 추가 트렌드 검색은 하지 않지만 문구와 이미지 생성 비용은 발생할 수 있습니다.')))void work(async()=>{const r=await mutate('/trend-radar/generate',{trend_id:item.id,language:trendLanguage,confirm_generate:true});await load(r.draft?.id);setActiveTab('generation');setNotice(t('Trend guide generated. Review sourced details before publishing.','정보형 트렌드 콘텐츠가 생성됐습니다. 게시 전 출처를 검토하세요.'));return r;});}}>{t('Create guide','가이드 만들기')}</button>
-    </article>})}</div>:<p className="admin-empty">{t('No trend candidates yet. Run a scan or wait for the next scheduled scan.','아직 트렌드 후보가 없습니다. 지금 스캔을 실행하거나 다음 자동 스캔을 기다리세요.')}</p>}
+     <button type="button" className="trend-create-button" disabled={busy||!ready} onClick={()=>{if(window.confirm(previouslyUsed?t('This trend was already used. Generate another carousel from the same topic? It may cost money for AI copy and visuals, but will not run a new trend search.','이미 사용한 트렌드입니다. 같은 주제로 콘텐츠를 다시 생성할까요? 문구와 이미지 생성 비용이 발생할 수 있으며 트렌드 검색은 다시 하지 않습니다.'):t('Generate a fact-checked carousel from the stored Fact Pack? No new trend web search; AI copy and visuals may incur generation costs.','저장된 팩트팩으로 '+(trendLanguage==='ko'?'한국어':'영어')+' 캐러셀을 생성할까요? 추가 트렌드 검색은 하지 않지만 문구와 이미지 생성 비용은 발생할 수 있습니다.')))void work(async()=>{const r=await mutate('/trend-radar/generate',{trend_id:item.id,language:trendLanguage,confirm_generate:true});await load(r.draft?.id);setActiveTab('generation');setNotice(t('Trend guide generated. Review sourced details before publishing.','정보형 트렌드 콘텐츠가 생성됐습니다. 게시 전 출처를 검토하세요.'));return r;});}}>{previouslyUsed?t('Recreate guide','가이드 다시 만들기'):t('Create guide','가이드 만들기')}</button>
+    </article>})}</div>:<p className="admin-empty">{trendUsageView==='used'?t('No previously used trends yet.','아직 콘텐츠 생성에 사용한 트렌드가 없습니다.'):t('No unused trends are available. Check the used trends archive or wait for new research.','미사용 트렌드가 없습니다. 사용 기록을 확인하거나 새로운 후보를 기다려주세요.')}</p>}
    </div>
   </section>}
   {channel==='instagram'&&activeTab==='automation'&&<section className="marketing-tab-panel">   {settings&&<div className="marketing-settings-card"><div className="admin-section-title"><div><p className="admin-kicker">{t('Schedule','스케줄')}</p><Heading level={2}>{t('Automation settings','자동화 설정')}</Heading></div></div><form className="admin-form" onSubmit={e=>{e.preventDefault();void work(async()=>{await mutate('/settings',settings,'PUT');await load(draft?.id);setNotice(t('Automation saved.','자동화 설정을 저장했습니다.'));});}}>
