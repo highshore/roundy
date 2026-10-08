@@ -69,7 +69,7 @@ const page = await read('src/app/[[...path]]/page.tsx');
 assert.match(page, /retiredEventDestination/);
 assert.match(page, /permanentRedirect\(retired/);
 assert.match(page, /remaining\.append\(key,item\)/, 'Preserve referral and other unrelated query parameters');
-assert.match(await read('src/lib/data.ts'), /eventCategories=\\['1:1 Speed Mingle','Language Exchange'\\]/);
+assert.match(await read('src/lib/data.ts'), /eventCategories=\['1:1 Speed Mingle','Language Exchange'\]/);
 assert.match(await read('src/lib/event-input.ts'), /eventCategories as readonly string\[\]/);
 assert.match(app, /gender_split_enabled===false/);
 assert.match(await read('supabase/migrations/20261008160000_language_exchange_gender_neutral.sql'), /build_neutral_seating/);
