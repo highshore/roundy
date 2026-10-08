@@ -6,7 +6,7 @@ import type {createServiceRoleClient} from './supabase/service';
 
 type DB=ReturnType<typeof createServiceRoleClient>;
 type Row=Record<string,any>;
-type SourcePhoto=Row & {slot:number;asset_id:string};
+type SourcePhoto=Row & {slot:number;asset_id:string;review_status:string;storage_path:string|null;content_sha256:string;photographer:string;provider_photo_id:string;image_url:string};
 const PHOTO_COOLDOWN_DAYS=90;
 const MAX_IMAGE_BYTES=9*1024*1024;
 const PEXELS_LICENSE_URL='https://www.pexels.com/license/';
