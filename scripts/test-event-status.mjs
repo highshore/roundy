@@ -23,6 +23,7 @@ assert.equal(at(100, { total: 15, women_count: 8, men_count: 7 }, { seats_remain
 assert.equal(at(72, { total: 10, women_count: 6, men_count: 4 }).discount, 'gents');
 assert.equal(at(100, { total: 10, women_count: 6, men_count: 4 }).discount, null);
 assert.equal(at(72, { total: 10, women_count: 4, men_count: 6 }).discount, 'ladies');
+assert.equal(at(72, { total: 10, women_count: 4, men_count: 6 }, { gender_split_enabled: false }).discount, null, 'Gender-neutral events never offer balance discounts');
 assert.equal(at(100, { total: 9, women_count: 5, men_count: 4 }).discount, null);
 assert.deepEqual(at(100, { total: 16, women_count: 10, men_count: 6 }, { seats_remaining: 4 }), { kind: 'almost-full', deadline: null, discount: null });
 for (const hours of [241, 100, 0, -2]) assert.equal(at(hours, { total: 10, women_count: 7, men_count: 3 }).discount, null);
