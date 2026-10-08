@@ -56,7 +56,12 @@ function harness(){
     {url:'https://social.example/not-tiktok'}
    ]}},
    {type:'message',content:[{type:'output_text',text:JSON.stringify({candidates:[
-    {display_name:'회크닉',trend_key:'hoe-picnic',aliases:['한강 회크닉'],category:'food',scope:'seoul',status:'rising',observed_at:'2026-10-06T00:00:00Z',momentum_score:95,roundy_relevance_score:96,target_relevance_score:94,seoul_relevance_score:98,visual_potential_score:92,summary:'서울에서 포장 회와 야외 피크닉을 결합해 즐기는 흐름.',content_angle:'이번 주 데이트로 즐기는 회크닉',angle_key:'hoe-picnic-date',suggested_route:'meme_remix',material_change:false,sources:[
+    {display_name:'회크닉',trend_key:'hoe-picnic',aliases:['한강 회크닉'],category:'food',scope:'seoul',status:'rising',observed_at:'2026-10-06T00:00:00Z',momentum_score:95,roundy_relevance_score:96,target_relevance_score:94,seoul_relevance_score:98,visual_potential_score:92,summary:'서울에서 포장 회와 야외 피크닉을 결합해 즐기는 흐름.',content_angle:'이번 주 데이트로 즐기는 회크닉',angle_key:'hoe-picnic-date',suggested_route:'meme_remix',material_change:false,expires_at:'',facts:[
+     {kind:'when',value_ko:'10월 가을 피크닉',value_en:'October autumn picnic',source_urls:['https://trends.google.com/trends/explore?geo=KR&q=%ED%9A%8C%ED%81%AC%EB%8B%89']},
+     {kind:'where',value_ko:'서울 한강 공원',value_en:'Seoul Hangang parks',source_urls:['https://news.example/hoe-picnic']},
+     {kind:'program',value_ko:'포장 회와 야외 피크닉',value_en:'Takeaway sashimi and an outdoor picnic',source_urls:['https://news.example/hoe-picnic']},
+     {kind:'experience',value_ko:'야외에서 가볍게 먹고 대화하기',value_en:'Picnic and chat outdoors',source_urls:['https://news.example/hoe-picnic']}
+    ],sources:[
      {url:'https://trends.google.com/trends/explore?geo=KR&q=%ED%9A%8C%ED%81%AC%EB%8B%89',title:'Search trend',signal_type:'search',why:'회크닉 검색 관심'},
      {url:'https://news.example/hoe-picnic',title:'Current report',signal_type:'news',why:'회크닉 확산 보도'}
     ]},
@@ -68,8 +73,10 @@ function harness(){
   ],
   usage:{input_tokens:1000,output_tokens:500}
  };
+ const guide={exports:{},Date,URL,console,Set,Map};vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/lib/marketing-trend-guide.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,guide);
  const context={exports:{},Buffer,URL,AbortSignal,Intl,Date,console,setTimeout,clearTimeout,process:{env:{OPENAI_API_KEY:'mock-key'}},require:name=>{
   if(name==='server-only')return {};
+  if(name==='./marketing-trend-guide')return guide.exports;
   if(name==='./supabase/service')return {createServiceRoleClient:()=>db};
   return require(name);
  },fetch:async(url,init)=>{requests.push({url,body:JSON.parse(init.body)});return {ok:true,status:200,json:async()=>structuredClone(provider)};}};
@@ -93,6 +100,9 @@ function harness(){
  check(()=>assert.equal(h.requests[1].body.text.format.type,'json_schema'));
  check(()=>assert.equal(h.requests[1].body.text.format.strict,true));
  check(()=>assert.equal(result.candidates.length,1,'news-only candidate must be rejected'));
+ check(()=>assert.equal(result.candidates[0].fact_pack.facts.length,4,'verified facts must be saved for reuse'));
+ check(()=>assert.equal(result.candidates[0].fact_pack.layout,'event_guide'));
+ check(()=>assert.equal(h.requests.filter(r=>r.body.tools).length,1,'weekly scan searches once'));
  const trend=result.candidates[0];
  check(()=>assert.equal(trend.trend_key,'hoe-picnic'));
  check(()=>assert.equal(trend.route_type,'seoul_trend','food must route to seoul_trend even if model suggests meme_remix'));
