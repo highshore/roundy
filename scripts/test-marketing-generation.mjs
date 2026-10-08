@@ -79,8 +79,8 @@ function harness({denied=false,network=false,badSources=false,duplicate=false,ph
     campaign_version:schema.campaign_version.enum[0],
     design_preset:schema.design_preset.enum[0],
     post_type:schema.post_type.enum[0],
-    caption_ko:'한 번에 한 사람과 만나기\\n마주 앉아 차분하게 대화를 이어가는 새로운 만남입니다.',
-    caption_en:'One person at a time\\nMeet face to face and let each conversation unfold naturally.',
+    caption_ko:'한 번에 한 사람과 만나기\n마주 앉아 차분하게 대화를 이어가는 새로운 만남입니다.',
+    caption_en:'One person at a time\nMeet face to face and let each conversation unfold naturally.',
     ...(data.campaign_pattern?{
      campaign_pattern:data.campaign_pattern,campaign_tone:data.campaign_tone,campaign_goal:data.campaign_goal
     }:{
