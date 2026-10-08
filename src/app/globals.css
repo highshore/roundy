@@ -3652,3 +3652,13 @@ html:lang(ko) .legal-intro h1{word-break:keep-all}
 .trend-usage-tabs button[aria-pressed=true] span{background:var(--surface)}
 .trend-usage-description{font-size:12px;line-height:1.55;color:var(--muted);margin:0}
 @container roundy (max-width:520px){.trend-usage-tabs button{font-size:12px;padding:9px 7px;gap:6px}.trend-usage-tabs span{padding:2px 5px}}
+
+
+/* Neutral meetup mode preserves the existing two-column presentation for dated meetups. */
+.event-offer-price.general{grid-column:1/-1}
+.event-offer-price.general .event-offer-group{color:#775c59}
+.public-roster-group.neutral .public-roster-seat-tab{background:#f1ede4;color:#625a4b}
+.public-roster-group.neutral .public-roster-chip{grid-template-columns:10px minmax(0,1fr)}
+.admin-form .participant-disclosure-admin .check-row{display:flex;align-items:center;gap:12px}
+.admin-form .participant-disclosure-admin .check-row input[type=checkbox]{width:22px;min-width:22px;height:22px;flex:0 0 22px;padding:0}
+.admin-form .participant-disclosure-admin legend{font-size:12px;font-weight:800;letter-spacing:.02em;margin-bottom:10px}

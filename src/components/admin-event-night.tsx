@@ -72,10 +72,10 @@ export function AdminEventNight({event,locale}:{event:Event;locale:Locale}){
   finally{setBusy(false);}
  }
 
- const balanced=useMemo(()=>!!state&&state.checked_men>0&&state.checked_men===state.checked_women,[state]);
+ const balanced=useMemo(()=>!!state&&(event.gender_split_enabled===false?state.checked_total>=2:state.checked_men>0&&state.checked_men===state.checked_women),[state,event.gender_split_enabled]);
  if(!state)return <p className="note">{error||tr(locale,'Loading meetup control…','밋업 컨트롤을 불러오는 중…')}</p>;
 
- const checkedTotal=state.checked_men+state.checked_women;
+ const checkedTotal=state.checked_total;
  const stateLabel={waiting:tr(locale,'Waiting','대기 중'),ready:tr(locale,'Ready','준비 완료'),live:tr(locale,'Live','진행 중'),final_choices:tr(locale,'Final choices','최종 선택'),finished:tr(locale,'Finished','종료')}[state.state];
  return <div className="admin-night">
   <section className="admin-night-summary">
@@ -85,8 +85,8 @@ export function AdminEventNight({event,locale}:{event:Event;locale:Locale}){
 
   <div className="admin-night-stats">
    <span><b>{checkedTotal}</b>{tr(locale,'checked in','체크인')}</span>
-   <span><b>{state.checked_women}</b>{tr(locale,'women','여성')}</span>
-   <span><b>{state.checked_men}</b>{tr(locale,'men','남성')}</span>
+   {event.gender_split_enabled!==false&&<span><b>{state.checked_women}</b>{tr(locale,'women','여성')}</span>}
+   {event.gender_split_enabled!==false&&<span><b>{state.checked_men}</b>{tr(locale,'men','남성')}</span>}
    <span><b>{state.total_rounds||'—'}</b>{tr(locale,'rounds','라운드')}</span>
   </div>
 
@@ -94,14 +94,14 @@ export function AdminEventNight({event,locale}:{event:Event;locale:Locale}){
    <div className="admin-night-section-head"><div><Heading level={4}>{tr(locale,'Attendee check-in','참가자 체크인')}</Heading><span>{tr(locale,'QR scan or manual check-in','QR 스캔 또는 수동 체크인')}</span></div><button type="button" className="admin-secondary qr-scan-button" disabled={busy||state.state!=='waiting'||!state.check_in_open} onClick={()=>setScannerOpen(true)}><ScanLine size={16}/>{tr(locale,'Scan QR','QR 스캔')}</button></div>
    {state.attendees.map(person=><div className="admin-checkin-row" key={person.user_id}>
     <span className="admin-checkin-avatar" style={person.photo?{backgroundImage:`url("${person.photo}")`}:undefined}>{!person.photo&&(person.full_name?.[0]||'?')}</span>
-    <div><b>{person.full_name}</b><span>{person.gender==='female'?tr(locale,'Woman','여성'):person.gender==='male'?tr(locale,'Man','남성'):tr(locale,'Not set','미설정')}</span></div>
+    <div><b>{person.full_name}</b>{event.gender_split_enabled!==false&&<span>{person.gender==='female'?tr(locale,'Woman','여성'):person.gender==='male'?tr(locale,'Man','남성'):tr(locale,'Not set','미설정')}</span>}</div>
     <button type="button" className={person.checked_in_at?'checked':''} disabled={busy||state.state!=='waiting'||!state.check_in_open} onClick={()=>void act('check-in',{userId:person.user_id,checked:!person.checked_in_at})}>{person.checked_in_at?<><UserX size={16}/>{tr(locale,'Undo','취소')}</>:<><UserCheck size={16}/>{tr(locale,'Check in','체크인')}</>}</button>
    </div>)}
    {!state.attendees.length&&<p className="note">{tr(locale,'No confirmed attendees yet.','확정된 참가자가 아직 없습니다.')}</p>}
   </section>
 
   <section className="admin-night-actions">
-   {state.state==='waiting'&&<><p>{!state.check_in_open?tr(locale,'The 15-minute check-in grace period has ended.','15분 체크인 유예 시간이 종료되었습니다.'):!balanced?tr(locale,'Check in an equal number of women and men before preparing the meetup.','밋업 준비 전 여성과 남성의 체크인 인원을 같게 맞춰 주세요.'):state.can_prepare?tr(locale,'Check-in is balanced. Prepare the rotation to assign starting tables.','체크인 인원이 균형을 이뤘습니다. 로테이션을 준비해 시작 테이블을 배정하세요.'):tr(locale,'Check-in is balanced. Meetup preparation opens 30 minutes before the event.','체크인 인원이 균형을 이뤘습니다. 밋업 준비는 시작 30분 전부터 가능합니다.')}</p><button className="admin-primary" disabled={busy||!balanced||!state.can_prepare} onClick={()=>void act('prepare')}><RotateCw size={17}/>{tr(locale,'Prepare Meetup','밋업 준비')}</button></>}
+   {state.state==='waiting'&&<><p>{!state.check_in_open?tr(locale,'The 15-minute check-in grace period has ended.','15분 체크인 유예 시간이 종료되었습니다.'):event.gender_split_enabled===false&&state.checked_total<2?tr(locale,'Check in at least two participants before preparing a neutral meetup.','성별 구분 없는 모임은 최소 2명이 체크인해야 준비할 수 있어요.'):!balanced?tr(locale,'Check in an equal number of women and men before preparing the meetup.','밋업 준비 전 여성과 남성의 체크인 인원을 같게 맞춰 주세요.'):state.can_prepare?tr(locale,'Check-in is balanced. Prepare the rotation to assign starting tables.','체크인 인원이 균형을 이뤘습니다. 로테이션을 준비해 시작 테이블을 배정하세요.'):tr(locale,'Check-in is balanced. Meetup preparation opens 30 minutes before the event.','체크인 인원이 균형을 이뤘습니다. 밋업 준비는 시작 30분 전부터 가능합니다.')}</p><button className="admin-primary" disabled={busy||!balanced||!state.can_prepare} onClick={()=>void act('prepare')}><RotateCw size={17}/>{tr(locale,'Prepare Meetup','밋업 준비')}</button></>}
    {state.state==='ready'&&<><p>{state.can_start?tr(locale,'Starting tables are assigned. Participants can see their table now.','시작 테이블이 배정되었습니다. 참가자 화면에 테이블이 표시됩니다.'):tr(locale,'Starting tables are ready. The Start button unlocks 15 minutes before the scheduled event time.','시작 테이블이 준비되었습니다. 시작 버튼은 예정 시간 15분 전부터 활성화됩니다.')}</p><button className="admin-primary" disabled={busy||!state.can_start} onClick={()=>void act('start')}><Play size={17}/>{tr(locale,'Start Meetup','밋업 시작')}</button></>}
    {state.state==='live'&&<><p>{tr(locale,'Round ','라운드 ')}{state.current_round} / {state.total_rounds}</p><button className="admin-primary" disabled={busy} onClick={()=>void act('advance')}><RotateCw size={17}/>{state.current_round<state.total_rounds?tr(locale,'Start Next Round','다음 라운드 시작'):tr(locale,'Open Final Choices','최종 선택 열기')}</button></>}
    {state.state==='final_choices'&&<><p>{state.submitted_count>=state.checked_total?tr(locale,'Everyone has submitted. Finish the meetup to publish mutual matches.','모든 참가자가 제출했습니다. 밋업을 종료하면 서로 선택한 매칭이 공개됩니다.'):tr(locale,`${state.submitted_count} of ${state.checked_total} checked-in participants have submitted final choices.`,`체크인한 참가자 ${state.checked_total}명 중 ${state.submitted_count}명이 최종 선택을 제출했습니다.`)}</p><button className="admin-primary" disabled={busy||state.submitted_count<state.checked_total} onClick={()=>void act('finish')}><Square size={17}/>{tr(locale,'Finish Meetup','밋업 종료')}</button></>}

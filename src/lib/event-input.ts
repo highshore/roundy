@@ -2,6 +2,9 @@ import {
   validateHeightRequirements,
   validateRequirements,
   validateSmokingRequirements,
+  allNationalities,
+  anyHeightRequirements,
+  anySmokingRequirements,
 } from './event-requirements';
 import { eventCategories } from './data';
 import { MINIMUM_AGE } from './age';
@@ -22,6 +25,11 @@ export function eventInput(body:unknown) {
  const duration_minutes=int('duration_minutes',15,1440),lockdown_minutes=int('lockdown_minutes',0,43200);
  const reminder_minutes=v.reminder_minutes===null?null:int('reminder_minutes',0,43200);
  const status=text('status',20);if(!['draft','live'].includes(status))throw new Error('Invalid event status.');
+ const gender_split_enabled=v.gender_split_enabled===undefined?true:v.gender_split_enabled;
+ if(typeof gender_split_enabled!=='boolean')throw new Error('Choose whether this event has gender-separated seats.');
+ const price_general=v.price_general===undefined?0:v.price_general;
+ if(typeof price_general!=='number'||!Number.isInteger(price_general)||price_general<0||price_general>10000000)throw new Error('Choose a valid single participant fee.');
+ if(!gender_split_enabled&&status==='live'&&price_general<1000)throw new Error('Set a participant fee before publishing a gender-neutral event.');
  const category=text('category',40);if(!(eventCategories as readonly string[]).includes(category))throw new Error('Choose a valid event category.');
  const latitude=v.latitude,longitude=v.longitude;
  if((latitude===null)!==(longitude===null)||!(latitude===null||typeof latitude==='number'&&Number.isFinite(latitude)&&Math.abs(latitude)<=90)||!(longitude===null||typeof longitude==='number'&&Number.isFinite(longitude)&&Math.abs(longitude)<=180))throw new Error('Select a valid location.');
@@ -36,9 +44,11 @@ export function eventInput(body:unknown) {
 
  return {
   ...(v.venue_description===undefined?{}:{venue_description:text('venue_description',1000,false)}),
-  nationality_requirements:validateRequirements(v.nationality_requirements),
-  height_requirements:validateHeightRequirements(v.height_requirements),
-  smoking_requirements:validateSmokingRequirements(v.smoking_requirements),
+  gender_split_enabled,
+  price_general,
+  nationality_requirements:gender_split_enabled?validateRequirements(v.nationality_requirements):allNationalities(),
+  height_requirements:gender_split_enabled?validateHeightRequirements(v.height_requirements):anyHeightRequirements(),
+  smoking_requirements:gender_split_enabled?validateSmokingRequirements(v.smoking_requirements):anySmokingRequirements(),
   participant_disclosures:validateParticipantDisclosures(v.participant_disclosures),
   event_language:validateEventLanguage(v.event_language),
   title,

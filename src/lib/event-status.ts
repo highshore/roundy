@@ -4,6 +4,7 @@ type StatusEvent = {
   starts_at: string;
   ends_at: string;
   capacity: number;
+  gender_split_enabled?: boolean;
   seats_remaining: number;
   status: string;
   lockdown_minutes?: number;
@@ -31,7 +32,7 @@ export function eventStatus(event: StatusEvent, counts: Counts | undefined, now:
 
   // Balance offers apply only during the admin-configured lockdown window.
   const lockdown = kind === 'imminent';
-  const discount = lockdown && counts
+  const discount = event.gender_split_enabled !== false && lockdown && counts
     ? counts.women_count - counts.men_count > 1 ? 'gents'
       : counts.men_count - counts.women_count > 1 ? 'ladies' : null
     : null;
