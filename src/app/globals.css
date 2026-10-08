@@ -3620,3 +3620,10 @@ html:lang(ko) .legal-intro h1{word-break:keep-all}
  .generation-thread-detail{gap:13px}
  .generation-attempt-copy>small{overflow-wrap:anywhere}
 }
+
+
+/* Trend Radar: prevent iPhone refresh buttons from collapsing into vertical characters. */
+.marketing-tab-panel>.admin-section-title{flex-wrap:wrap}
+.marketing-tab-panel>.admin-section-title>div{flex:1 1 230px;min-width:0}
+.marketing-tab-panel>.admin-section-title .trend-refresh-button{flex:0 0 auto;white-space:nowrap;min-width:90px}
+.trend-scan-summary{font-size:13px;line-height:1.6;color:var(--muted);overflow-wrap:anywhere}
