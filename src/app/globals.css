@@ -3641,3 +3641,14 @@ html:lang(ko) .legal-intro h1{word-break:keep-all}
 .trend-fact-warning{margin-top:12px;font-size:12px;color:#963e32}
 .trend-create-button:disabled{cursor:not-allowed;opacity:.45}
 @container roundy (max-width:580px){.trend-candidate-copy{min-width:0}.trend-candidate-row{flex-wrap:wrap}.trend-candidate-row .trend-create-button{width:100%;min-height:43px}}
+
+
+/* Seoul Trend usage archive, separate from the trend's momentum/lifecycle status. */
+.trend-usage-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;padding:4px;background:var(--surface);border:1px solid var(--border);border-radius:16px}
+.trend-usage-tabs button{min-width:0;min-height:44px;display:flex;align-items:center;justify-content:center;gap:9px;padding:9px 12px;border:0;border-radius:12px;background:transparent;color:var(--muted);font-size:13px;font-weight:750;cursor:pointer;white-space:normal;text-align:center}
+.trend-usage-tabs button[aria-pressed=true]{background:var(--paper);color:var(--ink);box-shadow:0 1px 5px #00000010}
+.trend-usage-tabs button:focus-visible{outline:2px solid var(--ink);outline-offset:1px}
+.trend-usage-tabs span{min-width:22px;border-radius:999px;padding:3px 6px;background:var(--paper);font-size:11px;font-weight:800;font-variant-numeric:tabular-nums}
+.trend-usage-tabs button[aria-pressed=true] span{background:var(--surface)}
+.trend-usage-description{font-size:12px;line-height:1.55;color:var(--muted);margin:0}
+@container roundy (max-width:520px){.trend-usage-tabs button{font-size:12px;padding:9px 7px;gap:6px}.trend-usage-tabs span{padding:2px 5px}}
