@@ -411,16 +411,30 @@ export async function markTrendUsed(db:DB,trendId:string){
 export async function trendOverview(){
  const db=createServiceRoleClient(),date=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()),dayStart=Date.parse(date+'T00:00:00+09:00'),monthStart=Date.parse(date.slice(0,7)+'-01T00:00:00+09:00');
  const freshSince=new Date(Date.now()-TREND_POOL_FRESH_DAYS*86400000).toISOString();
- const [control,settings,scans,trends,usage,pool]=await Promise.all([
+ const [control,settings,scans,trends,usage,pool,publishedDrafts]=await Promise.all([
   db.from('marketing_trend_control').select('*').eq('singleton',true).single(),
   db.from('marketing_automation_settings').select('trend_radar_enabled,trend_scan_interval_hours,trend_override_enabled,trend_override_score').eq('singleton',true).single(),
   db.from('marketing_trend_scans').select('*').order('created_at',{ascending:false}).limit(20),
-  db.from('marketing_trends').select('*').order('trend_score',{ascending:false}).limit(20),
+  db.from('marketing_trends').select('*').order('trend_score',{ascending:false}).limit(100),
   db.from('marketing_trend_scans').select('reserved_usd,created_at,status').gte('created_at',new Date(monthStart).toISOString()),
-  db.from('marketing_trends').select('id,category,source_urls,fact_pack,status,trend_score,last_seen_at,cooldown_until,material_change,material_change_at,used_at').gte('last_seen_at',freshSince).limit(100)
+  db.from('marketing_trends').select('id,category,source_urls,fact_pack,status,trend_score,last_seen_at,cooldown_until,material_change,material_change_at,used_at').gte('last_seen_at',freshSince).limit(100),
+  // Read-only publication lookup: legacy manual drafts may retain a trend_key without trend_id.
+  db.from('instagram_post_drafts').select('trend_id,content_document').eq('status','published').limit(200)
  ]);
  for(const r of [control,settings,scans,trends,usage,pool])if(r.error)throw r.error;
  const rows=usage.data||[],now=Date.now(),threshold=Number(settings.data?.trend_override_score||80),freshRows=(pool.data||[]) as Row[];
+ const publishedById=new Set<string>(),publishedByKey=new Set<string>();
+ if(!publishedDrafts.error){
+  for(const d of (publishedDrafts.data||[]) as Row[]){
+   if(typeof d.trend_id==='string')publishedById.add(d.trend_id);
+   const key=d.content_document?.trend?.trend_key;
+   if(typeof key==='string'&&key)publishedByKey.add(key);
+  }
+ }
+ const trendsWithUsage=(trends.data||[] as Row[]).map((row:Row)=>({
+  ...row,published:!publishedDrafts.error&&(publishedById.has(String(row.id))||publishedByKey.has(String(row.trend_key))),
+  publication_known:!publishedDrafts.error
+ }));
  const available=freshRows.filter((row:Row)=>factPackReady(row)&&Number(row.trend_score)>=threshold&&(row.status==='emerging'||row.status==='rising'||row.status==='peak'&&Number(row.trend_score)>=90)&&(!row.cooldown_until||Date.parse(row.cooldown_until)<=now||Boolean(row.material_change&&row.material_change_at&&(!row.used_at||Date.parse(row.material_change_at)>Date.parse(row.used_at))))).length;
- return {control:control.data,settings:settings.data,scans:scans.data,trends:trends.data,pool:{fresh_days:TREND_POOL_FRESH_DAYS,target_min:TREND_POOL_TARGET_MIN,target_max:TREND_POOL_TARGET_MAX,refill_threshold:TREND_POOL_REFILL_THRESHOLD,fresh_candidates:freshRows.length,available_candidates:available},usage:{daily_reserved_usd:rows.filter((x:Row)=>Date.parse(x.created_at)>=dayStart).reduce((sum:number,x:Row)=>sum+Number(x.reserved_usd||0),0),monthly_reserved_usd:rows.reduce((sum:number,x:Row)=>sum+Number(x.reserved_usd||0),0),daily_budget_usd:Number(control.data.daily_budget_usd),monthly_budget_usd:Number(control.data.monthly_budget_usd)}};
+ return {control:control.data,settings:settings.data,scans:scans.data,trends:trendsWithUsage,pool:{fresh_days:TREND_POOL_FRESH_DAYS,target_min:TREND_POOL_TARGET_MIN,target_max:TREND_POOL_TARGET_MAX,refill_threshold:TREND_POOL_REFILL_THRESHOLD,fresh_candidates:freshRows.length,available_candidates:available},usage:{daily_reserved_usd:rows.filter((x:Row)=>Date.parse(x.created_at)>=dayStart).reduce((sum:number,x:Row)=>sum+Number(x.reserved_usd||0),0),monthly_reserved_usd:rows.reduce((sum:number,x:Row)=>sum+Number(x.reserved_usd||0),0),daily_budget_usd:Number(control.data.daily_budget_usd),monthly_budget_usd:Number(control.data.monthly_budget_usd)}};
 }
