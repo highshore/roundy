@@ -3627,3 +3627,17 @@ html:lang(ko) .legal-intro h1{word-break:keep-all}
 .marketing-tab-panel>.admin-section-title>div{flex:1 1 230px;min-width:0}
 .marketing-tab-panel>.admin-section-title .trend-refresh-button{flex:0 0 auto;white-space:nowrap;min-width:90px}
 .trend-scan-summary{font-size:13px;line-height:1.6;color:var(--muted);overflow-wrap:anywhere}
+
+
+/* Seoul Trend Fact Pack preview: compact on mobile and source-first. */
+.trend-fact-preview{margin-top:12px;border:1px solid var(--border);border-radius:14px;padding:11px 13px;max-width:100%;background:var(--surface)}
+.trend-fact-preview summary{cursor:pointer;font-size:13px;font-weight:700;color:var(--ink)}
+.trend-fact-list{display:grid;gap:6px;margin-top:12px}
+.trend-fact-list p{font-size:13px;line-height:1.55;overflow-wrap:anywhere;margin:0}
+.trend-fact-list strong{color:var(--muted);font-size:11px;margin-right:7px}
+.trend-fact-list small{font-size:11px;color:var(--muted);margin-left:6px}
+.trend-fact-sources{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)}
+.trend-fact-sources a{font-size:11px;line-height:1.4;text-decoration:underline;overflow-wrap:anywhere}
+.trend-fact-warning{margin-top:12px;font-size:12px;color:#963e32}
+.trend-create-button:disabled{cursor:not-allowed;opacity:.45}
+@container roundy (max-width:580px){.trend-candidate-copy{min-width:0}.trend-candidate-row{flex-wrap:wrap}.trend-candidate-row .trend-create-button{width:100%;min-height:43px}}

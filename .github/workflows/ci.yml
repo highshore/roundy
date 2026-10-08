@@ -21,9 +21,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
+      - run: node scripts/test-marketing-trend-guides.mjs
       - run: node scripts/test-marketing-trend-radar.mjs
-      - run: npm test
       - run: node scripts/test-marketing-generation.mjs
+      - run: npm test
       - run: node scripts/test-marketing-compact.mjs
       - run: node scripts/test-marketing-compact-runtime.mjs
       - run: node scripts/test-marketing-output-recovery.mjs

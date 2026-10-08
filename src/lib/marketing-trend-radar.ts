@@ -1,5 +1,6 @@
 import 'server-only';
 import {createServiceRoleClient} from './supabase/service';
+import {layoutForTrend,readTrendFactPack,trendFactPackIssues,factPackReady} from './marketing-trend-guide';
 
 type Row=Record<string,any>;
 type DB=ReturnType<typeof createServiceRoleClient>;
@@ -8,8 +9,8 @@ export type TrendStatus='emerging'|'rising'|'peak'|'cooling'|'dead';
 const MODEL='gpt-4.1-mini';
 const TREND_POOL_FRESH_DAYS=7;
 const TREND_POOL_REFILL_THRESHOLD=5;
-const TREND_POOL_TARGET_MIN=15;
-const TREND_POOL_TARGET_MAX=30;
+const TREND_POOL_TARGET_MIN=6;
+const TREND_POOL_TARGET_MAX=12;
 const CATEGORIES=new Set(['food','activity','place','event','meme','lifestyle','research','other']);
 const STATUSES=new Set<TrendStatus>(['emerging','rising','peak','cooling','dead']);
 const ROUTES=new Set<TrendRoute>(['seoul_trend','seoul_dating','meme_remix','trend_research']);
@@ -106,6 +107,19 @@ const TREND_CANDIDATE_SCHEMA={
           "material_change": {
             "type": "boolean"
           },
+          "expires_at": {"type":"string"},
+          "facts": {
+            "type":"array",
+            "items":{
+              "type":"object","additionalProperties":false,
+              "properties":{
+                "kind":{"type":"string","enum":["when","where","price","booking","program","experience","access","context"]},
+                "value_ko":{"type":"string"},"value_en":{"type":"string"},
+                "source_urls":{"type":"array","items":{"type":"string"}}
+              },
+              "required":["kind","value_ko","value_en","source_urls"]
+            }
+          },
           "sources": {
             "type": "array",
             "items": {
@@ -157,6 +171,8 @@ const TREND_CANDIDATE_SCHEMA={
           "angle_key",
           "suggested_route",
           "material_change",
+          "expires_at",
+          "facts",
           "sources"
         ]
       }
@@ -242,19 +258,23 @@ function researchPrompt(recent:Row[]){
   'Prefer specific events and verifiable public interest signals over generic perennial date recommendations.',
   'For each supported topic, summarize the evidence and CITE exact HTTPS source URLs. Gather both social/search interest and reporting when possible.',
   'Never fabricate a source, reported fact, time, engagement count, or URL. Fewer supported topics are better than invented ones.',
-  'The next step will structure your findings; provide a concise research brief with links, not JSON.',
+  'The next step will structure your findings. Gather exact names, venue, event dates, prices, reservation conditions and real programs, each with a supporting HTTPS link. Provide a concise research brief, not JSON.',
   'Recently stored trends (avoid repetition unless genuinely changed): '+JSON.stringify(recent.slice(0,25))
  ].join('\n');
 }
 function formattingPrompt(recent:Row[],research:Row,verified:Set<string>){
  return [
   'Build candidate trend records ONLY from the research evidence below. Do not search again.',
-  'Return 6–12 CURRENT or newly accelerating Seoul/Korea trends when supported; fewer are fine if evidence is insufficient.',
+  'Return 6–8 CURRENT or newly accelerating Seoul/Korea trends when supported; fewer are fine if evidence is insufficient.',
   'For every candidate use two distinct sources AND two independent signal types (search, social, news). Do not fabricate URLs or signal types.',
   'URLs must be copied verbatim from the VERIFIED SOURCE URLS list. If a source does not support a topic, omit that topic.',
   'Keep evidence from the last 7 days. Mark status emerging/rising/peak/cooling/dead as applicable. Give short Korean display names and practical Roundy content angles.',
   'Score momentum, Roundy relevance, 20s–30s relevance, Seoul relevance, and visual potential from 0 to 100. The server computes the weighted score.',
-  'The server chooses route from category. Mark material_change only for demonstrable changes to an existing trend. Do not recycle a recent content angle.',
+  'The server chooses route from category. Mark material_change only for demonstrable changes. Do not recycle an old angle.',
+  'For EACH candidate, extract 3–6 factual records from cited evidence. Each fact needs kind, value_ko, value_en, and exact source_urls from the verified list. Date, place, actual named program, price and booking conditions are far more useful than generic feelings.',
+  'For events include both WHEN and WHERE (or a named PROGRAM if venue is not verified). Do not fabricate start times, tickets, availability, transit time, audience figures, popularity or logistics.',
+  'For expires_at give ISO timestamp of the day AFTER the event ends, Seoul timezone; use empty string if no documented end date. This is not a claim to put on a card.',
+  'Keep facts concise and bilingual: Korean for value_ko and faithful English for value_en. If fewer than three source-supported facts exist, omit that candidate.',
   'VERIFIED SOURCE URLS:\n'+[...verified].slice(0,60).join('\n'),
   'RESEARCH BRIEF:\n'+outputText(research).slice(0,16000),
   'RECENT STORED TRENDS:\n'+JSON.stringify(recent.slice(0,25))
@@ -280,14 +300,28 @@ async function saveCandidates(db:DB,result:Row,provider:Set<string>){
    return [{url,title:clean(source?.title,180),signal_type:signal,why:clean(source?.why,500)}];
   });
   const dedup=[...new Map(sources.map((source:Row)=>[source.url,source])).values()].slice(0,8),signals=[...new Set(dedup.map((source:Row)=>source.signal_type))];
-  if(dedup.length<2||signals.length<2)continue;
+  const independentHosts=new Set(dedup.map((source:Row)=>new URL(source.url).hostname.replace(/^www\./,'')));
+  if(dedup.length<2||independentHosts.size<2)continue;
+  // Officially documented events can be useful without claiming independent social/search momentum.
+  if(signals.length<2&&!['event','place','activity','food','lifestyle'].includes(category))continue;
+  const linkedFacts=(Array.isArray(raw?.facts)?raw.facts:[]).slice(0,9).flatMap((fact:Row)=>{
+   const ids=[...new Set((Array.isArray(fact?.source_urls)?fact.source_urls:[]).map((x:unknown)=>canonical(x)).filter(Boolean))].flatMap(url=>{
+    const idx=dedup.findIndex((source:Row)=>source.url===url);return idx>=0?['S'+(idx+1)]:[];
+   });
+   if(!ids.length)return [];
+   return [{kind:String(fact.kind||''),value_ko:String(fact.value_ko||'').slice(0,220),value_en:String(fact.value_en||'').slice(0,220),source_ids:ids}];
+  });
+  const rawExpiry=String(raw?.expires_at||'');
+  const factPack={version:1,origin:'radar_verified_source_brief',checked_at:new Date().toISOString(),expires_at:rawExpiry&&Number.isFinite(Date.parse(rawExpiry))?new Date(rawExpiry).toISOString():null,layout:layoutForTrend(category,linkedFacts.length),facts:linkedFacts};
+  const verifiedFactPack=readTrendFactPack(factPack,dedup.map((_:Row,i:number)=>'S'+(i+1)));
+  if(trendFactPackIssues(verifiedFactPack,category).length)continue;
   const confidence=sourceConfidence(dedup.length,signals.length),score=computeTrendScore(raw,confidence),route=routeFor(category,raw?.suggested_route),observed=Number.isFinite(Date.parse(String(raw?.observed_at||'')))?new Date(String(raw.observed_at)).toISOString():new Date().toISOString(),material=raw?.material_change===true;
   const existing=checked(await db.from('marketing_trends').select('*').eq('trend_key',key).maybeSingle()).data as Row|null;
   const row={
    trend_key:key,display_name:display,aliases:Array.isArray(raw?.aliases)?raw.aliases.map((x:unknown)=>clean(x,120)).filter(Boolean).slice(0,12):[],
    category,scope:raw?.scope==='korea'?'korea':'seoul',status,observed_at:observed,last_seen_at:new Date().toISOString(),
    momentum_score:clamp(raw?.momentum_score),roundy_relevance_score:clamp(raw?.roundy_relevance_score),target_relevance_score:clamp(raw?.target_relevance_score),seoul_relevance_score:clamp(raw?.seoul_relevance_score),visual_potential_score:clamp(raw?.visual_potential_score),source_confidence_score:confidence,trend_score:score,
-   signal_types:signals,source_urls:dedup,summary:clean(raw?.summary,2000),content_angle:clean(raw?.content_angle,1000),angle_key:normalizeTrendKey(raw?.angle_key||raw?.content_angle).slice(0,120),route_type:route,
+   signal_types:signals,source_urls:dedup,fact_pack:verifiedFactPack,summary:clean(raw?.summary,2000),content_angle:clean(raw?.content_angle,1000),angle_key:normalizeTrendKey(raw?.angle_key||raw?.content_angle).slice(0,120),route_type:route,
    material_change:material,material_change_at:material?new Date().toISOString():existing?.material_change_at||null,updated_at:new Date().toISOString()
   };
   if(existing){
@@ -367,7 +401,7 @@ export async function selectTrendForAutomaticContent(db:DB,threshold:number){
   let adjusted=Number(row.trend_score);
   if(recent.some(x=>x.id!==row.id&&x.category===row.category&&Date.parse(x.used_at)>=now-14*86400000))adjusted-=10;
   if(row.angle_key&&recent.some(x=>x.id!==row.id&&x.angle_key===row.angle_key&&Date.parse(x.used_at)>=now-30*86400000))adjusted-=15;
-  if(adjusted>=threshold)eligible.push({...row,adjusted_trend_score:Number(adjusted.toFixed(2))});
+  if(adjusted>=threshold&&factPackReady(row))eligible.push({...row,adjusted_trend_score:Number(adjusted.toFixed(2))});
  }
  return eligible.sort((a,b)=>Number(b.adjusted_trend_score)-Number(a.adjusted_trend_score))[0]||null;
 }
@@ -383,10 +417,10 @@ export async function trendOverview(){
   db.from('marketing_trend_scans').select('*').order('created_at',{ascending:false}).limit(20),
   db.from('marketing_trends').select('*').order('trend_score',{ascending:false}).limit(20),
   db.from('marketing_trend_scans').select('reserved_usd,created_at,status').gte('created_at',new Date(monthStart).toISOString()),
-  db.from('marketing_trends').select('id,status,trend_score,last_seen_at,cooldown_until,material_change,material_change_at,used_at').gte('last_seen_at',freshSince).limit(100)
+  db.from('marketing_trends').select('id,category,source_urls,fact_pack,status,trend_score,last_seen_at,cooldown_until,material_change,material_change_at,used_at').gte('last_seen_at',freshSince).limit(100)
  ]);
  for(const r of [control,settings,scans,trends,usage,pool])if(r.error)throw r.error;
  const rows=usage.data||[],now=Date.now(),threshold=Number(settings.data?.trend_override_score||80),freshRows=(pool.data||[]) as Row[];
- const available=freshRows.filter((row:Row)=>Number(row.trend_score)>=threshold&&(row.status==='emerging'||row.status==='rising'||row.status==='peak'&&Number(row.trend_score)>=90)&&(!row.cooldown_until||Date.parse(row.cooldown_until)<=now||Boolean(row.material_change&&row.material_change_at&&(!row.used_at||Date.parse(row.material_change_at)>Date.parse(row.used_at))))).length;
+ const available=freshRows.filter((row:Row)=>factPackReady(row)&&Number(row.trend_score)>=threshold&&(row.status==='emerging'||row.status==='rising'||row.status==='peak'&&Number(row.trend_score)>=90)&&(!row.cooldown_until||Date.parse(row.cooldown_until)<=now||Boolean(row.material_change&&row.material_change_at&&(!row.used_at||Date.parse(row.material_change_at)>Date.parse(row.used_at))))).length;
  return {control:control.data,settings:settings.data,scans:scans.data,trends:trends.data,pool:{fresh_days:TREND_POOL_FRESH_DAYS,target_min:TREND_POOL_TARGET_MIN,target_max:TREND_POOL_TARGET_MAX,refill_threshold:TREND_POOL_REFILL_THRESHOLD,fresh_candidates:freshRows.length,available_candidates:available},usage:{daily_reserved_usd:rows.filter((x:Row)=>Date.parse(x.created_at)>=dayStart).reduce((sum:number,x:Row)=>sum+Number(x.reserved_usd||0),0),monthly_reserved_usd:rows.reduce((sum:number,x:Row)=>sum+Number(x.reserved_usd||0),0),daily_budget_usd:Number(control.data.daily_budget_usd),monthly_budget_usd:Number(control.data.monthly_budget_usd)}};
 }

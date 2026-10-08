@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import {draftQuality} from './marketing-editorial';
+import {factPackReady} from './marketing-trend-guide';
 import type { createClient } from './supabase/server';
 import { createServiceRoleClient } from './supabase/service';
 import { marketingApi as legacyMarketingApi } from './marketing-legacy';
@@ -169,6 +170,7 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
   const trend=checked(await service.from('marketing_trends').select('*').eq('id',trendId).maybeSingle());
   if(!trend)return json({error:'TREND_NOT_FOUND'},404);
   if(!['emerging','rising','peak'].includes(String(trend.status)))return json({error:'TREND_NOT_ACTIVE'},409);
+  if(!factPackReady(trend))return json({error:'TREND_FACT_PACK_NOT_READY',details:'The cached trend needs three sourced facts and a valid event date before generating content.'},409);
   const recentSince=new Date(Date.now()-30*1000).toISOString();
   const recent=checked(await service.from('marketing_generation_jobs').select('id,status').contains('request_payload',{trend_id:trendId}).gte('created_at',recentSince).limit(1));
   if(recent.length)return json({error:'GENERATION_COOLDOWN_30_SECONDS'},429);
@@ -179,14 +181,14 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
   const recommended=String(rec?.recommended_time_kst||'21:00').slice(0,5);
   const draft=checked(await service.from('instagram_post_drafts').insert({
    draft_date:today,draft_role:'candidate',status:'needs_approval',generation_source:'manual',visual_source:'auto_ai',
-   content_language:language,content_mode:'prelaunch',draft_kind:'growth_carousel',growth_topic_type:String(trend.route_type||'seoul_trend'),
+   content_language:language,content_mode:'prelaunch',draft_kind:'growth_carousel',growth_topic_type:'seoul_trend',
    trend_id:trendId,content_pillar:'seoul',caption:'',cta:'Follow @roundy.meet',destination_url:'https://roundy.team',images:[],carousel_slides:[],
    research_sources:[],research_status:'pending',generation_reason:'Manual Trend Radar content: '+String(trend.display_name),
    recommended_time_kst:recommended,window_start_kst:rec?.window_start_kst||'20:30',window_end_kst:rec?.window_end_kst||'21:30',
    scheduled_for:today+'T'+recommended+':00+09:00',revision:1
   }).select('*').single());
   const instruction=[String(trend.display_name),String(trend.content_angle||trend.summary||'')].filter(Boolean).join(': ').slice(0,500);
-  const result=await runGeneration(draft.id,{request_key:'trend-manual:'+trendId+':'+language+':'+randomUUID(),revision:draft.revision,mode:'both',visual_mode:'cards',visual_source:'auto_ai',content_mode:'growth_carousel',topic_type:String(trend.route_type||'seoul_trend'),language,instruction},user.id,false);
+  const result=await runGeneration(draft.id,{request_key:'trend-manual:'+trendId+':'+language+':'+randomUUID(),revision:draft.revision,mode:'both',visual_mode:'cards',visual_source:'auto_ai',content_mode:'growth_carousel',topic_type:'seoul_trend',language,instruction},user.id,false);
   if(result.job?.status==='completed')checked(await service.from('marketing_trends').update({used_at:new Date().toISOString(),cooldown_until:new Date(Date.now()+60*86400000).toISOString(),material_change:false,updated_at:new Date().toISOString()}).eq('id',trendId));
   return json(result,result.error?400:200);
  }
