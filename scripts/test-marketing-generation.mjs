@@ -26,7 +26,7 @@ function harness({denied=false,network=false,badSources=false,duplicate=false,ph
   if(name==='react')return {createElement:(tag,props,...children)=>({tag,props,children})};
   if(name==='next/og')return {ImageResponse:class{constructor(tree){this.tree=tree;}arrayBuffer(){return Promise.resolve(Buffer.from(JSON.stringify(this.tree)));}}};
   if(name==='sharp')return bytes=>{const api={metadata:async()=>({width:1080,height:1350}),rotate:()=>api,resize:()=>api,jpeg:()=>api,toBuffer:async()=>Buffer.from(bytes)};return api;};
-  if(name.startsWith('./marketing-'))return load('src/lib/'+name.slice(2)+'.ts');return require(name);
+  if(name.startsWith('./')&&fs.existsSync('src/lib/'+name.slice(2)+'.ts'))return load('src/lib/'+name.slice(2)+'.ts');return require(name);
  },fetch:async(url,init)=>{
   const body=JSON.parse(init.body);requests.push({url,body});if(network)throw new Error('timeout');
   if(url.endsWith('images/generations'))return photo403?{ok:false,status:403,json:async()=>({error:{message:'Verify organization'}})}:{ok:true,json:async()=>({data:[0,1,2].map(()=>({b64_json:Buffer.alloc(200).toString('base64')}))})};
