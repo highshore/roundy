@@ -218,6 +218,7 @@ export async function approvedStockCardAssets(db:DB,draft:Row){
   if(!stockReady(draft,photos))throw new Error('STOCK_PHOTOS_NOT_APPROVED');
   const cardPhotos:Record<number,string>={};
   for(const photo of photos){
+    if(!photo.storage_path)throw new Error('STOCK_PHOTO_ARCHIVE_MISSING');
     const blob=check(await db.storage.from('marketing-images').download(photo.storage_path)).data as Blob;
     const raw=Buffer.from(await blob.arrayBuffer());
     if(!raw.length||raw.length>MAX_IMAGE_BYTES)throw new Error('ARCHIVED_STOCK_IMAGE_INVALID');
