@@ -32,7 +32,7 @@ export default async function LanguageExchangePage() {
     if (!error) events = (data ?? []) as LanguageEvent[];
   } catch { /* Program information must remain available during backend maintenance. */ }
   return <div className={styles.page}>
-    <header className={styles.header}><Link href="/" className={styles.logo}>roundy<span>.</span></Link><nav aria-label="프로그램 탐색"><Link href="/events">모임 보기</Link><Link href="/how-it-works">이용 방법</Link></nav></header>
+    <header className={styles.header}><Link href="/" className={styles.logo}>roundy<span>.</span></Link><nav aria-label="라운디 탐색"><Link href="/events">모임</Link><Link href="/matches">매칭</Link><Link href="/me">프로필</Link><Link href="/discover/classic">기존 Discovery</Link></nav></header>
     <main>
       <section className={styles.hero}>
         <div className={styles.heroCopy}><span className={styles.kicker}><Globe2 size={16}/> ROUNDY LANGUAGE EXCHANGE</span>
