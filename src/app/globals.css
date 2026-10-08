@@ -3662,3 +3662,21 @@ html:lang(ko) .legal-intro h1{word-break:keep-all}
 .admin-form .participant-disclosure-admin .check-row{display:flex;align-items:center;gap:12px}
 .admin-form .participant-disclosure-admin .check-row input[type=checkbox]{width:22px;min-width:22px;height:22px;flex:0 0 22px;padding:0}
 .admin-form .participant-disclosure-admin legend{font-size:12px;font-weight:800;letter-spacing:.02em;margin-bottom:10px}
+
+
+/* Public page chrome is provided by SiteShell in the root Next layout.
+   Program pages retain their full-width editorial design while the
+   original mobile-first App routes keep their established 430px viewport. */
+.experience.program-shell:not(.route-admin){
+  width:100%;
+  max-width:none;
+  box-shadow:none;
+}
+@container roundy (max-width:759px){
+  .experience.program-shell .site-footer{
+    display:flex;
+    flex-direction:column;
+    gap:18px;
+    padding:32px 24px calc(120px + env(safe-area-inset-bottom));
+  }
+}
