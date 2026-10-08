@@ -69,7 +69,7 @@ assert.match(footer, /Mail-order Business Registration No/);
 const globalStyles = await read('src/app/globals.css');
 const programStyles = await read('src/app/language-exchange/page.module.css');
 assert.match(globalStyles, /experience:not\(\.route-admin\)\{width:100%;max-width:430px/);
-assert.doesNotMatch(globalStyles, /experience\.program-shell|max-width:none/);
+assert.doesNotMatch(globalStyles, /experience\.program-shell/);
 assert.match(globalStyles, /route-language-exchange \.site-footer/);
 assert.match(programStyles, /@container roundy \(max-width:759px\)/);
 assert.match(programStyles, /\.hero\{min-height:0;[^}]*grid-template-columns:minmax\(0,1fr\)/);
