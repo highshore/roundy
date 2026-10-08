@@ -52,7 +52,7 @@ function guideDoc(){
  const roles=Array.from(g.trendGuideRoles('event_guide'));
  return {schema_version:2,post_type:'seoul_trend',caption:'한글날 저녁 강변 데이트',cta:'Follow',
   book:{title:'',author:'',source_id:'',source_context:''},
-  trend:{trend_id:'sample',trend_key:'hoe-picnic',display_name:'회크닉',category:'event',status:'rising',observed_at:'2026-10-08',summary:'한강에서 진행하는 행사',content_angle:'한글날 야경과 함께 즐기는 시간',source_ids},
+  trend:{trend_id:'sample',trend_key:'hoe-picnic',display_name:'회크닉',category:'event',status:'rising',observed_at:'2026-10-08',summary:'한강에서 진행하는 행사',content_angle:'한글날 야경과 함께 즐기는 시간',source_ids:sourceIds},
   trend_layout:'event_guide',trend_fact_pack:pack,
   slides:roles.map((role,i)=>({role,title:titles[i],body:koParts[i],highlight:'',eyebrow:'',options:[],source_ids:i===0||i===5?[]:sourceIds}))};
 }
