@@ -346,7 +346,7 @@ export async function runTrendRadar(scanKey:string){
    web_search_calls:searchCalls,raw_result:{failed_stage:stage,verified_source_count:sourceCount},
    completed_at:new Date().toISOString(),updated_at:new Date().toISOString()
   }).eq('id',scan.id));
-  if(/OPENAI_KEY_MISSING|HTTP_401|HTTP_403|HTTP_429/.test(message))await db.from('marketing_trend_control').update({blocked_reason:message,updated_at:new Date().toISOString()).eq('singleton',true);
+  if(/OPENAI_KEY_MISSING|HTTP_401|HTTP_403|HTTP_429/.test(message))await db.from('marketing_trend_control').update({blocked_reason:message,updated_at:new Date().toISOString()}).eq('singleton',true);
   throw error;
  }
 }
