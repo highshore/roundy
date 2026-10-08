@@ -6,6 +6,7 @@ alter table public.events
 alter table public.events drop constraint if exists events_theme_check;
 alter table public.events add constraint events_theme_check
   check (theme in ('1:1 Speed Mingle','Business Talk','Language Exchange'));
+alter table public.events drop constraint if exists events_price_general_valid;
 alter table public.events add constraint events_price_general_valid
   check (price_general >= 0 and (gender_split_enabled or status <> 'live' or price_general >= 1000));
 -- For an event that has been sold, neither its format nor its event category may be changed.
