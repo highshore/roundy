@@ -40,7 +40,14 @@ export function EventStatusStrip({ event, attendees, locale, compact = false }: 
     </div>
     <span className="event-status-count" aria-label={tr(locale, 'Confirmed attendees / capacity', '확정 참가자 / 정원')}>({attendees?.total ?? '—'} / {event.capacity})</span>
     {open && <div className="event-offer-prices">
-      {(['ladies', 'gents'] as const).map(group => {
+      {event.gender_split_enabled===false ? <div className="event-offer-price general">
+        <span className="event-offer-group">{tr(locale,'All participants','모든 참가자')}</span>
+        {event.seats_remaining<=0?<strong>{tr(locale,'Sold Out','마감')}</strong>:<>
+          {timingRate>0&&<span className="event-offer-saving">−{timingRate}%</span>}
+          {timingRate>0&&<del>₩{(event.price_general??0).toLocaleString('en-US')}</del>}
+          <strong>₩{((event.price_general??0)-Math.round((event.price_general??0)*timingRate/100)).toLocaleString('en-US')}</strong>
+        </>}
+      </div> : (['ladies', 'gents'] as const).map(group => {
         const original = group === 'ladies' ? (event.price_ladies ?? 35000) : (event.price_gents ?? 55000);
         const rate = timingRate + (status?.discount === group ? 10 : 0);
         const final = original - Math.round(original * timingRate / 100) - (status?.discount === group ? Math.round(original * .1) : 0);
