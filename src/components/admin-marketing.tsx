@@ -190,10 +190,12 @@ export function AdminMarketing({locale}:{locale:Locale}){
   const source=today?'auto_ai':renderOnly?(draft?.visual_source||'auto_ai'):manualVisualSource;
   if(!today&&!renderOnly&&source==='uploaded'&&!pendingMarketingImages.length){setError(t('Add at least one image before generating with uploads.','직접 업로드 방식은 이미지를 1장 이상 추가한 뒤 생성하세요.'));return;}
   if(!today&&!renderOnly&&basis==='live_event'&&!eventId){setError(t('Choose the live event to promote.','홍보할 정식 이벤트를 선택하세요.'));return;}
-  const research=basis==='growth_carousel'&&['book_insight','trend_research','dating_myth','seoul_trend'].includes(topic),requestedMode=renderOnly?'image':source==='auto_ai'?'both':'text';
+  const research=basis==='growth_carousel'&&['book_insight','trend_research','dating_myth','seoul_trend'].includes(topic),requestedMode=renderOnly?'image':(['auto_ai','pexels'].includes(source)?'both':'text');
   const selectedEvent=(data.live_events||[]).find((item:Row)=>String(item.id)===eventId),eventHasEnoughPhotos=basis==='live_event'&&Array.isArray(selectedEvent?.images)&&selectedEvent.images.length>=3;
-  const cost=renderOnly?(source==='uploaded'?'$0':eventHasEnoughPhotos?'$0':'$0.15'):source==='auto_ai'?(eventHasEnoughPhotos?'$0.02':'$0.20'):research?'$0.05':'$0.02';
-  const message=source==='auto_ai'
+  const cost=source==='pexels'?(renderOnly?'$0':research?'$0.05':'$0.02'):renderOnly?(source==='uploaded'?'$0':eventHasEnoughPhotos?'$0':'$0.15'):source==='auto_ai'?(eventHasEnoughPhotos?'$0.02':'$0.20'):research?'$0.05':'$0.02';
+  const message=source==='pexels'
+    ?t('Generate copy and find 2–3 Pexels photos? New photos require rights review. Reserve '+cost+'.','문구 생성과 Pexels 사진 2~3장을 검색할까요? 신규 사진은 저작권 검수 후 사용할 수 있습니다. 예약액 '+cost+'.')
+    :source==='auto_ai'
    ?t('Generate copy with three fresh AI editorial images? This reserves '+cost+'.','문구와 새 AI 에디토리얼 이미지 3장을 생성할까요? 앱 예산 '+cost+'를 예약합니다.')
    :source==='uploaded'
     ?t('Generate copy for manual image upload? Only copy/research cost is reserved; image AI will not run.','직접 업로드용 문구를 생성할까요? 문구/검색 비용만 예약되며 이미지 AI는 호출하지 않습니다.')
@@ -206,18 +208,20 @@ export function AdminMarketing({locale}:{locale:Locale}){
    if(!r.ok||r.data.error)throw new Error(r.data.error||'Generation failed');
    if(r.data.job?.status==='running'){setNotice(t('This request already exists. Check Generation history; it was not billed again.','이미 접수된 요청입니다. 생성 기록을 확인하세요. 추가 호출하지 않았습니다.'));return;}
    if(['failed','uncertain'].includes(r.data.job?.status))throw new Error(r.data.job?.error_message||'Previous attempt stopped; no retry was sent.');
-   if(!today&&!renderOnly&&source==='uploaded'){
+   if(!today&&!renderOnly&&(source==='uploaded'||source==='pexels')){
     const jobId=String(r.data.job?.id||'');if(!jobId)throw new Error('RESULT_SNAPSHOT_UNAVAILABLE');
     const imported=await request('/generation/jobs/'+jobId+'/import',{confirm_import:true});
     if(!imported.ok||imported.data.error||!imported.data.draft)throw new Error(imported.data.error||'Import failed');
     const candidate=imported.data.draft as Row;
-    try{
-     await uploadPendingImagesToDraft(candidate,[...pendingMarketingImages]);
-    }finally{
-     clearPendingMarketingImages();
+    if(source==='uploaded'){
+     try{await uploadPendingImagesToDraft(candidate,[...pendingMarketingImages]);}
+     finally{clearPendingMarketingImages();}
     }
     await load(candidate.id);setActiveTab('draft');
-    setNotice(t('Copy, uploaded images, and final cards are ready in Drafts. No image AI was used.','문구 생성, 이미지 업로드, 최종 카드 렌더까지 완료했습니다. 이미지 AI는 사용하지 않았습니다.'));
+    if(source==='pexels')await refreshStock(candidate.id);
+    setNotice(source==='pexels'
+     ?t('Copy and Pexels photos saved. Review new photos before rendering.','문구와 Pexels 사진 후보가 저장됐습니다. 신규 사진을 검수한 뒤 렌더링하세요.')
+     :t('Copy, uploaded images, and final cards are ready in Drafts. No image AI was used.','문구 생성, 이미지 업로드, 카드 렌더링까지 완료했습니다. 이미지 AI는 사용하지 않았습니다.'));
    }else{
     await load(renderOnly?draft?.id:undefined);
     if(renderOnly&&r.data.draft)selectDraft(r.data.draft);
