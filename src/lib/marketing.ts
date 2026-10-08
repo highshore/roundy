@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import {draftQuality} from './marketing-editorial';
 import {factPackReady} from './marketing-trend-guide';
+import {importStockSelections,listStockSelections,pexelsConfigured,prepareStockSelections,reviewStockAsset} from './marketing-stock-photos';
 import type { createClient } from './supabase/server';
 import { createServiceRoleClient } from './supabase/service';
 import { marketingApi as legacyMarketingApi } from './marketing-legacy';
@@ -73,7 +74,49 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
    return {...row,signed_url:signed.data?.signedUrl||null};
   }));
  }
- if(id==='uploads'&&path.length===1&&req.method==='GET'){
+ // All photo actions are routed through the existing authenticated admin API.
+ if(id==='photos'&&path.length===1&&req.method==='GET'){
+  const draftId=String(req.nextUrl.searchParams.get('draft_id')||'');
+  if(!uuid(draftId))return json({error:'INVALID_DRAFT_ID'},400);
+  return json({photos:await listStockSelections(service,draftId),provider:'Pexels',attribution_url:'https://www.pexels.com',configured:pexelsConfigured()});
+ }
+ if(id==='photos'&&path.length===3&&uuid(path[1])&&path[2]==='review'&&req.method==='POST'){
+  const body=await req.json().catch(()=>({})),status=String(body.status||'');
+  if(!['approved','rejected'].includes(status)||body.confirm_rights_reviewed!==true)return json({error:'PHOTO_REVIEW_CONFIRMATION_REQUIRED'},400);
+  const user=(await db.auth.getUser()).data.user;if(!user)return json({error:'Sign in required'},401);
+  try{
+   const photo=await reviewStockAsset(service,path[1],status as 'approved'|'rejected',user.id,String(body.note||''));
+   return json({photo});
+  }catch(error){return json({error:error instanceof Error?error.message:'PHOTO_REVIEW_FAILED'},400);}
+ }
+ if(id==='draft'&&path.length===3&&uuid(path[1])&&path[2]==='refresh-stock'&&req.method==='POST'){
+  const body=await req.json().catch(()=>({}));
+  const draft=checked(await service.from('instagram_post_drafts').select('*').eq('id',path[1]).maybeSingle());
+  if(!draft||draft.draft_role!=='candidate'||draft.status!=='needs_approval'||draft.visual_source!=='pexels')return json({error:'STOCK_DRAFT_NOT_EDITABLE'},409);
+  if(body.revision!==draft.revision||draft.images?.length)return json({error:'DRAFT_CHANGED_OR_ALREADY_RENDERED'},409);
+  try{
+   const photos=await prepareStockSelections(service,draft);
+   return json({photos,ready:photos.length>=2&&photos.every((photo:Row)=>photo.review_status==='approved')});
+  }catch(error){return json({error:error instanceof Error?error.message:'PEXELS_DISCOVERY_FAILED'},400);}
+ }
+ if(id==='draft'&&path.length===3&&uuid(path[1])&&path[2]==='render-stock'&&req.method==='POST'){
+  const body=await req.json().catch(()=>({}));
+  const draft=checked(await service.from('instagram_post_drafts').select('*').eq('id',path[1]).maybeSingle());
+  if(!draft||draft.draft_role!=='candidate'||draft.status!=='needs_approval'||draft.visual_source!=='pexels')return json({error:'STOCK_DRAFT_NOT_EDITABLE'},409);
+  if(body.revision!==draft.revision)return json({error:'DRAFT_CHANGED_REFRESH_FIRST'},409);
+  const user=(await db.auth.getUser()).data.user;if(!user)return json({error:'Sign in required'},401);
+  const result=await runGeneration(draft.id,{
+   request_key:'stock-render:'+randomUUID(),revision:draft.revision,mode:'image',
+   render_only:true,visual_mode:'cards',visual_source:'pexels',
+   content_mode:draft.draft_kind==='growth_carousel'?'growth_carousel':draft.content_mode,
+   topic_type:draft.growth_topic_type||undefined,language:draft.content_language==='en'?'en':'ko',
+   ...(draft.content_mode==='live_event'?{event_id:draft.event_id}:{}),
+   instruction:''
+  },user.id,false);
+  return json(result,result.error?400:200);
+ }
+
+if(id==='uploads'&&path.length===1&&req.method==='GET'){
   const draftId=req.nextUrl.searchParams.get('draft_id')||'';
   if(!uuid(draftId))return json({error:'INVALID_DRAFT_ID'},400);
   await manualCandidate(draftId);
@@ -224,9 +267,10 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
   try{
    let imported=checked(await service.rpc('create_marketing_candidate_from_generation',{p_job_id:path[2]}));
    if(imported.status!=='needs_approval')return json({error:'RESULT_ALREADY_USED'},409);
-   const source=checked(await service.from('marketing_generation_jobs').select('result_snapshot').eq('id',path[2]).single()),snapshot=source?.result_snapshot||{},trendId=snapshot.trend_id,campaignMeta=campaignMetaFromSnapshot(snapshot),eventMeta=eventCampaignMetaFromSnapshot(snapshot);
-   const importedPatch={...(trendId?{trend_id:trendId}:{}),...(campaignMeta||{}),...(eventMeta||{}),updated_at:new Date().toISOString()};
-   if(trendId||campaignMeta||eventMeta)imported=checked(await service.from('instagram_post_drafts').update(importedPatch).eq('id',imported.id).select('*').single());
+   const source=checked(await service.from('marketing_generation_jobs').select('draft_id,result_snapshot').eq('id',path[2]).single()),snapshot=source?.result_snapshot||{},trendId=snapshot.trend_id,campaignMeta=campaignMetaFromSnapshot(snapshot),eventMeta=eventCampaignMetaFromSnapshot(snapshot);
+   const importedPatch={...(trendId?{trend_id:trendId}:{}),...(campaignMeta||{}),...(eventMeta||{}),...(snapshot.visual_source==='pexels'?{visual_source:'pexels'}:{}),updated_at:new Date().toISOString()};
+   if(trendId||campaignMeta||eventMeta||snapshot.visual_source==='pexels')imported=checked(await service.from('instagram_post_drafts').update(importedPatch).eq('id',imported.id).select('*').single());
+   if(snapshot.visual_source==='pexels')await importStockSelections(service,imported.id,snapshot.stock_photo_selections);
    return json({draft:imported});
   }catch(error){
    const message=error instanceof Error?error.message:String((error as {message?:unknown})?.message||'Import failed');

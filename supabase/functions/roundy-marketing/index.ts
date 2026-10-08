@@ -79,6 +79,24 @@ function validate(t:Template){
  if(!connection()[t.channel])throw new Error('Channel is not connected');
 }
 
+// Final fail-closed check before creating Instagram media containers.
+// A scheduled draft may have had its approved asset revoked after scheduling.
+async function validateReviewedStockDraft(t:Template){
+ if(t.channel!=='instagram'||!t.draft_id)return;
+ const {data:draft,error:draftError}=await service.from('instagram_post_drafts')
+  .select('id,visual_source,images').eq('id',t.draft_id).single();
+ if(draftError||!draft)throw new Error('MARKETING_DRAFT_NOT_FOUND');
+ if(draft.visual_source!=='pexels')return;
+ const {data:rows,error}=await service.from('marketing_draft_photos')
+  .select('asset_id,marketing_photo_assets(review_status,storage_path)').eq('draft_id',t.draft_id);
+ if(error||!rows||rows.length<2||rows.length>3||
+  rows.some((row:Record<string,any>)=>{
+   const photo=Array.isArray(row.marketing_photo_assets)?row.marketing_photo_assets[0]:row.marketing_photo_assets;
+   return !photo||photo.review_status!=='approved'||!photo.storage_path;
+  }))throw new Error('STOCK_PHOTO_REVIEW_REQUIRED');
+ if(JSON.stringify(draft.images)!==JSON.stringify(t.images))throw new Error('STOCK_RENDER_CHANGED_AFTER_APPROVAL');
+}
+
 function kstNow(value:Date=new Date()){
  const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit',weekday:'short',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(value);
  const get=(type:string)=>parts.find(part=>part.type===type)?.value??'00';
@@ -582,6 +600,7 @@ Deno.serve(async req=>{
    let externalAttempt=false;let outcome:Record<string,unknown>;const t=run.snapshot as Template;
    try{
     validate(t);
+    await validateReviewedStockDraft(t);
     if(t.channel==='koreapas'&&await hasAdvertOnGopasFirstPage(t.title))outcome={status:'skipped',message:'A post with this title is already on the first Koreapas page.'};
     else if(t.channel==='instagram'){const result=await publishInstagram(t,()=>{externalAttempt=true;});outcome={status:'sent',message:'Published to @roundy.meet',...result};}
     else {const html='<p>'+escapeHtml(t.caption).replace(/\n/g,'<br>')+'</p>'+t.images.map(image=>'<p><img src="'+escapeHtml(image)+'" alt="Roundy event"></p>').join('')+(t.destination_url?'<p><a href="'+escapeHtml(t.destination_url)+'">'+escapeHtml(t.cta||t.destination_url)+'</a></p>':'');externalAttempt=true;const external_url=await publishToKoreapas(t.title,html);outcome={status:'sent',message:'Published to Koreapas',external_url};}

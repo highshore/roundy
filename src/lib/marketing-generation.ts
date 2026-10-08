@@ -1,5 +1,7 @@
 import {prepareSavedCtaRecovery,SAVED_CTA_RECOVERY_VERSION} from './marketing-output-recovery';
 import {loadEditorialAssets} from './marketing-render-assets';
+import {photoCreditCaption} from './marketing-stock-photo-policy';
+import {approvedStockCardAssets,listStockSelections,pexelsConfigured,photoSelectionSnapshot,prepareStockSelections,stockReady} from './marketing-stock-photos';
 import {CONTENT_POLICY_VERSION} from './marketing-content-policy';
 import {selectTrendForAutomaticContent,markTrendUsed} from './marketing-trend-radar';
 import 'server-only';
@@ -17,7 +19,7 @@ import { createServiceRoleClient } from './supabase/service';
 type Row=Record<string,any>;
 type DB=ReturnType<typeof createServiceRoleClient>;
 type ContentLanguage='ko'|'en';
-type VisualSource='auto_ai'|'uploaded'|'none';
+type VisualSource='auto_ai'|'uploaded'|'none'|'pexels';
 export type GenerationInput={request_key:string;revision:number;mode:'text'|'image'|'both';content_mode:'prelaunch'|'live_event'|'growth_carousel';visual_mode:'cards'|'photo';visual_source?:VisualSource;topic_type?:string;instruction?:string;language?:ContentLanguage;confirm_photo?:boolean;render_only?:boolean;campaign_pattern?:'auto'|'poster'|'problem_solution'|'how_it_works'|'benefit_stack'|'countdown';campaign_tone?:'modern_premium'|'soft_romantic'|'bold_teaser';launch_date?:string;event_id?:string;event_campaign_stage?:'auto'|'launch'|'experience'|'venue'|'participants'|'momentum'|'imminent'|'last_call';event_campaign_pattern?:'auto'|'event_poster'|'experience'|'social_proof'|'offer'|'last_call'};
 const topics=['mbti','dating_archetype','book_insight','trend_research','meme_remix','dating_myth','conversation_prompt','seoul_dating','mini_quiz'];
 const allowedTopics=[...topics,'seoul_trend'];
@@ -35,7 +37,7 @@ export function validateGenerationInput(value:unknown):GenerationInput{
  const topicType=v.content_mode==='growth_carousel'?v.topic_type:undefined;
  if(topicType!=null&&!allowedTopics.includes(topicType))throw new Error('INVALID_GROWTH_TOPIC');
  if(v.language!==undefined&&!['ko','en'].includes(v.language))throw new Error('INVALID_CONTENT_LANGUAGE');
- if(v.visual_source!==undefined&&!['auto_ai','uploaded','none'].includes(v.visual_source))throw new Error('INVALID_VISUAL_SOURCE');
+ if(v.visual_source!==undefined&&!['auto_ai','uploaded','none','pexels'].includes(v.visual_source))throw new Error('INVALID_VISUAL_SOURCE');
  if(v.campaign_pattern!==undefined&&!['auto',...CAMPAIGN_PATTERNS].includes(v.campaign_pattern as any))throw new Error('INVALID_CAMPAIGN_PATTERN');
  if(v.campaign_tone!==undefined&&!(CAMPAIGN_TONES as readonly string[]).includes(v.campaign_tone))throw new Error('INVALID_CAMPAIGN_TONE');
  if(v.launch_date!==undefined&&(!/^\d{4}-\d{2}-\d{2}$/.test(v.launch_date)||!Number.isFinite(Date.parse(v.launch_date+'T00:00:00+09:00'))))throw new Error('INVALID_LAUNCH_DATE');
@@ -48,6 +50,7 @@ export function validateGenerationInput(value:unknown):GenerationInput{
  if(v.visual_mode==='photo'&&(v.content_mode==='growth_carousel'||v.mode==='text'||v.render_only))throw new Error('PHOTO_OPTION_NOT_APPLICABLE');
  if(v.visual_mode==='photo'&&v.confirm_photo!==true)throw new Error('CONFIRM_PAID_PHOTO_FIRST');
  if(v.render_only&&v.mode!=='image')throw new Error('INVALID_RENDER_OPTIONS');
+ if(v.visual_source==='pexels'&&v.mode==='text')throw new Error('PEXELS_VISUALS_REQUIRE_IMAGE_MODE');
  const visualSource:VisualSource=v.visual_source||(v.mode==='text'?'none':'auto_ai');
  if(v.mode==='image'&&visualSource==='none')throw new Error('IMAGE_SOURCE_REQUIRED');
  return {...v,visual_source:visualSource,topic_type:topicType,instruction:v.instruction?.trim()||'',...(v.content_mode==='prelaunch'?{campaign_pattern:v.campaign_pattern||'auto',campaign_tone:v.campaign_tone||'modern_premium'}:{}),...(v.content_mode==='live_event'?{event_campaign_stage:v.event_campaign_stage||'auto',event_campaign_pattern:v.event_campaign_pattern||'auto'}:{})};
@@ -280,8 +283,9 @@ async function resolveContentWorkflowId(db:DB,draft:Row,job:Row,thread?:Generati
 }
 export async function runGeneration(draftId:string,value:unknown,actor:string|null,automatic=false,thread?:GenerationThreadContext){
  const input=validateGenerationInput(value),db=createServiceRoleClient();
- const visualSource:VisualSource=automatic?'auto_ai':input.visual_source!;
- if(automatic&&input.visual_source&&input.visual_source!=='auto_ai')throw new Error('AUTOMATION_REQUIRES_AI_IMAGES');
+ const visualSource:VisualSource=automatic?(pexelsConfigured()?'pexels':'auto_ai'):input.visual_source!;
+ if(automatic&&input.visual_source&&!['auto_ai','pexels'].includes(input.visual_source))throw new Error('AUTOMATION_VISUAL_SOURCE_INVALID');
+ if(visualSource==='pexels'&&!pexelsConfigured())throw new Error('PEXELS_API_KEY_MISSING');
  let draft=await readDraft(db,draftId);
  let recoveryPatch:Row|null=null,recoverySource:Row|null=null;
  if(thread?.recoverySourceJobId){
@@ -301,9 +305,10 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
  const eventRealPhotos=eventFacts?.images||[];
  const wantsVisuals=recoveryPatch||input.render_only||input.mode==='image'||input.mode==='both'||automatic;
  const autoVisuals=wantsVisuals&&visualSource==='auto_ai';
+ const stockVisuals=wantsVisuals&&visualSource==='pexels';
  const uploadedVisuals=(input.render_only||input.mode==='image')&&visualSource==='uploaded';
  const eventNeedsAiFallback=input.content_mode==='live_event'&&autoVisuals&&eventRealPhotos.length<3;
- const operation=autoVisuals
+ const operation=stockVisuals?(input.mode==='image'||input.render_only?'render':research?'research':'copy'):autoVisuals
   ?(input.content_mode==='live_event'&&!eventNeedsAiFallback
     ?(input.mode==='image'||input.render_only?'render':research?'research':'copy')
     :(input.mode==='image'||input.render_only||recoveryPatch?'photo':'copy_photo'))
@@ -332,6 +337,7 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
    const copy=await generateCopy(db,draft,input,job,research);contentQuality=copy.quality_report;await progress(db,job,'saving_copy');
    draft=await savePartial(db,draft,{...copy,generation_source:automatic?'automation':'manual',visual_source:visualSource,last_regeneration_mode:input.mode,last_regeneration_instruction:input.instruction,images:[]});
   }
+  let stockPhotos:ReturnType<typeof photoSelectionSnapshot>=[],photoReviewRequired=false;
   if(autoVisuals){
    let images:string[];
    if(input.content_mode==='live_event'){
@@ -351,6 +357,28 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
   }else if(uploadedVisuals){
    const images=await renderUploadedCards(db,draft,job);await progress(db,job,'saving_images');
    draft=await savePartial(db,draft,{images,generation_source:'manual',visual_source:'uploaded',last_regeneration_mode:input.mode,last_regeneration_instruction:input.instruction});
+  }else if(stockVisuals){
+   await progress(db,job,'selecting_licensed_photos');
+   const selected=(input.mode==='image'||input.render_only)
+     ?await listStockSelections(db,draft.id)
+     :await prepareStockSelections(db,draft);
+   stockPhotos=photoSelectionSnapshot(selected);
+   if(selected.length<2)throw new GenerationError('STOCK_PHOTO_POOL_INSUFFICIENT','No suitable Pexels photographs were found. Review the source/API settings and try a manual retry.');
+   if(stockReady(draft,selected)){
+    await progress(db,job,'rendering_approved_photos');
+    const assets=await loadEditorialAssets();
+    Object.assign(assets,await approvedStockCardAssets(db,draft));
+    const images=await renderCardsWithAssets(db,draft,job,assets);
+    await progress(db,job,'saving_images');
+    // Keep photographer attribution visible in the final draft.
+    const captionWithCredit=photoCreditCaption(String(draft.caption||''),selected.map((photo:Row)=>String(photo.photographer||'')));
+    draft=await savePartial(db,draft,{images,caption:captionWithCredit,generation_source:automatic?'automation':'manual',visual_source:'pexels',last_regeneration_mode:input.mode,last_regeneration_instruction:input.instruction});
+   }else if(input.mode==='image'||input.render_only){
+    throw new GenerationError('STOCK_PHOTOS_NOT_APPROVED','Approve all selected photos before rendering.');
+   }else{
+    // Incomplete photo review leaves the copy available but never publishable.
+    photoReviewRequired=true;
+   }
   }
   const quality=contentQuality||qualityForDraft(draft);
   if(quality.status!=='passed')throw new Error('품질 검토 필요: '+quality.issues.join(' '));
@@ -365,10 +393,11 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
    generation_reason:draft.generation_reason,event_id:draft.event_id||null,generation_source:automatic?'automation':'manual',visual_source:visualSource,revision:draft.revision,saved_at:new Date().toISOString(),
    render_style:draft.render_style||null,campaign_pattern:draft.campaign_pattern||draft.content_document?.campaign_pattern||null,campaign_tone:draft.campaign_tone||draft.content_document?.campaign_tone||null,campaign_version:draft.campaign_version||draft.content_document?.campaign_version||null,launch_date:draft.launch_date||draft.content_document?.launch_date||null,
    event_campaign_stage:draft.event_campaign_stage||draft.content_document?.event_campaign_stage||null,event_campaign_pattern:draft.event_campaign_pattern||draft.content_document?.event_campaign_pattern||null,event_campaign_version:draft.event_campaign_version||draft.content_document?.campaign_version||null,event_facts_snapshot:draft.event_facts_snapshot||draft.content_document?.event_facts||null,
-   generation_recovery:(quality as Row).recovery||draft.content_document?.generation_recovery||null
+   generation_recovery:(quality as Row).recovery||draft.content_document?.generation_recovery||null,
+   stock_photo_selections:stockPhotos,photos_pending_review:photoReviewRequired
   };
-  checked(await db.from('marketing_generation_jobs').update({status:'completed',stage:'complete',quality_report:quality,result_snapshot:resultSnapshot,result_revision:draft.revision,updated_at:new Date().toISOString()}).eq('id',job.id).eq('status','running'));
-  return {draft,job:{...job,status:'completed',stage:'complete',result_snapshot:resultSnapshot,result_revision:draft.revision},deduplicated:false};
+  checked(await db.from('marketing_generation_jobs').update({status:'completed',stage:photoReviewRequired?'photo_review_required':'complete',quality_report:quality,result_snapshot:resultSnapshot,result_revision:draft.revision,updated_at:new Date().toISOString()}).eq('id',job.id).eq('status','running'));
+  return {draft,job:{...job,status:'completed',stage:photoReviewRequired?'photo_review_required':'complete',result_snapshot:resultSnapshot,result_revision:draft.revision},deduplicated:false};
  }catch(error){
   const message=safeError(error),code=error instanceof GenerationError?error.code:'GENERATION_FAILED',unknown=code==='UPSTREAM_OUTCOME_UNKNOWN';
   await db.from('marketing_generation_jobs').update({status:unknown?'uncertain':'failed',stage:'stopped',error_code:code,error_message:message,updated_at:new Date().toISOString()}).eq('id',job.id).eq('status','running');
@@ -384,7 +413,7 @@ export async function generationOverview(){
  checked(jobs);checked(usage);checked(dispatch);const rows=usage.data||[],dayStart=Date.parse(date+'T00:00:00+09:00'),todayRows=rows.filter(r=>Date.parse(r.created_at)>=dayStart);
  const temporaryActive=Boolean(control.temporary_daily_budget_usd&&control.temporary_daily_budget_expires_at&&Date.parse(control.temporary_daily_budget_expires_at)>Date.now());
  const dailyBudget=temporaryActive?Number(control.temporary_daily_budget_usd):Number(control.daily_budget_usd);
- return {control,jobs:jobs.data,dispatch:dispatch.data,usage:{daily_reserved_usd:todayRows.reduce((sum,r)=>sum+Number(r.reserved_usd),0),daily_budget_usd:dailyBudget,daily_budget_override_expires_at:temporaryActive?control.temporary_daily_budget_expires_at:null,monthly_reserved_usd:rows.reduce((sum,r)=>sum+Number(r.reserved_usd),0),monthly_budget_usd:Number(control.monthly_budget_usd),daily_attempts:todayRows.filter(r=>Number(r.reserved_usd)>0).length,daily_calls:todayRows.filter(r=>Number(r.reserved_usd)>0&&['running','completed','uncertain'].includes(r.status)).length,daily_call_limit:5,monthly_call_limit:90,photo_daily_limit:5,photo_monthly_limit:90},provider:{configured:!!process.env.OPENAI_API_KEY?.trim(),copy_model:COPY_MODEL,image_model:IMAGE_MODEL,automatic_photos:true,manual_uploaded_images:true,fresh_visuals_per_generation:3,static_photo_reuse:false,external_retries:0,copy_repair_limit:1,research_search_limit:3,verified_book_catalog:true,research_fallback:true,content_policy_version:CONTENT_POLICY_VERSION,prelaunch_campaign_version:CAMPAIGN_VERSION,prelaunch_campaign_patterns:CAMPAIGN_PATTERNS,research_reservation_usd:0.05}};
+ return {control,jobs:jobs.data,dispatch:dispatch.data,usage:{daily_reserved_usd:todayRows.reduce((sum,r)=>sum+Number(r.reserved_usd),0),daily_budget_usd:dailyBudget,daily_budget_override_expires_at:temporaryActive?control.temporary_daily_budget_expires_at:null,monthly_reserved_usd:rows.reduce((sum,r)=>sum+Number(r.reserved_usd),0),monthly_budget_usd:Number(control.monthly_budget_usd),daily_attempts:todayRows.filter(r=>Number(r.reserved_usd)>0).length,daily_calls:todayRows.filter(r=>Number(r.reserved_usd)>0&&['running','completed','uncertain'].includes(r.status)).length,daily_call_limit:5,monthly_call_limit:90,photo_daily_limit:5,photo_monthly_limit:90},provider:{configured:!!process.env.OPENAI_API_KEY?.trim(),pexels_configured:pexelsConfigured(),stock_photos_per_carousel:'2-3',stock_review_required:true,stock_cooldown_days:90,copy_model:COPY_MODEL,image_model:IMAGE_MODEL,automatic_photos:true,manual_uploaded_images:true,fresh_visuals_per_generation:3,static_photo_reuse:false,external_retries:0,copy_repair_limit:1,research_search_limit:3,verified_book_catalog:true,research_fallback:true,content_policy_version:CONTENT_POLICY_VERSION,prelaunch_campaign_version:CAMPAIGN_VERSION,prelaunch_campaign_patterns:CAMPAIGN_PATTERNS,research_reservation_usd:0.05}};
 }
 export async function todayDraft(selectedTrend:Row|null=null){
  const db=createServiceRoleClient(),today=kstDate();

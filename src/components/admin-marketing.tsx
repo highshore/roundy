@@ -31,9 +31,10 @@ export function AdminMarketing({locale}:{locale:Locale}){
  const [data,setData]=useState<Row>({drafts:[],runs:[],templates:[]});
  const [draft,setDraft]=useState<Row|null>(null),[settings,setSettings]=useState<Row|null>(null),[generation,setGeneration]=useState<Row|null>(null);
  const [channel,setChannel]=useState<'instagram'|'koreapas'>('instagram'),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[error,setError]=useState(''),[notice,setNotice]=useState('');
- const [basis,setBasis]=useState('prelaunch'),[manualVisualSource,setManualVisualSource]=useState<'auto_ai'|'uploaded'|'none'>('auto_ai'),[topic,setTopic]=useState('conversation_prompt'),[contentLanguage,setContentLanguage]=useState<'ko'|'en'>('ko'),[direction,setDirection]=useState(''),[dirty,setDirty]=useState(false);
+ const [basis,setBasis]=useState('prelaunch'),[manualVisualSource,setManualVisualSource]=useState<'auto_ai'|'uploaded'|'none'|'pexels'>('auto_ai'),[topic,setTopic]=useState('conversation_prompt'),[contentLanguage,setContentLanguage]=useState<'ko'|'en'>('ko'),[direction,setDirection]=useState(''),[dirty,setDirty]=useState(false);
  const [eventId,setEventId]=useState(''),[eventCampaignStage,setEventCampaignStage]=useState('auto');
  const [template,setTemplate]=useState<Row>(blank());
+ const [stockPhotos,setStockPhotos]=useState<Row[]>([]);
  const [uploadedImages,setUploadedImages]=useState<Row[]>([]),[uploadAssetType,setUploadAssetType]=useState<'photo'|'completed_card'>('photo');
  const [pendingMarketingImages,setPendingMarketingImages]=useState<PendingMarketingImage[]>([]),[pendingAssetType,setPendingAssetType]=useState<'photo'|'completed_card'>('photo');
  const [resultPreview,setResultPreview]=useState<Row|null>(null);
@@ -42,11 +43,12 @@ export function AdminMarketing({locale}:{locale:Locale}){
  const [trendLanguage,setTrendLanguage]=useState<'ko'|'en'>('ko');
  const [trendUsageView,setTrendUsageView]=useState<'unused'|'used'>('unused');
  const [generationVisible,setGenerationVisible]=useState(20),[publishVisible,setPublishVisible]=useState(20);
- const inFlight=useRef(false),mounted=useRef(true);
+ const inFlight=useRef(false),mounted=useRef(true),stockPreferredSet=useRef(false);
  function selectDraft(next:Row|null){setDraft(next?structuredClone(next):null);setDirty(false);if(next){setBasis(next.draft_kind==='growth_carousel'?'growth_carousel':next.content_mode);setTopic(next.growth_topic_type||'conversation_prompt');setContentLanguage(next.content_language==='en'?'en':'ko');if(next.event_id)setEventId(String(next.event_id));if(next.event_campaign_stage)setEventCampaignStage(String(next.event_campaign_stage));}}
  async function load(preferredId?:string){
   const r=await request();if(!r.ok)throw new Error(r.data.error||'Could not load marketing');if(!mounted.current)return;
-  setData(r.data);setSettings(r.data.settings);setGeneration(r.data.generation);if(!eventId&&r.data.live_events?.[0]?.id)setEventId(String(r.data.live_events[0].id));const rows=r.data.drafts||[];
+  setData(r.data);setSettings(r.data.settings);setGeneration(r.data.generation);
+  if(!stockPreferredSet.current){stockPreferredSet.current=true;if(r.data.generation?.provider?.pexels_configured)setManualVisualSource('pexels');}if(!eventId&&r.data.live_events?.[0]?.id)setEventId(String(r.data.live_events[0].id));const rows=r.data.drafts||[];
   selectDraft(rows.find((x:Row)=>x.id===preferredId)||rows.find((x:Row)=>x.status==='needs_approval')||rows[0]||null);
  }
  // Independent, read-only radar loading: a failure in the full marketing overview must not hide saved trends.
@@ -67,6 +69,14 @@ export function AdminMarketing({locale}:{locale:Locale}){
   let cancelled=false;request('/uploads?draft_id='+encodeURIComponent(draft.id),undefined,'GET').then(r=>{if(!cancelled&&r.ok)setUploadedImages(r.data.images||[]);}).catch(()=>{});
   return()=>{cancelled=true;};
  },[draft?.id,draft?.generation_source,draft?.draft_role]);
+ useEffect(()=>{
+  if(!draft?.id||draft.visual_source!=='pexels'){setStockPhotos([]);return;}
+  let cancelled=false;
+  request('/photos?draft_id='+encodeURIComponent(draft.id),undefined,'GET')
+   .then(r=>{if(!cancelled&&r.ok)setStockPhotos(r.data.photos||[]);})
+   .catch(()=>{if(!cancelled)setStockPhotos([]);});
+  return()=>{cancelled=true;};
+ },[draft?.id,draft?.visual_source,draft?.revision]);
  // Bounded READ-ONLY polling: never calls a paid endpoint or starts generation.
  useEffect(()=>{
   if(!busy)return;let cancelled=false,attempts=0,failures=0,timer:ReturnType<typeof setTimeout>|undefined;
@@ -180,10 +190,12 @@ export function AdminMarketing({locale}:{locale:Locale}){
   const source=today?'auto_ai':renderOnly?(draft?.visual_source||'auto_ai'):manualVisualSource;
   if(!today&&!renderOnly&&source==='uploaded'&&!pendingMarketingImages.length){setError(t('Add at least one image before generating with uploads.','직접 업로드 방식은 이미지를 1장 이상 추가한 뒤 생성하세요.'));return;}
   if(!today&&!renderOnly&&basis==='live_event'&&!eventId){setError(t('Choose the live event to promote.','홍보할 정식 이벤트를 선택하세요.'));return;}
-  const research=basis==='growth_carousel'&&['book_insight','trend_research','dating_myth','seoul_trend'].includes(topic),requestedMode=renderOnly?'image':source==='auto_ai'?'both':'text';
+  const research=basis==='growth_carousel'&&['book_insight','trend_research','dating_myth','seoul_trend'].includes(topic),requestedMode=renderOnly?'image':(['auto_ai','pexels'].includes(source)?'both':'text');
   const selectedEvent=(data.live_events||[]).find((item:Row)=>String(item.id)===eventId),eventHasEnoughPhotos=basis==='live_event'&&Array.isArray(selectedEvent?.images)&&selectedEvent.images.length>=3;
-  const cost=renderOnly?(source==='uploaded'?'$0':eventHasEnoughPhotos?'$0':'$0.15'):source==='auto_ai'?(eventHasEnoughPhotos?'$0.02':'$0.20'):research?'$0.05':'$0.02';
-  const message=source==='auto_ai'
+  const cost=source==='pexels'?(renderOnly?'$0':research?'$0.05':'$0.02'):renderOnly?(source==='uploaded'?'$0':eventHasEnoughPhotos?'$0':'$0.15'):source==='auto_ai'?(eventHasEnoughPhotos?'$0.02':'$0.20'):research?'$0.05':'$0.02';
+  const message=source==='pexels'
+    ?t('Generate copy and find 2–3 Pexels photos? New photos require rights review. Reserve '+cost+'.','문구 생성과 Pexels 사진 2~3장을 검색할까요? 신규 사진은 저작권 검수 후 사용할 수 있습니다. 예약액 '+cost+'.')
+    :source==='auto_ai'
    ?t('Generate copy with three fresh AI editorial images? This reserves '+cost+'.','문구와 새 AI 에디토리얼 이미지 3장을 생성할까요? 앱 예산 '+cost+'를 예약합니다.')
    :source==='uploaded'
     ?t('Generate copy for manual image upload? Only copy/research cost is reserved; image AI will not run.','직접 업로드용 문구를 생성할까요? 문구/검색 비용만 예약되며 이미지 AI는 호출하지 않습니다.')
@@ -196,18 +208,20 @@ export function AdminMarketing({locale}:{locale:Locale}){
    if(!r.ok||r.data.error)throw new Error(r.data.error||'Generation failed');
    if(r.data.job?.status==='running'){setNotice(t('This request already exists. Check Generation history; it was not billed again.','이미 접수된 요청입니다. 생성 기록을 확인하세요. 추가 호출하지 않았습니다.'));return;}
    if(['failed','uncertain'].includes(r.data.job?.status))throw new Error(r.data.job?.error_message||'Previous attempt stopped; no retry was sent.');
-   if(!today&&!renderOnly&&source==='uploaded'){
+   if(!today&&!renderOnly&&(source==='uploaded'||source==='pexels')){
     const jobId=String(r.data.job?.id||'');if(!jobId)throw new Error('RESULT_SNAPSHOT_UNAVAILABLE');
     const imported=await request('/generation/jobs/'+jobId+'/import',{confirm_import:true});
     if(!imported.ok||imported.data.error||!imported.data.draft)throw new Error(imported.data.error||'Import failed');
     const candidate=imported.data.draft as Row;
-    try{
-     await uploadPendingImagesToDraft(candidate,[...pendingMarketingImages]);
-    }finally{
-     clearPendingMarketingImages();
+    if(source==='uploaded'){
+     try{await uploadPendingImagesToDraft(candidate,[...pendingMarketingImages]);}
+     finally{clearPendingMarketingImages();}
     }
     await load(candidate.id);setActiveTab('draft');
-    setNotice(t('Copy, uploaded images, and final cards are ready in Drafts. No image AI was used.','문구 생성, 이미지 업로드, 최종 카드 렌더까지 완료했습니다. 이미지 AI는 사용하지 않았습니다.'));
+    if(source==='pexels')await refreshStock(candidate.id);
+    setNotice(source==='pexels'
+     ?t('Copy and Pexels photos saved. Review new photos before rendering.','문구와 Pexels 사진 후보가 저장됐습니다. 신규 사진을 검수한 뒤 렌더링하세요.')
+     :t('Copy, uploaded images, and final cards are ready in Drafts. No image AI was used.','문구 생성, 이미지 업로드, 카드 렌더링까지 완료했습니다. 이미지 AI는 사용하지 않았습니다.'));
    }else{
     await load(renderOnly?draft?.id:undefined);
     if(renderOnly&&r.data.draft)selectDraft(r.data.draft);
@@ -265,6 +279,35 @@ export function AdminMarketing({locale}:{locale:Locale}){
  }
  async function renderUploaded(){
   if(!draft)return;const r=await request('/draft/'+draft.id+'/render-uploaded',{revision:draft.revision,request_key:'upload-render:'+crypto.randomUUID()});if(!r.ok||r.data.error)throw new Error(r.data.error||'Render failed');await load(draft.id);await refreshUploads(draft.id);
+ }
+ async function refreshStock(draftId:string){
+  const r=await request('/photos?draft_id='+encodeURIComponent(draftId),undefined,'GET');
+  if(!r.ok||r.data.error)throw new Error(r.data.error||'Could not load Pexels photos');
+  setStockPhotos(r.data.photos||[]);
+ }
+ async function reviewStock(photo:Row,status:'approved'|'rejected'){
+  if(!draft)return;
+  if(!window.confirm(status==='approved'
+   ?t('Have you reviewed the license, subjects, trademarks and whether the photo implies endorsement?','이 사진의 라이선스와 인물, 상표, 후원 또는 참가 암시 여부를 검토했나요?')
+   :t('Reject this photograph from the image library?','이 사진을 거절하고 사진 라이브러리에서 사용하지 않을까요?')))return;
+  const r=await request('/photos/'+photo.asset_id+'/review',{
+   status,confirm_rights_reviewed:true,note:'Human review of source, subjects, trademarks and commercial use'
+  });
+  if(!r.ok||r.data.error)throw new Error(r.data.error||'Stock photo review failed');
+  await refreshStock(draft.id);
+ }
+ async function discoverStock(){
+  if(!draft)return;
+  const r=await request('/draft/'+draft.id+'/refresh-stock',{revision:draft.revision});
+  if(!r.ok||r.data.error)throw new Error(r.data.error||'Stock photo discovery failed');
+  await refreshStock(draft.id);
+ }
+ async function renderStock(){
+  if(!draft)return;
+  const r=await request('/draft/'+draft.id+'/render-stock',{revision:draft.revision});
+  if(!r.ok||r.data.error)throw new Error(r.data.error||'Stock photo rendering failed');
+  await load(draft.id);
+  await refreshStock(draft.id);
  }
  async function importResultToDraft(){
   if(!resultPreview?.attempt?.id)return;
@@ -325,7 +368,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
   {error&&<p className="admin-error" role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}
   {channel==='instagram'&&<nav className="marketing-subtabs" aria-label={t('Marketing sections','마케팅 메뉴')} role="tablist">{tabItems.map(([value,label])=><button key={value} type="button" role="tab" aria-selected={activeTab===value} className={activeTab===value?'active':''} onClick={()=>setActiveTab(value)}>{label}{value==='generation'&&generationThreads.some((thread:Row)=>thread.status==='failed')&&<span className="marketing-tab-dot" aria-label={t('Failed generation exists','실패한 생성 있음')}/>}</button>)}</nav>}
   {channel==='instagram'&&activeTab==='draft'&&<>
-   <div className="marketing-setup"><strong>{t('API cost guard','API 비용 안전장치')}</strong><p>{t('Reserved today','오늘 예약액')} ${Number(generation?.usage?.daily_reserved_usd||0).toFixed(2)} / ${Number(generation?.usage?.daily_budget_usd||2).toFixed(2)}. {t('This month','이번 달')} ${Number(generation?.usage?.monthly_reserved_usd||0).toFixed(2)} / ${Number(generation?.usage?.monthly_budget_usd||6).toFixed(2)}. {t('Paid generation attempts','오늘 유료 생성 시도')} {generation?.usage?.daily_attempts||0}. {t('Safety-counted jobs','안전 카운트')} {generation?.usage?.daily_calls||0}/5.</p><p className="admin-help">{t('No automatic retries or paid-provider fallback. Failed/unknown attempts retain reservations. Automatic posts also generate a fresh three-image visual set. Static marketing photos are not reused. Overall daily/monthly AI budgets and generation limits remain the safety controls. External account spending is separate.','자동 재시도와 다른 유료 API로의 전환은 없습니다. 실패하거나 응답이 불명확한 작업도 예약액을 유지합니다. 자동 생성도 콘텐츠에 맞는 새 이미지 3장을 생성하며 기존 마케팅 사진을 재사용하지 않습니다. 전체 일/월 AI 예산과 생성 횟수 한도가 비용 안전장치로 적용됩니다. 다른 서비스의 API 사용액은 이 한도에 포함되지 않습니다.')}</p>{generation?.usage?.daily_budget_override_expires_at&&<p className="admin-help">{t('Temporary daily limit is active until midnight KST. It will automatically fall back to the normal $2.00 limit.','오늘만 임시 한도가 적용 중입니다. KST 자정이 지나면 기본 $2.00 한도로 자동 복귀합니다.')}</p>}
+   <div className="marketing-setup"><strong>{t('API cost guard','API 비용 안전장치')}</strong><p>{t('Reserved today','오늘 예약액')} ${Number(generation?.usage?.daily_reserved_usd||0).toFixed(2)} / ${Number(generation?.usage?.daily_budget_usd||2).toFixed(2)}. {t('This month','이번 달')} ${Number(generation?.usage?.monthly_reserved_usd||0).toFixed(2)} / ${Number(generation?.usage?.monthly_budget_usd||6).toFixed(2)}. {t('Paid generation attempts','오늘 유료 생성 시도')} {generation?.usage?.daily_attempts||0}. {t('Safety-counted jobs','안전 카운트')} {generation?.usage?.daily_calls||0}/5.</p><p className="admin-help">{t('No automatic paid retries or fallback. With Pexels configured, automatic posts use 2–3 rights-reviewed photographs and wait for approval of new images. Without Pexels, the existing AI visual flow remains. Overall daily/monthly AI budgets and generation limits remain the safety controls. External account spending is separate.','유료 API 자동 재시도나 자동 대체는 없습니다. Pexels 설정 시 자동 콘텐츠에 검수된 사진 2~3장을 사용하며 신규 사진은 승인을 기다립니다. Pexels 미설정 시 기존 AI 이미지 흐름을 유지합니다. 전체 일/월 AI 예산과 생성 횟수 한도가 비용 안전장치로 적용됩니다. 다른 서비스의 API 사용액은 이 한도에 포함되지 않습니다.')}</p>{generation?.usage?.daily_budget_override_expires_at&&<p className="admin-help">{t('Temporary daily limit is active until midnight KST. It will automatically fall back to the normal $2.00 limit.','오늘만 임시 한도가 적용 중입니다. KST 자정이 지나면 기본 $2.00 한도로 자동 복귀합니다.')}</p>}
     {!generation?.provider?.configured&&<p className="admin-error">{t('OPENAI_API_KEY is missing from this deployment. Configure Vercel Production and redeploy.','이 배포에 OPENAI_API_KEY가 없습니다. Vercel Production 설정 후 재배포가 필요합니다.')}</p>}
     {generation?.control?.blocked_reason&&<p className="admin-error" role="alert">{generation.control.blocked_reason}</p>}
     <button type="button" className="admin-secondary" onClick={()=>void (async()=>{try{const enable=blocked;if(enable&&!window.confirm(t('Resume after checking API configuration? Budgets are not reset and failed jobs are not retried.','API 설정을 확인했나요? 사용 한도를 초기화하거나 실패 작업을 재시도하지 않고 AI를 재개합니다.')))return;const r=await request('/generation/control',{enabled:enable,confirm_resume:enable},'PUT');if(!r.ok)throw new Error(r.data.error);setGeneration(r.data);}catch(e){setError(e instanceof Error?e.message:'Could not update AI control');}})()}>{blocked?t('Resume after checking configuration','설정 확인 후 AI 재개'):t('Pause paid AI','유료 AI 일시 중지')}</button>
@@ -334,11 +377,11 @@ export function AdminMarketing({locale}:{locale:Locale}){
    <section className="marketing-generator-card">
     <div className="admin-section-title"><div><p className="admin-kicker">{t('Create','생성')}</p><Heading level={2}>{t('New content','새 콘텐츠 생성')}</Heading></div></div>
     <div className="admin-form">
-     <div className="admin-two"><label><span>{t('Content basis','콘텐츠 기준')}</span><select value={basis} onChange={e=>setBasis(e.target.value)}><option value="prelaunch">{t('Pre-launch','오픈 전 홍보')}</option><option value="live_event">{t('Live event','정식 이벤트')}</option><option value="growth_carousel">Growth Carousel</option></select></label><label><span>{t('Manual generation method','수동 생성 방식')}</span><select value={manualVisualSource} onChange={e=>setManualVisualSource(e.target.value as 'auto_ai'|'uploaded'|'none')}><option value="auto_ai">{t('Copy + AI images','문구 + AI 이미지')}</option><option value="uploaded">{t('Copy + my uploads','문구 + 직접 업로드')}</option><option value="none">{t('Copy only','문구만')}</option></select></label></div>
+     <div className="admin-two"><label><span>{t('Content basis','콘텐츠 기준')}</span><select value={basis} onChange={e=>setBasis(e.target.value)}><option value="prelaunch">{t('Pre-launch','오픈 전 홍보')}</option><option value="live_event">{t('Live event','정식 이벤트')}</option><option value="growth_carousel">Growth Carousel</option></select></label><label><span>{t('Manual generation method','수동 생성 방식')}</span><select value={manualVisualSource} onChange={e=>setManualVisualSource(e.target.value as 'auto_ai'|'uploaded'|'none'|'pexels')}><option value="pexels" disabled={!generation?.provider?.pexels_configured}>{t('Copy + reviewed Pexels photos','문구 + 검수된 Pexels 사진')}</option><option value="auto_ai">{t('Copy + AI images','문구 + AI 이미지')}</option><option value="uploaded">{t('Copy + my uploads','문구 + 직접 업로드')}</option><option value="none">{t('Copy only','문구만')}</option></select></label></div>
      <label><span>{t('Cover / headline language','표지 / 제목 언어')}</span><select value={contentLanguage} onChange={e=>setContentLanguage(e.target.value as 'ko'|'en')}><option value="ko">{t('Korean post','한국어 콘텐츠')}</option><option value="en">{t('English post','영어 콘텐츠')}</option></select></label>
      {basis==='live_event'?<div className="admin-two"><label><span>{t('Event to promote','홍보할 이벤트')}</span><select value={eventId} onChange={e=>setEventId(e.target.value)}><option value="">{t('Choose an event','이벤트 선택')}</option>{(data.live_events||[]).map((event:Row)=><option key={event.id} value={event.id}>{event.title_ko||event.title} · {new Date(event.starts_at).toLocaleDateString(locale,{timeZone:'Asia/Seoul'})}</option>)}</select></label><label><span>{t('Campaign stage','홍보 단계')}</span><select value={eventCampaignStage} onChange={e=>setEventCampaignStage(e.target.value)}><option value="auto">{t('Auto from event status','이벤트 상태로 자동 추천')}</option><option value="launch">{t('Launch','오픈')}</option><option value="experience">{t('Experience','참가 경험')}</option><option value="venue">{t('Venue','장소')}</option><option value="participants">{t('Participants','참가자 구성')}</option><option value="momentum">{t('Momentum / offer','모멘텀 / 혜택')}</option><option value="imminent">{t('Imminent','임박')}</option><option value="last_call">{t('Last call','라스트콜')}</option></select></label></div>:null}
      {basis==='growth_carousel'?<label><span>{t('Topic','주제')}</span><select value={topic} onChange={e=>setTopic(e.target.value)}>{topics.map((x,i)=><option key={x} value={x}>{t(x.replaceAll('_',' '),topicKo[i])}</option>)}</select></label>:null}
-     {manualVisualSource==='auto_ai'?<p className="admin-help">{basis==='live_event'?t('Event campaigns use the event’s real uploaded photos first. AI photography is generated only when there are not enough event photos.','이벤트 홍보는 이벤트에 등록된 실제 사진을 우선 사용하고, 사진이 부족할 때만 AI 사진을 생성합니다.'):t('AI images: three new content-specific editorial images are generated. Existing Roundy photo assets are not reused.','AI 이미지: 콘텐츠에 맞는 새 에디토리얼 이미지 3장을 생성합니다. 기존 Roundy 사진 에셋은 재사용하지 않습니다.')}</p>:manualVisualSource==='uploaded'?<div className="marketing-setup">
+     {manualVisualSource==='pexels'?<p className="admin-help">{t('Pexels-first: use 2–3 authentic photos per carousel. New images require human review; approved assets are reusable after 90 days. No image AI calls.','Pexels 우선: 캐러셀당 실제 사진 2~3장. 신규 사진은 최초 검수하며 승인 자산은 90일 중복 제한 후 재사용합니다. 이미지 AI 호출은 없습니다.')}</p>:manualVisualSource==='auto_ai'?<p className="admin-help">{basis==='live_event'?t('Event campaigns use the event’s real uploaded photos first. AI photography is generated only when there are not enough event photos.','이벤트 홍보는 이벤트에 등록된 실제 사진을 우선 사용하고, 사진이 부족할 때만 AI 사진을 생성합니다.'):t('AI images: three new content-specific editorial images are generated. Existing Roundy photo assets are not reused.','AI 이미지: 콘텐츠에 맞는 새 에디토리얼 이미지 3장을 생성합니다. 기존 Roundy 사진 에셋은 재사용하지 않습니다.')}</p>:manualVisualSource==='uploaded'?<div className="marketing-setup">
       <strong>{t('Add images now','이미지 바로 추가')}</strong>
       <p className="admin-help">{t('Select 1–6 images here. When you generate, Roundy will create the copy, create a Draft, upload these files, and render the final cards automatically. Image AI is not called.','여기서 이미지를 1–6장 선택하세요. 콘텐츠 생성 시 문구 생성 → 초안 생성 → 이미지 업로드 → 최종 카드 렌더까지 자동으로 이어집니다. 이미지 AI는 호출하지 않습니다.')}</p>
       <div className="admin-two"><label><span>{t('New files are','새 파일 유형')}</span><select value={pendingAssetType} onChange={e=>setPendingAssetType(e.target.value as 'photo'|'completed_card')}><option value="photo">{t('Photo source','사진 소스')}</option><option value="completed_card">{t('Completed 4:5 card','완성 4:5 카드')}</option></select></label><label><span>{t('Choose images','이미지 선택')}</span><input type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={busy||!!running} onChange={e=>{const files=Array.from(e.target.files||[]);e.target.value='';void work(()=>addPendingMarketingImages(files));}}/></label></div>
@@ -361,7 +404,23 @@ export function AdminMarketing({locale}:{locale:Locale}){
      {(draft.quality_report?.issues||[]).map((issue:string)=><p key={issue}>{issue}</p>)}
      {draft.status==='needs_approval'&&<button type="button" className="admin-secondary" disabled={busy||!!running||dirty} onClick={()=>void work(async()=>{const r=await request('/quality/recheck',{draft_id:draft.id,revision:draft.revision});if(!r.ok)throw new Error(r.data.error);selectDraft(r.data.draft);setNotice(t('Quality check finished. No AI request was made.','품질 검사를 마쳤습니다. AI를 호출하지 않았습니다.'));})}>{t('Recheck saved edits — no AI charge','저장한 내용 품질 검사 — AI 비용 없음')}</button>}
     </div>
-    {draft.generation_source==='manual'&&draft.draft_role==='candidate'&&<div className="marketing-setup">
+    {draft.visual_source==='pexels'&&<div className="marketing-setup">
+      <strong>{t('Pexels photo rights review','Pexels 사진 저작권 검수')}</strong>
+      <p className="admin-help">{t('Review 2–3 real photos. New photographs are blocked until approved. Check commercial use, people, trademarks, and misleading endorsement.','실제 사진 2~3장을 검수하세요. 신규 사진은 승인 전 게시할 수 없습니다. 상업적 이용, 인물, 상표 및 오해를 부르는 참여나 후원 암시를 확인하세요.')}</p>
+      <div className="marketing-draft-inbox">{stockPhotos.length?stockPhotos.map((photo:Row)=><article className="marketing-draft-card" key={photo.asset_id}>
+       <img src={photo.preview_url} alt={t('Pexels photo candidate','Pexels 사진 후보')}/>
+       <div className="marketing-draft-copy">
+        <strong>{t('Card','카드')} {Number(photo.slot)+1} · {photo.review_status==='approved'?t('Approved','승인됨'):photo.review_status==='rejected'?t('Rejected','거절됨'):t('Pending rights review','저작권 검수 대기')}</strong>
+        <small><a href={photo.source_url} target="_blank" rel="noopener noreferrer">Photo by {photo.photographer} on Pexels</a> · <a href={photo.license_url} target="_blank" rel="noopener noreferrer">{t('License','라이선스')}</a></small>
+       </div>
+       {photo.review_status==='pending'&&<div className="admin-form-actions"><button type="button" className="admin-primary" disabled={busy||!!running} onClick={()=>void work(()=>reviewStock(photo,'approved'))}>{t('Approve photo','사진 승인')}</button><button type="button" className="admin-secondary" disabled={busy||!!running} onClick={()=>void work(()=>reviewStock(photo,'rejected'))}>{t('Reject','거절')}</button></div>}
+      </article>):<p className="admin-empty">{t('No stock photos selected. Search for Pexels candidates.','선정된 사진이 없습니다. Pexels 사진 후보를 검색하세요.')}</p>}</div>
+      {draft.status==='needs_approval'&&<div className="admin-form-actions">
+       <button type="button" className="admin-secondary" disabled={busy||!!running||!!draft.images?.length} onClick={()=>void work(discoverStock)}>{t('Search / replace photos','사진 재검색 / 교체')}</button>
+       <button type="button" className="admin-primary" disabled={busy||!!running||dirty||stockPhotos.length<2||stockPhotos.length>3||stockPhotos.some((p:Row)=>p.review_status!=='approved')||!!draft.images?.length} onClick={()=>void work(renderStock)}>{t('Render approved photos — $0 image AI','승인 사진 렌더링 — 이미지 AI 비용 $0')}</button>
+      </div>}
+     </div>}
+     {draft.visual_source!=='pexels'&&draft.generation_source==='manual'&&draft.draft_role==='candidate'&&<div className="marketing-setup">
      <strong>{t('Manual images','직접 이미지')}</strong>
      <p className="admin-help">{t('Upload 1–6 JPEG, PNG or WebP files (max 10 MB each). Photo source adds Roundy typography; completed card is used as-is. Uploaded rendering makes no image-AI request.','JPEG, PNG, WebP 이미지를 1–6장 업로드할 수 있습니다(장당 최대 10MB). 사진 소스는 Roundy 타이포를 합성하고, 완성 카드는 그대로 사용합니다. 업로드 렌더에서는 이미지 AI를 호출하지 않습니다.')}</p>
      <div className="admin-two"><label><span>{t('Upload type','업로드 유형')}</span><select value={uploadAssetType} onChange={e=>setUploadAssetType(e.target.value as 'photo'|'completed_card')}><option value="photo">{t('Photo source','사진 소스')}</option><option value="completed_card">{t('Completed 4:5 card','완성 4:5 카드')}</option></select></label><label><span>{t('Add images','이미지 추가')}</span><input type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={busy||!!running} onChange={e=>{const files=Array.from(e.target.files||[]);e.target.value='';void work(()=>uploadMarketingImages(files));}}/></label></div>
