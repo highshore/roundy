@@ -120,4 +120,24 @@ assert.equal((await as(1,'select status from reports where id=$1',[report])).row
 await denied(1,`update reports set status='resolved' where id='${report}'`,/permission/);
 await denied(4,`select admin_review_report('${report}','invalid','')`,/Invalid review/);
 console.log('PASS reports: own-only submissions, admin inbox, private staff notes, status updates, non-admin and invalid-state denial');
+// Gender-neutral event contract: one fee, shared seats and unique pair rotations.
+const neutral=uid(401);
+await as(4,`insert into events(id,title,starts_at,venue,address,capacity,status,age_min,age_max,theme,gender_split_enabled,price_general)
+ values('${neutral}','Language Exchange QA',now()+interval '5 hours','Test venue','Seoul',4,'live',18,100,'Language Exchange',false,42000)`);
+const defaultMode=(await as(4,'select gender_split_enabled,price_general from events where id=$1',[neutral])).rows[0];
+assert.equal(defaultMode.gender_split_enabled,false); assert.equal(defaultMode.price_general,42000);
+await assert.rejects(()=>as(4,`update events set price_general=0 where id='${neutral}'`),/events_price_general_valid/);
+for(const person of [1,2]) await db.query('insert into bookings(event_id,user_id) values($1,$2)',[neutral,uid(person)]);
+const neutralQuote=(await as(4,'select event_checkout_quote($1,NULL) as quote',[neutral])).rows[0].quote;
+assert.equal(neutralQuote.base_amount,42000,'No gender-specific ticket price');
+assert.equal(neutralQuote.gender_balance_discount_amount,0,'No gender-balance promotion');
+await db.query('insert into bookings(event_id,user_id) values($1,$2)',[neutral,uid(4)]);
+await assert.rejects(()=>as(4,'update events set gender_split_enabled=true where id=$1',[neutral]),/Cannot change the event format/);
+await db.query('insert into bookings(event_id,user_id) values($1,$2)',[neutral,uid(3)]);
+const seating=(await as(4,'select generate_seating($1) as plan',[neutral])).rows[0].plan;
+assert.equal(seating.total_rounds,3);
+assert.equal(seating.rows.length,6);
+assert.equal(new Set(seating.rows.map(row=>[row.left,row.right].sort().join('/'))).size,6,'Each participant pair meets only once');
+assert.equal((await db.query('select seats_remaining from events where id=$1',[neutral])).rows[0].seats_remaining,0);
+console.log('PASS neutral event: shared capacity, one price, no balance promotion, immutable sold format, round-robin seating');
 await db.close();
