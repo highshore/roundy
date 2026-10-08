@@ -69,4 +69,23 @@ const tree=JSON.stringify(image.tree);
 check(()=>assert.ok(tree.includes('10월 9일 한글날')&&tree.includes('뚝섬한강공원')&&tree.includes('무료 관람')));
 const source=fs.readFileSync('src/lib/marketing-editorial.ts','utf8');
 check(()=>assert.ok(source.includes('trendPack=readTrendFactPack')&&source.includes('paid_web_search_calls:0')));
+const candidates=[
+ {trend_key:'unused-first',used_at:null,trend_score:94},
+ {trend_key:'older-used',used_at:'2026-10-06T09:00:00+09:00',trend_score:99,published:false},
+ {trend_key:'unused-second',used_at:null,trend_score:90},
+ {trend_key:'newer-used',used_at:'2026-10-08T11:00:00+09:00',trend_score:85,published:true},
+ {trend_key:'legacy-published',used_at:null,trend_score:70,published:true}
+];
+const groups=g.groupTrendsByUsage(candidates);
+check(()=>assert.deepEqual(Array.from(groups.unused,x=>x.trend_key),['unused-first','unused-second'],'unused candidates retain score ranking'));
+check(()=>assert.deepEqual(Array.from(groups.used,x=>x.trend_key),['newer-used','older-used','legacy-published'],'used archive sorts newest first and includes legacy published posts'));
+check(()=>assert.equal(groups.used.length+groups.unused.length,candidates.length,'no trend is lost or duplicated'));
+check(()=>assert.equal(candidates[1].trend_key,'older-used','grouping does not mutate the original list'));
+check(()=>assert.equal(g.groupTrendsByUsage([]).used.length,0));
+const marketingUi=fs.readFileSync('src/components/admin-marketing.tsx','utf8');
+check(()=>assert.ok(marketingUi.includes("groupTrendsByUsage((data.trend?.trends||[])")&&marketingUi.includes("setTrendUsageView('used')"),'admin exposes a separate used trends section'));
+check(()=>assert.ok(marketingUi.includes("publication_known")&&marketingUi.includes("Last used"),'used archive distinguishes published content and shows generation time'));
+const radarSource=fs.readFileSync('src/lib/marketing-trend-radar.ts','utf8');
+check(()=>assert.ok(radarSource.includes("publishedByKey")&&radarSource.includes("limit(100)")&&radarSource.includes(".eq('status','published')"),'read-only status lookup supports legacy drafts and full archive'));
+
 console.log('PASS '+checks+' source-backed Trend Guide assertions; no paid providers called.');
