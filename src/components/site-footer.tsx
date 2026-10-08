@@ -6,15 +6,11 @@ export function SiteFooter({ locale }: { locale: Locale }) {
   return <footer className="site-footer">
     <div className="footer-top">
       <div className="footer-links" aria-label={tr(locale,'Footer navigation','푸터 내비게이션')}>
-        <Link href="/discover">{tr(locale, 'Discover Events', '모임 찾기')}</Link>
-        <Link href="/language-exchange">{tr(locale, 'Language Exchange', '언어교환 프로그램')}</Link>
-        <Link href="/discover/classic">{tr(locale, 'Original Discovery', '기존 Discovery')}</Link>
         <Link href="/about">{tr(locale, 'About Us', '라운디 소개')}</Link>
         <Link href="/how-it-works">{tr(locale, 'How It Works & Safety', '이용 방법 및 안전')}</Link>
         <Link href="/privacy">{tr(locale, 'Privacy Policy', '개인정보 처리방침')}</Link>
         <Link href="/terms">{tr(locale, 'Terms of Use', '이용약관')}</Link>
         <Link href="/refund-policy">{tr(locale, 'Refund Policy', '환불 규정')}</Link>
-        <Link href="/copyright">{tr(locale, 'Copyright & Takedown', '저작권 및 삭제 요청')}</Link>
       </div>
       <Link className="footer-wordmark" href="/"><RoundyBrand /></Link>
     </div>

@@ -425,18 +425,18 @@ export function MatchesScreen({locale}:{locale:Locale}){
  function onDraft(value:string){setDraft(value);if(selected?.canSend){const channel=channelsRef.current[selected.key];if(channel)void channel.keystroke().catch(()=>undefined);}}
 
  if(loading)return <LoadingScreen/>;
- if(error&&!inbox)return <section className="matches-empty"><Heart size={36}/><Heading level={1}>{tr(locale,'Could not load your matches','매칭을 불러오지 못했어요')}</Heading><p role="alert">{error}</p><button className="button" onClick={()=>setRetry(value=>value+1)}>{tr(locale,'Try again','다시 시도')}</button></section>;
+ if(error&&!inbox)return <section className="matches-empty"><Heart size={36}/><Heading level={1}>{tr(locale,'Could not load your messages','메시지를 불러오지 못했어요')}</Heading><p role="alert">{error}</p><button className="button" onClick={()=>setRetry(value=>value+1)}>{tr(locale,'Try again','다시 시도')}</button></section>;
  if(!selected)return null;
 
  const newMatches=(inbox?.channels??[]).filter(channel=>channel.kind==='match'&&Date.parse(channel.openingExpiresAt??channel.deadline??'')>now);
  const visibleChannels=inbox?.channels??[];
 
  return <section className={'stream-inbox'+(mobileConversation?' mobile-conversation':'')}>
-  <aside className="inbox-sidebar" aria-label={tr(locale,'Match conversations','매칭 대화 목록')}>
-   {newMatches.length>0&&<section className="inbox-new-matches"><Heading level={2}>{tr(locale,'Your Matches','내 매칭')}</Heading><div className="inbox-match-strip">
+  <aside className="inbox-sidebar" aria-label={tr(locale,'Messages','메시지 목록')}>
+   {newMatches.length>0&&<section className="inbox-new-matches"><Heading level={2}>{tr(locale,'New Connections','새로운 인연')}</Heading><div className="inbox-match-strip">
     {newMatches.map(channel=>{const expires=channel.openingExpiresAt??channel.deadline!;const remaining=Math.max(0,Math.min(1,(Date.parse(expires)-now)/(72*3_600_000)));return <button key={channel.key} onClick={()=>openConversation(channel)} aria-label={channel.title+', '+deadlineLabel({...channel,deadline:expires},locale,now)}><span className="inbox-match-ring" style={{'--remaining':String(remaining*360)+'deg'} as CSSProperties}><Avatar channel={channel}/></span><strong>{channel.title.split(' ')[0]}</strong><small>{deadlineLabel({...channel,deadline:expires},locale,now)}</small></button>;})}
    </div></section>}
-   <Heading level={2} className="inbox-section-heading">{tr(locale,'Conversations','대화')}</Heading>
+   <Heading level={2} className="inbox-section-heading">{tr(locale,'Messages','메시지')}</Heading>
    {error&&<p className="inbox-connection-error" role="alert">{tr(locale,'Could not connect.','연결하지 못했어요.')} <button onClick={()=>setRetry(value=>value+1)}>{tr(locale,'Retry','다시 시도')}</button></p>}
    <div className="inbox-list">{visibleChannels.map(channel=><button key={channel.key} className={'inbox-row '+(channel.key===selected.key?'selected':'')} onClick={()=>openConversation(channel)} aria-pressed={channel.key===selected.key&&mobileConversation}>
     <Avatar channel={channel}/><span><strong>{channel.title}</strong><small>{typing[channel.key]?tr(locale,'Typing…','입력 중…'):preview(channel)}</small></span>

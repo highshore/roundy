@@ -75,7 +75,7 @@ export function SiteShell({ children }: { children: ReactNode }) {
       active: pathname === '/' || pathname === '/discover' || pathname === '/language-exchange' || pathname.startsWith('/discover/') },
     { href: '/events', label: tr(locale, 'Events', '모임'), icon: CalendarDays,
       active: pathname === '/events' || pathname.startsWith('/events/') },
-    { href: '/matches', label: tr(locale, 'Matches', '매칭'), icon: MessageCircle,
+    { href: '/matches', label: tr(locale, 'Messages', '메시지'), icon: MessageCircle,
       active: pathname === '/matches' || pathname.startsWith('/matches/') },
     { href: '/me', label: tr(locale, 'Profile', '프로필'), icon: UserRound,
       active: pathname === '/me' || pathname.startsWith('/me/') },
