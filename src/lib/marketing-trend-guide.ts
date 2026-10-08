@@ -89,10 +89,10 @@ export function trendPackForModel(pack:TrendFactPack){
 }
 
 /** UI-only grouping. used_at records completed content generation, not necessarily publication. */
-export function groupTrendsByUsage<T extends {used_at?:string|null}>(trends:readonly T[]):{unused:T[];used:T[]}{
+export function groupTrendsByUsage<T extends {used_at?:string|null;published?:boolean}>(trends:readonly T[]):{unused:T[];used:T[]}{
  const unused:T[]=[],used:T[]=[];
  for(const trend of trends){
-  if(typeof trend.used_at==='string'&&trend.used_at.trim())used.push(trend);
+  if((typeof trend.used_at==='string'&&trend.used_at.trim())||trend.published===true)used.push(trend);
   else unused.push(trend);
  }
  const time=(value:string|null|undefined)=>{const stamp=Date.parse(value||'');return Number.isFinite(stamp)?stamp:0;};
