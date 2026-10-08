@@ -19,7 +19,7 @@ for (const path of ['/', '/discover', '/language-exchange']) {
   assert.equal(siteLayoutForPath(path).header, true, path + ': global header');
   assert.equal(siteLayoutForPath(path).footer, true, path + ': global footer');
 }
-assert.equal(siteLayoutForPath('/discover/classic').programWidth, false, 'Keep classic Discovery mobile-first');
+assert.equal(siteLayoutForPath('/discover/classic').useSiteShell, true, 'Keep classic Discovery in the shared mobile-first shell');
 assert.equal(siteLayoutForPath('/discover/classic').bottomNav, true);
 assert.equal(siteLayoutForPath('/onboarding/basics').header, false);
 assert.equal(siteLayoutForPath('/onboarding/basics').footer, false);
