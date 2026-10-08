@@ -5,6 +5,7 @@ import '@fontsource/dm-sans/500.css';
 import '@fontsource/dm-sans/700.css';
 import './globals.css';
 import { ToastProvider } from '@/components/toast';
+import { SiteShell } from '@/components/site-shell';
 
 const notoSansKr=Noto_Sans_KR({
  variable:'--font-noto-sans-kr',
@@ -23,4 +24,4 @@ export const metadata: Metadata = {
  twitter:{card:'summary_large_image',title:'Roundy | Meet in Real Life',description:'Roundy | Meet in Real Life',images:['/opengraph-image']}
 };
 export const viewport: Viewport = {width:'device-width',initialScale:1,themeColor:'#FFFEFA'};
-export default function Layout({children}:{children:React.ReactNode}) {return <html lang="en" className={notoSansKr.variable}><body><ToastProvider>{children}</ToastProvider></body></html>;}
+export default function Layout({children}:{children:React.ReactNode}) {return <html lang="en" className={notoSansKr.variable}><body><ToastProvider><SiteShell>{children}</SiteShell></ToastProvider></body></html>;}

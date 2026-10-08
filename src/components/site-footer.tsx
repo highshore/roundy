@@ -8,6 +8,7 @@ export function SiteFooter({ locale }: { locale: Locale }) {
       <div className="footer-links" aria-label={tr(locale,'Footer navigation','푸터 내비게이션')}>
         <Link href="/discover">{tr(locale, 'Discover Events', '모임 찾기')}</Link>
         <Link href="/language-exchange">{tr(locale, 'Language Exchange', '언어교환 프로그램')}</Link>
+        <Link href="/discover/classic">{tr(locale, 'Original Discovery', '기존 Discovery')}</Link>
         <Link href="/about">{tr(locale, 'About Us', '라운디 소개')}</Link>
         <Link href="/how-it-works">{tr(locale, 'How It Works & Safety', '이용 방법 및 안전')}</Link>
         <Link href="/privacy">{tr(locale, 'Privacy Policy', '개인정보 처리방침')}</Link>

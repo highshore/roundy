@@ -14,7 +14,10 @@ assert.match(discover, /import LanguageExchangePage from ['"]@\/app\/language-ex
 assert.match(discover, /export default LanguageExchangePage/);
 assert.match(discover, /force-dynamic/);
 assert.match(classic, /<App path="discover"/);
-assert.match(languageExchange, /href="\/discover\/classic"/);
+const siteFooter = await read('src/components/site-footer.tsx');
+assert.match(siteFooter, /href="\/discover\/classic"/);
+assert.doesNotMatch(languageExchange, /<SiteFooter|className=\{styles\.header\}/);
+assert.match(languageExchange, /<main id="main">/);
 assert.match(languageExchange, /href="\/refund-policy"/);
 assert.match(languageExchange, /매칭/);
 assert.match(languageExchange, /Language Exchange/);
