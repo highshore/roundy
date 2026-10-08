@@ -10,7 +10,7 @@ check(()=>assert.ok(app.includes('1:1 MINGLE / MUTUAL MATCH')));
 check(()=>assert.ok(app.includes('See 1:1 Mingle events')));
 check(()=>assert.ok(hero.includes('대면으로 만나고 매칭되는 국제 로테이션 소개팅')));
 check(()=>assert.ok(about.includes('For 1:1 Mingle')&&about.includes('1:1 밍글 후')));
-check(()=>assert.ok(data.includes("eventCategories=['1:1 Speed Mingle']")));
+check(()=>assert.ok(data.includes("eventCategories=['1:1 Speed Mingle','Language Exchange']")));
 check(()=>assert.ok(data.includes('entirely in English')));
 check(()=>assert.ok(copy.includes('Roundy offers 1:1 Mingle only.')));
 // Instagram marketing generation uses the requested terminology.
