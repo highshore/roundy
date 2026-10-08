@@ -17,6 +17,8 @@ async function request(path='',body?:unknown,method='POST'){
   response=await fetch(BASE+path,body===undefined?{cache:'no-store',signal:AbortSignal.timeout(25000)}:{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(245000)});
  }catch(error){
   const timedOut=error instanceof Error&&['AbortError','TimeoutError'].includes(error.name);
+  // A failed mutation can have an unknown outcome. Never imply a paid operation did not start.
+  if(body!==undefined)throw new Error('MARKETING_ACTION_OUTCOME_UNKNOWN');
   throw new Error(timedOut?'MARKETING_REQUEST_TIMEOUT':'MARKETING_NETWORK_ERROR');
  }
  const data=await response.json().catch(()=>({error:'MARKETING_INVALID_SERVER_RESPONSE'}));
@@ -87,6 +89,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
    TREND_RADAR_OUTCOME_UNKNOWN:['The search outcome is unknown. Check the scan history before starting another paid scan.','검색 결과를 확인할 수 없습니다. 유료 검색을 다시 누르기 전에 실행 기록을 확인하세요.'],
    MARKETING_REQUEST_TIMEOUT:['The request timed out. Try a read-only refresh; no paid scan was started.','마케팅 데이터 조회 시간이 초과됐습니다. 새로고침으로 상태를 확인하세요. 유료 검색은 시작하지 않았습니다.'],
    MARKETING_NETWORK_ERROR:['Could not connect to the marketing server. Check the connection and refresh status.','마케팅 서버와 연결하지 못했습니다. 연결 상태 확인 후 새로고침하세요.'],
+   MARKETING_ACTION_OUTCOME_UNKNOWN:['The operation may have started. Check the saved history before retrying; no automatic retry was made.','요청이 서버에서 시작됐을 수 있습니다. 새 유료 요청 전에 저장된 기록을 확인하세요. 자동 재시도는 하지 않았습니다.'],
    MARKETING_INVALID_SERVER_RESPONSE:['The server did not return usable data. Please refresh status.','서버가 정상 데이터를 반환하지 못했습니다. 새로고침으로 상태를 확인하세요.'],
    TREND_RADAR_LOAD_FAILED:['Could not load saved Seoul trends. Please retry a read-only refresh.','저장된 서울 트렌드를 불러오지 못했습니다. 새로고침으로 다시 조회하세요.'],
    GENERATION_ALREADY_RUNNING:['Another generation is still running. Wait for it to finish or refresh status.','다른 생성 작업이 진행 중입니다. 완료될 때까지 기다리거나 상태를 새로고침하세요.'],
