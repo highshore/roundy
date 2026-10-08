@@ -84,11 +84,14 @@ function harness(){
  check(()=>assert.equal(h.radar.computeTrendScore({momentum_score:100,roundy_relevance_score:100,target_relevance_score:100,seoul_relevance_score:100,visual_potential_score:100},100),100));
  const result=await h.radar.runTrendRadar('radar:test:001');
  check(()=>assert.equal(result.deduplicated,false));
- check(()=>assert.equal(h.requests.length,1));
+ check(()=>assert.equal(h.requests.length,2,'one web research call and one tool-free formatter'));
  check(()=>assert.equal(h.requests[0].body.max_tool_calls,1));
- check(()=>assert.equal(h.requests[0].body.max_output_tokens,10000));
- check(()=>assert.match(h.requests[0].body.input,/15–30/));
- check(()=>assert.match(h.requests[0].body.input,/previous 7 days/));
+ check(()=>assert.equal(h.requests[0].body.max_output_tokens,4500));
+ check(()=>assert.match(h.requests[0].body.input,/6–12/));
+ check(()=>assert.match(h.requests[0].body.input,/last 7 days/));
+ check(()=>assert.equal(h.requests[1].body.tools,undefined,'formatter must not search the web again'));
+ check(()=>assert.equal(h.requests[1].body.text.format.type,'json_schema'));
+ check(()=>assert.equal(h.requests[1].body.text.format.strict,true));
  check(()=>assert.equal(result.candidates.length,1,'news-only candidate must be rejected'));
  const trend=result.candidates[0];
  check(()=>assert.equal(trend.trend_key,'hoe-picnic'));
@@ -119,5 +122,33 @@ function harness(){
  trend.last_seen_at=new Date(Date.now()-8*86400000).toISOString();
  const selected=await h.radar.selectTrendForAutomaticContent(h.db,80);
  check(()=>assert.equal(selected,null,'candidates older than the 7-day pool must not be selected'));
+}
+{
+ const h=harness();
+ h.provider.output[1].content[0].text=JSON.stringify({candidates:[]});
+ await assert.rejects(()=>h.radar.runTrendRadar('radar:test:empty'),/TREND_RADAR_NO_VERIFIED_CANDIDATES/);
+ check(()=>assert.equal(h.tables.marketing_trend_scans[0].status,'failed','zero candidates must never count as completed'));
+ check(()=>assert.equal(h.requests.length,2,'empty results must not trigger another search'));
+}
+{
+ const h=harness();
+ h.provider.output[1].content[0].text='not valid JSON';
+ await assert.rejects(()=>h.radar.runTrendRadar('radar:test:invalid'),/TREND_RADAR_INVALID_JSON/);
+ check(()=>assert.equal(h.tables.marketing_trend_scans[0].status,'failed'));
+ check(()=>assert.equal(h.requests.length,2,'invalid JSON must not be retried automatically'));
+}
+{
+ const h=harness();
+ h.provider.output[0].action.sources=[];
+ await assert.rejects(()=>h.radar.runTrendRadar('radar:test:no-sources'),/TREND_RADAR_NO_RESEARCH_EVIDENCE/);
+ check(()=>assert.equal(h.tables.marketing_trend_scans[0].status,'failed'));
+ check(()=>assert.equal(h.requests.length,1,'no verified web sources must not trigger the formatter'));
+}
+{
+ const h=harness();
+ h.provider.output[0].action.sources[0].url+='&utm_source=test';
+ const response=await h.radar.runTrendRadar('radar:test:tracking');
+ check(()=>assert.equal(response.candidates.length,1,'tracking query parameters must not cause false negatives'));
+ check(()=>assert.equal(h.requests.length,2));
 }
 console.log('PASS '+checks+' Seoul Trend Radar assertions; provider calls mocked.');
