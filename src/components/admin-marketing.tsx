@@ -12,8 +12,17 @@ const BASE='/api/admin/marketing';
 const topics=['mbti','dating_archetype','book_insight','trend_research','meme_remix','dating_myth','conversation_prompt','seoul_dating','seoul_trend','mini_quiz'];
 const topicKo=['MBTI 연애 유형','연애 유형','책 속 공감','최신 연구','밈 재해석','연애 통념','첫 대화 질문','서울 데이팅','서울 트렌드','미니 퀴즈'];
 async function request(path='',body?:unknown,method='POST'){
- const response=await fetch(BASE+path,body===undefined?{cache:'no-store'}:{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(245000)});
- const data=await response.json().catch(()=>({error:'서버 응답을 확인하지 못했습니다. 새로고침으로 작업 기록부터 확인하세요.'}));return {ok:response.ok,data};
+ let response:Response;
+ try{
+  response=await fetch(BASE+path,body===undefined?{cache:'no-store',signal:AbortSignal.timeout(25000)}:{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(245000)});
+ }catch(error){
+  const timedOut=error instanceof Error&&['AbortError','TimeoutError'].includes(error.name);
+  // A failed mutation can have an unknown outcome. Never imply a paid operation did not start.
+  if(body!==undefined)throw new Error('MARKETING_ACTION_OUTCOME_UNKNOWN');
+  throw new Error(timedOut?'MARKETING_REQUEST_TIMEOUT':'MARKETING_NETWORK_ERROR');
+ }
+ const data=await response.json().catch(()=>({error:'MARKETING_INVALID_SERVER_RESPONSE'}));
+ return {ok:response.ok,data};
 }
 const blank=()=>({channel:'koreapas',name:'',title:'',caption:'',cta:'자세히 보기',destination_url:'https://roundy.team',images:[] as string[],days:[] as number[],time_kst:'10:00',enabled:false});
 export function AdminMarketing({locale}:{locale:Locale}){
@@ -38,6 +47,18 @@ export function AdminMarketing({locale}:{locale:Locale}){
   setData(r.data);setSettings(r.data.settings);setGeneration(r.data.generation);if(!eventId&&r.data.live_events?.[0]?.id)setEventId(String(r.data.live_events[0].id));const rows=r.data.drafts||[];
   selectDraft(rows.find((x:Row)=>x.id===preferredId)||rows.find((x:Row)=>x.status==='needs_approval')||rows[0]||null);
  }
+ // Independent, read-only radar loading: a failure in the full marketing overview must not hide saved trends.
+ async function loadTrend(){
+  const r=await request('/trend-radar',undefined,'GET');
+  if(!r.ok)throw new Error(r.data.error||'TREND_RADAR_LOAD_FAILED');
+  if(mounted.current)setData(current=>({...current,trend:r.data}));
+ }
+ useEffect(()=>{
+  if(channel!=='instagram'||activeTab!=='trend')return;
+  let cancelled=false;
+  loadTrend().then(()=>{if(!cancelled)setError('');}).catch(error=>{if(!cancelled)setError(friendlyError(error instanceof Error?error.message:'TREND_RADAR_LOAD_FAILED'));});
+  return()=>{cancelled=true;};
+ },[activeTab,channel]);
  useEffect(()=>{mounted.current=true;load().catch(e=>{if(mounted.current)setError(e.message);}).finally(()=>{if(mounted.current)setLoading(false);});return()=>{mounted.current=false;};},[]);
  useEffect(()=>{
   if(!draft?.id||draft.generation_source!=='manual'||draft.draft_role!=='candidate'){setUploadedImages([]);return;}
@@ -59,6 +80,18 @@ export function AdminMarketing({locale}:{locale:Locale}){
    TREND_RADAR_BUDGET_REACHED:['The Trend Radar safety budget has been reached.','Trend Radar 안전 예산 한도에 도달했습니다.'],
    TREND_SCAN_ALREADY_RUNNING:['A Trend Radar scan is already running.','Trend Radar 스캔이 이미 진행 중입니다.'],
    TREND_RADAR_PAUSED:['Trend Radar is paused.','Trend Radar가 일시 중지되어 있습니다.'],
+   TREND_SCAN_MANUAL_COOLDOWN_10_MINUTES:['Please wait 10 minutes between paid manual scans.','유료 수동 검색은 10분 간격으로만 실행할 수 있습니다.'],
+   TREND_RADAR_INCOMPLETE_RESPONSE:['The search returned an incomplete AI response. No automatic retry was made.','AI 응답이 끝까지 완성되지 않아 검색을 중단했습니다. 자동으로 재시도하지 않았습니다.'],
+   TREND_RADAR_INVALID_JSON:['The research result was not valid JSON. No automatic retry was made.','검색 결과의 데이터 형식을 해석할 수 없어 중단했습니다. 자동 재시도는 하지 않았습니다.'],
+   TREND_RADAR_NO_RESEARCH_EVIDENCE:['The web search returned too little verifiable evidence. No retry was made.','웹 검색에서 확인 가능한 출처를 충분히 확보하지 못했습니다. 자동 재시도는 하지 않았습니다.'],
+   TREND_RADAR_NO_VERIFIED_CANDIDATES:['No candidate passed the source and signal checks. The scan was recorded as failed, not completed.','출처와 트렌드 신호를 모두 충족한 후보가 없어 실패로 기록했습니다. 검색을 반복하지는 않습니다.'],
+   TREND_RADAR_SEARCH_NOT_COMPLETED:['The web search did not complete. No retry was made.','웹 검색이 정상적으로 완료되지 않았습니다. 자동 재시도는 하지 않았습니다.'],
+   TREND_RADAR_OUTCOME_UNKNOWN:['The search outcome is unknown. Check the scan history before starting another paid scan.','검색 결과를 확인할 수 없습니다. 유료 검색을 다시 누르기 전에 실행 기록을 확인하세요.'],
+   MARKETING_REQUEST_TIMEOUT:['The request timed out. Try a read-only refresh; no paid scan was started.','마케팅 데이터 조회 시간이 초과됐습니다. 새로고침으로 상태를 확인하세요. 유료 검색은 시작하지 않았습니다.'],
+   MARKETING_NETWORK_ERROR:['Could not connect to the marketing server. Check the connection and refresh status.','마케팅 서버와 연결하지 못했습니다. 연결 상태 확인 후 새로고침하세요.'],
+   MARKETING_ACTION_OUTCOME_UNKNOWN:['The operation may have started. Check the saved history before retrying; no automatic retry was made.','요청이 서버에서 시작됐을 수 있습니다. 새 유료 요청 전에 저장된 기록을 확인하세요. 자동 재시도는 하지 않았습니다.'],
+   MARKETING_INVALID_SERVER_RESPONSE:['The server did not return usable data. Please refresh status.','서버가 정상 데이터를 반환하지 못했습니다. 새로고침으로 상태를 확인하세요.'],
+   TREND_RADAR_LOAD_FAILED:['Could not load saved Seoul trends. Please retry a read-only refresh.','저장된 서울 트렌드를 불러오지 못했습니다. 새로고침으로 다시 조회하세요.'],
    GENERATION_ALREADY_RUNNING:['Another generation is still running. Wait for it to finish or refresh status.','다른 생성 작업이 진행 중입니다. 완료될 때까지 기다리거나 상태를 새로고침하세요.'],
    DRAFT_CHANGED_REFRESH_FIRST:['This draft changed. Refresh status before trying again.','초안이 변경됐습니다. 상태를 새로고침한 뒤 다시 시도하세요.'],
    DRAFT_NOT_EDITABLE:['This draft is no longer editable. Refresh status.','이 초안은 더 이상 수정할 수 없습니다. 상태를 새로고침하세요.'],
@@ -280,7 +313,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
  if(loading)return <p role="status">{t('Loading marketing workspace…','마케팅 정보를 불러오는 중입니다…')}</p>;
  return <section className="admin-panel marketing-panel">
   <div className="admin-heading"><p className="admin-kicker">ROUNDY ADMIN</p><Heading level={1}>{t('Marketing','마케팅')}</Heading><p>{t('Generate safely. Review once. Publish only after approval.','안전하게 생성하고 검토한 뒤, 승인한 콘텐츠만 게시합니다.')}</p></div>
-  <div className="admin-form-actions">{(['instagram','koreapas'] as const).map(c=><button type="button" key={c} className={channel===c?'admin-primary':'admin-secondary'} onClick={()=>setChannel(c)}>{c==='instagram'?'Instagram @roundy.meet':'Koreapas'}</button>)}<button type="button" className="admin-secondary" disabled={busy} onClick={()=>void work(()=>load(draft?.id))}>{t('Refresh status','상태 새로고침')}</button></div>
+  <div className="admin-form-actions">{(['instagram','koreapas'] as const).map(c=><button type="button" key={c} className={channel===c?'admin-primary':'admin-secondary'} onClick={()=>setChannel(c)}>{c==='instagram'?'Instagram @roundy.meet':'Koreapas'}</button>)}<button type="button" className="admin-secondary" disabled={busy} onClick={()=>void work(()=>channel==='instagram'&&activeTab==='trend'?loadTrend():load(draft?.id))}>{t('Refresh status','상태 새로고침')}</button></div>
   {error&&<p className="admin-error" role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}
   {channel==='instagram'&&<nav className="marketing-subtabs" aria-label={t('Marketing sections','마케팅 메뉴')} role="tablist">{tabItems.map(([value,label])=><button key={value} type="button" role="tab" aria-selected={activeTab===value} className={activeTab===value?'active':''} onClick={()=>setActiveTab(value)}>{label}{value==='generation'&&generationThreads.some((thread:Row)=>thread.status==='failed')&&<span className="marketing-tab-dot" aria-label={t('Failed generation exists','실패한 생성 있음')}/>}</button>)}</nav>}
   {channel==='instagram'&&activeTab==='draft'&&<>
@@ -361,7 +394,8 @@ export function AdminMarketing({locale}:{locale:Locale}){
    {filteredGenerationThreads.length>generationVisible&&<button type="button" className="marketing-load-more" onClick={()=>setGenerationVisible(v=>v+20)}>{t('Load 20 more','20개 더 보기')}</button>}
   </section>}
   {channel==='instagram'&&activeTab==='trend'&&<section className="marketing-tab-panel">
-   <div className="admin-section-title"><div><p className="admin-kicker">Trend Radar</p><Heading level={2}>{t('Seoul Trend','서울 트렌드')}</Heading><p>{t('Track verified Seoul/Korea 20s–30s culture signals and turn strong trends into date-focused Roundy content.','서울/한국 2030 문화 신호를 검증하고 강한 트렌드를 데이트 중심 Roundy 콘텐츠로 연결합니다.')}</p></div><button type="button" className="admin-secondary" disabled={busy} onClick={()=>void work(()=>load(draft?.id))}>{t('Refresh','새로고침')}</button></div>
+   <div className="admin-section-title"><div><p className="admin-kicker">Trend Radar</p><Heading level={2}>{t('Seoul Trend','서울 트렌드')}</Heading><p>{t('Track verified Seoul/Korea 20s–30s culture signals and turn strong trends into date-focused Roundy content.','서울/한국 2030 문화 신호를 검증하고 강한 트렌드를 데이트 중심 Roundy 콘텐츠로 연결합니다.')}</p></div><button type="button" className="admin-secondary trend-refresh-button" disabled={busy} onClick={()=>void work(()=>loadTrend())}>{t('Refresh','새로고침')}</button></div>
+    {data.trend?.scans?.[0]&&<p className="trend-scan-summary" role="status">{t('Latest scan','최근 검색')}: {statusText(data.trend.scans[0].status)} · {data.trend.scans[0].candidate_count||0}{t(' verified candidates','건 검증됨')}{data.trend.scans[0].error_message&&<> — {friendlyError(String(data.trend.scans[0].error_message))}</>}</p>}
    {settings&&<div className="marketing-settings-card"><form className="admin-form" onSubmit={e=>{e.preventDefault();void work(async()=>{await mutate('/settings',settings,'PUT');await load(draft?.id);setNotice(t('Seoul Trend settings saved.','서울 트렌드 설정을 저장했습니다.'));});}}>
     <label className="check-row"><input type="checkbox" checked={settings.trend_radar_enabled??true} onChange={e=>setSettings({...settings,trend_radar_enabled:e.target.checked})}/>{t('Enable Trend Radar','Trend Radar 활성화')}</label>
     <label className="check-row"><input type="checkbox" checked={settings.trend_override_enabled??true} onChange={e=>setSettings({...settings,trend_override_enabled:e.target.checked})}/>{t('Let strong trends replace the daily rotation','강한 트렌드가 일일 순환 콘텐츠를 대체')}</label>
@@ -369,7 +403,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
     <p className="admin-help">{t('Radar builds one reusable pool of 15–30 candidates from the previous 7 days. It refreshes weekly; if fewer than 5 usable fresh candidates remain, it can refill at most once every 24 hours. Daily content generation reuses the pool without another trend search.','Radar는 최근 7일 데이터를 한 번에 검색해 15~30개의 재사용 후보 풀을 만듭니다. 기본 갱신은 주 1회이며, 사용 가능한 최근 후보가 5개 미만이면 최대 하루 1회 보충 검색합니다. 일일 콘텐츠 생성은 추가 트렌드 검색 없이 이 후보 풀을 재사용합니다.')}</p>
     <p className="admin-help">{t('Current reusable pool','현재 재사용 후보 풀')}: {data.trend?.pool?.available_candidates??0} {t('available','사용 가능')} / {data.trend?.pool?.fresh_candidates??0} {t('fresh candidates from 7 days','최근 7일 후보')}. {t('Automatic refill starts below 5 available candidates.','사용 가능 후보가 5개 미만이면 자동 보충 대상이 됩니다.')}</p>
     <p className="admin-help">{t('Radar budget','Radar 예산')}: ${Number(data.trend?.usage?.daily_reserved_usd||0).toFixed(2)} / ${Number(data.trend?.usage?.daily_budget_usd||.12).toFixed(2)} {t('today','오늘')} · ${Number(data.trend?.usage?.monthly_reserved_usd||0).toFixed(2)} / ${Number(data.trend?.usage?.monthly_budget_usd||4).toFixed(2)} {t('this month','이번 달')}.</p>
-    <div className="admin-form-actions"><button className="admin-primary" disabled={busy}>{t('Save Seoul Trend settings','서울 트렌드 설정 저장')}</button><button type="button" className="admin-secondary" disabled={busy} onClick={()=>{if(window.confirm(t('Refresh the weekly trend pool now with one paid scan? It uses the separate Radar safety budget.','지금 유료 스캔 1회로 주간 트렌드 후보 풀을 새로고침할까요? 별도 Radar 안전 예산을 사용합니다.')))void work(async()=>{const r=await mutate('/trend-radar/run',{confirm_paid_scan:true});await load(draft?.id);setNotice(t('Trend Radar scan completed.','Trend Radar 스캔을 완료했습니다.'));return r;});}}>{t('Refresh trend pool now','트렌드 후보 풀 새로고침')}</button></div>
+    <div className="admin-form-actions"><button className="admin-primary" disabled={busy}>{t('Save Seoul Trend settings','서울 트렌드 설정 저장')}</button><button type="button" className="admin-secondary" disabled={busy} onClick={()=>{if(window.confirm(t('Refresh the weekly trend pool now with one paid scan? It uses the separate Radar safety budget.','지금 유료 스캔 1회로 주간 트렌드 후보 풀을 새로고침할까요? 별도 Radar 안전 예산을 사용합니다.')))void work(async()=>{try{const r=await mutate('/trend-radar/run',{confirm_paid_scan:true});setNotice(t('Trend Radar scan completed.','Trend Radar 스캔을 완료했습니다.'));return r;}finally{await loadTrend().catch(()=>{});}});}}>{t('Refresh trend pool now','트렌드 후보 풀 새로고침')}</button></div>
    </form></div>}
    <div className="marketing-settings-card trend-candidates-card"><div className="admin-section-title"><div><p className="admin-kicker">{t('Candidates','후보')}</p><Heading level={3}>{t('Detected trends','감지된 트렌드')}</Heading><p>{t('Turn a verified trend into a Roundy carousel without searching the web again.','검증된 트렌드를 추가 웹 검색 없이 바로 Roundy 캐러셀로 만듭니다.')}</p></div><div className="trend-language-picker" role="group" aria-label={t('Content language','콘텐츠 언어')}><span>{t('Content language','콘텐츠 언어')}</span><div><button type="button" aria-pressed={trendLanguage==='ko'} onClick={()=>setTrendLanguage('ko')}>한국어</button><button type="button" aria-pressed={trendLanguage==='en'} onClick={()=>setTrendLanguage('en')}>English</button></div></div></div>
     {!!data.trend?.trends?.length?<div className="trend-candidate-list">{data.trend.trends.map((item:Row)=><article className="trend-candidate-row" key={item.id}><div className="trend-candidate-copy"><div className="trend-candidate-title"><strong>{item.display_name}</strong><span className={'trend-lifecycle '+item.status}>{item.status}</span></div><div className="trend-candidate-meta"><span>{item.route_type?.replaceAll('_',' ')}</span><span>{Number(item.trend_score||0).toFixed(0)}/100</span>{item.used_at&&<span>{t('Used','사용됨')}</span>}</div><p>{item.content_angle||item.summary}</p></div><button type="button" className="trend-create-button" disabled={busy} onClick={()=>{if(window.confirm(t('Create a Roundy carousel from this saved trend? This generates copy and visuals, but does not run another trend search.','이 저장된 트렌드로 '+(trendLanguage==='ko'?'한국어':'영어')+' Roundy 캐러셀을 만들까요? 문구와 이미지는 생성하지만 트렌드 검색은 다시 하지 않습니다.')))void work(async()=>{const r=await mutate('/trend-radar/generate',{trend_id:item.id,language:trendLanguage,confirm_generate:true});await load(r.draft?.id);setActiveTab('generation');setNotice(t('Trend content generation completed.','트렌드 콘텐츠 생성을 완료했습니다.'));return r;});}}>{t('Create content','콘텐츠 만들기')}</button></article>)}</div>:<p className="admin-empty">{t('No trend candidates yet. Run a scan or wait for the next scheduled scan.','아직 트렌드 후보가 없습니다. 지금 스캔을 실행하거나 다음 자동 스캔을 기다리세요.')}</p>}
