@@ -62,6 +62,8 @@ assert.equal(session.chat_state,'active');assert.equal(session.can_send,true);
 session=await confirmMatchMessage(2,match,replyMessage);
 assert.equal(session.chat_state,'active');
 await db.query("update matches set opening_expires_at=now()-interval '1 second' where id=$1",[match]);
+await asService('select claim_match_chat_cleanup(10) cleanup');
+assert.equal((await db.query('select chat_state from matches where id=$1',[match])).rows[0].chat_state,'expired','Background cleanup also expires active rooms at the absolute deadline');
 session=await matchSession(1,match);
 assert.equal(session.chat_state,'expired','An active chat expires at the match absolute 72-hour deadline');
 assert.equal(session.can_send,false);
