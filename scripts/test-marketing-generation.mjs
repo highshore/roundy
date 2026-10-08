@@ -5,9 +5,10 @@ import {createRequire} from 'node:module';
 const require=createRequire(import.meta.url),ts=require('typescript'),{fixture}=require('./marketing-fixtures.cjs');
 let checks=0;const check=(f)=>{f();checks++;};
 const id='4b9066d0-e01b-4cc4-92d1-469f56317a04';
+const eventId='11111111-1111-4111-8111-111111111111';
 const base={request_key:'manual:quality-test-001',revision:1,mode:'both',content_mode:'prelaunch',language:'en',visual_mode:'cards',instruction:''};
 function harness({denied=false,network=false,badSources=false,duplicate=false,photo403=false}={}){
- const tables={instagram_post_drafts:[{id,status:'needs_approval',revision:1,caption:'Original',cta:'Follow',images:[],carousel_slides:[],content_mode:'prelaunch'}],marketing_generation_jobs:[],marketing_ai_control:[{singleton:true,enabled:true,blocked_reason:null}],marketing_uploaded_images:[],events:[{id:'event-fixture',slug:'fixture',title:'Fixture event',status:'live',deleted_at:null,starts_at:'2099-12-01T10:00:00Z',venue:'Fixture public venue'}]};
+ const tables={instagram_post_drafts:[{id,status:'needs_approval',revision:1,caption:'Original',cta:'Follow',images:[],carousel_slides:[],content_mode:'prelaunch'}],marketing_generation_jobs:[],marketing_ai_control:[{singleton:true,enabled:true,blocked_reason:null}],marketing_uploaded_images:[],events:[{id:eventId,slug:'fixture',title:'Fixture event',title_ko:'테스트 모임',status:'live',deleted_at:null,marketing_enabled:true,starts_at:'2099-12-01T10:00:00Z',ends_at:'2099-12-01T12:00:00Z',venue:'Fixture public venue',capacity:12,seats_remaining:12,price_ladies:29000,price_gents:49000,event_language:'either',images:[]}]};
  const requests=[],stored=[];
  class Q{
   constructor(t){this.rows=tables[t]||[];this.pred=[];this.patch=null;this.n=Infinity;}
@@ -15,6 +16,7 @@ function harness({denied=false,network=false,badSources=false,duplicate=false,ph
   exec(single=false){const rows=this.rows.filter(r=>this.pred.every(p=>p(r))).slice(0,this.n);if(this.patch)rows.forEach(r=>Object.assign(r,this.patch));return Promise.resolve({data:structuredClone(single?rows[0]||null:rows),error:null});}
  }
  const db={from:t=>new Q(t),rpc:async(name,p)=>{
+  if(name==='event_public_roster')return {data:{women:[],men:[],women_count:0,men_count:0,total:0},error:null};
   if(name==='set_marketing_quality'){const d=tables.instagram_post_drafts[0];if(d.revision!==p.p_revision)return {error:{message:'DRAFT_CHANGED_REFRESH_FIRST'}};Object.assign(d,{quality_report:p.p_report,quality_revision:d.revision});return {data:structuredClone(d),error:null};}
   if(denied)return {error:{message:'GENERATION_BUDGET_REACHED'}};
   const old=tables.marketing_generation_jobs.find(j=>j.request_key===p.p_key);if(old)return {data:{accepted:false,job:structuredClone(old)},error:null};
@@ -47,7 +49,54 @@ function harness({denied=false,network=false,badSources=false,duplicate=false,ph
    ]:[{type:'url_citation',url:'https://doi.org/10.1234/attentive.2024',title:'Attentive Conversation Study (2024)',start_index:0,end_index:notes.length}];
    return {ok:true,json:async()=>({status:'completed',output:[{type:'web_search_call',status:'completed',action:{sources:[{url:'https://unrelated.example/english-school'}]}},{type:'message',content:[{type:'output_text',text:notes,annotations}]}],usage:{input_tokens:800,output_tokens:180}})};
   }
-  const data=JSON.parse(body.messages[1].content),c=fixture(data.editorial_type,data.language,load('src/lib/marketing-content-policy.ts').CONTENT_PROFILES);
+  const data=JSON.parse(body.messages[1].content);
+  let c;
+  // Campaigns have their own model schemas; an editorial fixture is not a
+  // valid campaign response. Mock the schema/roles actually sent to the model.
+  if(data.campaign_pattern||data.event_campaign_stage){
+   const schema=body.response_format.json_schema.schema.properties;
+   const pattern=data.campaign_pattern||data.event_campaign_pattern;
+   const roles={
+    poster:['hook','benefit','cta'],
+    problem_solution:['hook','problem','solution','benefit','cta'],
+    how_it_works:['hook','step','step','step','cta'],
+    benefit_stack:['hook','benefit','benefit','benefit','cta'],
+    countdown:['hook','countdown','cta'],
+    event_poster:['hook','facts','cta'],
+    experience:['hook','step','step','step','cta'],
+    social_proof:['hook','participants','experience','cta'],
+    offer:['hook','offer','facts','cta'],
+    last_call:['hook','status','facts','cta']
+   }[pattern];
+   if(!roles)throw new Error('UNMOCKED_CAMPAIGN_PATTERN: '+pattern);
+   const ko=data.language==='ko';
+   const enTitles=['Beyond the screen','One conversation at a time','Meet in Seoul','Focus on the person','Make room for a real story'];
+   const koTitles=['화면 밖에서 시작하기','한 사람과 한 번의 대화','서울에서 직접 만나요','서로의 이야기에 집중하기','다음 이야기를 위한 여유'];
+   const enBodies=['Meet people face to face','Give every voice some room','Have a real conversation','Be present with each other','Take it one step at a time'];
+   const koBodies=['서로 마주 앉아 만나기','한 사람의 이야기에 집중하기','대화를 직접 이어가기','서로의 이야기에 귀 기울이기','천천히 한 번씩 만나기'];
+   c={
+    schema_version:2,
+    campaign_version:schema.campaign_version.enum[0],
+    design_preset:schema.design_preset.enum[0],
+    post_type:schema.post_type.enum[0],
+    caption_ko:'한 번에 한 사람과 만나기\\n마주 앉아 차분하게 대화를 이어가는 새로운 만남입니다.',
+    caption_en:'One person at a time\\nMeet face to face and let each conversation unfold naturally.',
+    ...(data.campaign_pattern?{
+     campaign_pattern:data.campaign_pattern,campaign_tone:data.campaign_tone,campaign_goal:data.campaign_goal
+    }:{
+     event_campaign_stage:data.event_campaign_stage,event_campaign_pattern:data.event_campaign_pattern
+    }),
+    slides:roles.map((role,i)=>({
+     role,eyebrow:'',title:ko?koTitles[i]:enTitles[i],
+     body:ko?koBodies[i]:enBodies[i],secondary_body:ko?enBodies[i]:koBodies[i],
+     visual_direction:'Candid photo of people talking in contemporary Seoul, without text or logos',
+     step_number:0,source_ids:[]
+    }))
+   };
+  }else{
+   if(!data.editorial_type)throw new Error('UNMOCKED_EDITORIAL_REQUEST');
+   c=fixture(data.editorial_type,data.language,load('src/lib/marketing-content-policy.ts').CONTENT_PROFILES);
+  }
   if(data.editorial_type==='dating_myth'&&data.myth_candidate==='backup'){
    const ko=data.language==='ko';c.myth={claim:ko?'침묵이 생기면 첫 데이트가 망한 것이다':'Silence means a first date is going badly',myth_key:'silence_means_failure',verdict:'not_well_supported',selection_reason:ko?'첫 후보와 다른 주제이며 대화 맥락 연구로 검토할 수 있습니다.':'A distinct backup belief with relevant conversation evidence.'};
    const card=c.slides.find(s=>s.role==='myth');if(card){card.title=ko?'침묵이 생기면 실패일까?':'Does silence mean failure?';card.body=c.myth.claim;}
@@ -59,7 +108,7 @@ function harness({denied=false,network=false,badSources=false,duplicate=false,ph
  return {api:load('src/lib/marketing-generation.ts'),policy:load('src/lib/marketing-content-policy.ts'),editorial:load('src/lib/marketing-editorial.ts'),tables,requests,stored};
 }
 for(const language of ['en','ko'])for(const type of Object.keys(harness().policy.CONTENT_PROFILES)){
- const h=harness(),input={...base,language,content_mode:type==='prelaunch'||type==='live_event'?type:'growth_carousel',topic_type:type==='prelaunch'||type==='live_event'?undefined:type,instruction:type==='book_insight'?"You're Not Listening":''};
+ const h=harness(),input={...base,language,content_mode:type==='prelaunch'||type==='live_event'?type:'growth_carousel',topic_type:type==='prelaunch'||type==='live_event'?undefined:type,campaign_pattern:type==='prelaunch'?'poster':undefined,event_id:type==='live_event'?eventId:undefined,event_campaign_stage:type==='live_event'?'launch':undefined,instruction:type==='book_insight'?"You're Not Listening":''};
  const r=await h.api.runGeneration(id,input,null);
  check(()=>assert.equal(r.job.status,'completed',JSON.stringify(r)));
  check(()=>assert.equal(h.requests.length,type==='book_insight'?2:h.policy.CONTENT_PROFILES[type].research?3:2));
