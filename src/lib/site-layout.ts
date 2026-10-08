@@ -9,7 +9,6 @@ export type SiteLayoutPolicy = {
   header: boolean;
   footer: boolean;
   bottomNav: boolean;
-  programWidth: boolean;
 };
 
 const noBottomNav = new Set([
@@ -28,6 +27,5 @@ export function siteLayoutForPath(pathname: string): SiteLayoutPolicy {
     header: useSiteShell && !onboarding,
     footer: useSiteShell && !onboarding,
     bottomNav: useSiteShell && !noBottomNav.has(route),
-    programWidth: canonical === '/' || canonical === '/discover' || canonical === '/language-exchange',
   };
 }

@@ -2205,10 +2205,10 @@ body:not(:has(.route-admin)) .global-toast{border-radius:16px;padding:13px 14px 
 .landing-final-cta p{font-size:13px;line-height:1.45;color:var(--muted)}
 .landing-final-cta>a{display:flex;align-items:center;justify-content:center;width:100%;height:56px;padding:16px;border-radius:28px;background:var(--ink);color:var(--paper);font-size:15px;font-weight:700;line-height:20.8px;text-align:center;text-decoration:none}
 
-.route-home .site-footer,.route-discover .site-footer{display:flex}
+.route-home .site-footer,.route-discover .site-footer,.route-language-exchange .site-footer{display:flex}
 @container roundy (max-width:759px){
  .route-home .content.wide,.route-discover .content.wide{max-width:none;padding:28px 24px 112px}
- .route-home .site-footer,.route-discover .site-footer{flex-direction:column;padding:32px 24px 120px;gap:18px}
+ .route-home .site-footer,.route-discover .site-footer,.route-language-exchange .site-footer{flex-direction:column;padding:32px 24px calc(120px + env(safe-area-inset-bottom));gap:18px}
 }
 @container roundy (max-width:359px){
  .landing-hero-copy-v2 h1{font-size:35px}
@@ -3664,19 +3664,4 @@ html:lang(ko) .legal-intro h1{word-break:keep-all}
 .admin-form .participant-disclosure-admin legend{font-size:12px;font-weight:800;letter-spacing:.02em;margin-bottom:10px}
 
 
-/* Public page chrome is provided by SiteShell in the root Next layout.
-   Program pages retain their full-width editorial design while the
-   original mobile-first App routes keep their established 430px viewport. */
-.experience.program-shell:not(.route-admin){
-  width:100%;
-  max-width:none;
-  box-shadow:none;
-}
-@container roundy (max-width:759px){
-  .experience.program-shell .site-footer{
-    display:flex;
-    flex-direction:column;
-    gap:18px;
-    padding:32px 24px calc(120px + env(safe-area-inset-bottom));
-  }
-}
+/* All consumer routes, including Discovery and Language Exchange, share the same 430px mobile-first viewport. */

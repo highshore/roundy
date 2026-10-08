@@ -15,8 +15,9 @@ for (const path of ['/', '/discover', '/language-exchange', '/events', '/events/
   assert.equal(policy.footer, true, path + ': global footer');
 }
 for (const path of ['/', '/discover', '/language-exchange']) {
-  assert.equal(siteLayoutForPath(path).programWidth, true, path);
   assert.equal(siteLayoutForPath(path).bottomNav, true, path + ': shared mobile nav');
+  assert.equal(siteLayoutForPath(path).header, true, path + ': global header');
+  assert.equal(siteLayoutForPath(path).footer, true, path + ': global footer');
 }
 assert.equal(siteLayoutForPath('/discover/classic').programWidth, false, 'Keep classic Discovery mobile-first');
 assert.equal(siteLayoutForPath('/discover/classic').bottomNav, true);
@@ -45,6 +46,7 @@ assert.match(chrome, /<RoundyBrand\s*\/>/);
 assert.match(chrome, /roundy-locale/);
 assert.match(chrome, /aria-current=\{item\.active/);
 assert.match(chrome, /useSiteLocale/);
+assert.doesNotMatch(chrome, /program-shell|programWidth/);
 assert.match(app, /const \{locale\}=useSiteLocale\(\)/);
 assert.match(app, /wizardHeader=<header className="wizard-header"/);
 assert.doesNotMatch(app, /<header className="site-header"/);
@@ -64,5 +66,13 @@ assert.deepEqual(footerLinks, ['/about', '/how-it-works', '/privacy', '/terms', 
 assert.match(footer, /mailto:hello@roundy.team/);
 assert.match(footer, /Business Registration No/);
 assert.match(footer, /Mail-order Business Registration No/);
-assert.match(await read('src/app/globals.css'), /experience\.program-shell:not\(\.route-admin\)/);
+const globalStyles = await read('src/app/globals.css');
+const programStyles = await read('src/app/language-exchange/page.module.css');
+assert.match(globalStyles, /experience:not\(\.route-admin\)\{width:100%;max-width:430px/);
+assert.doesNotMatch(globalStyles, /experience\.program-shell|max-width:none/);
+assert.match(globalStyles, /route-language-exchange \.site-footer/);
+assert.match(programStyles, /@container roundy \(max-width:759px\)/);
+assert.match(programStyles, /\.hero\{min-height:0;[^}]*grid-template-columns:minmax\(0,1fr\)/);
+assert.match(programStyles, /\.featureGrid,\.termsGrid\{grid-template-columns:minmax\(0,1fr\)/);
+assert.doesNotMatch(programStyles, /@media\s*\(max-width/);
 console.log('PASS: global layout chrome defaults, existing nav/footer/mobile nav, route exceptions, shared locale and no duplicated page chrome');

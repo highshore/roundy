@@ -82,7 +82,7 @@ export function SiteShell({ children }: { children: ReactNode }) {
   ];
 
   const body = !policy.useSiteShell ? children : (
-    <div className={'experience route-' + policy.route + (policy.programWidth ? ' program-shell' : '')}>
+    <div className={'experience route-' + policy.route}>
       {policy.header && <>
         <a className="skip" href="#main">{tr(locale, 'Skip to content', '본문으로 건너뛰기')}</a>
         <header className="site-header" data-global-header>
