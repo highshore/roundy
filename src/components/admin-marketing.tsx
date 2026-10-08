@@ -31,9 +31,10 @@ export function AdminMarketing({locale}:{locale:Locale}){
  const [data,setData]=useState<Row>({drafts:[],runs:[],templates:[]});
  const [draft,setDraft]=useState<Row|null>(null),[settings,setSettings]=useState<Row|null>(null),[generation,setGeneration]=useState<Row|null>(null);
  const [channel,setChannel]=useState<'instagram'|'koreapas'>('instagram'),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[error,setError]=useState(''),[notice,setNotice]=useState('');
- const [basis,setBasis]=useState('prelaunch'),[manualVisualSource,setManualVisualSource]=useState<'auto_ai'|'uploaded'|'none'>('auto_ai'),[topic,setTopic]=useState('conversation_prompt'),[contentLanguage,setContentLanguage]=useState<'ko'|'en'>('ko'),[direction,setDirection]=useState(''),[dirty,setDirty]=useState(false);
+ const [basis,setBasis]=useState('prelaunch'),[manualVisualSource,setManualVisualSource]=useState<'auto_ai'|'uploaded'|'none'|'pexels'>('auto_ai'),[topic,setTopic]=useState('conversation_prompt'),[contentLanguage,setContentLanguage]=useState<'ko'|'en'>('ko'),[direction,setDirection]=useState(''),[dirty,setDirty]=useState(false);
  const [eventId,setEventId]=useState(''),[eventCampaignStage,setEventCampaignStage]=useState('auto');
  const [template,setTemplate]=useState<Row>(blank());
+ const [stockPhotos,setStockPhotos]=useState<Row[]>([]);
  const [uploadedImages,setUploadedImages]=useState<Row[]>([]),[uploadAssetType,setUploadAssetType]=useState<'photo'|'completed_card'>('photo');
  const [pendingMarketingImages,setPendingMarketingImages]=useState<PendingMarketingImage[]>([]),[pendingAssetType,setPendingAssetType]=useState<'photo'|'completed_card'>('photo');
  const [resultPreview,setResultPreview]=useState<Row|null>(null);
@@ -42,11 +43,12 @@ export function AdminMarketing({locale}:{locale:Locale}){
  const [trendLanguage,setTrendLanguage]=useState<'ko'|'en'>('ko');
  const [trendUsageView,setTrendUsageView]=useState<'unused'|'used'>('unused');
  const [generationVisible,setGenerationVisible]=useState(20),[publishVisible,setPublishVisible]=useState(20);
- const inFlight=useRef(false),mounted=useRef(true);
+ const inFlight=useRef(false),mounted=useRef(true),stockPreferredSet=useRef(false);
  function selectDraft(next:Row|null){setDraft(next?structuredClone(next):null);setDirty(false);if(next){setBasis(next.draft_kind==='growth_carousel'?'growth_carousel':next.content_mode);setTopic(next.growth_topic_type||'conversation_prompt');setContentLanguage(next.content_language==='en'?'en':'ko');if(next.event_id)setEventId(String(next.event_id));if(next.event_campaign_stage)setEventCampaignStage(String(next.event_campaign_stage));}}
  async function load(preferredId?:string){
   const r=await request();if(!r.ok)throw new Error(r.data.error||'Could not load marketing');if(!mounted.current)return;
-  setData(r.data);setSettings(r.data.settings);setGeneration(r.data.generation);if(!eventId&&r.data.live_events?.[0]?.id)setEventId(String(r.data.live_events[0].id));const rows=r.data.drafts||[];
+  setData(r.data);setSettings(r.data.settings);setGeneration(r.data.generation);
+  if(!stockPreferredSet.current){stockPreferredSet.current=true;if(r.data.generation?.provider?.pexels_configured)setManualVisualSource('pexels');}if(!eventId&&r.data.live_events?.[0]?.id)setEventId(String(r.data.live_events[0].id));const rows=r.data.drafts||[];
   selectDraft(rows.find((x:Row)=>x.id===preferredId)||rows.find((x:Row)=>x.status==='needs_approval')||rows[0]||null);
  }
  // Independent, read-only radar loading: a failure in the full marketing overview must not hide saved trends.
@@ -67,6 +69,14 @@ export function AdminMarketing({locale}:{locale:Locale}){
   let cancelled=false;request('/uploads?draft_id='+encodeURIComponent(draft.id),undefined,'GET').then(r=>{if(!cancelled&&r.ok)setUploadedImages(r.data.images||[]);}).catch(()=>{});
   return()=>{cancelled=true;};
  },[draft?.id,draft?.generation_source,draft?.draft_role]);
+ useEffect(()=>{
+  if(!draft?.id||draft.visual_source!=='pexels'){setStockPhotos([]);return;}
+  let cancelled=false;
+  request('/photos?draft_id='+encodeURIComponent(draft.id),undefined,'GET')
+   .then(r=>{if(!cancelled&&r.ok)setStockPhotos(r.data.photos||[]);})
+   .catch(()=>{if(!cancelled)setStockPhotos([]);});
+  return()=>{cancelled=true;};
+ },[draft?.id,draft?.visual_source,draft?.revision]);
  // Bounded READ-ONLY polling: never calls a paid endpoint or starts generation.
  useEffect(()=>{
   if(!busy)return;let cancelled=false,attempts=0,failures=0,timer:ReturnType<typeof setTimeout>|undefined;
@@ -265,6 +275,35 @@ export function AdminMarketing({locale}:{locale:Locale}){
  }
  async function renderUploaded(){
   if(!draft)return;const r=await request('/draft/'+draft.id+'/render-uploaded',{revision:draft.revision,request_key:'upload-render:'+crypto.randomUUID()});if(!r.ok||r.data.error)throw new Error(r.data.error||'Render failed');await load(draft.id);await refreshUploads(draft.id);
+ }
+ async function refreshStock(draftId:string){
+  const r=await request('/photos?draft_id='+encodeURIComponent(draftId),undefined,'GET');
+  if(!r.ok||r.data.error)throw new Error(r.data.error||'Could not load Pexels photos');
+  setStockPhotos(r.data.photos||[]);
+ }
+ async function reviewStock(photo:Row,status:'approved'|'rejected'){
+  if(!draft)return;
+  if(!window.confirm(status==='approved'
+   ?t('Have you reviewed the license, subjects, trademarks and whether the photo implies endorsement?','이 사진의 라이선스와 인물, 상표, 후원 또는 참가 암시 여부를 검토했나요?')
+   :t('Reject this photograph from the image library?','이 사진을 거절하고 사진 라이브러리에서 사용하지 않을까요?')))return;
+  const r=await request('/photos/'+photo.asset_id+'/review',{
+   status,confirm_rights_reviewed:true,note:'Human review of source, subjects, trademarks and commercial use'
+  });
+  if(!r.ok||r.data.error)throw new Error(r.data.error||'Stock photo review failed');
+  await refreshStock(draft.id);
+ }
+ async function discoverStock(){
+  if(!draft)return;
+  const r=await request('/draft/'+draft.id+'/refresh-stock',{revision:draft.revision});
+  if(!r.ok||r.data.error)throw new Error(r.data.error||'Stock photo discovery failed');
+  await refreshStock(draft.id);
+ }
+ async function renderStock(){
+  if(!draft)return;
+  const r=await request('/draft/'+draft.id+'/render-stock',{revision:draft.revision});
+  if(!r.ok||r.data.error)throw new Error(r.data.error||'Stock photo rendering failed');
+  await load(draft.id);
+  await refreshStock(draft.id);
  }
  async function importResultToDraft(){
   if(!resultPreview?.attempt?.id)return;
