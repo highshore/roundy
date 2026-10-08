@@ -368,7 +368,13 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
     Object.assign(assets,await approvedStockCardAssets(db,draft));
     const images=await renderCardsWithAssets(db,draft,job,assets);
     await progress(db,job,'saving_images');
-    draft=await savePartial(db,draft,{images,generation_source:automatic?'automation':'manual',visual_source:'pexels',last_regeneration_mode:input.mode,last_regeneration_instruction:input.instruction});
+    // Keep photographer and Pexels attribution visible in the reviewed post copy.
+    // Existing attribution is replaced on re-render to avoid duplicates.
+    const creditNames=[...new Set(selected.map((photo:Row)=>String(photo.photographer||'').trim().slice(0,64)).filter(Boolean))];
+    const captionBase=String(draft.caption||'').replace(/\n\nPhotos: [^\n]+ \/ Pexels$/,'');
+    const credits='\n\nPhotos: '+creditNames.join(', ')+' / Pexels';
+    if(captionBase.length+credits.length>2000)throw new GenerationError('STOCK_CAPTION_CREDIT_LIMIT','Shorten the caption to retain photographer attribution before rendering.');
+    draft=await savePartial(db,draft,{images,caption:captionBase+credits,generation_source:automatic?'automation':'manual',visual_source:'pexels',last_regeneration_mode:input.mode,last_regeneration_instruction:input.instruction});
    }else if(input.mode==='image'||input.render_only){
     throw new GenerationError('STOCK_PHOTOS_NOT_APPROVED','Approve all selected photos before rendering.');
    }else{
