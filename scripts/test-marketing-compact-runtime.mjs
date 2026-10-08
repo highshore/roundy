@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 const require=createRequire(import.meta.url),ts=require('typescript');
 let assertions=0;const check=f=>{f();assertions++;};
-export function harness(language){
+export function harness(language,documentType='editorial'){
  const id='74c39df2-4be9-4dd5-99f4-1f82fa64a0ec';
  const tables={instagram_post_drafts:[{id,status:'needs_approval',revision:1,caption:'Original',cta:'Follow',images:[],carousel_slides:[],content_mode:'prelaunch'}],marketing_generation_jobs:[],marketing_ai_control:[{singleton:true,enabled:true,blocked_reason:null}]};
  const requests=[],stored=[],reservations=[],cache={};
@@ -21,7 +21,7 @@ export function harness(language){
  const koBodies=['서로 마주 앉아 자연스럽게 만나기','한 사람과 차분하게 대화를 나눠요','다음 만남을 기대해보세요'];
  const enBodies=['Meet in person, away from the screen','Focus on one conversation at a time','See what unfolds with Roundy'];
  // Prelaunch uses a dedicated campaign format, not the old compact-editorial preset.
- const copy={
+ const campaignCopy={
   schema_version:2,campaign_version:'prelaunch_campaign_v1',design_preset:'roundy_prelaunch_campaign_v1',
   post_type:'prelaunch',campaign_pattern:'poster',campaign_tone:'modern_premium',campaign_goal:'awareness',
   caption_ko:'화면 대신 마주 앉기\n한 번에 한 사람과 차분하게 이야기하는 만남을 준비합니다.',
@@ -33,6 +33,13 @@ export function harness(language){
    step_number:0,source_ids:[]
   }))
  };
+
+ const editorialCopy={schema_version:2,design_preset:'roundy_compact_editorial_v1',post_type:'prelaunch',caption:'',caption_ko:'사람이 많을수록 어렵다면\n누구에게 먼저 말을 걸지 고민되는 순간이 있습니다.\n한 번에 한 대화에 집중하는 방식도 있어요.',caption_en:'Groups can make first hellos harder\nChoosing who to approach can become the hardest part.\nOne conversation at a time can feel simpler.',cta:language==='ko'?'라운디 소식 보기':'Follow Roundy',tagline:language==='ko'?'로테이션으로 더 자연스럽게':'A more natural rotation dating format',hashtags:['#서울데이트','#firstmeeting'],book:{title:'',author:'',source_id:'',source_context:''},slides:[
+  {role:'cover',eyebrow:'Roundy Notes',title:language==='ko'?'첫 대화가 어려운가요?':'Not sure how to start?',body:language==='ko'?'로테이션 소개팅으로 자연스럽게 시작해보세요.':'Start with Rotation Dating in Seoul.',secondary_body:language==='ko'?'Start with Rotation Dating in Seoul.':'로테이션 소개팅으로 자연스럽게 시작해보세요.',highlight:'',options:[],source_ids:[]},
+  {role:'concept',eyebrow:'',title:language==='ko'?'한 사람에게 집중하기':'Give one person your attention',body:language==='ko'?'큰 모임에서 말을 끼워 넣기보다, 맞은편 사람의 이야기를 들어보세요.':'Instead of trying to join a crowded conversation, listen to the person across from you.',secondary_body:language==='ko'?'Listen to the person across from you, rather than trying to join a crowded conversation.':'큰 모임에서 말을 끼워 넣기보다, 맞은편 사람의 이야기를 들어보세요.',highlight:'',options:[],source_ids:[]},
+  {role:'cta',eyebrow:'Roundy',title:language==='ko'?'서울에서 직접 만나요':'Meet face to face in Seoul',body:language==='ko'?'라운디 로테이션 소개팅에서 직접 만나보세요.':'Try Rotation Dating with Roundy.',secondary_body:language==='ko'?'Try Rotation Dating with Roundy.':'라운디 로테이션 소개팅에서 직접 만나보세요.',highlight:'',options:[],source_ids:[]},
+ ]};editorialCopy.caption=language==='ko'?editorialCopy.caption_ko:editorialCopy.caption_en;
+ const copy=documentType==='campaign'?campaignCopy:editorialCopy;
  function load(file){if(cache[file])return cache[file];const context={exports:{},Buffer,URL,AbortSignal,Intl,Date,console,setTimeout,clearTimeout,process:{env:{OPENAI_API_KEY:'test-not-real'}},require:n=>{
   if(n==='server-only')return {};if(n==='./supabase/service')return {createServiceRoleClient:()=>db};
   if(n==='./marketing-render-assets')return {loadEditorialAssets:async()=>({photo:null,photos:[],fonts:[]})};
@@ -48,7 +55,7 @@ export function harness(language){
  return {id,tables,requests,stored,reservations,copy,api:load('src/lib/marketing-generation.ts'),policy:load('src/lib/marketing-content-policy.ts'),presentation:load('src/lib/marketing-presentation.ts'),recovery:load('src/lib/marketing-output-recovery.ts'),research:load('src/lib/marketing-research-task.ts'),editorial:load('src/lib/marketing-editorial.ts')};
 }
 for(const language of ['ko','en'])for(const visual_mode of ['cards','photo']){
- const h=harness(language),input={request_key:'manual:compact-runtime-'+language+'-'+visual_mode,revision:1,mode:'both',content_mode:'prelaunch',campaign_pattern:'poster',visual_mode,language,confirm_photo:visual_mode==='photo'};
+ const h=harness(language,'campaign'),input={request_key:'manual:compact-runtime-'+language+'-'+visual_mode,revision:1,mode:'both',content_mode:'prelaunch',campaign_pattern:'poster',visual_mode,language,confirm_photo:visual_mode==='photo'};
  const result=await h.api.runGeneration(h.id,input,null);
  check(()=>assert.equal(result.job.status,'completed',JSON.stringify(result)));
  check(()=>assert.equal(h.requests.length,2));
