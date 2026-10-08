@@ -1,5 +1,6 @@
 import {createElement as h} from 'react';
 import {ImageResponse} from 'next/og';
+import {readTrendFactPack,selectGuideFacts,factLabel} from './marketing-trend-guide';
 import {ROUNDY_IDENTITY as BRAND, EDITORIAL_PRESET, CAMPAIGN_PRESET, EVENT_CAMPAIGN_PRESET, type PresentationRow as Row} from './marketing-presentation';
 
 export type EditorialAssets = {
@@ -179,6 +180,29 @@ function contentTextOnly(slide:Row,document:Row){
   box({position:'absolute',left:92,bottom:78},sourceFootnote(slide,language))
  );
 }
+function trendFactSheet(slide:Row,document:Row){
+ const language=document.content_language==='en'?'en':'ko',sources=Array.isArray(document.trend?.source_ids)?document.trend.source_ids:[],
+  pack=readTrendFactPack(document.trend_fact_pack,sources);
+ if(!pack)return contentTextOnly(slide,document);
+ const facts=selectGuideFacts(pack,4);
+ return box({position:'relative',width:1080,height:1350,background:BRAND.paper,color:BRAND.ink,overflow:'hidden'},
+  box({position:'absolute',left:65,top:55},miniLogo()),
+  box({position:'absolute',left:72,right:72,top:160,flexDirection:'column',gap:18},
+   text(language==='ko'?'서울 트렌드 / 방문 가이드':'SEOUL TREND / QUICK GUIDE',23,{letterSpacing:1.2,color:BRAND.accent,fontWeight:800}),
+   accentedHeadline(String(slide.title||(language==='ko'?'방문 전에 알아둘 것':'The details that matter')),language==='ko'?68:65,900)
+  ),
+  box({position:'absolute',left:70,right:70,top:365,bottom:126,flexDirection:'column',gap:13},
+   ...facts.map((fact,i)=>box({borderRadius:22,background:i%2===0?'#f0f0ea':'#f8f1e9',padding:'23px 31px',flexDirection:'column',gap:10,minHeight:145},
+    text(factLabel(fact.kind,language),20,{color:BRAND.accent,fontWeight:800,letterSpacing:1.5}),
+    paragraph(language==='ko'?fact.value_ko:fact.value_en,language==='ko'?34:32,840,{fontWeight:650,color:BRAND.ink})
+   ))
+  ),
+  box({position:'absolute',bottom:68,left:72,right:72,flexDirection:'row',justifyContent:'space-between'},
+   text(language==='ko'?'근거 자료는 게시글 본문에서 확인':'Sources are linked in the caption',19,{color:BRAND.muted}),
+   text('ROUNDY / '+facts.length+' FACTS',19,{color:BRAND.muted,fontWeight:700})
+  )
+ );
+}
 function content(slide:Row,index:number,_total:number,document:Row,assets:EditorialAssets){
  const options=Array.isArray(slide.options)?slide.options.filter(Boolean):[];
  if(assets.reusePhotos===false&&!selectedPhoto(assets,index))return contentTextOnly(slide,document);
@@ -206,7 +230,7 @@ function outro(_index:number,_total:number,document:Row){
 
 export function compactEditorialTree(slide:Row,index:number,total:number,document:Row,assets:EditorialAssets={}){
  const language=document.content_language==='en'?'en':'ko';
- const tree=slide.role==='cover'?cover(slide,index,total,assets,document):slide.role==='cta'?outro(index,total,document):content(slide,index,total,document,assets);
+ const tree=slide.role==='cover'?cover(slide,index,total,assets,document):slide.role==='cta'?outro(index,total,document):slide.role==='facts'&&document.trend_fact_pack?trendFactSheet(slide,document):content(slide,index,total,document,assets);
  return box({
   width:1080,
   height:1350,
