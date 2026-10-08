@@ -1,6 +1,6 @@
 /** Active public offerings. Historical event and payment records are not mutated. */
 export function isRoundyEvent(event: { theme?: string | null }): boolean {
-  return event.theme === '1:1 Speed Mingle' || event.theme === '1:1 Speed Meetup';
+  return event.theme === '1:1 Speed Mingle' || event.theme === '1:1 Speed Meetup' || event.theme === 'Language Exchange';
 }
 
 /** Old links resolve to the current event list without reviving a retired offering. */
