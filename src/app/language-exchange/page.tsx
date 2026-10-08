@@ -2,7 +2,6 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ArrowRight, BookOpen, CalendarDays, CircleHelp, Clock3, Globe2, MessageCircleMore, ShieldCheck, UsersRound } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
-import { SiteFooter } from '@/components/site-footer';
 import styles from './page.module.css';
 
 export const dynamic = 'force-dynamic';
@@ -32,8 +31,7 @@ export default async function LanguageExchangePage() {
     if (!error) events = (data ?? []) as LanguageEvent[];
   } catch { /* Program information must remain available during backend maintenance. */ }
   return <div className={styles.page}>
-    <header className={styles.header}><Link href="/" className={styles.logo}>roundy<span>.</span></Link><nav aria-label="라운디 탐색"><Link href="/events">모임</Link><Link href="/matches">매칭</Link><Link href="/me">프로필</Link><Link href="/discover/classic">기존 Discovery</Link></nav></header>
-    <main>
+    <main id="main">
       <section className={styles.hero}>
         <div className={styles.heroCopy}><span className={styles.kicker}><Globe2 size={16}/> ROUNDY LANGUAGE EXCHANGE</span>
           <h1>언어는 책보다,<br/><em>사람 사이에서</em> 자랍니다.</h1>
@@ -67,6 +65,6 @@ export default async function LanguageExchangePage() {
         <article><ShieldCheck size={21}/><h3>취소와 환불</h3><p>각 행사에 표시된 취소 마감 시점과 <Link href="/refund-policy">환불 규정</Link>을 결제 전에 확인할 수 있습니다. 적용 법령에 따른 권리는 별도로 보호됩니다.</p></article>
         <article><CircleHelp size={21}/><h3>매칭·채팅 기능 안내</h3><p>Roundy에는 오프라인 행사 이후 상호 선택에 따라 매칭되거나 채팅하는 기능도 있습니다. 이 기능은 언어교환 실습 자체와 구분되며 행사별 제공 여부를 안내합니다.</p></article>
       </div><p className={styles.contact}>문의: <a href="mailto:hello@roundy.team">hello@roundy.team</a> · <Link href="/terms">이용약관</Link> · <Link href="/privacy">개인정보처리방침</Link></p></section>
-    </main><SiteFooter locale="ko"/>
+    </main>
   </div>;
 }
