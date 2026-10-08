@@ -329,7 +329,7 @@ begin
     'is_boomerang',is_boomerang
   );
 end;
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION roundy_private.claim_event_payment_order(p_order text, p_user uuid)
  RETURNS jsonb
@@ -448,7 +448,7 @@ begin
     'already_completed',false
   );
 end;
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION roundy_private.generate_seating(p_event uuid)
  RETURNS jsonb
@@ -488,7 +488,7 @@ begin
  if jsonb_array_length(rows)=0 then raise exception 'No safe pairings are available';end if;
  insert into public.seating_plans(event_id,plan,generated_by) values(p_event,jsonb_build_object('rows',rows,'skipped',skipped,'roster',roster),auth.uid()) on conflict(event_id) do update set plan=excluded.plan,generated_at=now(),generated_by=auth.uid();
  return jsonb_build_object('rows',rows,'skipped',skipped,'roster',roster);
-end;$function$
+end;$function$;
 
 CREATE OR REPLACE FUNCTION roundy_private.admin_prepare_event_night(p_event uuid)
  RETURNS jsonb
@@ -618,7 +618,7 @@ begin
 
   return jsonb_build_object('rows',rows,'skipped',skipped,'roster',roster,'total_rounds',n);
 end;
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION roundy_private.admin_event_night_state(p_event uuid)
  RETURNS jsonb
