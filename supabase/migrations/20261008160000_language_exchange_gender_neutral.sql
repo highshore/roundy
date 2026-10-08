@@ -516,7 +516,7 @@ begin
 
   select * into e from public.events where id=p_event for update;
   if e.id is null then raise exception 'Event unavailable'; end if;
-  if e.theme<>'1:1 Speed Mingle' then raise exception 'Meetup rotations are available for 1:1 Speed Mingle events'; end if;
+  if e.theme not in ('1:1 Speed Mingle','Language Exchange') then raise exception 'Meetup rotations are only available for supported hosted events'; end if;
   if now()<e.starts_at-interval '30 minutes' then raise exception 'Meetup preparation opens 30 minutes before the event'; end if;
   if now()>=e.ends_at then raise exception 'This event has ended'; end if;
   if exists(select 1 from public.choices where event_id=p_event) then
@@ -707,5 +707,4 @@ begin
     'matches',coalesce(match_count,0)
   );
 end;
-$function$
-
+$function$;
