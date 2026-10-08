@@ -1,6 +1,7 @@
 import 'server-only';
 import {createHash} from 'node:crypto';
 import sharp from 'sharp';
+import {allSelectedPhotosApproved,requiredPhotoSlotsForRoles} from './marketing-stock-photo-policy';
 import type {createServiceRoleClient} from './supabase/service';
 
 type DB=ReturnType<typeof createServiceRoleClient>;
@@ -37,19 +38,8 @@ export function photoTopic(draft:Row){
   return SEARCHES[topic]?topic:'conversation_prompt';
 }
 export function requiredStockSlots(draft:Row):number[]{
-  const slides=Array.isArray(draft.carousel_slides)?draft.carousel_slides:[];
-  const count=Math.min(3,Math.max(2,slides.length-1));
-  const eligible=slides.map((slide:Row,index:number)=>({index,role:String(slide.role||'')}))
-    .filter((slide:{index:number;role:string})=>slide.role!=='cta').map((slide:{index:number})=>slide.index);
-  if(eligible.length<2)throw new Error('STOCK_PHOTOS_REQUIRE_TWO_CONTENT_CARDS');
-  const others=eligible.filter((index:number)=>index!==0);
-  const chosen=eligible.includes(0)?[0]:[];
-  while(chosen.length<count&&others.length){
-    const position=chosen.length===1&&others.length>=3?Math.floor(others.length/2):0;
-    chosen.push(others.splice(position,1)[0]);
-  }
-  if(chosen.length<2)throw new Error('STOCK_PHOTOS_REQUIRE_TWO_CONTENT_CARDS');
-  return chosen.sort((a,b)=>a-b);
+ const slides=Array.isArray(draft.carousel_slides)?draft.carousel_slides:[];
+ return requiredPhotoSlotsForRoles(slides.map((slide:Row)=>String(slide.role||'')));
 }
 export async function listStockSelections(db:DB,draftId:string):Promise<SourcePhoto[]>{
   const rows=check(await db.from('marketing_draft_photos')
@@ -60,7 +50,7 @@ export async function importStockSelections(db:DB,draftId:string,photoSelections
   if(!Array.isArray(photoSelections)||photoSelections.length<2||photoSelections.length>3)throw new Error('STOCK_PHOTO_SNAPSHOT_UNAVAILABLE');
   const rows=photoSelections.map((item:Row)=>({draft_id:draftId,asset_id:String(item?.asset_id||''),slot:Number(item?.slot)}));
   if(rows.some(x=>!Number.isInteger(x.slot)||x.slot<0||x.slot>5||!/^[a-f0-9-]{36}$/i.test(x.asset_id))||new Set(rows.map(x=>x.asset_id)).size!==rows.length)throw new Error('INVALID_STOCK_PHOTO_SNAPSHOT');
-  check(await db.from('marketing_draft_photos').insert(rows));
+  check(await db.from('marketing_draft_photos').upsert(rows,{onConflict:'draft_id,slot',ignoreDuplicates:true}));
 }
 export function photoSelectionSnapshot(rows:SourcePhoto[]){
   return rows.map(row=>({asset_id:row.asset_id,slot:row.slot}));
@@ -158,10 +148,8 @@ export async function prepareStockSelections(db:DB,draft:Row):Promise<SourcePhot
   return listStockSelections(db,draft.id);
 }
 export function stockReady(draft:Row,photos:SourcePhoto[]){
-  let slots:number[];
-  try{slots=requiredStockSlots(draft);}catch{return false;}
-  return photos.length===slots.length
-    &&photos.every((photo,index)=>photo.slot===slots[index]&&photo.review_status==='approved'&&!!photo.storage_path);
+ const slides=Array.isArray(draft.carousel_slides)?draft.carousel_slides:[];
+ return allSelectedPhotosApproved(slides.map((slide:Row)=>String(slide.role||'')),photos);
 }
 async function getRemotePhoto(url:string,id:string){
   const uri=httpsUrl(url,'images.pexels.com');
