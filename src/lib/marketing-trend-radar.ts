@@ -9,8 +9,8 @@ export type TrendStatus='emerging'|'rising'|'peak'|'cooling'|'dead';
 const MODEL='gpt-4.1-mini';
 const TREND_POOL_FRESH_DAYS=7;
 const TREND_POOL_REFILL_THRESHOLD=5;
-const TREND_POOL_TARGET_MIN=15;
-const TREND_POOL_TARGET_MAX=30;
+const TREND_POOL_TARGET_MIN=6;
+const TREND_POOL_TARGET_MAX=12;
 const CATEGORIES=new Set(['food','activity','place','event','meme','lifestyle','research','other']);
 const STATUSES=new Set<TrendStatus>(['emerging','rising','peak','cooling','dead']);
 const ROUTES=new Set<TrendRoute>(['seoul_trend','seoul_dating','meme_remix','trend_research']);
@@ -300,7 +300,10 @@ async function saveCandidates(db:DB,result:Row,provider:Set<string>){
    return [{url,title:clean(source?.title,180),signal_type:signal,why:clean(source?.why,500)}];
   });
   const dedup=[...new Map(sources.map((source:Row)=>[source.url,source])).values()].slice(0,8),signals=[...new Set(dedup.map((source:Row)=>source.signal_type))];
-  if(dedup.length<2||signals.length<2)continue;
+  const independentHosts=new Set(dedup.map((source:Row)=>new URL(source.url).hostname.replace(/^www\./,'')));
+  if(dedup.length<2||independentHosts.size<2)continue;
+  // Officially documented events can be useful without claiming independent social/search momentum.
+  if(signals.length<2&&!['event','place','activity','food','lifestyle'].includes(category))continue;
   const linkedFacts=(Array.isArray(raw?.facts)?raw.facts:[]).slice(0,9).flatMap((fact:Row)=>{
    const ids=[...new Set((Array.isArray(fact?.source_urls)?fact.source_urls:[]).map((x:unknown)=>canonical(x)).filter(Boolean))].flatMap(url=>{
     const idx=dedup.findIndex((source:Row)=>source.url===url);return idx>=0?['S'+(idx+1)]:[];
