@@ -156,7 +156,7 @@ export function AdminMarketingReels({locale}:{locale:Locale}){
  const canEdit=!selected||['draft','needs_review'].includes(selected.status);
  const changed=selected&&(['title','hook_text','caption','language','pillar','hook_style'] as const)
   .some(key=>copy[key]!==selected[key]);
- if(loading)return <section className="marketing-tab-panel"><p role="status">{t('Loading Reel Studio…','릴스 스튜디오를 불러오는 중…')}</p></section>;
+ if(loading)return <section className="marketing-tab-panel marketing-reel-studio"><p role="status">{t('Loading Reel Studio…','릴스 스튜디오를 불러오는 중…')}</p></section>;
  return <section className="marketing-tab-panel">
   <div className="admin-section-title"><div><p className="admin-kicker">ROUNDY REEL STUDIO</p>
    <Heading level={2}>{t('Reels: create, review, publish and learn','릴스 제작, 검수, 게시, 성과 분석')}</Heading>
@@ -172,7 +172,8 @@ export function AdminMarketingReels({locale}:{locale:Locale}){
    <Heading level={3}>{t('Reel drafts','릴스 작업함')}</Heading>
    <div className="marketing-draft-inbox">{rows.length?rows.map(row=><button type="button" key={row.id}
     className="admin-secondary" aria-pressed={selected?.id===row.id} onClick={()=>select(row)}>
-    {row.title||t('Untitled Reel','제목 없는 릴스')} — {t(...(statusLabels[row.status]||['Unknown','알 수 없음']))}
+    <strong className="marketing-reel-draft-title">{row.title||t('Untitled Reel','제목 없는 릴스')}</strong>
+    <span className="marketing-reel-draft-status">{t(...(statusLabels[row.status]||['Unknown','알 수 없음']))}</span>
    </button>):<p className="admin-help">{t('No Reels yet. Create the first draft below.','아직 릴스가 없습니다. 아래에서 첫 초안을 생성하세요.')}</p>}</div>
   </div>
   <div className="marketing-settings-card">
@@ -203,14 +204,25 @@ export function AdminMarketingReels({locale}:{locale:Locale}){
      {story.map((value,i)=><label key={i}><span>{t('Scene','장면')} {i+1}</span>
       <input maxLength={110} disabled={busy} value={value} onChange={e=>setStory(current=>current.map((v,j)=>j===i?e.target.value:v) as [string,string,string])}/>
      </label>)}
-     <label><span>{t('Optional original/licensed photos (up to three)','선택: 직접 제작하거나 사용 허가를 받은 사진 최대 3장')}</span>
+     <label className="marketing-reel-picker">
+      <span>{t('Optional original/licensed photos (up to three)','선택: 직접 제작하거나 사용 허가를 받은 사진 최대 3장')}</span>
+      <span className="marketing-reel-picker-control">
+       <b>{t('Choose photos','사진 선택')}</b>
+       <small>{photos.length?t('Selected photos: ','선택한 사진: ')+photos.length:t('No photos selected. Text-only storyboard is supported.','사진 없이 문구로만 제작할 수도 있습니다.')}</small>
+      </span>
       <input type="file" multiple accept="image/jpeg,image/png,image/webp" disabled={busy} onChange={e=>setPhotos(Array.from(e.target.files||[]).slice(0,3))}/>
      </label>
      <button type="button" disabled={busy||!mp4RecorderMime()} className="admin-secondary" onClick={()=>void work(storyboard)}>{mp4RecorderMime()?t('Render 9-second MP4','9초 MP4 제작'):t('MP4 encoding unavailable in this browser','이 브라우저는 MP4 제작 미지원')}</button>
      {busy&&progress>0&&progress<100&&<p role="status">{t('Rendering MP4','MP4 렌더링')} {progress}%</p>}
     </div>}
-    {canEdit&&<label><span>{t('Or upload an edited portrait MP4 (3–90 s, max 40 MB)','또는 편집된 세로형 MP4 업로드 (3~90초, 최대 40MB)')}</span>
-     <input type="file" accept="video/mp4,.mp4" disabled={busy} onChange={e=>{const next=e.target.files?.[0]||null;replaceLocalVideo(next);setSourceKind('upload');}}/>
+    {canEdit&&<label className="marketing-reel-picker">
+     <span>{t('Or upload an edited portrait MP4 (3–90 s, max 40 MB)','또는 편집된 세로형 MP4 업로드 (3~90초, 최대 40MB)')}</span>
+     <span className="marketing-reel-picker-control">
+      <b>{t('Choose MP4','MP4 선택')}</b>
+      <small>{file?file.name:t('No video selected','아직 영상을 선택하지 않았습니다.')}</small>
+     </span>
+     <input type="file" accept="video/mp4,.mp4" disabled={busy}
+      onChange={e=>{const next=e.target.files?.[0]||null;replaceLocalVideo(next);setSourceKind('upload');}}/>
     </label>}
     {localVideoUrl||selected?.preview_url?<div className="marketing-settings-card">
      <strong>{t('Video preview','영상 미리보기')}</strong>
@@ -244,17 +256,47 @@ export function AdminMarketingReels({locale}:{locale:Locale}){
     </div>}
    </div>
   </div>
-  <div className="marketing-settings-card">
-   <Heading level={3}>{t('Reel performance and learning','릴스 성과 분석')}</Heading>
-   <p className="admin-help">{t('24h/72h real Meta insights; latest horizon per post only. Hook recommendations remain disabled until sufficient reach.','Meta의 게시 후 24시간, 72시간 실측 데이터를 사용합니다. 게시물별 최신 지표만 반영하며 충분한 도달을 확보하기 전에는 훅 자동 추천을 제한합니다.')}</p>
-   <p>{t('Eligible measured Reels','측정 기준 충족 릴스')} {metrics?.summary?.sample?.posts||0} / {t('Total measured reach','측정 도달')} {metrics?.summary?.sample?.reach||0}</p>
-   <p>{metrics?.summary?.learning_ready?t('Preliminary winning hook:','초기 우세 훅:')+' '+metrics.summary.recommended_hook:t('Experimenting — insufficient sample to choose a winner.','실험 단계로 아직 우세한 훅을 선정할 표본이 없습니다.')}</p>
-   <div className="marketing-log-list">{(metrics?.summary?.hooks||[]).map((row:Row)=><div className="marketing-log-row" key={row.hook_style}>
-    <div className="marketing-log-main"><div><strong>{row.hook_style} · {row.posts} {t('posts','건')}</strong>
-    <small>{t('Reach','도달')} {row.reach} · {t('Shares / 100 reached','도달 100명당 공유')} {row.share_rate} · {t('Saves / 100 reached','저장')} {row.save_rate}{row.watch_rate!==null?' · '+t('Avg watch fraction','평균 시청 비율')+' '+row.watch_rate+'%':''}</small>
-    </div></div>
-   </div>)}</div>
-   <p className="admin-help">{t('View counts, reach and average watch time are not follower attribution. Some Meta video metrics may be unavailable for the connected permissions.','조회수, 도달 및 평균 시청 시간만으로 팔로워 획득을 추론할 수 없습니다. 계정 권한에 따라 일부 Meta 영상 지표는 제공되지 않을 수 있습니다.')}</p>
-  </div>
- </section>;
+  <section className="marketing-insight-section marketing-reel-analytics" aria-labelledby="reel-analytics-title">
+   <header className="marketing-insight-section-head">
+    <div>
+     <Heading level={3} id="reel-analytics-title">{t('Reel performance','릴스 성과 분석')}</Heading>
+     <p>{t('Real Meta insights captured 24 and 72 hours after posting','Meta 게시 후 24시간과 72시간에 수집된 실제 지표')}</p>
+    </div>
+    <span className="marketing-insight-pill">{metrics?.summary?.learning_ready?t('Learning','성과 반영 중'):t('Experiment','실험 단계')}</span>
+   </header>
+   <dl className="marketing-insight-kpis">
+    <div className="marketing-insight-kpi">
+     <dt>{t('Measured Reels','측정 릴스')}</dt>
+     <dd>{Number(metrics?.summary?.sample?.posts||0).toLocaleString()}</dd>
+     <small>{t('At least 30 reached per Reel','릴스별 도달 30명 이상')}</small>
+    </div>
+    <div className="marketing-insight-kpi">
+     <dt>{t('Cumulative reach','누적 도달')}</dt>
+     <dd>{Number(metrics?.summary?.sample?.reach||0).toLocaleString()}</dd>
+     <small>{t('For hook experiments','훅 실험 참고 지표')}</small>
+    </div>
+   </dl>
+   <div className="marketing-insight-notice">
+    <span className="marketing-insight-notice-dot" aria-hidden="true"/>
+    <div>
+     <strong>{metrics?.summary?.learning_ready?t('Preliminary leading hook:','초기 우세 훅:')+' '+metrics.summary.recommended_hook:t('More data needed','학습을 위한 데이터가 부족합니다.')}</strong>
+     <p>{t('No hook type is selected until the minimum sample and reach thresholds are met.','최소 게시물 수와 도달 기준을 충족할 때까지 훅 유형을 자동으로 선정하지 않습니다.')}</p>
+    </div>
+   </div>
+   <ul className="marketing-reel-hook-list">
+    {(metrics?.summary?.hooks||[]).map((row:Row)=><li className="marketing-reel-hook" key={row.hook_style}>
+     <div className="marketing-reel-hook-head">
+      <strong>{row.hook_style}</strong>
+      <span>{Number(row.posts||0)}{t(' posts','건')}</span>
+     </div>
+     <div className="marketing-reel-hook-meta">
+      <span>{t('Reach','도달')} {Number(row.reach||0).toLocaleString()}</span>
+      <span>{t('Shares / 100','도달 100명당 공유')} {Number(row.share_rate||0)}</span>
+      <span>{t('Saves / 100','도달 100명당 저장')} {Number(row.save_rate||0)}</span>
+      {row.watch_rate!=null&&<span>{t('Average watch','평균 시청 비율')} {row.watch_rate}%</span>}
+     </div>
+    </li>)}
+   </ul>
+   <p className="marketing-insight-footnote">{t('Reach, views and watch time are not proof of new followers. Some insights depend on your Meta permissions.','조회수, 도달, 시청 시간은 팔로워 획득 지표가 아닙니다. 일부 지표는 Meta 계정 권한에 따라 제공되지 않을 수 있습니다.')}</p>
+  </section> </section>;
 }
