@@ -9,11 +9,12 @@ export type SiteLayoutPolicy = {
   header: boolean;
   footer: boolean;
   bottomNav: boolean;
+  compactFooter: boolean;
 };
 
 const noBottomNav = new Set([
   'onboarding', 'profile', 'admin', 'terms', 'refund-policy',
-  'privacy', 'copyright', 'checkout', 'event-night',
+  'privacy', 'copyright', 'checkout', 'event-night', 'ticket',
 ]);
 
 export function siteLayoutForPath(pathname: string): SiteLayoutPolicy {
@@ -27,5 +28,6 @@ export function siteLayoutForPath(pathname: string): SiteLayoutPolicy {
     header: useSiteShell && !onboarding,
     footer: useSiteShell && !onboarding,
     bottomNav: useSiteShell && !noBottomNav.has(route),
+    compactFooter: ['checkout', 'ticket', 'event-night', 'me', 'payment'].includes(route) || canonical.startsWith('/events/'),
   };
 }

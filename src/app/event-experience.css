@@ -1,0 +1,126 @@
+/* Shared event journey: compact summaries, purposeful surfaces, readable actions. */
+.event-experience,.event-experience-detail{display:grid;gap:24px;min-width:0}
+.experience-heading{display:grid;gap:10px}
+.experience-heading h1,.event-experience-detail .event-detail-copy h1{font-size:28px!important;line-height:1.2;letter-spacing:-.035em;max-width:none;white-space:normal}
+.experience-heading h2{font-size:20px;line-height:1.35;letter-spacing:-.025em}
+.experience-heading>p,.experience-caption{font-size:14px;line-height:1.6;color:var(--muted)}
+.experience-button{display:flex;align-items:center;justify-content:center;gap:8px;min-width:0;min-height:48px;padding:12px 16px;border:1px solid transparent;border-radius:999px;background:var(--ink);color:white;font-weight:700;font-size:14px;line-height:1.4;text-align:center}
+.experience-button.secondary{background:var(--surface);color:var(--ink)}
+.experience-button:hover{filter:brightness(.96)}
+.experience-button svg{flex-shrink:0}
+.experience-button:disabled{cursor:not-allowed}
+.experience-text-link{font-size:14px;font-weight:700;text-decoration:underline;text-underline-offset:4px;min-height:44px;display:inline-flex;align-items:center;justify-self:start}
+.event-summary{display:grid;grid-template-columns:80px minmax(0,1fr);align-items:start;gap:12px;min-width:0}
+.event-summary-image{position:relative;width:80px;height:96px;border-radius:16px;overflow:hidden;background:var(--surface)}
+.event-summary-image img{object-fit:cover}
+.event-summary-copy{display:grid;gap:5px;min-width:0}
+.event-summary-copy h3{font-size:16px;line-height:1.35;letter-spacing:-.015em;overflow-wrap:anywhere}
+.event-summary-copy p{display:flex;align-items:flex-start;gap:6px;font-size:13px;color:var(--muted);line-height:1.45}
+.event-summary-copy p svg{flex:0 0 auto;margin-top:2px}
+.event-summary-language{font-size:12px;color:var(--muted)}
+.event-state-badge{display:inline-flex;align-items:center;justify-self:start;gap:6px;padding:6px 10px;border-radius:999px;font-size:12px;font-weight:700;line-height:1.4;background:var(--surface);color:var(--muted)}
+.event-state-badge.confirmed{background:#e6f4ed;color:#20593d}
+.event-state-badge.available{background:#fff0ee;color:#953e36}
+.event-state-badge.pending{background:#fff2d9;color:#705017}
+.event-quick-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.event-quick-actions .calendar-action{grid-column:1/-1}
+.compact-event-list{display:grid;gap:0}
+.compact-event-row{display:grid;gap:12px;padding:20px 0;border-bottom:1px solid var(--border)}
+.compact-event-row:first-child{padding-top:0}
+.compact-event-row:hover .event-summary-copy h3{text-decoration:underline;text-underline-offset:3px}
+.compact-event-meta{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:14px}
+.experience-section-title{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.experience-section-title h2{font-size:24px;line-height:1.25}
+.experience-section-title>a{font-size:13px;color:var(--muted);text-decoration:underline;white-space:nowrap;padding-block:12px}
+.next-event-section{display:grid;gap:16px}
+.next-event-card,.experience-booking{display:grid;gap:16px;padding:18px;border-radius:20px;background:var(--surface);min-width:0}
+.next-event-card .experience-button.secondary{background:var(--paper)}
+.experience-booking{background:transparent;border:1px solid var(--border)}
+.experience-booking.pending{background:var(--surface);border:0}
+.experience-filters{display:flex;flex-wrap:wrap;gap:8px}
+.experience-filters button,.experience-tabs button{border:0;border-radius:999px;min-height:44px;padding:10px 14px;background:var(--surface);font-size:13px;font-weight:700}
+.experience-filters button[aria-pressed=true],.experience-tabs button[aria-pressed=true]{background:var(--ink);color:white}
+.experience-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.event-search{display:flex;align-items:center;gap:10px;padding:12px 16px;border-radius:16px;background:var(--surface)}
+.event-search input{min-width:0;width:100%;border:0;background:transparent;font-size:14px;outline-offset:4px}
+.experience-program-link{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px;border:1px solid var(--border);border-radius:20px}
+.experience-program-link>span:first-child{display:grid;gap:6px}
+.experience-program-link b{font-size:16px;line-height:1.4}
+.experience-program-link small{font-size:13px;color:var(--muted)}
+.experience-empty{display:grid;justify-items:center;text-align:center;gap:14px;padding:32px 16px;border-radius:20px;background:var(--surface)}
+.experience-empty h2{font-size:22px;line-height:1.3}
+.experience-empty p{font-size:14px;color:var(--muted)}
+.my-events-page.event-experience{padding:0;gap:24px}
+.my-events-list,.pending-events{display:grid;gap:16px}
+.pending-events>h2{font-size:20px}
+.event-experience-detail .detail-photo{border-radius:20px;overflow:hidden;aspect-ratio:1.6}
+.route-events .event-experience-detail .event-image-carousel{margin:0}
+.route-events .event-experience-detail .event-image-carousel .detail-photo{border-radius:20px}
+.event-experience-detail .detail-facts.experience-facts{display:grid;grid-template-columns:1fr;gap:14px;padding:0;border:0;background:transparent}
+.event-experience-detail .experience-facts>.event-fact{display:flex;align-items:flex-start;gap:12px;min-height:0;padding:0;border:0;background:none;box-shadow:none;border-radius:0}
+.event-experience-detail .experience-facts .fact-icon{width:22px;min-width:22px;height:24px;border-radius:0;background:none;color:var(--muted)}
+.event-experience-detail .experience-facts .fact-copy{display:grid;gap:3px;font-size:14px;font-weight:500}
+.event-experience-detail .experience-facts .fact-copy b{display:none}
+.event-experience-detail .experience-facts .fact-copy span{font-size:14px;font-weight:500;line-height:1.45}
+.event-experience-detail .experience-facts .fact-copy b:after{content:none}
+.event-experience-detail .event-about{display:grid;gap:12px}
+.event-experience-detail h2{font-size:20px;line-height:1.3}
+.event-experience-detail .event-description{font-size:16px;line-height:1.65;color:var(--muted);margin:0}
+.experience-disclosure{border:1px solid var(--border);border-radius:16px;padding:0 16px;min-width:0}
+.experience-disclosure>summary{min-height:52px;padding:14px 0;cursor:pointer;font-size:14px;font-weight:700;list-style:none;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.experience-disclosure>summary::-webkit-details-marker{display:none}
+.experience-disclosure>summary:after{content:'+';font-size:20px;font-weight:400}
+.experience-disclosure[open]>summary:after{content:'−'}
+.experience-disclosure[open]{padding-bottom:16px}
+.experience-disclosure[open]>*+*{margin-top:12px}
+.experience-disclosure summary:focus-visible{outline:3px solid #b52f3e;outline-offset:3px;border-radius:8px}
+.event-experience-detail .experience-disclosure .info-card{border:0;padding:0;background:none;border-radius:0}
+.event-experience-detail .experience-disclosure .card-copy{margin:0}
+.event-experience-detail .public-roster{padding:0}
+.event-experience-detail .public-roster-privacy{font-size:12px;line-height:1.5}
+.booking-management{display:grid;gap:12px}
+.experience .event-experience-detail .event-booking-dock{display:flex;align-items:center;gap:12px;position:fixed;left:50%;right:auto;transform:translateX(-50%);bottom:calc(68px + env(safe-area-inset-bottom));width:min(100%,430px);padding:12px 24px;background:var(--paper);border-top:1px solid var(--border);z-index:690}
+.event-booking-dock>.event-booking-price{display:grid;gap:2px;flex:1;min-width:0}
+.event-booking-price small{font-size:12px;color:var(--muted)}
+.event-booking-price strong{font-size:17px;line-height:1.3;overflow-wrap:anywhere}
+.experience .event-booking-dock .button,.experience .event-booking-dock .experience-button{width:auto;max-width:64%;min-height:48px;padding:12px 18px;font-size:14px;white-space:normal}
+.checkout-page.checkout-compact{gap:24px}
+.checkout-compact .checkout-section-card,.checkout-compact .checkout-consent-card{padding:0;border:0;border-radius:0;background:transparent}
+.checkout-compact .checkout-amount-card{padding:18px;border-radius:20px;background:var(--surface)}
+.checkout-compact .checkout-section-card>h2,.checkout-compact .checkout-consent-card>h2{font-size:18px;line-height:1.3}
+.checkout-compact .checkout-method-card>h2{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+.checkout-compact .checkout-method-pill{background:none;color:var(--ink);padding:0;font-size:14px;min-height:0}
+.checkout-compact .checkout-method-card p{font-size:14px}
+.checkout-compact .checkout-consent-body{font-size:14px;line-height:1.6}
+.checkout-compact .checkout-consent-body ul{padding-left:18px;gap:8px}
+.checkout-compact .checkout-consent-title{font-size:14px;font-weight:500}
+.checkout-compact .checkout-sticky-submit .button{min-height:48px;font-size:16px}
+.checkout-coupon-card .checkout-referral-note{font-size:13px}
+.event-ticket-page .admission-qr{display:grid;place-items:center;gap:16px;min-height:294px;padding:16px;background:white;border-radius:24px;text-align:center}
+.admission-qr>img{width:min(100%,294px);height:auto;aspect-ratio:1;image-rendering:pixelated}
+.admission-qr>div{display:grid;gap:16px}
+.admission-qr p{font-size:14px;line-height:1.6}
+.ticket-event-meta{display:grid;gap:12px}
+.ticket-event-meta p{display:flex;align-items:flex-start;gap:12px;font-size:14px}
+.ticket-event-meta svg{flex-shrink:0;margin-top:2px}
+.experience .site-footer.site-footer-compact{display:grid;gap:12px;margin-top:24px;padding:24px 24px calc(104px + env(safe-area-inset-bottom));border-top:1px solid var(--border)}
+.site-footer-compact .footer-top{display:block}
+.site-footer-compact .footer-links{gap:4px 14px;font-size:12px}
+.site-footer-compact .footer-links>a{padding-block:10px}
+.site-footer-compact .footer-wordmark{display:none}
+.footer-business-disclosure summary{cursor:pointer;font-size:12px;font-weight:500;color:var(--muted);padding-block:10px}
+.footer-business-disclosure[open] .footer-business{margin-top:12px}
+.route-ticket .content,.route-event-night .content{padding-bottom:24px}
+.route-ticket .site-footer.site-footer-compact,.route-event-night .site-footer.site-footer-compact{padding-bottom:32px}
+.route-events:has(.event-experience-detail) .site-footer.site-footer-compact{padding-bottom:calc(188px + env(safe-area-inset-bottom))}
+.route-events:has(.event-experience-detail) .content{padding-bottom:24px}
+.experience-skeleton{height:220px;border-radius:20px;background:var(--surface)}
+@container roundy (max-width:359px){
+ .event-summary{grid-template-columns:64px minmax(0,1fr);gap:10px}
+ .event-summary-image{width:64px;height:80px}
+ .event-quick-actions{grid-template-columns:1fr}
+ .event-quick-actions .calendar-action{grid-column:auto}
+ .event-booking-price strong{font-size:15px}
+ .experience .event-experience-detail .event-booking-dock{padding-inline:16px;gap:8px}
+}
+@media(prefers-reduced-motion:reduce){.event-experience *{scroll-behavior:auto;animation:none;transition:none}}

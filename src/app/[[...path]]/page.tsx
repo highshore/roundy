@@ -1,7 +1,7 @@
 import { retiredEventDestination } from '@/lib/event-scope';
 import { isMemberUser } from '@/lib/auth-user';
 import { App } from '@/components/app';
-import LanguageExchangePage from '@/app/language-exchange/page';
+import LanguageExchangePage from '@/app/language-exchange/program-page';
 import { redirect, permanentRedirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { authConfigured, isPrivatePath, signInPath } from '@/lib/auth-routing';
@@ -20,9 +20,9 @@ export default async function Page({params,searchParams}:{params:Promise<{path?:
   }
   permanentRedirect(retired+(remaining.size?'?'+remaining.toString():''));
  }
- // Serve the same program landing at the actual homepage as at /discover.
+ // Serve the same guest/member discovery entry as /discover.
  // The original discovery is preserved at /discover/classic.
- if (path.length === 0) return <LanguageExchangePage/>;
+ if (path.length === 0) return <LanguageExchangePage memberDiscovery/>;
  if (isPrivatePath(pathname)) {
   if (!authConfigured()) redirect(signInPath(pathname));
   const supabase=await createClient();
