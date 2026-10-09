@@ -6,6 +6,7 @@ import { tr, type Locale } from '@/lib/locale';
 import { uploadFile, uploadMarketingFile } from '@/lib/uploads';
 import { OrderedImages } from './ordered-images';
 import {AdminMarketingGrowth} from './admin-marketing-growth';
+import {AdminMarketingReels} from './admin-marketing-reels';
 import {CONTENT_PROFILES,postType} from '@/lib/marketing-content-policy';
 import {factPackReady,groupTrendsByUsage} from '@/lib/marketing-trend-guide';
 type Row=Record<string,any>;
@@ -39,7 +40,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
  const [uploadedImages,setUploadedImages]=useState<Row[]>([]),[uploadAssetType,setUploadAssetType]=useState<'photo'|'completed_card'>('photo');
  const [pendingMarketingImages,setPendingMarketingImages]=useState<PendingMarketingImage[]>([]),[pendingAssetType,setPendingAssetType]=useState<'photo'|'completed_card'>('photo');
  const [resultPreview,setResultPreview]=useState<Row|null>(null);
- const [activeTab,setActiveTab]=useState<'draft'|'growth'|'generation'|'trend'|'publishing'|'automation'|'connection'>('draft');
+ const [activeTab,setActiveTab]=useState<'draft'|'growth'|'reels'|'generation'|'trend'|'publishing'|'automation'|'connection'>('draft');
  const [generationFilter,setGenerationFilter]=useState<'all'|'completed'|'failed'|'running'>('all');
  const [trendLanguage,setTrendLanguage]=useState<'ko'|'en'>('ko');
  const [trendUsageView,setTrendUsageView]=useState<'unused'|'used'>('unused');
@@ -348,6 +349,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
  const tabItems=[
   ['draft',t('Draft','초안')],
   ['growth',t('Growth','성장 분석')],
+  ['reels',t('Reel Studio','릴스 스튜디오')],
   ['generation',t('Generation','생성 기록')],
   ['trend',t('Seoul Trend','서울 트렌드')],
   ['publishing',t('Publishing','게시 기록')],
@@ -370,6 +372,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
   {error&&<p className="admin-error" role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}
   {channel==='instagram'&&<nav className="marketing-subtabs" aria-label={t('Marketing sections','마케팅 메뉴')} role="tablist">{tabItems.map(([value,label])=><button key={value} type="button" role="tab" aria-selected={activeTab===value} className={activeTab===value?'active':''} onClick={()=>setActiveTab(value)}>{label}{value==='generation'&&generationThreads.some((thread:Row)=>thread.status==='failed')&&<span className="marketing-tab-dot" aria-label={t('Failed generation exists','실패한 생성 있음')}/>}</button>)}</nav>}
   {channel==='instagram'&&activeTab==='growth'&&<AdminMarketingGrowth locale={locale}/>}
+  {channel==='instagram'&&activeTab==='reels'&&<AdminMarketingReels locale={locale}/>}
   {channel==='instagram'&&activeTab==='draft'&&<>
    <div className="marketing-setup"><strong>{t('API cost guard','API 비용 안전장치')}</strong><p>{t('Reserved today','오늘 예약액')} ${Number(generation?.usage?.daily_reserved_usd||0).toFixed(2)} / ${Number(generation?.usage?.daily_budget_usd||2).toFixed(2)}. {t('This month','이번 달')} ${Number(generation?.usage?.monthly_reserved_usd||0).toFixed(2)} / ${Number(generation?.usage?.monthly_budget_usd||6).toFixed(2)}. {t('Paid generation attempts','오늘 유료 생성 시도')} {generation?.usage?.daily_attempts||0}. {t('Safety-counted jobs','안전 카운트')} {generation?.usage?.daily_calls||0}/5.</p><p className="admin-help">{t('No automatic paid retries or fallback. With Pexels configured, automatic posts use 2–3 rights-reviewed photographs and wait for approval of new images. Without Pexels, the existing AI visual flow remains. Overall daily/monthly AI budgets and generation limits remain the safety controls. External account spending is separate.','유료 API 자동 재시도나 자동 대체는 없습니다. Pexels 설정 시 자동 콘텐츠에 검수된 사진 2~3장을 사용하며 신규 사진은 승인을 기다립니다. Pexels 미설정 시 기존 AI 이미지 흐름을 유지합니다. 전체 일/월 AI 예산과 생성 횟수 한도가 비용 안전장치로 적용됩니다. 다른 서비스의 API 사용액은 이 한도에 포함되지 않습니다.')}</p>{generation?.usage?.daily_budget_override_expires_at&&<p className="admin-help">{t('Temporary daily limit is active until midnight KST. It will automatically fall back to the normal $2.00 limit.','오늘만 임시 한도가 적용 중입니다. KST 자정이 지나면 기본 $2.00 한도로 자동 복귀합니다.')}</p>}
     {!generation?.provider?.configured&&<p className="admin-error">{t('OPENAI_API_KEY is missing from this deployment. Configure Vercel Production and redeploy.','이 배포에 OPENAI_API_KEY가 없습니다. Vercel Production 설정 후 재배포가 필요합니다.')}</p>}
