@@ -52,13 +52,15 @@ export async function growthLearningWeights(db:DB):Promise<GrowthWeights>{
 }
 export async function growthOverview(){
  const db=createServiceRoleClient();
- const [settings,evidence,followerRows]=await Promise.all([
+ const [settings,evidence,followerRows,attemptRows]=await Promise.all([
   db.from('marketing_automation_settings').select('growth_mode_enabled,trend_radar_enabled,daily_instagram_enabled').eq('singleton',true).single(),
   readGrowthEvidence(db),
-  db.from('instagram_follower_snapshots').select('snapshot_date,followers_count,captured_at').order('snapshot_date',{ascending:false}).limit(90)
+  db.from('instagram_follower_snapshots').select('snapshot_date,followers_count,captured_at').order('snapshot_date',{ascending:false}).limit(90),
+  db.from('instagram_follower_snapshot_attempts').select('snapshot_date,status,error_code').order('snapshot_date',{ascending:false}).limit(7)
  ]);
  const config=checked(settings).data as Row;
  const followerHistory=(checked(followerRows).data||[]) as Row[];
+ const lastAttempt=((checked(attemptRows).data||[]) as Row[])[0]||null;
  const latest=followerHistory[0]||null;
  // Compare to the most recent snapshot on/before the 7- or 30-day reference date.
  const followerChange=(days:number)=>{
@@ -70,6 +72,9 @@ export async function growthOverview(){
  const followers={
   current:latest?Number(latest.followers_count):null,
   snapshot_date:latest?.snapshot_date||null,
+  capture_status:lastAttempt?.status||'not_attempted',
+  last_capture_attempt:lastAttempt?.snapshot_date||null,
+  capture_error:lastAttempt?.status==='unavailable'?lastAttempt.error_code:null,
   change_7d:followerChange(7),change_30d:followerChange(30),
   snapshots:followerHistory.slice().reverse().map(row=>({date:row.snapshot_date,count:row.followers_count}))
  };
