@@ -84,6 +84,7 @@ export function compactContentSchema(schema: PresentationRow, language: string) 
       cta:{type:'string',enum:[generatedCta(language)],minLength:1,maxLength:MAX_MARKETING_CTA_LENGTH},
       caption_ko: text(400), caption_en: text(520), tagline: text(64),
       hashtags: {type:'array', maxItems:8, items:text(40)},
+      headline_candidates:{type:'array',minItems:3,maxItems:3,items:text(ko?34:64)},
       slides: {...schema.properties.slides, items: {
         ...schema.properties.slides.items,
         properties: {...schema.properties.slides.items.properties,
@@ -94,7 +95,7 @@ export function compactContentSchema(schema: PresentationRow, language: string) 
         required:[...schema.properties.slides.items.required, 'secondary_body'],
       }},
     },
-    required:[...schema.required, 'design_preset', 'caption_ko', 'caption_en', 'tagline', 'hashtags'],
+    required:[...schema.required, 'design_preset', 'caption_ko', 'caption_en', 'tagline', 'hashtags','headline_candidates'],
   };
 }
 export function compactWritingInstructions(language: string) {
@@ -102,7 +103,7 @@ export function compactWritingInstructions(language: string) {
     'APPROVED VISUAL PRESET: '+EDITORIAL_PRESET+'. Bold Gothic/sans-serif type, coral #ff6666, a photo-led hook, uncluttered content, and a fixed Roundy introduction outro. No sidebar, UI screenshot, fake logo, or decorative chart.',
     'Roundy is a Seoul-based Rotation Dating service for Korean and international adults. Korean-Korean meetings are also part of the service. In Korean, always call the format 로테이션 소개팅. In English, call it Rotation Dating. Never label the service 1:1 Mingle. Do not describe the whole service as English-only or as a language class/exchange. Do not invent a particular event language.',
     'Write compact, complete sentences on the FIRST writing call. There is no automatic paid compression/rewrite call. Do not fill the available maximum length. One card = one useful point, one short example, and at most one takeaway.',
-    'COVER: aim for a short headline (Korean 8-22 characters / English 3-9 words), plus ONE short subtitle that can fit on a single line. Aim for 2-3 striking title lines. No hashtags or source bibliography in the title. Put nuance in the caption rather than repeating the hook.',
+    'COVER: present a concrete answer, verifiable recommendation or usable result first. Do NOT lead with an abstract teaser or generic question. Supply exactly THREE distinct answer-first headline_candidates, and use the strongest as the cover title. Aim for a short headline (Korean 8-22 characters / English 3-9 words), plus ONE short subtitle that can fit on a single line. Aim for 2-3 striking title lines. No hashtags or source bibliography in the title. Put nuance in the caption rather than repeating the hook.',
     'CONTENT: aim for Korean body 40-90 characters and English body 8-20 words, no more than two short paragraphs. highlight is optional: use one concrete takeaway, or an empty string; never repeat the body verbatim. No generic headings such as 핵심 정리 or 알아보기.',
     language==='en'
       ? 'title/body/highlight/options are English. secondary_body is a short, faithful Korean rendering of the same idea for storage and caption parity only; it is NOT visible on the image. The Korean and English must preserve the same uncertainty and limitations.'
