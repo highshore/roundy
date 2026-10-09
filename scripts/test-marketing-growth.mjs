@@ -41,4 +41,12 @@ assert.match(generation,/Verified Seoul trend unavailable; use evergreen Korea-l
 const publisher=readFileSync(new URL('../supabase/functions/roundy-marketing/index.ts',import.meta.url),'utf8');
 assert.match(publisher,/Number\(row\.reach\)>=50/);
 assert.match(publisher,/total>=15&&totalReach>=3000/);
-console.log('Instagram growth engine tests passed: balanced schedule, bilingual slots, confidence gating, feedback weights, safe trend fallback and tiny-reach time guard.');
+assert.match(publisher,/async function captureFollowerSnapshot/);
+assert.match(publisher,/instagram_follower_snapshot_attempts/);
+assert.match(publisher,/ignoreDuplicates:true/);
+assert.match(publisher,/await captureFollowerSnapshot\(\)\.catch\(/);
+const growth=readFileSync(new URL('../src/lib/marketing-growth.ts',import.meta.url),'utf8');
+assert.match(growth,/instagram_follower_snapshots/);
+assert.match(growth,/change_7d:followerChange\(7\)/);
+assert.match(growth,/change_30d:followerChange\(30\)/);
+console.log('Instagram growth engine tests passed: balanced schedule, bilingual slots, confidence gating, feedback weights, safe trend fallback, follower snapshot guard and tiny-reach time guard.');
