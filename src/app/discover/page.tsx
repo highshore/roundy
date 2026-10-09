@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
-import LanguageExchangePage from '@/app/language-exchange/page';
+import LanguageExchangePage from '@/app/language-exchange/program-page';
 
-// Discovery now presents the language-exchange program. The independent
-// /language-exchange page remains available for direct links and PG review.
+// Visitors see the program; signed-in members get their event discovery view.
+// /language-exchange remains a stable public program page.
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
@@ -11,4 +11,4 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default LanguageExchangePage;
+export default function DiscoverPage() { return <LanguageExchangePage memberDiscovery/>; }

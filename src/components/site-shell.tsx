@@ -25,6 +25,8 @@ export function useSiteLocale() {
 
 type HeaderAccount = { authenticated: boolean; photo: string | null };
 const anonymous: HeaderAccount = { authenticated: false, photo: null };
+const SiteAccountContext = createContext({ authenticated: false });
+export function useSiteAccount() { return useContext(SiteAccountContext); }
 
 export function SiteShell({ children }: { children: ReactNode }) {
   const pathname = usePathname() || '/';
@@ -65,8 +67,8 @@ export function SiteShell({ children }: { children: ReactNode }) {
           ? result.profile.photos[0] : null;
         return { authenticated: true, photo } as HeaderAccount;
       })
-      .then(profile => { if (!controller.signal.aborted) setAccount(profile); })
-      .catch(() => { if (!controller.signal.aborted) setAccount(anonymous); });
+      .then(profile => { if (!controller.signal.aborted) { setAccount(profile); } })
+      .catch(() => { if (!controller.signal.aborted) { setAccount(anonymous); } });
     return () => controller.abort();
   }, [pathname, policy.useSiteShell]);
 
@@ -102,7 +104,7 @@ export function SiteShell({ children }: { children: ReactNode }) {
         </header>
       </>}
       {children}
-      {policy.footer && <SiteFooter locale={locale}/>}
+      {policy.footer && <SiteFooter locale={locale} compact={policy.compactFooter || (account.authenticated && ['home', 'discover'].includes(policy.route))}/>}
       {policy.bottomNav && <nav className="bottom-nav" data-global-bottom-nav
         aria-label={tr(locale, 'Main navigation', '주요 메뉴')}>
         {nav.map(item => <Link key={item.href} href={item.href} className={item.active ? 'active' : ''}
@@ -114,5 +116,5 @@ export function SiteShell({ children }: { children: ReactNode }) {
     </div>
   );
 
-  return <SiteLocaleContext.Provider value={{ locale, changeLocale }}>{body}</SiteLocaleContext.Provider>;
+  return <SiteLocaleContext.Provider value={{ locale, changeLocale }}><SiteAccountContext.Provider value={{ authenticated: account.authenticated }}>{body}</SiteAccountContext.Provider></SiteLocaleContext.Provider>;
 }

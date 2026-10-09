@@ -2,8 +2,16 @@ import Link from 'next/link';
 import { RoundyBrand } from '@/components/roundy-brand';
 import { tr, type Locale } from '@/lib/locale';
 
-export function SiteFooter({ locale }: { locale: Locale }) {
-  return <footer className="site-footer">
+export function SiteFooter({ locale, compact = false }: { locale: Locale; compact?: boolean }) {
+  const business = <div className="footer-business">
+      <p>{tr(locale, 'NativePT | Business Registration No. 549-04-02156 | Representative Kyle Kim | Email ', '네이티브피티 | 549-04-02156 | 대표자 김수겸 | 이메일 ')}<a href="mailto:hello@roundy.team">hello@roundy.team</a>{tr(locale, ' | Tel +82 10-6858-4123', ' | 전화 010-6858-4123')}</p>
+      <p>{tr(locale, 'Mail-order Business Registration No. 2022-Seoul-Jongno-1744', '통신판매업 신고번호 제2022-서울종로-1744호')}</p>
+      <p>{tr(locale, 'Room 303, 9-8 Anam-ro 9ga-gil, Seongbuk-gu, Seoul, Republic of Korea', '서울특별시 성북구 안암로9가길 9-8, 303호')}</p>
+      <p>{tr(locale, 'Roundy is NativePT’s offline social-event brand.', "'Roundy'는 '네이티브피티'의 오프라인 소셜 모임 브랜드입니다.")}</p>
+      <p>{tr(locale, '© 2026 Roundy. All rights reserved.', '© 2026 Roundy. 모든 권리 보유.')}</p>
+      <p className="footer-attribution">{tr(locale, 'Animated emoji: ', '애니메이션 이모지: ')}<a href="https://googlefonts.github.io/noto-emoji-animation/" target="_blank" rel="noreferrer">Noto Animated Emoji</a>{tr(locale, ' by Google, CC BY 4.0.', ' by Google, CC BY 4.0.')}</p>
+    </div>;
+  return <footer className={'site-footer' + (compact ? ' site-footer-compact' : '')}>
     <div className="footer-top">
       <div className="footer-links" aria-label={tr(locale,'Footer navigation','푸터 내비게이션')}>
         <Link href="/about">{tr(locale, 'About Us', '라운디 소개')}</Link>
@@ -14,13 +22,6 @@ export function SiteFooter({ locale }: { locale: Locale }) {
       </div>
       <Link className="footer-wordmark" href="/"><RoundyBrand /></Link>
     </div>
-    <div className="footer-business">
-      <p>{tr(locale, 'NativePT | Business Registration No. 549-04-02156 | Representative Kyle Kim | Email ', '네이티브피티 | 549-04-02156 | 대표자 김수겸 | 이메일 ')}<a href="mailto:hello@roundy.team">hello@roundy.team</a>{tr(locale, ' | Tel +82 10-6858-4123', ' | 전화 010-6858-4123')}</p>
-      <p>{tr(locale, 'Mail-order Business Registration No. 2022-Seoul-Jongno-1744', '통신판매업 신고번호 제2022-서울종로-1744호')}</p>
-      <p>{tr(locale, 'Room 303, 9-8 Anam-ro 9ga-gil, Seongbuk-gu, Seoul, Republic of Korea', '서울특별시 성북구 안암로9가길 9-8, 303호')}</p>
-      <p>{tr(locale, 'Roundy is NativePT’s offline social-event brand.', "'Roundy'는 '네이티브피티'의 오프라인 소셜 모임 브랜드입니다.")}</p>
-      <p>{tr(locale, '© 2026 Roundy. All rights reserved.', '© 2026 Roundy. 모든 권리 보유.')}</p>
-      <p className="footer-attribution">{tr(locale, 'Animated emoji: ', '애니메이션 이모지: ')}<a href="https://googlefonts.github.io/noto-emoji-animation/" target="_blank" rel="noreferrer">Noto Animated Emoji</a>{tr(locale, ' by Google, CC BY 4.0.', ' by Google, CC BY 4.0.')}</p>
-    </div>
+    {compact ? <details className="footer-business-disclosure"><summary>{tr(locale, 'Business details', '사업자 정보')}</summary>{business}</details> : business}
   </footer>;
 }

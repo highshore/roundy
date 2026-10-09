@@ -27,20 +27,24 @@ assert.equal(siteLayoutForPath('/onboarding/basics').bottomNav, false);
 for (const path of ['/admin', '/admin/events', '/auth/callback']) {
   assert.equal(siteLayoutForPath(path).useSiteShell, false, path);
 }
-for (const path of ['/checkout/event', '/terms', '/refund-policy', '/privacy', '/event-night/id']) {
+for (const path of ['/checkout/event', '/terms', '/refund-policy', '/privacy', '/event-night/id', '/ticket/event']) {
   assert.equal(siteLayoutForPath(path).bottomNav, false, path);
 }
+
+assert.equal(siteLayoutForPath('/ticket/event').compactFooter, true);
+assert.equal(siteLayoutForPath('/checkout/event').compactFooter, true);
+assert.equal(siteLayoutForPath('/language-exchange').compactFooter, false);
 
 const root = await read('src/app/layout.tsx');
 const chrome = await read('src/components/site-shell.tsx');
 const app = await read('src/components/app.tsx');
-const program = await read('src/app/language-exchange/page.tsx');
+const program = await read('src/app/language-exchange/program-page.tsx');
 const programContent = await read('src/app/language-exchange/program-content.tsx');
 const footer = await read('src/components/site-footer.tsx');
 assert.match(root, /<SiteShell>\{children\}<\/SiteShell>/);
 assert.match(chrome, /className="site-header"/);
 assert.match(chrome, /className="bottom-nav"/);
-assert.match(chrome, /<SiteFooter locale=\{locale\}\/>/);
+assert.match(chrome, /<SiteFooter locale=\{locale\} compact=\{policy\.compactFooter/);
 assert.match(chrome, /<LocaleToggle locale=\{locale\}/);
 assert.match(chrome, /<RoundyBrand\s*\/>/);
 assert.match(chrome, /roundy-locale/);
