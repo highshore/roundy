@@ -5,74 +5,176 @@ import {tr,type Locale} from '@/lib/locale';
 import type {GrowthPillar,GrowthSlot} from '@/lib/marketing-growth-planner';
 
 type Row=Record<string,any>;
-const labels:Record<GrowthPillar,[string,string]>={
+const pillars:Record<GrowthPillar,[string,string]>={
  seoul:['Seoul discoveries','서울 트렌드와 핫플'],
  culture:['Korea life','한국 생활과 문화'],
- humor:['Relatable humor','공감형 밈과 릴스'],
+ humor:['Original humor','공감형 밈과 릴스'],
  people:['People and conversation','사람과 대화'],
  brand:['Roundy updates','라운디 소식']
 };
-const formatLabels:Record<string,[string,string]>={
- carousel:['Carousel','캐러셀'],reel_candidate:['Reel candidate (manual)','릴스 후보 (수동 제작)'],brand:['Brand post','브랜드 콘텐츠']
+const formats:Record<string,[string,string]>={
+ carousel:['Carousel','캐러셀'],
+ reel_candidate:['Reel idea','릴스 제작 후보'],
+ brand:['Brand post','브랜드 콘텐츠']
+};
+const pillarDescriptions:Record<GrowthPillar,[string,string]>={
+ seoul:['Sourced discoveries worth saving','확인된 서울 명소와 실용 정보'],
+ culture:['Everyday Korean culture','생활 속 문화 차이와 공감'],
+ humor:['Original, relatable moments','독창적인 상황극과 유머'],
+ people:['Useful ways to connect','새로운 사람과 대화하는 방법'],
+ brand:['Occasional brand updates','서비스와 브랜드의 새로운 소식']
+};
+const number=(value:unknown)=>Number(value||0).toLocaleString();
+const signedNumber=(value:unknown)=>value==null?'—':(Number(value)>0?'+':'')+Number(value).toLocaleString();
+const ratio=(value:unknown,total:unknown)=>Math.min(100,Math.round(Number(value||0)/Math.max(1,Number(total||1))*100));
+const dateLabel=(value:string,locale:Locale)=>{
+ const parts=new Date(value+'T12:00:00+09:00');
+ return Number.isNaN(parts.getTime())?'':parts.toLocaleDateString(locale==='ko'?'ko-KR':'en-US',{weekday:'short',timeZone:'Asia/Seoul'});
 };
 
 export function AdminMarketingGrowth({locale}:{locale:Locale}){
  const t=(en:string,ko:string)=>tr(locale,en,ko);
- const [data,setData]=useState<Row|null>(null),[error,setError]=useState(''),[loading,setLoading]=useState(true);
+ const [data,setData]=useState<Row|null>(null);
+ const [error,setError]=useState(''),[loading,setLoading]=useState(true);
  useEffect(()=>{
   const controller=new AbortController();
-  setLoading(true);
   fetch('/api/admin/marketing/growth',{signal:controller.signal,cache:'no-store'})
-   .then(async response=>{const json=await response.json();if(!response.ok)throw new Error(json.error||'Could not load growth metrics');return json;})
-   .then(result=>{if(!controller.signal.aborted){setData(result);setError('');}})
-   .catch(e=>{if(!controller.signal.aborted)setError(e instanceof Error?e.message:'Growth metrics unavailable');})
+   .then(async response=>{
+    const result=await response.json();
+    if(!response.ok)throw new Error(result.error||'Could not load growth metrics');
+    return result;
+   })
+   .then(result=>{if(!controller.signal.aborted)setData(result);})
+   .catch(reason=>{if(!controller.signal.aborted)setError(reason instanceof Error?reason.message:'Growth metrics unavailable');})
    .finally(()=>{if(!controller.signal.aborted)setLoading(false);});
   return()=>controller.abort();
  },[]);
- if(loading)return <section className="marketing-tab-panel"><p role="status">{t('Loading organic growth metrics…','콘텐츠 성장 지표를 조회하는 중입니다…')}</p></section>;
- if(!data)return <section className="marketing-tab-panel"><p className="admin-error" role="alert">{error||t('Growth analytics unavailable','성장 지표를 불러올 수 없습니다')}</p></section>;
- const stats=data.totals||{},followers=data.followers||{},summary=(data.pillars||[]) as Row[],topics=(data.topics||[]) as Row[],plan=(data.week_plan||[]) as GrowthSlot[],threshold=data.thresholds||{};
- return <section className="marketing-tab-panel">
-  <div className="admin-section-title"><div><p className="admin-kicker">ROUNDY GROWTH ENGINE</p><Heading level={2}>{t('Organic growth control','오가닉 성장 관리')}</Heading><p>{t('An editorial test plan, not a claim about Instagram ranking weights. Publishing still requires approval.','Instagram 공식 알고리즘 가중치가 아닌 라운디의 실험 계획입니다. 실제 게시는 계속 관리자 승인이 필요합니다.')}</p></div></div>
-  <div className="marketing-setup"><strong>{data.enabled?t('Growth mode enabled','성장 모드 활성화'):t('Growth mode not enabled','성장 모드 비활성화')}</strong>
-   <p>{t('You can turn it on in Automation. Until then the existing daily content planner stays intact.','자동화 탭에서 성장 모드를 켤 수 있습니다. 활성화 전에는 기존 일일 콘텐츠 기획을 그대로 유지합니다.')}</p>
-   <p>{t('Reels listed below are production recommendations, not automatic video creation or publishing.','아래 릴스는 제작 권장안입니다. 영상 자동 생성이나 릴스 자동 게시는 아직 지원되지 않습니다.')}</p>
-  </div>
-  <div className="marketing-settings-card">
-   <div className="admin-section-title"><Heading level={3}>{t('Actual follower growth','실제 팔로워 증가')}</Heading></div>
-   <div className="admin-two">
-    <div><strong>{t('Latest followers','현재 팔로워')}</strong><p><strong>{followers.current===null||followers.current===undefined?t('Pending first snapshot','첫 수집 대기'):Number(followers.current).toLocaleString()}</strong></p></div>
-    <div><strong>{t('7-day net change','7일 순증감')}</strong><p><strong>{followers.change_7d===null||followers.change_7d===undefined?'—':(Number(followers.change_7d)>0?'+':'')+Number(followers.change_7d).toLocaleString()}</strong></p></div>
-    <div><strong>{t('30-day net change','30일 순증감')}</strong><p><strong>{followers.change_30d===null||followers.change_30d===undefined?'—':(Number(followers.change_30d)>0?'+':'')+Number(followers.change_30d).toLocaleString()}</strong></p></div>
+ if(loading)return <section className="marketing-tab-panel" aria-busy="true"><p role="status">{t('Loading growth insights…','성장 분석 데이터를 불러오는 중입니다…')}</p></section>;
+ if(!data)return <section className="marketing-tab-panel"><p role="alert" className="admin-error">{error||t('Growth insights unavailable','성장 지표를 불러오지 못했습니다.')}</p></section>;
+
+ const stats=data.totals||{},followers=data.followers||{};
+ const summary=(data.pillars||[]) as Row[],topics=(data.topics||[]) as Row[];
+ const plan=(data.week_plan||[]) as GrowthSlot[],thresholds=data.thresholds||{};
+ const weights=data.weights||{};
+ const active=data.enabled===true,learning=data.learning===true;
+ const published=Number(stats.published||0),measured=Number(stats.measured||0),reach=Number(stats.measured_reach||0);
+ const allocations=summary.filter(row=>row.pillar in pillars);
+
+ return <section className="marketing-tab-panel marketing-insights">
+  <header className="marketing-insights-heading">
+   <p className="admin-kicker">ROUNDY / GROWTH INSIGHTS</p>
+   <Heading level={2}>{t('Instagram growth','인스타그램 성장 분석')}</Heading>
+   <p>{t('Plan and measure useful Seoul content without guessing from tiny samples.','서울 콘텐츠의 편성과 성과를 한곳에서 확인합니다.')}</p>
+  </header>
+
+  <div className={'marketing-insight-notice'+(active?' is-active':'')}>
+   <span className="marketing-insight-notice-dot" aria-hidden="true"/>
+   <div>
+    <strong>{active?t('Growth planning enabled','성장 모드 활성화'):t('Growth planning paused','성장 모드 비활성화')}</strong>
+    <p>{active
+     ?t('Daily suggestions follow the content mix below. Every post still needs approval.','아래 기준으로 매일 주제를 편성하며 실제 게시는 승인 후 진행됩니다.')
+     :t('This is a proposed content mix. Enable Growth mode under Automation when ready.','아래 비율은 실험 계획입니다. 자동화 탭에서 성장 모드를 켤 수 있습니다.')}</p>
    </div>
-   <p className="admin-help">{followers.snapshot_date?t('Last measured day:','마지막 수집일:')+' '+followers.snapshot_date:t('No follower snapshot captured yet. The updated publishing worker needs to run with authorized Instagram insights access.','팔로워 데이터가 아직 수집되지 않았습니다. 업데이트된 게시 워커와 Instagram 접근 권한이 필요합니다.')} {t('Net follower changes are account-level observations, not per-post conversions.','팔로워 순증감은 계정 단위 관측치이며 개별 게시물의 전환 성과가 아닙니다.')}</p>
-   {followers.capture_status==='unavailable'&&<p className="admin-error" role="status">{t('Instagram follower collection failed on','Instagram 팔로워 수집에 실패한 날짜:')} {followers.last_capture_attempt}. {t('Check the connected account scope and worker logs.','Instagram 계정 권한과 워커 로그를 확인하세요.')} {followers.capture_error}</p>}
-   {followers.capture_status==='not_attempted'&&<p className="admin-help">{t('No profile API collection attempt has been recorded.','아직 Instagram 프로필 API 수집 시도 기록이 없습니다.')}</p>}
   </div>
-  <div className="admin-two">
-   <div className="marketing-settings-card"><strong>{t('Published posts (90d)','게시물 (90일)')}</strong><p><strong>{stats.published??0}</strong></p></div>
-   <div className="marketing-settings-card"><strong>{t('Measured posts with reach','도달이 측정된 게시물')}</strong><p><strong>{stats.measured??0}</strong></p></div>
-   <div className="marketing-settings-card"><strong>{t('Cumulative measured reach','측정 도달 합계')}</strong><p><strong>{stats.measured_reach??0}</strong></p></div>
-   <div className="marketing-settings-card"><strong>{t('Unmeasured posts','도달 데이터가 없는 게시물')}</strong><p><strong>{stats.missing_reach??0}</strong></p></div>
-  </div>
-  <div className="marketing-settings-card">
-   <div className="admin-section-title"><Heading level={3}>{t('Editorial allocation','콘텐츠 편성 비율')}</Heading></div>
-   <p className="admin-help">{data.learning?t('Sample minimum passed: cautiously adjusting content weights.','표본 기준을 충족해 콘텐츠 비율을 제한적으로 조정하고 있습니다.'):t('Experiment stage: fixed editorial mix. Performance is too sparse for automatic winner selection.','실험 단계입니다. 자동 우승 주제를 고르기엔 데이터가 부족해 기준 비율을 유지합니다.')}</p>
-   <div className="marketing-log-list">{summary.map(row=>{
-    const p=row.pillar as GrowthPillar;
-    return <div className="marketing-log-row" key={p}><div className="marketing-log-main"><div><strong>{t(...labels[p])} — {Math.round(Number(data.weights?.[p]||0))}%</strong><small>{t('Posts','게시물')} {row.posts} / {t('Reach','도달')} {row.reach} / {t('Shares per 100 reach','도달 100명당 공유')} {row.share_rate} / {t('Saves per 100 reach','저장')} {row.save_rate}</small></div></div></div>;
-   })}</div>
-   <p className="admin-help">{t('Learning starts after at least','학습 시작 기준:')} {threshold.min_posts} {t('posts,','개 게시물,')} {threshold.min_reach} {t('aggregate reach, and minimum evidence in each content group.','명 이상의 누적 도달 및 각 콘텐츠 유형의 최소 표본 확보.')}</p>
-  </div>
-  <div className="marketing-settings-card">
-   <div className="admin-section-title"><Heading level={3}>{t('Next seven days','향후 7일 편성안')}</Heading></div>
-   <div className="marketing-log-list">{plan.map(slot=><div className="marketing-log-row" key={slot.date}><div className="marketing-log-main"><div><strong>{slot.date} · {t(...labels[slot.pillar])}</strong><small>{slot.language.toUpperCase()} / {t(...formatLabels[slot.recommended_format])} / {slot.editorial_goal}</small></div></div></div>)}</div>
-   <p className="admin-help">{t('Verified Seoul topics are used only when a valid trend fact pack is available; otherwise a safe evergreen Korea-life topic replaces the scheduled slot.','서울 트렌드는 검증된 최신 팩트팩이 있을 때만 사용하며, 확인된 자료가 없으면 안전한 한국 생활 상시 콘텐츠로 대체합니다.')}</p>
-  </div>
-  <div className="marketing-settings-card">
-   <div className="admin-section-title"><Heading level={3}>{t('Topics and language evidence','주제 및 언어별 성과')}</Heading></div>
-   {topics.length?<div className="marketing-log-list">{topics.map((row:Row)=><div className="marketing-log-row" key={row.topic+row.language}><div className="marketing-log-main"><div><strong>{row.topic} / {row.language?.toUpperCase()}</strong><small>{t('Posts','게시물')} {row.posts} · {t('Reach','도달')} {row.reach} · {t('Share rate','공유율')} {row.share_rate}% · {t('Save rate','저장률')} {row.save_rate}%</small></div></div></div>)}</div>:<p>{t('No measured post data yet.','측정된 게시물 데이터가 아직 없습니다.')}</p>}
-   <p className="admin-help">{t('Daily follower counts can establish account-level net growth; reach and engagement remain proxy signals and cannot identify which post acquired those followers.','일일 팔로워 집계는 계정 전체의 순증감을 보여주지만, 도달과 반응만으로 특정 게시물의 팔로워 획득을 추론할 수는 없습니다.')}</p>
-  </div>
+
+  <section className="marketing-insight-section" aria-labelledby="growth-performance-title">
+   <header className="marketing-insight-section-head">
+    <div><Heading level={3} id="growth-performance-title">{t('Account overview','계정 현황')}</Heading>
+     <p>{t('Actual account totals and the last 90 days of post data','실제 팔로워 수와 최근 90일 게시물 데이터')}</p>
+    </div>
+   </header>
+   <dl className="marketing-insight-kpis">
+    <div className="marketing-insight-kpi">
+     <dt>{t('Followers','현재 팔로워')}</dt>
+     <dd>{followers.current==null?'—':number(followers.current)}</dd>
+     <small>{followers.snapshot_date||t('Waiting for a snapshot','첫 수집 대기')}</small>
+    </div>
+    <div className="marketing-insight-kpi">
+     <dt>{t('Net change, 7 days','최근 7일 순증감')}</dt>
+     <dd>{signedNumber(followers.change_7d)}</dd>
+     <small>{t('30-day change','30일 증감')} {signedNumber(followers.change_30d)}</small>
+    </div>
+    <div className="marketing-insight-kpi">
+     <dt>{t('Published posts','게시 완료')}</dt>
+     <dd>{number(published)}</dd>
+     <small>{t('Measured posts','성과 수집')} {number(measured)}</small>
+    </div>
+    <div className="marketing-insight-kpi">
+     <dt>{t('Cumulative reach','측정 누적 도달')}</dt>
+     <dd>{number(reach)}</dd>
+     <small>{t('Missing post insights','미측정 게시물')} {number(stats.missing_reach)}</small>
+    </div>
+   </dl>
+   {followers.capture_status==='unavailable'&&
+    <p className="marketing-insight-alert" role="status">{t('Follower data could not be collected. Check the Instagram API permissions.','팔로워 데이터 수집에 실패했습니다. Instagram API 권한을 확인하세요.')}</p>}
+   {followers.current==null&&followers.capture_status!=='unavailable'&&
+    <p className="marketing-insight-footnote">{t('Follower snapshots will appear when the Instagram API returns the metric. Missing data is never treated as zero.','Instagram API에서 수집한 팔로워 수가 여기에 표시됩니다. 미수집 값은 0으로 처리하지 않습니다.')}</p>}
+  </section>
+
+  <section className="marketing-insight-section" aria-labelledby="growth-allocation-title">
+   <header className="marketing-insight-section-head">
+    <div><Heading level={3} id="growth-allocation-title">{t('Content mix','콘텐츠 편성 비율')}</Heading>
+     <p>{t('Initial topic allocation, adjusted only after enough real data','실측 데이터가 충분해지기 전까지는 기준 비율을 유지합니다.')}</p></div>
+    <span className="marketing-insight-pill">{learning?t('Learning','성과 반영 중'):t('Experiment','실험 단계')}</span>
+   </header>
+   <div className="marketing-insight-progress">
+    <div className="marketing-insight-progress-line">
+     <span>{t('Posts measured','측정 게시물')} <b>{number(measured)} / {number(thresholds.min_posts||30)}</b></span>
+     <span>{t('Reach','누적 도달')} <b>{number(reach)} / {number(thresholds.min_reach||5000)}</b></span>
+    </div>
+    <div className="marketing-insight-progress-track" role="progressbar" aria-label={t('Measured post sample progress','측정 게시물 표본 확보 진행률')} aria-valuemin={0} aria-valuemax={Number(thresholds.min_posts||30)} aria-valuenow={Math.min(measured,Number(thresholds.min_posts||30))}>
+     <span style={{width:ratio(measured,thresholds.min_posts||30)+'%'}}/>
+    </div>
+   </div>
+   <ul className="marketing-insight-allocation-list">
+    {allocations.map((row:Row)=>{
+     const pillar=row.pillar as GrowthPillar,percent=Math.max(0,Number(weights[pillar]||0));
+     return <li key={pillar} className="marketing-insight-allocation">
+      <div className="marketing-insight-allocation-head">
+       <div><strong>{t(...pillars[pillar])}</strong><small>{t(...pillarDescriptions[pillar])}</small></div>
+       <b>{Math.round(percent)}%</b>
+      </div>
+      <div className="marketing-insight-allocation-track" aria-hidden="true"><span style={{width:Math.min(percent,100)+'%'}}/></div>
+      <p>{t('Posts','게시물')} {number(row.posts)} <span aria-hidden="true">/</span> {t('Reach','도달')} {number(row.reach)} <span aria-hidden="true">/</span> {t('Shares','공유')} {number(row.shares)} <span aria-hidden="true">/</span> {t('Saves','저장')} {number(row.saves)}</p>
+     </li>;
+    })}
+   </ul>
+  </section>
+
+  <section className="marketing-insight-section" aria-labelledby="growth-plan-title">
+   <header className="marketing-insight-section-head">
+    <div><Heading level={3} id="growth-plan-title">{t('Next 7 days','향후 7일 편성안')}</Heading>
+     <p>{t('One planned topic per day. Reel ideas still need separate video production.','날짜별 예정 주제입니다. 릴스 후보는 영상 제작 후 게시할 수 있습니다.')}</p></div>
+   </header>
+   <ol className="marketing-insight-calendar">
+    {plan.map(slot=><li className="marketing-insight-calendar-item" key={slot.date}>
+     <div className="marketing-insight-calendar-day" aria-label={slot.date}>
+      <strong>{slot.date.slice(-2)}</strong><span>{dateLabel(slot.date,locale)}</span>
+     </div>
+     <div className="marketing-insight-calendar-body">
+      <strong>{t(...pillars[slot.pillar])}</strong>
+      <div className="marketing-insight-inline-meta">
+       <span className="marketing-insight-language">{slot.language.toUpperCase()}</span>
+       <span>{t(...(formats[slot.recommended_format]||['Content','콘텐츠']))}</span>
+      </div>
+      <p>{t(...pillarDescriptions[slot.pillar])}</p>
+     </div>
+    </li>)}
+   </ol>
+   <p className="marketing-insight-footnote">{t('Seoul trends require verified sources. Otherwise the planner uses a safer evergreen topic.','서울 트렌드는 확인된 출처가 있어야 사용하며, 부족하면 상시 콘텐츠로 대체합니다.')}</p>
+  </section>
+
+  <section className="marketing-insight-section" aria-labelledby="growth-topic-title">
+   <header className="marketing-insight-section-head">
+    <div><Heading level={3} id="growth-topic-title">{t('Topic and language performance','주제와 언어별 성과')}</Heading>
+     <p>{t('Shares and saves are engagement signals, not follower conversions.','공유와 저장은 반응 지표이며 팔로워 전환을 의미하지 않습니다.')}</p></div>
+   </header>
+   {topics.length?<ul className="marketing-insight-topic-list">{topics.map((row:Row)=><li key={row.topic+row.language}>
+    <div><strong>{String(row.topic||'').replaceAll('_',' ')}</strong><span className="marketing-insight-language">{String(row.language||'').toUpperCase()}</span></div>
+    <p>{t('Posts','게시물')} {number(row.posts)} <span aria-hidden="true">/</span> {t('Reach','도달')} {number(row.reach)}</p>
+    <p>{t('Share rate','공유율')} {row.share_rate||0}% <span aria-hidden="true">/</span> {t('Save rate','저장률')} {row.save_rate||0}%</p>
+   </li>)}</ul>:<p className="marketing-insight-empty">{t('No measured content yet. Results appear here after publishing and insight collection.','아직 수집된 성과가 없습니다. 게시 후 지표가 확보되면 표시됩니다.')}</p>}
+   <p className="marketing-insight-footnote">{t('Account-level follower totals cannot identify which individual post gained a follower.','계정 전체의 팔로워 순증감만으로 개별 게시물의 기여도를 판단할 수 없습니다.')}</p>
+  </section>
  </section>;
 }
