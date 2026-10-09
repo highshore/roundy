@@ -555,7 +555,7 @@ async function regenerateDraft(draftId:string){
 const insightMetric=(data:any,name:string)=>{
  const item=Array.isArray(data?.data)?data.data.find((entry:any)=>entry?.name===name):null;
  const value=item?.value??item?.values?.[0]?.value??item?.total_value?.value;
- return Number.isFinite(Number(value))?Number(value):null;
+ return value===null||value===undefined||value===''?null:Number.isFinite(Number(value))?Number(value):null;
 };
 async function mediaPerformance(mediaId:string,isReel=false){
  const basic=await graph(mediaId+'?fields=like_count,comments_count').catch(()=>({}));
