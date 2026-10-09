@@ -1,16 +1,14 @@
 // Pure invariants shared by the Pexels selector and publisher-facing review.
 export type ReviewedPhoto={slot:number;review_status:string;storage_path?:string|null};
+// Keep the cover available for one optional AI/editorial treatment. The body is
+// always anchored in reviewed photography; the final card belongs to the CTA.
 export function requiredPhotoSlotsForRoles(roles:string[]):number[]{
- const needed=Math.min(3,Math.max(2,roles.length-1));
- const eligible=roles.map((role,index)=>({role,index})).filter(row=>row.role!=='cta').map(row=>row.index);
- if(eligible.length<2)throw new Error('STOCK_PHOTOS_REQUIRE_TWO_CONTENT_CARDS');
- const others=eligible.filter(index=>index!==0),chosen:number[]=eligible.includes(0)?[0]:[];
- while(chosen.length<needed&&others.length){
-  const position=chosen.length===1&&others.length>=3?Math.floor(others.length/2):0;
-  chosen.push(others.splice(position,1)[0]);
- }
- if(chosen.length<2)throw new Error('STOCK_PHOTOS_REQUIRE_TWO_CONTENT_CARDS');
- return chosen.sort((a,b)=>a-b);
+ if(roles.length<3||!['cover','hook'].includes(roles[0])||roles[roles.length-1]!=='cta')
+  throw new Error('STOCK_PHOTOS_REQUIRE_VALID_CAROUSEL');
+ if(roles.length===5)return [1,2,3];
+ // The alternating 3-card mode has one substantive body card.
+ if(roles.length===3)return [1];
+ return Array.from({length:Math.min(3,roles.length-2)},(_,index)=>index+1);
 }
 export function allSelectedPhotosApproved(roles:string[],photos:ReviewedPhoto[]){
  let slots:number[];
