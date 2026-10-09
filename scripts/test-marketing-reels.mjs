@@ -52,7 +52,7 @@ const evaluated=p.evaluateReelCohorts(strong);
 check(()=>assert.equal(evaluated.learning_ready,true));
 check(()=>assert.equal(evaluated.recommended_hook,'humor'));
 const worker=readFileSync(new URL('../supabase/functions/roundy-marketing/index.ts',import.meta.url),'utf8');
-for(const expression of [/async function publishReel\(/,/media_type:'REELS'/,/stage:'publishing'/,/new ReelProcessingPending\(/,/status:'needs_review'/,/reel_avg_watch_time_ms/])
+for(const expression of [/async function publishReel\(/,/media_type:'REELS'/,/stage:'publishing'/,/new ReelProcessingPending\(/,/status:externalAttempt\\?'needs_review':'failed'/,/reel_avg_watch_time_ms/])
  check(()=>assert.match(worker,expression));
 const migration=readFileSync(new URL('../supabase/migrations/20261009193500_instagram_reel_studio_reviewed_publishing.sql',import.meta.url),'utf8');
 check(()=>assert.match(migration,/rights_attested/));
