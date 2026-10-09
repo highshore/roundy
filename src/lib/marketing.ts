@@ -11,6 +11,7 @@ import { marketingApi as legacyMarketingApi } from './marketing-legacy';
 import { generationOverview, kstDate, runGeneration, validateGenerationInput } from './marketing-generation';
 import {runTrendRadar,trendOverview} from './marketing-trend-radar';
 import {growthOverview} from './marketing-growth';
+import {reelsApi} from './marketing-reels';
 import {CAMPAIGN_VERSION} from './marketing-campaign';
 import {EVENT_CAMPAIGN_VERSION} from './marketing-event-campaign';
 type Client=Awaited<ReturnType<typeof createClient>>;
@@ -48,6 +49,7 @@ async function invokeMarketingWorker(db:Client,body:Record<string,unknown>,timeo
 // No generation route, including malformed suffixes, can reach legacy AI code.
 export async function marketingApi(req:NextRequest,db:Client,path:string[]){
  const id=path[0],service=createServiceRoleClient();
+ if(id==='reels')return reelsApi(req,db,path.slice(1));
  if(id==='quality'&&path[1]==='recheck'&&path.length===2&&req.method==='POST'){
   const body=await req.json();if(!uuid(body.draft_id||'')||!Number.isInteger(body.revision))return json({error:'INVALID_REVIEW_REQUEST'},400);
   const d=checked(await service.from('instagram_post_drafts').select('*').eq('id',body.draft_id).single());
