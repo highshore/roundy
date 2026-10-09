@@ -1,3 +1,4 @@
+import {CONTENT_POLICY_VERSION} from './marketing-content-policy';
 import {savedCtaRecoverySource} from './marketing-output-recovery';
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
@@ -362,6 +363,29 @@ if(id==='uploads'&&path.length===1&&req.method==='GET'){
   if(req.method!=='GET'){
    const active=checked(await service.from('marketing_generation_jobs').select('id').eq('draft_id',path[1]).eq('status','running').gt('created_at',new Date(Date.now()-300000).toISOString()).limit(1));
    if(active.length)return json({error:'GENERATION_ALREADY_RUNNING'},409);
+  }
+  if(path.length===3&&path[2]==='select-headline'&&req.method==='POST'){
+   const body=await req.json().catch(()=>({})),selected=Number(body.index);
+   const current=checked(await service.from('instagram_post_drafts')
+    .select('*').eq('id',path[1]).eq('status','needs_approval').maybeSingle());
+   if(!current||!Number.isInteger(body.revision)||current.revision!==body.revision)
+     return json({error:'DRAFT_CHANGED_REFRESH_FIRST'},409);
+   const choices=Array.isArray(current.headline_candidates)?current.headline_candidates:[];
+   if(!Number.isInteger(selected)||selected<0||selected>=choices.length||choices.length!==3)
+     return json({error:'INVALID_HEADLINE_CHOICE'},400);
+   const title=String(choices[selected]||'').trim();
+   if(!title||title.length>64)return json({error:'INVALID_HEADLINE_COPY'},400);
+   const doc=current.content_document||{};
+   if(!Array.isArray(doc.slides)||!doc.slides.length)return json({error:'CONTENT_DOCUMENT_MISSING'},409);
+   const slides=doc.slides.map((v:Row,i:number)=>i===0?{...v,title}:v);
+   const presentation=(current.carousel_slides||[]).map((v:Row,i:number)=>i===0?{...v,title}:v);
+   const next=checked(await service.from('instagram_post_drafts').update({
+    content_document:{...doc,slides},carousel_slides:presentation,images:[],
+    selected_headline:title,quality_revision:null,
+    quality_report:{version:CONTENT_POLICY_VERSION,status:'unchecked',issues:[],review_required:true},
+    revision:current.revision+1,updated_at:new Date().toISOString()
+   }).eq('id',current.id).eq('status','needs_approval').eq('revision',current.revision).select('*').single());
+   return json({draft:next,needs_render:true});
   }
   if(path.length===2&&req.method==='PUT'){
    const v=await req.json();

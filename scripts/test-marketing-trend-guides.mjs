@@ -34,15 +34,15 @@ const trend={category:'event',source_urls:[{url:'https://seoul.example/show'},{u
 check(()=>assert.equal(g.factPackReady(trend),true));
 check(()=>assert.equal(g.readTrendFactPack(pack,sourceIds).facts.length,4));
 check(()=>assert.equal(g.trendFactPackIssues(g.readTrendFactPack(pack,sourceIds),'event').length,0));
-check(()=>assert.equal(g.trendGuideRoles('event_guide').length,6));
+check(()=>assert.equal(g.trendGuideRoles('event_guide').length,5));
 check(()=>assert.equal(g.trendGuideRoles('popup_guide').length,5));
-check(()=>assert.equal(g.trendGuideRoles('culture_brief').length,4));
+check(()=>assert.equal(g.trendGuideRoles('culture_brief').length,5));
 check(()=>assert.equal(g.factPackReady({...trend,fact_pack:{...pack,expires_at:'2000-01-01T00:00:00Z'}}),false));
 check(()=>assert.equal(g.factPackReady({...trend,fact_pack:{...pack,facts:pack.facts.slice(0,2)}}),false));
 check(()=>assert.equal(g.factPackReady({...trend,fact_pack:{...pack,facts:pack.facts.map(f=>({...f,source_ids:['S99']}))}}),false));
-check(()=>assert.equal(p.contentSchema('seoul_trend','ko','event_guide').properties.slides.minItems,6));
+check(()=>assert.equal(p.contentSchema('seoul_trend','ko','event_guide').properties.slides.minItems,5));
 check(()=>assert.equal(p.contentSchema('seoul_trend','en','popup_guide').properties.slides.maxItems,5));
-check(()=>assert.equal(p.contentSchema('seoul_trend','ko','culture_brief').properties.slides.minItems,4));
+check(()=>assert.equal(p.contentSchema('seoul_trend','ko','culture_brief').properties.slides.minItems,5));
 check(()=>assert.equal(p.contentSchema('seoul_trend','ko','event_guide').properties.slides.items.properties.role.enum[1],'facts'));
 const sources=[{id:'S1',url:'https://seoul.example/show',title:'회크닉 드론쇼 서울시 공식 안내',evidence:'회크닉 10월 9일 한글날 무료 관람 야간 드론 라이트 쇼'},
  {id:'S2',url:'https://seoul.example/dates',title:'회크닉 야외 공연 장소',evidence:'회크닉 뚝섬한강공원 공연 장소'}];
@@ -54,7 +54,7 @@ function guideDoc(){
   book:{title:'',author:'',source_id:'',source_context:''},
   trend:{trend_id:'sample',trend_key:'hoe-picnic',display_name:'회크닉',category:'event',status:'rising',observed_at:'2026-10-08',summary:'한강에서 진행하는 행사',content_angle:'한글날 야경과 함께 즐기는 시간',source_ids:sourceIds},
   trend_layout:'event_guide',trend_fact_pack:pack,
-  slides:roles.map((role,i)=>({role,title:titles[i],body:koParts[i],highlight:'',eyebrow:'',options:[],source_ids:i===0||i===5?[]:sourceIds}))};
+  slides:roles.map((role,i)=>({role,title:titles[i],body:koParts[i],highlight:'',eyebrow:'',options:[],source_ids:i===0||i===roles.length-1?[]:sourceIds}))};
 }
 const doc=guideDoc();
 const report=p.evaluateContent(doc,'seoul_trend','ko',sources);
@@ -64,7 +64,7 @@ check(()=>assert.equal(p.evaluateContent(bad,'seoul_trend','ko',sources).status,
 const fakePack=guideDoc();fakePack.trend_fact_pack={...pack,facts:pack.facts.map(f=>({...f,source_ids:['S999']}))};
 check(()=>assert.equal(p.evaluateContent(fakePack,'seoul_trend','ko',sources).status,'rejected'));
 const slide=doc.slides.find(x=>x.role==='facts');
-const image=v.renderCompactEditorial(slide,1,6,{...doc,content_language:'ko',slides:doc.slides});
+const image=v.renderCompactEditorial(slide,1,5,{...doc,content_language:'ko',slides:doc.slides});
 const tree=JSON.stringify(image.tree);
 check(()=>assert.ok(tree.includes('10월 9일 한글날')&&tree.includes('뚝섬한강공원')&&tree.includes('무료 관람')));
 const source=fs.readFileSync('src/lib/marketing-editorial.ts','utf8');

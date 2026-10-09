@@ -1,10 +1,10 @@
 // Reusable, source-linked facts for Roundy's Seoul Trend editorial cards.
 // Never use the user's prose prompt or the model's own output as an authority for these facts.
 export const TREND_GUIDE_LAYOUTS={
- event_guide:['cover','facts','experience','date_plan','practical','cta'],
+ event_guide:['cover','facts','experience','practical','cta'],
  popup_guide:['cover','facts','experience','practical','cta'],
  place_guide:['cover','facts','date_plan','practical','cta'],
- culture_brief:['cover','facts','practice','cta']
+ culture_brief:['cover','facts','experience','practice','cta']
 } as const;
 export type TrendGuideLayout=keyof typeof TREND_GUIDE_LAYOUTS;
 export const TREND_FACT_KINDS=['when','where','price','booking','program','experience','access','context'] as const;
@@ -34,7 +34,7 @@ export function layoutForTrend(category:string,factCount:number):TrendGuideLayou
  return factCount>=4?'event_guide':'popup_guide';
 }
 export function trendGuideRoles(layout:string):readonly string[]{
- return layouts.has(layout)?TREND_GUIDE_LAYOUTS[layout as TrendGuideLayout]:['cover','trend','why_now','date_version','practical','cta'];
+ return layouts.has(layout)?TREND_GUIDE_LAYOUTS[layout as TrendGuideLayout]:['cover','trend','why_now','practical','cta'];
 }
 export function readTrendFactPack(value:unknown,knownSources:string[]=[]):TrendFactPack|null{
  if(!value||typeof value!=='object'||Array.isArray(value))return null;

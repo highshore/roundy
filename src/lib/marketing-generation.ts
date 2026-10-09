@@ -15,14 +15,14 @@ import {generateEditorialCopy,draftQuality,editorialCard,editorialPhotoCover} fr
 import {generateCampaignCopy,campaignDraftQuality,CAMPAIGN_VERSION,CAMPAIGN_PATTERNS,CAMPAIGN_TONES} from './marketing-campaign';
 import {generateEventCampaignCopy,eventCampaignDraftQuality,EVENT_CAMPAIGN_VERSION,EVENT_CAMPAIGN_STAGES,EVENT_CAMPAIGN_PATTERNS,selectAutomaticEventCampaign,createAutomaticEventDraft,recordAutomaticEventCampaign,loadEventCampaignFacts} from './marketing-event-campaign';
 import {CAMPAIGN_PRESET,EVENT_CAMPAIGN_PRESET} from './marketing-presentation';
-import {renderPrelaunchCampaign,renderLiveEventCampaign} from './marketing-visuals';
+import {renderPrelaunchCampaign,renderLiveEventCampaign,titleLines,textUnits} from './marketing-visuals';
 // EDITORIAL_V2_INTEGRATED
 import { createServiceRoleClient } from './supabase/service';
 type Row=Record<string,any>;
 type DB=ReturnType<typeof createServiceRoleClient>;
 type ContentLanguage='ko'|'en';
 type VisualSource='auto_ai'|'uploaded'|'none'|'pexels';
-export type GenerationInput={request_key:string;revision:number;mode:'text'|'image'|'both';content_mode:'prelaunch'|'live_event'|'growth_carousel';visual_mode:'cards'|'photo';visual_source?:VisualSource;topic_type?:string;instruction?:string;language?:ContentLanguage;confirm_photo?:boolean;render_only?:boolean;campaign_pattern?:'auto'|'poster'|'problem_solution'|'how_it_works'|'benefit_stack'|'countdown';campaign_tone?:'modern_premium'|'soft_romantic'|'bold_teaser';launch_date?:string;event_id?:string;event_campaign_stage?:'auto'|'launch'|'experience'|'venue'|'participants'|'momentum'|'imminent'|'last_call';event_campaign_pattern?:'auto'|'event_poster'|'experience'|'social_proof'|'offer'|'last_call'};
+export type GenerationInput={request_key:string;revision:number;mode:'text'|'image'|'both';content_mode:'prelaunch'|'live_event'|'growth_carousel';visual_mode:'cards'|'photo';visual_source?:VisualSource;topic_type?:string;instruction?:string;language?:ContentLanguage;confirm_photo?:boolean;render_only?:boolean;campaign_pattern?:'auto'|'poster'|'problem_solution'|'how_it_works'|'benefit_stack'|'countdown';campaign_tone?:'modern_premium'|'soft_romantic'|'bold_teaser';launch_date?:string;event_id?:string;event_campaign_stage?:'auto'|'launch'|'experience'|'venue'|'participants'|'momentum'|'imminent'|'last_call';event_campaign_pattern?:'auto'|'event_poster'|'experience'|'social_proof'|'offer'|'last_call';carousel_slide_count?:3|5};
 const topics=['mbti','dating_archetype','book_insight','trend_research','meme_remix','dating_myth','conversation_prompt','seoul_dating','korea_life','mini_quiz'];
 const allowedTopics=[...topics,'seoul_trend'];
 const researchTopics=new Set(['book_insight','trend_research','dating_myth','seoul_dating','seoul_trend']);
@@ -118,15 +118,14 @@ function normalizeCarouselSlides(value:unknown,growth:boolean):Row[]{
  if(!Array.isArray(value))throw new Error('INVALID_SLIDES');
  const slides=value.filter((item:unknown):item is Row=>Boolean(item)&&typeof item==='object');
  if(!growth){
-  if(slides.length<1||slides.length>6)throw new Error('INVALID_SLIDE_COUNT');
-  return slides.slice(0,6);
+  if(![3,5].includes(slides.length))throw new Error('INVALID_SLIDE_COUNT');
+  return slides;
  }
  // Growth carousels are editorial, not a rigid document format. Avoid paying for another
  // model call just because the model returned 4/5/7 cards instead of exactly 6.
- if(slides.length<4)throw new Error('TOO_FEW_GROWTH_SLIDES');
- if(slides.length<=6)return slides;
- // Preserve the opening sequence and the final Roundy CTA when output is too long.
- return [...slides.slice(0,5),slides[slides.length-1]];
+ if(![3,5].includes(slides.length))throw new Error('CAROUSEL_MUST_HAVE_THREE_OR_FIVE_SLIDES');
+ return slides;
+
 }
 async function nextContentLanguage(db:DB,excludeId?:string):Promise<ContentLanguage>{
  const history=checked(await db.from('instagram_post_drafts').select('id,content_language,draft_date,caption').eq('draft_role','workspace').order('draft_date',{ascending:false}).limit(30)).data as Row[];
@@ -158,12 +157,25 @@ async function storeImage(db:DB,job:Row,bytes:Buffer,index:number){
 }
 async function renderCardsWithAssets(db:DB,draft:Row,job:Row,assets:Awaited<ReturnType<typeof loadEditorialAssets>>,directCards:Record<number,Buffer>={}){
  const cards=draft.carousel_slides||[];
- if(!draft.content_document||!cards.length||cards.length>6)throw new Error('유형별 카드 문구가 없습니다. 품질 재작업 후 렌더하세요.');
+ if(!draft.content_document||![3,5].includes(cards.length))throw new Error('Card count must be exactly three or five. Regenerate the copy first.');
+ const typography=checked(await db.from('marketing_automation_settings').select('marketing_title_font_px,marketing_body_font_px').eq('singleton',true).single()).data as Row;
+ const titleScale=Number(typography.marketing_title_font_px||76)/76,bodyScale=Number(typography.marketing_body_font_px||40)/40;
+ for(const [index,card] of cards.entries()){
+  const title=String(card.title||''),body=String(card.body||'');
+  if(!title||!body)throw new GenerationError('CARD_LAYOUT_REVIEW_REQUIRED',`Card ${index+1} is missing copy.`);
+  const titlePx=Math.round((index===0?112:85)*titleScale),bodyPx=Math.round(41*bodyScale);
+  const titleLinesCount=titleLines(title,900/titlePx*.91).length;
+  const bodyLinesCount=titleLines(body,900/bodyPx*.91).length;
+  const options=Array.isArray(card.options)?card.options.filter(Boolean).length:0;
+  const estimatedHeight=titleLinesCount*titlePx*1.15+bodyLinesCount*bodyPx*1.49+options*62+(card.highlight?55:0)+145;
+  if(titleLinesCount>5||estimatedHeight>(index===0?1040:990)||title.split(/\\s+/).some((word:string)=>textUnits(word)>900/titlePx))
+   throw new GenerationError('CARD_LAYOUT_REVIEW_REQUIRED',`Card ${index+1} has excessive text. Shorten the headline or body before rendering.`);
+ }
  const urls:string[]=[];
  for(let i=0;i<cards.length;i++){
   await progress(db,job,'rendering_'+(i+1)+'_of_'+cards.length);
   if(directCards[i]){urls.push(await storeImage(db,job,directCards[i],i));continue;}
-  const document={...draft.content_document,slides:cards};
+  const document={...draft.content_document,slides:cards,typography:{title_px:Number(typography.marketing_title_font_px||76),body_px:Number(typography.marketing_body_font_px||40)}};
   const image=document.design_preset===CAMPAIGN_PRESET
    ?renderPrelaunchCampaign(cards[i],i,cards.length,document,assets)
    :document.design_preset===EVENT_CAMPAIGN_PRESET
@@ -233,7 +245,7 @@ function visualContext(draft:Row){
   slide.visual_direction?'Visual: '+String(slide.visual_direction).slice(0,180):''
  ].filter(Boolean).join(' | ')).join('\n');
 }
-async function generateVisualSet(db:DB,draft:Row,input:GenerationInput,job:Row){
+async function generateVisualSet(db:DB,draft:Row,input:GenerationInput,job:Row,count=3){
  await progress(db,job,'generating_visual_set');
  const campaign=draft.content_document?.design_preset===CAMPAIGN_PRESET,eventCampaign=draft.content_document?.design_preset===EVENT_CAMPAIGN_PRESET;
  const prompt=(eventCampaign?[
@@ -267,11 +279,12 @@ async function generateVisualSet(db:DB,draft:Row,input:GenerationInput,job:Row){
    ?'IMPORTANT FOR SEOUL TREND POSTS: generate an ORIGINAL Roundy editorial interpretation of the activity/culture described in the cards. Never reproduce a source article photo, social post, screenshot, creator identity, watermark, meme asset, or exact identifiable composition. Do not pretend a generated image is documentary evidence of the trend.'
    :''
  ]).concat(['Carousel context:',visualContext(draft),input.instruction||'']).filter(Boolean).join('\n');
- const result=await upstream('images/generations',{model:IMAGE_MODEL,prompt,n:3,size:'1024x1280',quality:'low',output_format:'jpeg',output_compression:85,background:'opaque'},150000);
+ const coverPrompt=count===1?'Create exactly ONE text-free original editorial COVER image; do not claim it represents a named real venue. '+prompt:prompt;
+ const result=await upstream('images/generations',{model:IMAGE_MODEL,prompt:coverPrompt,n:count,size:'1024x1280',quality:'low',output_format:'jpeg',output_compression:85,background:'opaque'},150000);
  const encoded=(Array.isArray(result.data)?result.data:[]).map((row:Row)=>row?.b64_json).filter((value:unknown):value is string=>typeof value==='string'&&value.length>=100&&value.length<=8*1024*1024);
- if(encoded.length<3)throw new Error('INVALID_GENERATED_VISUAL_SET');
+ if(encoded.length<count)throw new Error('INVALID_GENERATED_VISUAL_SET');
  await progress(db,job,'saving_visual_set');
- return encoded.slice(0,3).map(value=>'data:image/jpeg;base64,'+value);
+ return encoded.slice(0,count).map(value=>'data:image/jpeg;base64,'+value);
 }
 type GenerationThreadContext={threadId:string;attemptNumber:number;retryOfJobId:string;recoverySourceJobId?:string;workflowId?:string};
 async function resolveContentWorkflowId(db:DB,draft:Row,job:Row,thread?:GenerationThreadContext){
@@ -285,10 +298,24 @@ async function resolveContentWorkflowId(db:DB,draft:Row,job:Row,thread?:Generati
 }
 export async function runGeneration(draftId:string,value:unknown,actor:string|null,automatic=false,thread?:GenerationThreadContext){
  const input=validateGenerationInput(value),db=createServiceRoleClient();
- const visualSource:VisualSource=automatic?(pexelsConfigured()?'pexels':'auto_ai'):input.visual_source!;
+ // Never fall back to AI-only photographs if Pexels is unavailable.
+ const visualSource:VisualSource=automatic?'pexels':input.visual_source==='auto_ai'?'pexels':input.visual_source!;
  if(automatic&&input.visual_source&&!['auto_ai','pexels'].includes(input.visual_source))throw new Error('AUTOMATION_VISUAL_SOURCE_INVALID');
- if(visualSource==='pexels'&&!pexelsConfigured())throw new Error('PEXELS_API_KEY_MISSING');
  let draft=await readDraft(db,draftId);
+ const editorialSettings=checked(await db.from('marketing_automation_settings')
+   .select('carousel_slide_mode,carousel_default_slides,ai_cover_enabled,answer_first_enabled')
+   .eq('singleton',true).single()).data as Row;
+ let slideCount:3|5=5;
+ if(input.mode==='image'||input.render_only){
+  slideCount=(draft.carousel_slides?.length===3?3:5);
+ }else if(editorialSettings.carousel_slide_mode==='alternating'){
+  const history=checked(await db.from('marketing_runs')
+    .select('snapshot').eq('channel','instagram')
+    .in('status',['queued','publishing','needs_review','sent']).limit(2000)).data as Row[];
+  const feeds=history.filter(row=>!['reel','story'].includes(String(row.snapshot?.media_kind||'feed')));
+  slideCount=feeds.length%2===0?3:5;
+ }else slideCount=editorialSettings.carousel_default_slides===3?3:5;
+ input.carousel_slide_count=slideCount;
  let recoveryPatch:Row|null=null,recoverySource:Row|null=null;
  if(thread?.recoverySourceJobId){
   if(automatic||input.visual_mode!=='cards')throw new Error('SAVED_RESULT_RECOVERY_UNAVAILABLE');
@@ -303,24 +330,20 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
  if(input.mode==='image'&&!recoveryPatch){const q=qualityForDraft(draft);if(q.status!=='passed')throw new Error('품질 검토 필요: '+q.issues.join(' '));}
  input.language=input.mode==='image'?(draft.content_language==='en'?'en':draft.content_language==='ko'?'ko':await nextContentLanguage(db,draft.id)):await resolveContentLanguage(db,draft,input.language);
  const growth=input.content_mode==='growth_carousel',research=growth&&researchTopics.has(input.topic_type||'')&&!input.render_only&&input.mode!=='image';
- const eventFacts=input.content_mode==='live_event'?await loadEventCampaignFacts(db,String(input.event_id||draft.event_id||'')):null;
- const eventRealPhotos=eventFacts?.images||[];
- const wantsVisuals=recoveryPatch||input.render_only||input.mode==='image'||input.mode==='both'||automatic;
- const autoVisuals=wantsVisuals&&visualSource==='auto_ai';
+
+ const wantsVisuals=Boolean(recoveryPatch||input.render_only||input.mode==='image'||input.mode==='both'||automatic);
  const stockVisuals=wantsVisuals&&visualSource==='pexels';
+ if(stockVisuals&&!pexelsConfigured())throw new GenerationError('PEXELS_API_KEY_MISSING','Licensed Pexels photos are required. AI-only fallback is disabled.');
  const uploadedVisuals=(input.render_only||input.mode==='image')&&visualSource==='uploaded';
- const eventNeedsAiFallback=input.content_mode==='live_event'&&autoVisuals&&eventRealPhotos.length<3;
- const operation=stockVisuals?(input.mode==='image'||input.render_only?'render':research?'research':'copy'):autoVisuals
-  ?(input.content_mode==='live_event'&&!eventNeedsAiFallback
-    ?(input.mode==='image'||input.render_only?'render':research?'research':'copy')
-    :(input.mode==='image'||input.render_only||recoveryPatch?'photo':'copy_photo'))
-  :uploadedVisuals?'render':research?'research':'copy';
- const fingerprint=createHash('sha256').update(JSON.stringify({id:draftId,revision:input.revision,mode:input.mode,content:input.content_mode,language:input.language,visual:input.visual_mode,visual_source:visualSource,topic:input.topic_type||'',instruction:input.instruction,campaign_pattern:input.campaign_pattern||null,campaign_tone:input.campaign_tone||null,launch_date:input.launch_date||null,event_id:input.event_id||draft.event_id||null,event_campaign_stage:input.event_campaign_stage||null,event_campaign_pattern:input.event_campaign_pattern||null,render:!!input.render_only,saved_recovery_of:thread?.recoverySourceJobId||null})).digest('hex');
+ const generateCover=stockVisuals&&Boolean(editorialSettings.ai_cover_enabled)&&(input.mode==='image'||input.render_only);
+ const operation=stockVisuals?(generateCover?'photo':input.mode==='image'||input.render_only?'render':research?'research':'copy')
+    :uploadedVisuals?'render':research?'research':'copy';
+ const fingerprint=createHash('sha256').update(JSON.stringify({id:draftId,revision:input.revision,mode:input.mode,content:input.content_mode,language:input.language,visual:input.visual_mode,visual_source:visualSource,slides:slideCount,topic:input.topic_type||'',instruction:input.instruction,campaign_pattern:input.campaign_pattern||null,campaign_tone:input.campaign_tone||null,launch_date:input.launch_date||null,event_id:input.event_id||draft.event_id||null,event_campaign_stage:input.event_campaign_stage||null,event_campaign_pattern:input.event_campaign_pattern||null,render:!!input.render_only,saved_recovery_of:thread?.recoverySourceJobId||null})).digest('hex');
  const reservation=checked(await db.rpc('reserve_marketing_generation',{p_key:input.request_key,p_fingerprint:fingerprint,p_draft:draftId,p_revision:input.revision,p_operation:operation,p_actor:actor,p_automatic:automatic})).data as Row,job=reservation.job as Row;
  if(!reservation.accepted)return {draft,job,deduplicated:true};
  let contentQuality:Row|null=null;
  try{
-  const requestPayload={mode:input.mode,content_mode:input.content_mode,language:input.language,visual_mode:input.visual_mode,visual_source:visualSource,topic_type:input.topic_type||null,trend_id:draft.trend_id||null,instruction:input.instruction||'',campaign_pattern:input.campaign_pattern||null,campaign_tone:input.campaign_tone||null,launch_date:input.launch_date||null,event_id:input.event_id||draft.event_id||null,event_campaign_stage:input.event_campaign_stage||null,event_campaign_pattern:input.event_campaign_pattern||null,confirm_photo:input.confirm_photo===true,render_only:input.render_only===true,...(recoverySource?{saved_recovery_of:recoverySource.id}: {})};
+  const requestPayload={mode:input.mode,content_mode:input.content_mode,language:input.language,visual_mode:input.visual_mode,visual_source:visualSource,carousel_slide_count:slideCount,topic_type:input.topic_type||null,trend_id:draft.trend_id||null,instruction:input.instruction||'',campaign_pattern:input.campaign_pattern||null,campaign_tone:input.campaign_tone||null,launch_date:input.launch_date||null,event_id:input.event_id||draft.event_id||null,event_campaign_stage:input.event_campaign_stage||null,event_campaign_pattern:input.event_campaign_pattern||null,confirm_photo:input.confirm_photo===true,render_only:input.render_only===true,...(recoverySource?{saved_recovery_of:recoverySource.id}: {})};
   const threadId=thread?.threadId||job.id,attemptNumber=thread?.attemptNumber||1,workflowId=await resolveContentWorkflowId(db,draft,job,thread);
   checked(await db.from('marketing_generation_jobs').update({
    request_payload:requestPayload,
@@ -337,26 +360,10 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
    draft=await savePartial(db,draft,{...recoveryPatch,last_regeneration_mode:input.mode,last_regeneration_instruction:input.instruction});
   }else if(operation!=='photo'&&operation!=='render'){
    const copy=await generateCopy(db,draft,input,job,research);contentQuality=copy.quality_report;await progress(db,job,'saving_copy');
-   draft=await savePartial(db,draft,{...copy,generation_source:automatic?'automation':'manual',visual_source:visualSource,last_regeneration_mode:input.mode,last_regeneration_instruction:input.instruction,images:[]});
+   draft=await savePartial(db,draft,{...copy,target_slide_count:slideCount,headline_candidates:Array.isArray((copy.content_document as Row)?.headline_candidates)?(copy.content_document as Row).headline_candidates:[],generation_source:automatic?'automation':'manual',visual_source:visualSource,last_regeneration_mode:input.mode,last_regeneration_instruction:input.instruction,images:[]});
   }
   let stockPhotos:ReturnType<typeof photoSelectionSnapshot>=[],photoReviewRequired=false;
-  if(autoVisuals){
-   let images:string[];
-   if(input.content_mode==='live_event'){
-    const currentEventPhotos=eventPhotoUrls(draft).length?eventPhotoUrls(draft):eventRealPhotos;
-    let photos=[...currentEventPhotos];
-    if(photos.length<3){
-     const fallback=await generateVisualSet(db,draft,input,job);
-     photos=[...photos,...fallback].slice(0,Math.max(3,photos.length));
-    }
-    images=await renderEventCards(db,draft,job,photos);
-   }else{
-    const freshPhotos=await generateVisualSet(db,draft,input,job);
-    images=await renderCards(db,draft,job,freshPhotos);
-   }
-   await progress(db,job,'saving_images');
-   draft=await savePartial(db,draft,{images,generation_source:automatic?'automation':'manual',visual_source:'auto_ai',last_regeneration_mode:input.mode,last_regeneration_instruction:input.instruction});
-  }else if(uploadedVisuals){
+  if(uploadedVisuals){
    const images=await renderUploadedCards(db,draft,job);await progress(db,job,'saving_images');
    draft=await savePartial(db,draft,{images,generation_source:'manual',visual_source:'uploaded',last_regeneration_mode:input.mode,last_regeneration_instruction:input.instruction});
   }else if(stockVisuals){
@@ -365,11 +372,12 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
      ?await listStockSelections(db,draft.id)
      :await prepareStockSelections(db,draft);
    stockPhotos=photoSelectionSnapshot(selected);
-   if(selected.length<2)throw new GenerationError('STOCK_PHOTO_POOL_INSUFFICIENT','No suitable Pexels photographs were found. Review the source/API settings and try a manual retry.');
+   if(!selected.length)photoReviewRequired=true;
    if(stockReady(draft,selected)){
     await progress(db,job,'rendering_approved_photos');
     const assets=await loadEditorialAssets();
     Object.assign(assets,await approvedStockCardAssets(db,draft));
+    if(generateCover){const cover=await generateVisualSet(db,draft,input,job,1);assets.cardPhotos={...assets.cardPhotos,0:cover[0]};}
     const images=await renderCardsWithAssets(db,draft,job,assets);
     await progress(db,job,'saving_images');
     // Keep photographer attribution visible in the final draft.
@@ -392,7 +400,7 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
    images:draft.images||[],carousel_slides:draft.carousel_slides||[],research_sources:draft.research_sources||[],
    research_status:draft.research_status,content_language:draft.content_language,draft_kind:draft.draft_kind,
    growth_topic_type:draft.growth_topic_type,content_mode:draft.content_mode,content_pillar:draft.content_pillar,
-   generation_reason:draft.generation_reason,event_id:draft.event_id||null,generation_source:automatic?'automation':'manual',visual_source:visualSource,revision:draft.revision,saved_at:new Date().toISOString(),
+   generation_reason:draft.generation_reason,event_id:draft.event_id||null,generation_source:automatic?'automation':'manual',visual_source:visualSource,slide_count:slideCount,revision:draft.revision,saved_at:new Date().toISOString(),
    render_style:draft.render_style||null,campaign_pattern:draft.campaign_pattern||draft.content_document?.campaign_pattern||null,campaign_tone:draft.campaign_tone||draft.content_document?.campaign_tone||null,campaign_version:draft.campaign_version||draft.content_document?.campaign_version||null,launch_date:draft.launch_date||draft.content_document?.launch_date||null,
    event_campaign_stage:draft.event_campaign_stage||draft.content_document?.event_campaign_stage||null,event_campaign_pattern:draft.event_campaign_pattern||draft.content_document?.event_campaign_pattern||null,event_campaign_version:draft.event_campaign_version||draft.content_document?.campaign_version||null,event_facts_snapshot:draft.event_facts_snapshot||draft.content_document?.event_facts||null,
    generation_recovery:(quality as Row).recovery||draft.content_document?.generation_recovery||null,

@@ -11,6 +11,13 @@ export type EditorialAssets = {
  fonts?: Array<{name:string;data:ArrayBuffer;weight:400|700|900;style:'normal'}>;
 };
 const box=(style:Row,...children:any[])=>h('div',{style:{display:'flex',...style}},...children.filter(x=>x!==null&&x!==undefined&&x!==false));
+function typographyPx(document:Row,base:number,kind:'title'|'body'){
+ const configured=Number(document?.typography?.[kind==='title'?'title_px':'body_px']);
+ const reference=kind==='title'?76:40;
+ const bounded=Number.isFinite(configured)?Math.min(kind==='title'?104:56,Math.max(kind==='title'?62:32,configured)):reference;
+ return Math.round(base*bounded/reference);
+}
+
 const text=(value:unknown,size:number,style:Row={})=>box({fontSize:size,lineHeight:1.35,whiteSpace:'pre-wrap',wordBreak:'keep-all',...style},String(value||''));
 
 // The geometry matches the website component. Tests compare the four official paths.
@@ -97,14 +104,14 @@ function miniLogo(dark=false){
 
 function cover(slide:Row,_index:number,_total:number,assets:EditorialAssets,document:Row){
  const language=document.content_language==='en'?'en':'ko',src=selectedPhoto(assets,0,true),title=String(slide.title||''),body=selectedBody(slide,language);
- const subtitleSize=Math.max(21,Math.min(34,Math.floor(900/Math.max(1,textUnits(body)))));
+ const subtitleSize=typographyPx(document,language==='ko'?37:34,'body');
  return box({position:'relative',width:1080,height:1350,background:BRAND.ink,color:BRAND.paper,overflow:'hidden'},
   photo(src),
   box({position:'absolute',inset:0,background:'linear-gradient(180deg,rgba(20,20,18,.45) 0%,rgba(20,20,18,.12) 38%,rgba(20,20,18,.72) 100%)'}),
   box({position:'absolute',top:66,left:0,right:0,justifyContent:'center'},officialRoundyLogo(true,62)),
   box({position:'absolute',left:72,right:72,bottom:112,flexDirection:'column',gap:24},
-   accentedHeadline(title,language==='ko'?112:100,900,BRAND.paper),
-   text(body,subtitleSize,{fontWeight:400,lineHeight:1.35,color:'#f4f1e9',whiteSpace:'nowrap'})
+   accentedHeadline(title,typographyPx(document,language==='ko'?112:100,'title'),900,BRAND.paper),
+   paragraph(body,subtitleSize,900,{fontWeight:500,color:'#f4f1e9'})
   )
  );
 }
@@ -203,11 +210,32 @@ function trendFactSheet(slide:Row,document:Row){
   )
  );
 }
+// Real photography is the image canvas, with a controlled scrim and text safe area.
+function contentPhotoOverlay(slide:Row,index:number,document:Row,assets:EditorialAssets){
+ const language=document.content_language==='en'?'en':'ko';
+ const src=selectedPhoto(assets,index);
+ const body=selectedBody(slide,language),options=Array.isArray(slide.options)?slide.options.filter(Boolean).slice(0,3):[];
+ const headlineSize=typographyPx(document,language==='ko'?85:76,'title');
+ const bodySize=typographyPx(document,language==='ko'?41:38,'body');
+ return box({position:'relative',width:1080,height:1350,background:BRAND.ink,color:BRAND.paper,overflow:'hidden'},
+  photo(src),
+  box({position:'absolute',inset:0,background:'linear-gradient(180deg,rgba(14,18,17,.66) 0%,rgba(14,18,17,.75) 48%,rgba(14,18,17,.85) 100%)'}),
+  box({position:'absolute',top:66,left:72},miniLogo(true)),
+  box({position:'absolute',left:72,right:72,top:220,bottom:130,flexDirection:'column',justifyContent:'center',gap:24},
+   String(slide.eyebrow||'')?text(slide.eyebrow,22,{fontWeight:750,color:'#d9e6cb',letterSpacing:1}):null,
+   accentedHeadline(String(slide.title||''),headlineSize,900,BRAND.paper),
+   paragraph(body,bodySize,900,{color:'#fcfaf6',fontWeight:500}),
+   options.length?box({flexDirection:'column',gap:10},...options.map((option,i)=>
+     text((i+1)+'. '+option,typographyPx(document,language==='ko'?32:29,'body'),{fontWeight:650,color:'#f4f1e9'}))):null,
+   String(slide.highlight||'')?text(slide.highlight,typographyPx(document,language==='ko'?34:30,'body'),{fontWeight:750,color:'#efffa9'}):null
+  ),
+  String(slide.source_label||'')?box({position:'absolute',left:72,bottom:65},text(language==='ko'?'출처는 캡션에서 확인':'Sources in the caption',23,{fontWeight:500,color:'#f4f1e9'})):null
+ );
+}
 function content(slide:Row,index:number,_total:number,document:Row,assets:EditorialAssets){
  const options=Array.isArray(slide.options)?slide.options.filter(Boolean):[];
  if(assets.reusePhotos===false&&!selectedPhoto(assets,index))return contentTextOnly(slide,document);
- if(options.length>=2)return contentTextLead(slide,index,document,assets);
- return index%3===1?contentSplit(slide,index,document,assets):index%3===2?contentPhotoBand(slide,index,document,assets):contentTextLead(slide,index,document,assets);
+ return contentPhotoOverlay(slide,index,document,assets);
 }
 
 function outro(_index:number,_total:number,document:Row){

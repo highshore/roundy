@@ -23,12 +23,17 @@ const STAGE_PATTERN:Record<EventCampaignStage,EventCampaignPattern>={
  last_call:'last_call',
 };
 const PATTERN_ROLES:Record<EventCampaignPattern,string[]>={
- event_poster:['hook','facts','cta'],
+ event_poster:['hook','facts','experience','experience','cta'],
  experience:['hook','step','step','step','cta'],
- social_proof:['hook','participants','experience','cta'],
- offer:['hook','offer','facts','cta'],
- last_call:['hook','status','facts','cta'],
+ social_proof:['hook','participants','experience','experience','cta'],
+ offer:['hook','offer','facts','experience','cta'],
+ last_call:['hook','status','facts','experience','cta'],
 };
+function rolesForEvent(pattern:EventCampaignPattern,count:3|5=5):string[]{
+ if(count===5)return PATTERN_ROLES[pattern];
+ const main:Record<EventCampaignPattern,string>={event_poster:'facts',experience:'step',social_proof:'participants',offer:'offer',last_call:'status'};
+ return ['hook',main[pattern],'cta'];
+}
 const STAGE_SCORE:Record<EventCampaignStage,number>={
  launch:25,experience:20,venue:18,participants:45,momentum:70,imminent:90,last_call:100,
 };
@@ -237,8 +242,8 @@ function ctaCopy(stage:EventCampaignStage,language:string){
  if(stage==='momentum')return ko?'남은 자리 확인하기':'Check remaining spots';
  return ko?'자리 확인하기':'Check spots';
 }
-function schema(pattern:EventCampaignPattern,stage:EventCampaignStage,language:string){
- const roles=PATTERN_ROLES[pattern],titleMax=language==='en'?48:26,bodyMax=language==='en'?90:48;
+function schema(pattern:EventCampaignPattern,stage:EventCampaignStage,language:string,count:3|5=5){
+ const roles=rolesForEvent(pattern,count),titleMax=language==='en'?48:26,bodyMax=language==='en'?90:48;
  const str=(maxLength:number,minLength=0)=>({type:'string',minLength,maxLength});
  return {
   type:'object',additionalProperties:false,
@@ -250,21 +255,22 @@ function schema(pattern:EventCampaignPattern,stage:EventCampaignStage,language:s
    event_campaign_stage:{type:'string',enum:[stage]},
    event_campaign_pattern:{type:'string',enum:[pattern]},
    caption_ko:str(420,1),caption_en:str(520,1),
+   headline_candidates:{type:'array',minItems:3,maxItems:3,items:str(titleMax,1)},
    slides:{type:'array',minItems:roles.length,maxItems:roles.length,items:{
     type:'object',additionalProperties:false,
     properties:{role:{type:'string',enum:[...new Set(roles)]},eyebrow:str(24),title:str(titleMax,1),body:str(bodyMax),secondary_body:str(language==='en'?48:90),visual_direction:str(180,8),step_number:{type:'integer',minimum:0,maximum:3},source_ids:{type:'array',maxItems:0,items:{type:'string'}}},
     required:['role','eyebrow','title','body','secondary_body','visual_direction','step_number','source_ids']
    }}
   },
-  required:['schema_version','campaign_version','design_preset','post_type','event_campaign_stage','event_campaign_pattern','caption_ko','caption_en','slides']
+  required:['schema_version','campaign_version','design_preset','post_type','event_campaign_stage','event_campaign_pattern','caption_ko','caption_en','headline_candidates','slides']
  };
 }
-function instructions(stage:EventCampaignStage,pattern:EventCampaignPattern,language:string){
+function instructions(stage:EventCampaignStage,pattern:EventCampaignPattern,language:string,count:3|5=5){
  return [
   'Create a conversion-focused Instagram campaign for ONE real Roundy event using only the supplied server facts.',
   'This is an EVENT CAMPAIGN, not editorial magazine content and not a generic brand teaser.',
-  'Stage: '+stage+'. Pattern: '+pattern+'. Exact card roles: '+PATTERN_ROLES[pattern].join(' -> ')+'.',
-  'One message per card. Keep copy short, direct and visual-first. No paragraphs on cards.',
+  'Stage: '+stage+'. Pattern: '+pattern+'. Exact card roles: '+rolesForEvent(pattern,count).join(' -> ')+'.',
+  'One message per card. Keep copy short, direct and visual-first. No paragraphs on cards. The first slide must state a verified concrete event detail or takeaway; generate exactly three distinct honest answer-first headline_candidates. Do not use abstract unanswered questions.',
   'Never invent dates, venue details, prices, discounts, seats, attendee demographics, popularity, reviews, testimonials, scarcity, sell-out speed, safety guarantees, or participant identities.',
   'Dynamic roles named facts, participants, offer, and status are overwritten by the server. For those roles write neutral placeholders only and never add additional facts.',
   'Use urgency only when present in supplied server status. Never write Hurry, selling fast, last chance, or similar unsupported pressure language.',
@@ -287,8 +293,8 @@ function buildCaption(doc:EventCampaignRow,stage:EventCampaignStage,facts:EventC
  const en=[clean(doc.caption_en),ctaCopy(stage,'en')+' → '+facts.event_url].filter(Boolean).join('\n\n');
  return [ko,en,ROUNDY_IDENTITY.instagram+' | '+ROUNDY_IDENTITY.website,curateHashtags('live_event',[],doc).join(' ')].filter(Boolean).join('\n\n');
 }
-function normalize(raw:EventCampaignRow,language:string,stage:EventCampaignStage,pattern:EventCampaignPattern,facts:EventCampaignRow){
- const ko=language!=='en',roles=PATTERN_ROLES[pattern],slides=roles.map((role,index)=>{
+function normalize(raw:EventCampaignRow,language:string,stage:EventCampaignStage,pattern:EventCampaignPattern,facts:EventCampaignRow,count:3|5=5){
+ const ko=language!=='en',roles=rolesForEvent(pattern,count),slides=roles.map((role,index)=>{
   const source=raw.slides?.[index]||{},server=serverFactCopy(role,facts,stage,language),main=server?.body??clean(source.body),secondary=server?serverFactCopy(role,facts,stage,language==='en'?'ko':'en')?.body||'':clean(source.secondary_body);
   const title=server?.title??clean(source.title),step=pattern==='experience'&&role==='step'?roles.slice(0,index+1).filter(x=>x==='step').length:0;
   return {role,eyebrow:clean(source.eyebrow),title,body:main,secondary_body:secondary,body_ko:ko?main:secondary,body_en:ko?secondary:main,visual_direction:clean(source.visual_direction),step_number:step,source_ids:[],variant:role==='hook'?'hook':role==='cta'?'roundy':role,...(role==='cta'?{instagram:ROUNDY_IDENTITY.instagram,website:ROUNDY_IDENTITY.website}:{})};
@@ -299,10 +305,11 @@ function normalize(raw:EventCampaignRow,language:string,stage:EventCampaignStage
 }
 export function evaluateEventCampaign(document:EventCampaignRow,language:string){
  const issues:string[]=[],add=(x:string)=>{if(!issues.includes(x))issues.push(x);};
- const stage=document?.event_campaign_stage as EventCampaignStage,pattern=document?.event_campaign_pattern as EventCampaignPattern,roles=PATTERN_ROLES[pattern]||[],slides=Array.isArray(document?.slides)?document.slides:[];
+ const stage=document?.event_campaign_stage as EventCampaignStage,pattern=document?.event_campaign_pattern as EventCampaignPattern,roles=PATTERN_ROLES[pattern]?rolesForEvent(pattern,document.slides?.length===3?3:5):[],slides=Array.isArray(document?.slides)?document.slides:[];
  if(document?.design_preset!==EVENT_CAMPAIGN_PRESET||document?.campaign_version!==EVENT_CAMPAIGN_VERSION||document?.post_type!=='live_event'||document?.schema_version!==2)add('이벤트 캠페인 버전 또는 렌더 프리셋이 맞지 않습니다.');
  if(!(EVENT_CAMPAIGN_STAGES as readonly string[]).includes(stage)||!(EVENT_CAMPAIGN_PATTERNS as readonly string[]).includes(pattern))add('이벤트 캠페인 단계 또는 패턴이 올바르지 않습니다.');
  if(slides.length!==roles.length)add('이벤트 캠페인 카드 수가 패턴과 맞지 않습니다.');
+ if(!Array.isArray(document?.headline_candidates)||document.headline_candidates.length!==3)add('이벤트 표지 카피 후보 3개가 필요합니다.');
  slides.forEach((slide:EventCampaignRow,index:number)=>{
   if(slide.role!==roles[index])add('이벤트 캠페인 카드 역할과 순서가 맞지 않습니다.');
   if(!clean(slide.title))add('이벤트 캠페인 카드 제목이 비어 있습니다.');
@@ -345,23 +352,23 @@ export async function generateEventCampaignCopy(db:any,draft:EventCampaignRow,in
  }
  if(!(EVENT_CAMPAIGN_STAGES as readonly string[]).includes(stage))throw new Error('INVALID_EVENT_CAMPAIGN_STAGE');
  const resolvedStage=stage as EventCampaignStage;
- const pattern=STAGE_PATTERN[resolvedStage],eventSchema=schema(pattern,resolvedStage,language);
+ const pattern=STAGE_PATTERN[resolvedStage],count:3|5=input.carousel_slide_count===3?3:5,eventSchema=schema(pattern,resolvedStage,language,count);
  let inputTokens=0,outputTokens=0;
  const record=async(result:EventCampaignRow)=>{inputTokens+=Number(result.usage?.input_tokens||result.usage?.prompt_tokens||0);outputTokens+=Number(result.usage?.output_tokens||result.usage?.completion_tokens||0);ok(await db.from('marketing_generation_jobs').update({input_tokens:inputTokens,output_tokens:outputTokens}).eq('id',job.id));};
  const write=async(repair?:{document:EventCampaignRow;issues:string[]})=>{
   const payload={language,event_campaign_stage:resolvedStage,event_campaign_pattern:pattern,event_facts:facts,direction:clean(input.instruction).slice(0,500),...(repair?{original_document:repair.document,quality_issues:repair.issues}:{})};
-  const system=instructions(resolvedStage,pattern,language)+(repair?'\nREPAIR PASS: Fix ONLY the listed quality issues. Do not alter server facts or invent new claims. Return complete corrected JSON.':'');
+  const system=instructions(resolvedStage,pattern,language,count)+(repair?'\nREPAIR PASS: Fix ONLY the listed quality issues. Do not alter server facts or invent new claims. Return complete corrected JSON.':'');
   if(Buffer.byteLength(system+JSON.stringify(payload)+JSON.stringify(eventSchema),'utf8')>30000)throw new Error('PROMPT_SIZE_LIMIT');
   ok(await db.from('marketing_generation_jobs').update({stage:repair?'repairing_copy':'writing'}).eq('id',job.id));
   const result=await call('chat/completions',{model:MODEL,reasoning_effort:'none',max_completion_tokens:3000,response_format:{type:'json_schema',json_schema:{name:'roundy_live_event_campaign_v1',strict:true,schema:eventSchema}},messages:[{role:'system',content:system},{role:'user',content:JSON.stringify(payload)}]},55000);
   await record(result);return parse(result);
  };
- let written=await write(),document=normalize(written.document,language,resolvedStage,pattern,facts),report=evaluateEventCampaign(document,language),repairUsed=false;
- if(report.status!=='passed'){repairUsed=true;written=await write({document,issues:report.issues});document=normalize(written.document,language,resolvedStage,pattern,facts);report=evaluateEventCampaign(document,language);}
+ let written=await write(),document=normalize(written.document,language,resolvedStage,pattern,facts,count),report=evaluateEventCampaign(document,language),repairUsed=false;
+ if(report.status!=='passed'){repairUsed=true;written=await write({document,issues:report.issues});document=normalize(written.document,language,resolvedStage,pattern,facts,count);report=evaluateEventCampaign(document,language);}
  const recovery={requested_type:'live_event',effective_type:'live_event',fallback_reason:null,repair_used:repairUsed,event_campaign_stage:resolvedStage,event_campaign_pattern:pattern};
  const caption=buildCaption(document,resolvedStage,facts),quality={...report,recovery};
  const patch={
-  caption,cta:ctaCopy(resolvedStage,language),content_document:{...document,generation_recovery:recovery},quality_report:quality,
+  caption,cta:ctaCopy(resolvedStage,language),target_slide_count:count,content_document:{...document,generation_recovery:recovery},quality_report:quality,
   carousel_slides:document.slides,research_sources:[],research_status:'not_required',content_language:language,
   draft_kind:'brand',growth_topic_type:null,content_mode:'live_event',content_pillar:resolvedStage==='imminent'||resolvedStage==='last_call'?'urgency':'event',
   generation_reason:'이벤트 홍보 / '+resolvedStage+' / '+EVENT_CAMPAIGN_VERSION,event_id:facts.id,trend_id:null,destination_url:facts.event_url,
