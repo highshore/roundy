@@ -493,6 +493,25 @@ async function mediaPerformance(mediaId:string){
  const score=((likes+comments*2+saves*3+shares*4)/denominator)*1000+Math.log10(denominator+1)*10;
  return {source:rich?'insights':'basic',views,reach,likes,comments,saves,shares,total_interactions:total,performance_score:Number(score.toFixed(4))};
 }
+async function captureFollowerSnapshot(){
+ // One daily account-level observation; never attribute it to an individual post.
+ if(!connection().instagram||!userId())return false;
+ const date=kstNow().date;
+ const {data:existing,error:lookupError}=await service.from('instagram_follower_snapshots')
+  .select('snapshot_date').eq('snapshot_date',date).maybeSingle();
+ if(lookupError)throw lookupError;
+ if(existing)return false;
+ // followers_count is exposed on supported Instagram Business/Creator profile accounts.
+ // Absence or denied scope must NOT result in a zero count or disrupt posting.
+ const profile=await graph(userId()+'?fields=followers_count');
+ const count=profile?.followers_count;
+ if(!Number.isSafeInteger(count)||count<0)throw new Error('INSTAGRAM_FOLLOWERS_METRIC_UNAVAILABLE');
+ const {error:saveError}=await service.from('instagram_follower_snapshots').upsert({
+  snapshot_date:date,followers_count:count,source:'instagram_profile',captured_at:new Date().toISOString()
+ },{onConflict:'snapshot_date'});
+ if(saveError)throw saveError;
+ return true;
+}
 async function captureDueInsights(){
  const since=new Date(Date.now()-4*86400000).toISOString();
  const {data:runs,error}=await service.from('marketing_runs').select('id,external_id,finished_at,snapshot').eq('channel','instagram').eq('status','sent').not('external_id','is',null).gte('finished_at',since).order('finished_at',{ascending:true}).limit(30);
@@ -593,6 +612,8 @@ Deno.serve(async req=>{
    }
   }
   if(schedulerKey){
+   // Optional metrics must never block the established publisher or insights worker.
+   await captureFollowerSnapshot().catch(error=>console.warn('Instagram daily follower snapshot unavailable:',error instanceof Error?error.message:'Unknown error'));
    const insightsChanged=await captureDueInsights();
    if(insightsChanged)await refreshTimeRecommendations();
   }
