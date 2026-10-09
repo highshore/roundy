@@ -31,12 +31,21 @@ export function AdminMarketingGrowth({locale}:{locale:Locale}){
  },[]);
  if(loading)return <section className="marketing-tab-panel"><p role="status">{t('Loading organic growth metrics…','콘텐츠 성장 지표를 조회하는 중입니다…')}</p></section>;
  if(!data)return <section className="marketing-tab-panel"><p className="admin-error" role="alert">{error||t('Growth analytics unavailable','성장 지표를 불러올 수 없습니다')}</p></section>;
- const stats=data.totals||{},summary=(data.pillars||[]) as Row[],topics=(data.topics||[]) as Row[],plan=(data.week_plan||[]) as GrowthSlot[],threshold=data.thresholds||{};
+ const stats=data.totals||{},followers=data.followers||{},summary=(data.pillars||[]) as Row[],topics=(data.topics||[]) as Row[],plan=(data.week_plan||[]) as GrowthSlot[],threshold=data.thresholds||{};
  return <section className="marketing-tab-panel">
   <div className="admin-section-title"><div><p className="admin-kicker">ROUNDY GROWTH ENGINE</p><Heading level={2}>{t('Organic growth control','오가닉 성장 관리')}</Heading><p>{t('An editorial test plan, not a claim about Instagram ranking weights. Publishing still requires approval.','Instagram 공식 알고리즘 가중치가 아닌 라운디의 실험 계획입니다. 실제 게시는 계속 관리자 승인이 필요합니다.')}</p></div></div>
   <div className="marketing-setup"><strong>{data.enabled?t('Growth mode enabled','성장 모드 활성화'):t('Growth mode not enabled','성장 모드 비활성화')}</strong>
    <p>{t('You can turn it on in Automation. Until then the existing daily content planner stays intact.','자동화 탭에서 성장 모드를 켤 수 있습니다. 활성화 전에는 기존 일일 콘텐츠 기획을 그대로 유지합니다.')}</p>
    <p>{t('Reels listed below are production recommendations, not automatic video creation or publishing.','아래 릴스는 제작 권장안입니다. 영상 자동 생성이나 릴스 자동 게시는 아직 지원되지 않습니다.')}</p>
+  </div>
+  <div className="marketing-settings-card">
+   <div className="admin-section-title"><Heading level={3}>{t('Actual follower growth','실제 팔로워 증가')}</Heading></div>
+   <div className="admin-two">
+    <div><strong>{t('Latest followers','현재 팔로워')}</strong><p><strong>{followers.current===null||followers.current===undefined?t('Pending first snapshot','첫 수집 대기'):Number(followers.current).toLocaleString()}</strong></p></div>
+    <div><strong>{t('7-day net change','7일 순증감')}</strong><p><strong>{followers.change_7d===null||followers.change_7d===undefined?'—':(Number(followers.change_7d)>0?'+':'')+Number(followers.change_7d).toLocaleString()}</strong></p></div>
+    <div><strong>{t('30-day net change','30일 순증감')}</strong><p><strong>{followers.change_30d===null||followers.change_30d===undefined?'—':(Number(followers.change_30d)>0?'+':'')+Number(followers.change_30d).toLocaleString()}</strong></p></div>
+   </div>
+   <p className="admin-help">{followers.snapshot_date?t('Last measured day:','마지막 수집일:')+' '+followers.snapshot_date:t('The system will attempt a daily follower snapshot through the official Instagram profile API once the updated worker is deployed and authorized.','연동된 Instagram API가 허용하고 업데이트된 수집 워커가 배포되면 일일 팔로워 수를 수집합니다.')} {t('Net follower changes are account-level observations, not per-post conversions.','팔로워 순증감은 계정 단위 관측치이며 개별 게시물의 전환 성과가 아닙니다.')}</p>
   </div>
   <div className="admin-two">
    <div className="marketing-settings-card"><strong>{t('Published posts (90d)','게시물 (90일)')}</strong><p><strong>{stats.published??0}</strong></p></div>
@@ -61,7 +70,7 @@ export function AdminMarketingGrowth({locale}:{locale:Locale}){
   <div className="marketing-settings-card">
    <div className="admin-section-title"><Heading level={3}>{t('Topics and language evidence','주제 및 언어별 성과')}</Heading></div>
    {topics.length?<div className="marketing-log-list">{topics.map((row:Row)=><div className="marketing-log-row" key={row.topic+row.language}><div className="marketing-log-main"><div><strong>{row.topic} / {row.language?.toUpperCase()}</strong><small>{t('Posts','게시물')} {row.posts} · {t('Reach','도달')} {row.reach} · {t('Share rate','공유율')} {row.share_rate}% · {t('Save rate','저장률')} {row.save_rate}%</small></div></div></div>)}</div>:<p>{t('No measured post data yet.','측정된 게시물 데이터가 아직 없습니다.')}</p>}
-   <p className="admin-help">{t('Current Instagram integration does not provide profile-to-follow conversion. Reach and engagement are proxy metrics; do not interpret them as followers gained.','현재 Instagram 연동에는 프로필 방문 대비 팔로우 전환 데이터가 없습니다. 도달과 반응은 대리지표이며 실제 신규 팔로워 수와 다릅니다.')}</p>
+   <p className="admin-help">{t('Daily follower counts can establish account-level net growth; reach and engagement remain proxy signals and cannot identify which post acquired those followers.','일일 팔로워 집계는 계정 전체의 순증감을 보여주지만, 도달과 반응만으로 특정 게시물의 팔로워 획득을 추론할 수는 없습니다.')}</p>
   </div>
  </section>;
 }
