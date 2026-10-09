@@ -20,11 +20,11 @@ export type CampaignPattern=typeof CAMPAIGN_PATTERNS[number];
 export type CampaignTone=typeof CAMPAIGN_TONES[number];
 
 const ROLE_MAP:Record<CampaignPattern,string[]>={
- poster:['hook','benefit','cta'],
+ poster:['hook','benefit','benefit','benefit','cta'],
  problem_solution:['hook','problem','solution','benefit','cta'],
  how_it_works:['hook','step','step','step','cta'],
  benefit_stack:['hook','benefit','benefit','benefit','cta'],
- countdown:['hook','countdown','cta'],
+ countdown:['hook','countdown','benefit','benefit','cta'],
 };
 const GOAL_MAP:Record<CampaignPattern,string>={
  poster:'awareness',
@@ -125,9 +125,10 @@ function campaignSchema(pattern:CampaignPattern,tone:CampaignTone,language:strin
    campaign_goal:{type:'string',enum:[GOAL_MAP[pattern]]},
    caption_ko:str(360,1),
    caption_en:str(480,1),
+   headline_candidates:{type:'array',minItems:3,maxItems:3,items:str(language==='en'?45:24,1)},
    slides:{type:'array',minItems:roles.length,maxItems:roles.length,items:slide},
   },
-  required:['schema_version','campaign_version','design_preset','post_type','campaign_pattern','campaign_tone','campaign_goal','caption_ko','caption_en','slides'],
+  required:['schema_version','campaign_version','design_preset','post_type','campaign_pattern','campaign_tone','campaign_goal','caption_ko','caption_en','headline_candidates','slides'],
  };
 }
 function campaignInstructions(pattern:CampaignPattern,tone:CampaignTone,language:string,launchDate:string|null){
@@ -147,12 +148,12 @@ function campaignInstructions(pattern:CampaignPattern,tone:CampaignTone,language
  return [
   'Create a PRE-LAUNCH ADVERTISING CAMPAIGN for Roundy, a Seoul-based offline-first Rotation Dating service.',
   'This is NOT editorial content, NOT a magazine carousel, NOT an article, and NOT educational long-form content.',
-  'Goal: stop the scroll, explain one idea quickly, create curiosity, and make Roundy feel like a real consumer brand launch.',
+  'Goal: present a specific product truth first, then explain how and why it matters. Avoid generic question headlines or clickbait. Generate three concrete distinct cover headline_candidates and choose the strongest as slide 1 title.',
   'Use ONLY the selected campaign pattern: '+pattern+'. Exact card roles in order: '+ROLE_MAP[pattern].join(' -> ')+'.',
   patternGuide[pattern],
   'Campaign tone: '+tone+'. '+toneGuide[tone],
   'ONE message per card. '+limits+'. body is optional short subcopy, never a paragraph. Do not fill the maximum just because it exists.',
-  'Use strong ad-copy compression. No magazine-style eyebrow/title/body hierarchy, no essays, no bullet-heavy explainer cards.',
+  'Use strong answer-first ad-copy compression. No magazine-style eyebrow/title/body hierarchy, no essays, no bullet-heavy explainer cards.',
   'Core product truths you MAY use: offline-first; meet people one-on-one; rotate between conversations; choose privately; match only when interest is mutual; Seoul-based social format.',
   'Do NOT invent participant counts, launch dates, prices, venues, success rates, testimonials, scarcity, screening/qualification claims, safety guarantees, or event facts.',
   'Avoid cliché dating copy such as 특별한 인연, 운명적인 만남, 소중한 인연, meaningful connection, find your person, unforgettable night.',
@@ -228,6 +229,7 @@ export function evaluateCampaignDocument(document:CampaignRow,language:string,re
  if(!(CAMPAIGN_PATTERNS as readonly string[]).includes(pattern))add('허용되지 않은 오픈 전 캠페인 패턴입니다.');
  if(!(CAMPAIGN_TONES as readonly string[]).includes(tone))add('허용되지 않은 캠페인 톤입니다.');
  if(slides.length!==roles.length)add('캠페인 패턴에 맞는 카드 수가 필요합니다.');
+ if(!Array.isArray(document?.headline_candidates)||document.headline_candidates.length!==3)add('커버 문구 후보 3개가 필요합니다.');
  slides.forEach((slide:CampaignRow,index:number)=>{
   if(slide?.role!==roles[index])add('캠페인 카드 역할과 순서가 맞지 않습니다.');
   const title=clean(slide?.title),body=clean(slide?.body),secondary=clean(slide?.secondary_body),direction=clean(slide?.visual_direction);
