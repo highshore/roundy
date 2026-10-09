@@ -23,11 +23,11 @@ const STAGE_PATTERN:Record<EventCampaignStage,EventCampaignPattern>={
  last_call:'last_call',
 };
 const PATTERN_ROLES:Record<EventCampaignPattern,string[]>={
- event_poster:['hook','facts','cta'],
+ event_poster:['hook','facts','experience','experience','cta'],
  experience:['hook','step','step','step','cta'],
- social_proof:['hook','participants','experience','cta'],
- offer:['hook','offer','facts','cta'],
- last_call:['hook','status','facts','cta'],
+ social_proof:['hook','participants','experience','experience','cta'],
+ offer:['hook','offer','facts','experience','cta'],
+ last_call:['hook','status','facts','experience','cta'],
 };
 const STAGE_SCORE:Record<EventCampaignStage,number>={
  launch:25,experience:20,venue:18,participants:45,momentum:70,imminent:90,last_call:100,
@@ -250,13 +250,14 @@ function schema(pattern:EventCampaignPattern,stage:EventCampaignStage,language:s
    event_campaign_stage:{type:'string',enum:[stage]},
    event_campaign_pattern:{type:'string',enum:[pattern]},
    caption_ko:str(420,1),caption_en:str(520,1),
+   headline_candidates:{type:'array',minItems:3,maxItems:3,items:str(titleMax,1)},
    slides:{type:'array',minItems:roles.length,maxItems:roles.length,items:{
     type:'object',additionalProperties:false,
     properties:{role:{type:'string',enum:[...new Set(roles)]},eyebrow:str(24),title:str(titleMax,1),body:str(bodyMax),secondary_body:str(language==='en'?48:90),visual_direction:str(180,8),step_number:{type:'integer',minimum:0,maximum:3},source_ids:{type:'array',maxItems:0,items:{type:'string'}}},
     required:['role','eyebrow','title','body','secondary_body','visual_direction','step_number','source_ids']
    }}
   },
-  required:['schema_version','campaign_version','design_preset','post_type','event_campaign_stage','event_campaign_pattern','caption_ko','caption_en','slides']
+  required:['schema_version','campaign_version','design_preset','post_type','event_campaign_stage','event_campaign_pattern','caption_ko','caption_en','headline_candidates','slides']
  };
 }
 function instructions(stage:EventCampaignStage,pattern:EventCampaignPattern,language:string){
@@ -264,7 +265,7 @@ function instructions(stage:EventCampaignStage,pattern:EventCampaignPattern,lang
   'Create a conversion-focused Instagram campaign for ONE real Roundy event using only the supplied server facts.',
   'This is an EVENT CAMPAIGN, not editorial magazine content and not a generic brand teaser.',
   'Stage: '+stage+'. Pattern: '+pattern+'. Exact card roles: '+PATTERN_ROLES[pattern].join(' -> ')+'.',
-  'One message per card. Keep copy short, direct and visual-first. No paragraphs on cards.',
+  'One message per card. Keep copy short, direct and visual-first. No paragraphs on cards. The first slide must state a verified concrete event detail or takeaway; generate exactly three distinct honest answer-first headline_candidates. Do not use abstract unanswered questions.',
   'Never invent dates, venue details, prices, discounts, seats, attendee demographics, popularity, reviews, testimonials, scarcity, sell-out speed, safety guarantees, or participant identities.',
   'Dynamic roles named facts, participants, offer, and status are overwritten by the server. For those roles write neutral placeholders only and never add additional facts.',
   'Use urgency only when present in supplied server status. Never write Hurry, selling fast, last chance, or similar unsupported pressure language.',
@@ -303,6 +304,7 @@ export function evaluateEventCampaign(document:EventCampaignRow,language:string)
  if(document?.design_preset!==EVENT_CAMPAIGN_PRESET||document?.campaign_version!==EVENT_CAMPAIGN_VERSION||document?.post_type!=='live_event'||document?.schema_version!==2)add('이벤트 캠페인 버전 또는 렌더 프리셋이 맞지 않습니다.');
  if(!(EVENT_CAMPAIGN_STAGES as readonly string[]).includes(stage)||!(EVENT_CAMPAIGN_PATTERNS as readonly string[]).includes(pattern))add('이벤트 캠페인 단계 또는 패턴이 올바르지 않습니다.');
  if(slides.length!==roles.length)add('이벤트 캠페인 카드 수가 패턴과 맞지 않습니다.');
+ if(!Array.isArray(document?.headline_candidates)||document.headline_candidates.length!==3)add('이벤트 표지 카피 후보 3개가 필요합니다.');
  slides.forEach((slide:EventCampaignRow,index:number)=>{
   if(slide.role!==roles[index])add('이벤트 캠페인 카드 역할과 순서가 맞지 않습니다.');
   if(!clean(slide.title))add('이벤트 캠페인 카드 제목이 비어 있습니다.');
