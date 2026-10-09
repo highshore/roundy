@@ -15,6 +15,7 @@ export const CONTENT_PROFILES = {
  conversation_prompt:{roles:['cover','opener','followup','listen','practice','cta'],research:false,label:'첫 대화 질문',brief:'Give an ACTUAL non-invasive opener in the primary post language, a DIFFERENT follow-up, example of listening and usable practice prompt. Korean posts should use natural Korean conversation examples. Not an English lesson or job interview.'},
  seoul_dating:{roles:['cover','scenario','etiquette','plan','checklist','cta'],research:true,label:'서울 데이팅',brief:'Recommend exactly three currently verifiable real Seoul date places, or three sequential stops in one verified date course. Ground every named place in cited current sources. Prefer practical date fit over fame. Hours/prices/reservations are optional and may appear only when directly verified.'},
  seoul_trend:{roles:['cover','trend','why_now','date_version','practical','cta'],research:true,label:'서울 트렌드',brief:'Explain one currently verified emerging/rising Seoul or Korea 20s/30s lifestyle trend, why it is gaining attention, how it can translate into a date, and what to check before going. Every concrete place, price, date, rule, opening-hour or logistics claim must be directly sourced. Do not call a cooling/dead trend current.'},
+ korea_life:{roles:['cover','scenario','contrast','example','reflection','cta'],research:false,label:'서울과 한국 생활',brief:'An original, accurate-feeling everyday situation for people living in or curious about Seoul. Offer a concrete, useful cultural observation, two possible perspectives and a respectful action. NEVER invent prices, dates, visa or legal advice, research statistics, real events or a claim that a trend is currently popular. Avoid nationality stereotypes and romance-only framing.'},
  mini_quiz:{roles:['cover','question','options','reveal','reflection','cta'],research:false,label:'대화 미니 퀴즈',brief:'A self-reflection question with 2-3 distinct options, matching reveal and useful reflection. No diagnostic scores or compatibility percentages. Entertainment disclaimer required.'}
 } as const;
 export type PostType=keyof typeof CONTENT_PROFILES;
@@ -168,6 +169,7 @@ function toneGuide(type:PostType,language:string){
   conversation_prompt:'당장 써볼 수 있는 질문과 후속 질문 중심. 영어 수업처럼 설명하지 않는다.',
   seoul_dating:'서울 로컬 에디터처럼 구체적으로. 실제 장소명과 그 장소가 데이트에 좋은 이유를 먼저 말하고, 관광 홍보 문구보다 대화하기 좋은지, 함께 할 행동이 있는지, 다음 동선이 자연스러운지를 설명한다.',
   seoul_trend:'서울 라이프스타일 에디터처럼 빠르고 구체적으로. 무엇이 뜨는지, 왜 지금 사람들이 반응하는지, 데이트로 어떻게 즐길지 연결하되 유행을 과장하거나 관광 홍보 문구처럼 쓰지 않는다.',
+  korea_life:'서울 생활 에디터처럼. 외국인과 한국인이 모두 공감할 만한 구체적 일상 장면을 보여 주고 실제로 도움 되는 행동으로 끝낸다. 문화 일반화나 과도한 이국화는 피한다.',
   mini_quiz:'가볍고 빠르게 답할 수 있는 선택형 콘텐츠. 결과를 성격 진단처럼 말하지 않는다.'
  };
  const en:Record<PostType,string>={
@@ -182,6 +184,7 @@ function toneGuide(type:PostType,language:string){
   conversation_prompt:'Give usable questions and follow-ups. Do not sound like an English lesson.',
   seoul_dating:'Sound like a Seoul local editor. Name real verified places and explain why they work for a date: conversation comfort, shared activity, atmosphere and realistic follow-up options. Avoid generic tourism copy.',
   seoul_trend:'Sound like a sharp Seoul lifestyle editor. Explain what is emerging, why people are paying attention, and how to turn it into a realistic date without hype or generic tourism copy.',
+  korea_life:'A friendly Seoul local explaining everyday life through a specific recognisable scene. Useful, gently funny, never exoticising Korea or treating nationalities as stereotypes.',
   mini_quiz:'Fast, playful self-reflection. Never present the reveal as diagnosis.'
  };
  return (language==='en'?en:ko)[type];
