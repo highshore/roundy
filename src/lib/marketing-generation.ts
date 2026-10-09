@@ -53,7 +53,240 @@ export function validateGenerationInput(value:unknown):GenerationInput{
  if(v.visual_mode==='photo'&&v.confirm_photo!==true)throw new Error('CONFIRM_PAID_PHOTO_FIRST');
  if(v.render_only&&v.mode!=='image')throw new Error('INVALID_RENDER_OPTIONS');
  if(v.visual_source==='pexels'&&v.mode==='text')throw new Error('PEXELS_VISUALS_REQUIRE_IMAGE_MODE');
- // Never silently degrade into AI-only photography if Pexels is unavailable.
+ const visualSource:VisualSource=v.visual_source||(v.mode==='text'?'none':'auto_ai');
+ if(v.mode==='image'&&visualSource==='none')throw new Error('IMAGE_SOURCE_REQUIRED');
+ return {...v,visual_source:visualSource,topic_type:topicType,instruction:v.instruction?.trim()||'',...(v.content_mode==='prelaunch'?{campaign_pattern:v.campaign_pattern||'auto',campaign_tone:v.campaign_tone||'modern_premium'}:{}),...(v.content_mode==='live_event'?{event_campaign_stage:v.event_campaign_stage||'auto',event_campaign_pattern:v.event_campaign_pattern||'auto'}:{})};
+}
+async function readDraft(db:DB,id:string){return checked(await db.from('instagram_post_drafts').select('*').eq('id',id).single()).data as Row;}
+async function readControl(db:DB){return checked(await db.from('marketing_ai_control').select('*').eq('singleton',true).single()).data as Row;}
+async function progress(db:DB,job:Row,stage:string){
+ const c=await readControl(db);if(job.reserved_usd>0&&(!c.enabled||c.blocked_reason))throw new GenerationError('AI_PAUSED',c.blocked_reason||'AI was paused by an administrator.');
+ const r=checked(await db.from('marketing_generation_jobs').update({stage,updated_at:new Date().toISOString()}).eq('id',job.id).eq('status','running').select('id').maybeSingle());
+ if(!r.data||Date.now()-Date.parse(job.created_at)>290000)throw new GenerationError('JOB_EXPIRED','Execution expired. No automatic retry will occur.');
+}
+async function upstream(endpoint:string,body:Row,timeout:number):Promise<Row>{
+ const key=process.env.OPENAI_API_KEY?.trim();
+ if(!key)throw new GenerationError('OPENAI_KEY_MISSING','Vercel Production에 OPENAI_API_KEY를 설정하고 재배포한 뒤 AI 재개를 누르세요.',true);
+ // Exactly one raw request: no SDK retries, gateway fallback or retry loops.
+ let response:Response;
+ try{response=await fetch('https://api.openai.com/v1/'+endpoint,{method:'POST',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(timeout),redirect:'error',cache:'no-store'});}catch{throw new GenerationError('UPSTREAM_OUTCOME_UNKNOWN','API 응답을 확인하지 못했습니다. 중복 과금을 피하려고 자동 재시도를 중지했습니다.',true);}
+ const data=await response.json().catch(()=>null);
+ if(!response.ok){const code=String(data?.error?.code||'OPENAI_HTTP_'+response.status),message=String(data?.error?.message||'OpenAI request failed.');throw new GenerationError(code,'OpenAI '+response.status+': '+safeError(new Error(message)),[401,403,404,429].includes(response.status));}
+ if(!data)throw new GenerationError('INVALID_API_RESPONSE','OpenAI returned an unreadable response.');return data;
+}
+function slide(value:Row,index:number,total:number){
+ if(!value||typeof value.title!=='string'||typeof value.body!=='string'||!value.title.trim()||!value.body.trim())throw new Error('INVALID_SLIDE');
+ return {eyebrow:String(value.eyebrow||'ROUNDY NOTES').slice(0,40),title:value.title.trim().slice(0,90),body:value.body.trim().slice(0,320),source_label:String(value.source_label||'').slice(0,100),variant:index===0?'hook':index===total-1?'roundy':'content'};
+}
+function sourceRows(value:unknown){if(!Array.isArray(value))return [];return value.slice(0,3).filter((x:Row)=>{try{return new URL(x.url).protocol==='https:';}catch{return false;}}).map((x:Row)=>({title:String(x.title||'').slice(0,160),publisher:String(x.publisher||'').slice(0,80),url:String(x.url).slice(0,1000),date:String(x.date||'').slice(0,40)}));}
+function researchEvidenceFromResponse(result:Row):{sources:Row[];searchCompleted:boolean}{
+ const found=new Map<string,Row>();let searchCompleted=false;
+ const add=(item:Row)=>{
+  const nested=item?.url_citation&&typeof item.url_citation==='object'?item.url_citation:item;
+  const raw=String(nested?.url||item?.source_website_url||'').trim();if(!raw)return;
+  let parsed:URL;try{parsed=new URL(raw);if(parsed.protocol!=='https:')return;}catch{return;}
+  const url=(parsed.origin+parsed.pathname+parsed.search).slice(0,1000);
+  const publisher=String(nested?.publisher||'').trim()||parsed.hostname.replace(/^www\./,'');
+  const title=String(nested?.title||item?.caption||'').trim()||publisher;
+  const previous=found.get(url);
+  if(!previous||previous.title===previous.publisher)found.set(url,{title:title.slice(0,160),publisher:publisher.slice(0,80),url,date:String(nested?.date||'').slice(0,40)});
+ };
+ for(const output of Array.isArray(result.output)?result.output:[]){
+  if(output?.type==='web_search_call'){
+   if(output.status==='completed')searchCompleted=true;
+   if(Array.isArray(output.action?.sources))for(const item of output.action.sources)add(item);
+   if(typeof output.action?.url==='string')add({url:output.action.url});
+   if(Array.isArray(output.results))for(const item of output.results)add(item);
+  }
+  if(output?.type==='message')for(const part of Array.isArray(output.content)?output.content:[])for(const annotation of Array.isArray(part.annotations)?part.annotations:[])if(annotation?.type==='url_citation')add(annotation);
+ }
+ if(Array.isArray(result.sources))for(const item of result.sources)add(item);
+ return {sources:[...found.values()].slice(0,5),searchCompleted};
+}
+function parseGeneratedJson(raw:string):Row{
+ const trimmed=raw.trim();
+ const unfenced=trimmed.replace(/^\`\`\`(?:json)?\s*/i,'').replace(/\s*\`\`\`$/,'').trim();
+ try{return JSON.parse(unfenced) as Row;}catch{
+  const first=unfenced.indexOf('{'),last=unfenced.lastIndexOf('}');
+  if(first>=0&&last>first){
+   try{return JSON.parse(unfenced.slice(first,last+1)) as Row;}catch{}
+  }
+  throw new Error('AI_RETURNED_INVALID_JSON');
+ }
+}
+function normalizeCarouselSlides(value:unknown,growth:boolean):Row[]{
+ if(!Array.isArray(value))throw new Error('INVALID_SLIDES');
+ const slides=value.filter((item:unknown):item is Row=>Boolean(item)&&typeof item==='object');
+ if(!growth){
+  if(slides.length<1||slides.length>6)throw new Error('INVALID_SLIDE_COUNT');
+  return slides.slice(0,6);
+ }
+ // Growth carousels are editorial, not a rigid document format. Avoid paying for another
+ // model call just because the model returned 4/5/7 cards instead of exactly 6.
+ if(slides.length<4)throw new Error('TOO_FEW_GROWTH_SLIDES');
+ if(slides.length<=6)return slides;
+ // Preserve the opening sequence and the final Roundy CTA when output is too long.
+ return [...slides.slice(0,5),slides[slides.length-1]];
+}
+async function nextContentLanguage(db:DB,excludeId?:string):Promise<ContentLanguage>{
+ const history=checked(await db.from('instagram_post_drafts').select('id,content_language,draft_date,caption').eq('draft_role','workspace').order('draft_date',{ascending:false}).limit(30)).data as Row[];
+ const previous=(history||[]).find(row=>row.id!==excludeId&&['ko','en'].includes(row.content_language)&&String(row.caption||'').trim());
+ return previous?.content_language==='ko'?'en':'ko';
+}
+async function resolveContentLanguage(db:DB,draft:Row,requested?:ContentLanguage):Promise<ContentLanguage>{
+ if(requested==='ko'||requested==='en')return requested;
+ if(draft.content_language==='ko'||draft.content_language==='en')return draft.content_language;
+ return nextContentLanguage(db,draft.id);
+}
+async function generateCopy(db:DB,draft:Row,input:GenerationInput,job:Row,_research:boolean){
+ if(input.content_mode==='prelaunch')return generateCampaignCopy(db,draft,input,job,upstream);
+ if(input.content_mode==='live_event')return generateEventCampaignCopy(db,draft,input,job,upstream);
+ return generateEditorialCopy(db,draft,input,job,upstream);
+}
+function qualityForDraft(draft:Row){
+ if(draft.content_document?.design_preset===CAMPAIGN_PRESET)return campaignDraftQuality(draft);
+ if(draft.content_document?.design_preset===EVENT_CAMPAIGN_PRESET)return eventCampaignDraftQuality(draft);
+ return draftQuality(draft);
+}
+async function savePartial(db:DB,draft:Row,patch:Row){
+ const r=checked(await db.from('instagram_post_drafts').update({...patch,revision:draft.revision+1,regenerated_at:new Date().toISOString()}).eq('id',draft.id).eq('status','needs_approval').eq('revision',draft.revision).select('*').maybeSingle());if(!r.data)throw new Error('DRAFT_CHANGED_DURING_GENERATION');return r.data as Row;
+}
+async function storeImage(db:DB,job:Row,bytes:Buffer,index:number){
+ if(bytes.length>5*1024*1024)throw new Error('IMAGE_SIZE_LIMIT');
+ const suffix=createHash('sha256').update(job.id+':'+index).digest('hex'),id=suffix.slice(0,8)+'-'+suffix.slice(8,12)+'-'+suffix.slice(12,16)+'-'+suffix.slice(16,20)+'-'+suffix.slice(20,32),path=job.id+'/'+id+'.jpg';
+ checked(await db.storage.from('wis-event-images').upload(path,bytes,{contentType:'image/jpeg',upsert:true}));return db.storage.from('wis-event-images').getPublicUrl(path).data.publicUrl;
+}
+async function renderCardsWithAssets(db:DB,draft:Row,job:Row,assets:Awaited<ReturnType<typeof loadEditorialAssets>>,directCards:Record<number,Buffer>={}){
+ const cards=draft.carousel_slides||[];
+ if(!draft.content_document||!cards.length||cards.length>6)throw new Error('유형별 카드 문구가 없습니다. 품질 재작업 후 렌더하세요.');
+ const urls:string[]=[];
+ for(let i=0;i<cards.length;i++){
+  await progress(db,job,'rendering_'+(i+1)+'_of_'+cards.length);
+  if(directCards[i]){urls.push(await storeImage(db,job,directCards[i],i));continue;}
+  const document={...draft.content_document,slides:cards};
+  const image=document.design_preset===CAMPAIGN_PRESET
+   ?renderPrelaunchCampaign(cards[i],i,cards.length,document,assets)
+   :document.design_preset===EVENT_CAMPAIGN_PRESET
+    ?renderLiveEventCampaign(cards[i],i,cards.length,document,assets)
+    :editorialCard(cards[i],i,cards.length,document,assets);
+  let timer:ReturnType<typeof setTimeout>|undefined;
+  try{const bytes=await Promise.race([image.arrayBuffer(),new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(new Error('CARD_RENDER_TIMEOUT')),20000);})]);
+   urls.push(await storeImage(db,job,await sharp(Buffer.from(bytes)).jpeg({quality:88}).toBuffer(),i));
+  }finally{if(timer)clearTimeout(timer);}
+ }
+ return urls;
+}
+async function renderCards(db:DB,draft:Row,job:Row,freshPhotos:string[]){
+ if(!Array.isArray(freshPhotos)||freshPhotos.length<3)throw new Error('FRESH_VISUAL_SET_REQUIRED');
+ const assets=await loadEditorialAssets();assets.photo=freshPhotos[0];assets.photos=freshPhotos;assets.reusePhotos=true;
+ return renderCardsWithAssets(db,draft,job,assets);
+}
+function eventPhotoUrls(draft:Row){
+ const source=draft.content_document?.event_facts?.images||draft.event_facts_snapshot?.images||[];
+ return Array.isArray(source)?source.filter((x:unknown):x is string=>typeof x==='string'&&x.startsWith('https://')).slice(0,10):[];
+}
+async function renderEventCards(db:DB,draft:Row,job:Row,photos:string[]){
+ if(!photos.length)throw new Error('EVENT_VISUALS_REQUIRED');
+ const assets=await loadEditorialAssets();assets.photo=photos[0];assets.photos=photos;assets.reusePhotos=true;
+ return renderCardsWithAssets(db,draft,job,assets);
+}
+async function renderUploadedCards(db:DB,draft:Row,job:Row){
+ if(draft.draft_role!=='candidate'||draft.generation_source!=='manual')throw new Error('UPLOAD_VISUALS_MANUAL_ONLY');
+ const rows=checked(await db.from('marketing_uploaded_images').select('*').eq('draft_id',draft.id).order('sort_order',{ascending:true})).data as Row[];
+ if(!rows.length)throw new Error('UPLOADED_IMAGES_REQUIRED');
+ if(rows.length>6)throw new Error('TOO_MANY_UPLOADED_IMAGES');
+ const cards=draft.carousel_slides||[];if(!cards.length)throw new Error('유형별 카드 문구가 없습니다. 품질 재작업 후 렌더하세요.');
+ const assets=await loadEditorialAssets();assets.reusePhotos=false;assets.cardPhotos={};
+ const directCards:Record<number,Buffer>={},used=new Set<number>();
+ const bodyTargets=Array.from({length:Math.max(0,cards.length-1)},(_,i)=>i+1);
+ const nextFree=(preferBody=true)=>{
+  const candidates=preferBody?bodyTargets:[0,...bodyTargets];
+  const target=candidates.find(index=>!used.has(index));if(target!==undefined)used.add(target);return target;
+ };
+ const assignTarget=(row:Row)=>{
+  if(row.role==='cover'&&!used.has(0)){used.add(0);return 0;}
+  return nextFree(row.role==='body');
+ };
+ for(const row of rows){
+  const download=checked(await db.storage.from('marketing-images').download(row.storage_path)).data as Blob;
+  const raw=Buffer.from(await download.arrayBuffer());if(!raw.length||raw.length>10*1024*1024)throw new Error('INVALID_UPLOADED_IMAGE');
+  const target=assignTarget(row);if(target===undefined)continue;
+  if(row.asset_type==='completed_card'){
+   const meta=await sharp(raw).metadata();const ratio=(meta.width||0)/(meta.height||1);
+   if(Math.abs(ratio-.8)>.035)throw new Error('COMPLETED_CARD_MUST_BE_4_5');
+   directCards[target]=await sharp(raw).rotate().resize(1080,1350,{fit:'fill'}).jpeg({quality:90}).toBuffer();
+  }else{
+   const photoBytes=await sharp(raw).rotate().resize(1080,1350,{fit:'cover'}).jpeg({quality:88}).toBuffer();
+   assets.cardPhotos[target]='data:image/jpeg;base64,'+photoBytes.toString('base64');
+   if(target===0)assets.photo=assets.cardPhotos[target];
+  }
+ }
+ return renderCardsWithAssets(db,draft,job,assets,directCards);
+}
+function visualContext(draft:Row){
+ const slides=Array.isArray(draft.carousel_slides)?draft.carousel_slides:[];
+ return slides.slice(0,6).map((slide:Row,index:number)=>[
+  'Card '+(index+1),
+  String(slide.role||'content'),
+  String(slide.title||'').slice(0,100),
+  String(slide.body||'').slice(0,220),
+  slide.visual_direction?'Visual: '+String(slide.visual_direction).slice(0,180):''
+ ].filter(Boolean).join(' | ')).join('\n');
+}
+async function generateVisualSet(db:DB,draft:Row,input:GenerationInput,job:Row,count=3){
+ await progress(db,job,'generating_visual_set');
+ const campaign=draft.content_document?.design_preset===CAMPAIGN_PRESET,eventCampaign=draft.content_document?.design_preset===EVENT_CAMPAIGN_PRESET;
+ const prompt=(eventCampaign?[
+  'Generate THREE distinct premium TEXT-FREE fallback lifestyle photographs for a real Roundy event campaign. These are used only when the event does not have enough real event/venue photos.',
+  'The server supplies all event facts and adds all typography later. Do not render any date, price, venue name, seat count, logo, sign, watermark, text, letters, UI, ticket, poster, or branded object.',
+  'Show believable contemporary Seoul social-event atmosphere: natural one-on-one conversation, arrival/venue atmosphere, or a neutral detail/environmental frame. Do not pretend the generated image depicts the named real venue.',
+  'People should look like real adults in a respectful social setting, smart-casual and candid. Avoid staged romance, physical intimacy, nightlife excess, alcohol focus, hand hearts, wedding styling, stock-photo smiles, or fake signage.',
+  'Portrait 4:5. Leave negative space for server-rendered campaign copy.',
+  'Event campaign stage: '+String(draft.event_campaign_stage||draft.content_document?.event_campaign_stage||'launch')+'. Pattern: '+String(draft.event_campaign_pattern||draft.content_document?.event_campaign_pattern||'event_poster')+'.'
+ ]:campaign?[
+  'Generate THREE distinct but visually coherent premium lifestyle PHOTOGRAPHS for one Roundy pre-launch advertising campaign. Each returned image is a separate photograph, not a collage.',
+  'This is campaign photography, not a magazine spread. The server will add all typography later.',
+  'Roundy is a Seoul-based offline-first Rotation Dating service. Show believable contemporary Seoul social moments that support the supplied card directions.',
+  'Use three complementary framings: one strong environmental/cover image with negative space, one natural one-on-one conversational medium shot, and one detail or social-atmosphere lifestyle shot.',
+  'People should look like real adults in natural social situations, not posed romantic partners. Smart-casual styling, natural skin texture, contemporary Seoul atmosphere, restrained premium lighting.',
+  'Avoid wedding/couple-shoot styling, exaggerated romance, physical intimacy, hand hearts, staged luxury, crowded nightlife, visible alcohol as the focal point, stock-photo smiles, repeated café compositions, and fake event details.',
+  'ABSOLUTELY NO text, letters, typography, logos, signs, watermarks, UI, screenshots, cards, posters, or branded objects inside the photographs.',
+  'Portrait 4:5 composition. Leave useful negative space for server-rendered campaign copy.',
+  'Campaign pattern: '+String(draft.campaign_pattern||draft.content_document?.campaign_pattern||'poster')+'. Tone: '+String(draft.campaign_tone||draft.content_document?.campaign_tone||'modern_premium')+'.'
+ ]:[
+  'Generate THREE distinct but visually coherent editorial lifestyle photographs for one Roundy Instagram carousel. Each returned image is a separate photograph from the same campaign, not a collage.',
+  'Roundy is a Seoul-based Rotation Dating service for Korean and international adults, including Korean-Korean meetings. The images should support the specific carousel content below instead of reusing a generic dating stock photo.',
+  'Vary locations naturally across believable Seoul settings such as a neighborhood street, riverside, restaurant, lounge, rooftop, gallery-like social space, or café only when it genuinely fits. Vary framing as well: one strong cover composition with negative space, one natural conversational medium shot, and one detail/environmental lifestyle shot.',
+  'People should look like real adults in a natural social moment, not posed romantic partners. Smart-casual styling, natural skin texture, imperfect gestures, genuine conversation, contemporary Seoul atmosphere.',
+  'Magazine-editorial photography: restrained, premium, warm, modern, documentary-natural. Avoid exaggerated romance, physical intimacy, flowers-as-romance clichés, hand hearts, wedding/couple-shoot styling, glamour/luxury cues, crowded parties, visible alcohol, stock-photo smiles, repeated café setups, fake signage, text, logos, watermarks, or invented event facts.',
+  'Portrait 4:5 composition. Leave useful negative space where editorial typography can be placed by the server. Do not render any words or Roundy branding inside the photographs.',
+  draft.growth_topic_type==='seoul_dating'
+   ?'IMPORTANT FOR SEOUL DATING POSTS: the named venues in the copy are factual recommendations, but these generated photographs are mood/editorial illustrations only. Do NOT attempt to depict, reconstruct or label any named venue as if this were a real photo of that place. Use a generic Seoul date atmosphere that matches the category (park, gallery, street, restaurant, riverside, etc.) with no identifiable venue signage.'
+   :'',
+  draft.growth_topic_type==='seoul_trend'
+   ?'IMPORTANT FOR SEOUL TREND POSTS: generate an ORIGINAL Roundy editorial interpretation of the activity/culture described in the cards. Never reproduce a source article photo, social post, screenshot, creator identity, watermark, meme asset, or exact identifiable composition. Do not pretend a generated image is documentary evidence of the trend.'
+   :''
+ ]).concat(['Carousel context:',visualContext(draft),input.instruction||'']).filter(Boolean).join('\n');
+ const coverPrompt=count===1?'Create exactly ONE text-free original editorial COVER image; do not claim it represents a named real venue. '+prompt:prompt;
+ const result=await upstream('images/generations',{model:IMAGE_MODEL,prompt:coverPrompt,n:count,size:'1024x1280',quality:'low',output_format:'jpeg',output_compression:85,background:'opaque'},150000);
+ const encoded=(Array.isArray(result.data)?result.data:[]).map((row:Row)=>row?.b64_json).filter((value:unknown):value is string=>typeof value==='string'&&value.length>=100&&value.length<=8*1024*1024);
+ if(encoded.length<count)throw new Error('INVALID_GENERATED_VISUAL_SET');
+ await progress(db,job,'saving_visual_set');
+ return encoded.slice(0,count).map(value=>'data:image/jpeg;base64,'+value);
+}
+type GenerationThreadContext={threadId:string;attemptNumber:number;retryOfJobId:string;recoverySourceJobId?:string;workflowId?:string};
+async function resolveContentWorkflowId(db:DB,draft:Row,job:Row,thread?:GenerationThreadContext){
+ if(thread?.workflowId)return thread.workflowId;
+ const sourceJobId=String(draft.source_generation_job_id||'');
+ if(sourceJobId){
+  const source=checked(await db.from('marketing_generation_jobs').select('id,content_workflow_id,generation_thread_id').eq('id',sourceJobId).maybeSingle()).data as Row|null;
+  if(source)return String(source.content_workflow_id||source.generation_thread_id||source.id);
+ }
+ return String(job.id);
+}
+export async function runGeneration(draftId:string,value:unknown,actor:string|null,automatic=false,thread?:GenerationThreadContext){
+ const input=validateGenerationInput(value),db=createServiceRoleClient();
+ // Never fall back to AI-only photographs if Pexels is unavailable.
  const visualSource:VisualSource=automatic?'pexels':input.visual_source==='auto_ai'?'pexels':input.visual_source!;
  if(automatic&&input.visual_source&&!['auto_ai','pexels'].includes(input.visual_source))throw new Error('AUTOMATION_VISUAL_SOURCE_INVALID');
  let draft=await readDraft(db,draftId);
