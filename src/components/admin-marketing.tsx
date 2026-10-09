@@ -5,13 +5,14 @@ import { Heading } from './heading';
 import { tr, type Locale } from '@/lib/locale';
 import { uploadFile, uploadMarketingFile } from '@/lib/uploads';
 import { OrderedImages } from './ordered-images';
+import {AdminMarketingGrowth} from './admin-marketing-growth';
 import {CONTENT_PROFILES,postType} from '@/lib/marketing-content-policy';
 import {factPackReady,groupTrendsByUsage} from '@/lib/marketing-trend-guide';
 type Row=Record<string,any>;
 type PendingMarketingImage={id:string;file:File;preview:string;asset_type:'photo'|'completed_card';width:number;height:number};
 const BASE='/api/admin/marketing';
-const topics=['mbti','dating_archetype','book_insight','trend_research','meme_remix','dating_myth','conversation_prompt','seoul_dating','seoul_trend','mini_quiz'];
-const topicKo=['MBTI 연애 유형','연애 유형','책 속 공감','최신 연구','밈 재해석','연애 통념','첫 대화 질문','서울 데이팅','서울 트렌드','미니 퀴즈'];
+const topics=['mbti','dating_archetype','book_insight','trend_research','meme_remix','dating_myth','conversation_prompt','seoul_dating','seoul_trend','korea_life','mini_quiz'];
+const topicKo=['MBTI 연애 유형','연애 유형','책 속 공감','최신 연구','밈 재해석','연애 통념','첫 대화 질문','서울 데이팅','서울 트렌드','한국 생활과 문화','미니 퀴즈'];
 async function request(path='',body?:unknown,method='POST'){
  let response:Response;
  try{
@@ -38,7 +39,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
  const [uploadedImages,setUploadedImages]=useState<Row[]>([]),[uploadAssetType,setUploadAssetType]=useState<'photo'|'completed_card'>('photo');
  const [pendingMarketingImages,setPendingMarketingImages]=useState<PendingMarketingImage[]>([]),[pendingAssetType,setPendingAssetType]=useState<'photo'|'completed_card'>('photo');
  const [resultPreview,setResultPreview]=useState<Row|null>(null);
- const [activeTab,setActiveTab]=useState<'draft'|'generation'|'trend'|'publishing'|'automation'|'connection'>('draft');
+ const [activeTab,setActiveTab]=useState<'draft'|'growth'|'generation'|'trend'|'publishing'|'automation'|'connection'>('draft');
  const [generationFilter,setGenerationFilter]=useState<'all'|'completed'|'failed'|'running'>('all');
  const [trendLanguage,setTrendLanguage]=useState<'ko'|'en'>('ko');
  const [trendUsageView,setTrendUsageView]=useState<'unused'|'used'>('unused');
@@ -346,6 +347,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
  const visibleRuns=channelRuns.slice(0,publishVisible);
  const tabItems=[
   ['draft',t('Draft','초안')],
+  ['growth',t('Growth','성장 분석')],
   ['generation',t('Generation','생성 기록')],
   ['trend',t('Seoul Trend','서울 트렌드')],
   ['publishing',t('Publishing','게시 기록')],
@@ -354,7 +356,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
  ] as const;
  function statusText(status:string){const labels:Record<string,[string,string]>={completed:['Completed','완료'],failed:['Failed','실패'],running:['Running','진행 중'],uncertain:['Needs review','확인 필요'],sent:['Published','게시됨'],queued:['Scheduled','예약됨'],sending:['Publishing','게시 중'],needs_review:['Needs review','확인 필요'],scheduled:['Scheduled','예약됨']};return labels[status]?t(...labels[status]):status;}
  function operationLabel(row:Row){const labels:Record<string,[string,string]>={copy:['Copy creation','문구 생성'],research:['Research + copy','주제 조사 + 문구 생성'],render:['Card rendering','이미지 카드 렌더'],photo:['Visual generation','이미지 생성 + 렌더'],copy_photo:['Copy + visuals','문구 + 이미지 생성']};return labels[row.operation]?t(...labels[row.operation]):t('Generation step','생성 단계');}
- function contentLabel(row:Row){const request=row.request_payload||{},snapshot=row.result_snapshot||row.snapshot||row||{},growth=request.content_mode==='growth_carousel'||snapshot.draft_kind==='growth_carousel'||row.draft_kind==='growth_carousel',kind=growth?(request.topic_type||snapshot.growth_topic_type||row.growth_topic_type||'growth_carousel'):(request.content_mode||snapshot.content_mode||row.content_mode||snapshot.draft_kind||row.draft_kind||row.operation||'content');const ko:Record<string,string>={prelaunch:'오픈 전 홍보',live_event:'이벤트 모집',book_insight:'책 속 공감',trend_research:'연구로 보는 관계',mbti:'MBTI와 대화',dating_archetype:'대화 스타일',meme_remix:'공감 상황극',dating_myth:'연애 통념 점검',conversation_prompt:'첫 대화 질문',seoul_dating:'서울에서 만나기',seoul_trend:'서울 트렌드',mini_quiz:'대화 미니 퀴즈',growth_carousel:'Growth Carousel',brand:'브랜드 콘텐츠',copy:'일반 콘텐츠',research:'검색 콘텐츠'};return locale==='ko'?(ko[kind]||String(kind).replaceAll('_',' ')):String(kind).replaceAll('_',' ');}
+ function contentLabel(row:Row){const request=row.request_payload||{},snapshot=row.result_snapshot||row.snapshot||row||{},growth=request.content_mode==='growth_carousel'||snapshot.draft_kind==='growth_carousel'||row.draft_kind==='growth_carousel',kind=growth?(request.topic_type||snapshot.growth_topic_type||row.growth_topic_type||'growth_carousel'):(request.content_mode||snapshot.content_mode||row.content_mode||snapshot.draft_kind||row.draft_kind||row.operation||'content');const ko:Record<string,string>={prelaunch:'오픈 전 홍보',live_event:'이벤트 모집',book_insight:'책 속 공감',trend_research:'연구로 보는 관계',mbti:'MBTI와 대화',dating_archetype:'대화 스타일',meme_remix:'공감 상황극',dating_myth:'연애 통념 점검',conversation_prompt:'첫 대화 질문',seoul_dating:'서울에서 만나기',seoul_trend:'서울 트렌드',korea_life:'한국 생활',mini_quiz:'대화 미니 퀴즈',growth_carousel:'Growth Carousel',brand:'브랜드 콘텐츠',copy:'일반 콘텐츠',research:'검색 콘텐츠'};return locale==='ko'?(ko[kind]||String(kind).replaceAll('_',' ')):String(kind).replaceAll('_',' ');}
  function compactContentTitle(value:unknown){const clean=typeof value==='string'?value.replace(/\s+/g,' ').replace(/^[#\-–—"'“”‘’\s]+|["'“”‘’\s]+$/g,'').trim():'';return clean.length>64?clean.slice(0,61).trimEnd()+'…':clean;}
  function contentTitle(row:Row){for(const source of [row,row?.result_snapshot,row?.snapshot].filter(Boolean) as Row[]){const doc=source.content_document||{},slides=[...(Array.isArray(doc.slides)?doc.slides:[]),...(Array.isArray(source.carousel_slides)?source.carousel_slides:[])];const slideTitle=slides.map((s:Row)=>compactContentTitle(s?.title)).find(Boolean);if(slideTitle)return slideTitle;const bookTitle=compactContentTitle(doc?.book?.title);if(bookTitle)return bookTitle;const caption=typeof source.caption==='string'?source.caption.split(/\n+/).map((line:string)=>compactContentTitle(line)).find((line:string)=>line&&!line.startsWith('#')):'';if(caption)return caption;}return contentLabel(row);}
  function contentRecordForRun(run:Row){const draftId=String(run?.snapshot?.draft_id||'');return draftId?contentRecords.find((record:Row)=>String(record.id)===draftId)||null:null;}
@@ -367,6 +369,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
   <div className="admin-form-actions">{(['instagram','koreapas'] as const).map(c=><button type="button" key={c} className={channel===c?'admin-primary':'admin-secondary'} onClick={()=>setChannel(c)}>{c==='instagram'?'Instagram @roundy.meet':'Koreapas'}</button>)}<button type="button" className="admin-secondary" disabled={busy} onClick={()=>void work(()=>channel==='instagram'&&activeTab==='trend'?loadTrend():load(draft?.id))}>{t('Refresh status','상태 새로고침')}</button></div>
   {error&&<p className="admin-error" role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}
   {channel==='instagram'&&<nav className="marketing-subtabs" aria-label={t('Marketing sections','마케팅 메뉴')} role="tablist">{tabItems.map(([value,label])=><button key={value} type="button" role="tab" aria-selected={activeTab===value} className={activeTab===value?'active':''} onClick={()=>setActiveTab(value)}>{label}{value==='generation'&&generationThreads.some((thread:Row)=>thread.status==='failed')&&<span className="marketing-tab-dot" aria-label={t('Failed generation exists','실패한 생성 있음')}/>}</button>)}</nav>}
+  {channel==='instagram'&&activeTab==='growth'&&<AdminMarketingGrowth locale={locale}/>}
   {channel==='instagram'&&activeTab==='draft'&&<>
    <div className="marketing-setup"><strong>{t('API cost guard','API 비용 안전장치')}</strong><p>{t('Reserved today','오늘 예약액')} ${Number(generation?.usage?.daily_reserved_usd||0).toFixed(2)} / ${Number(generation?.usage?.daily_budget_usd||2).toFixed(2)}. {t('This month','이번 달')} ${Number(generation?.usage?.monthly_reserved_usd||0).toFixed(2)} / ${Number(generation?.usage?.monthly_budget_usd||6).toFixed(2)}. {t('Paid generation attempts','오늘 유료 생성 시도')} {generation?.usage?.daily_attempts||0}. {t('Safety-counted jobs','안전 카운트')} {generation?.usage?.daily_calls||0}/5.</p><p className="admin-help">{t('No automatic paid retries or fallback. With Pexels configured, automatic posts use 2–3 rights-reviewed photographs and wait for approval of new images. Without Pexels, the existing AI visual flow remains. Overall daily/monthly AI budgets and generation limits remain the safety controls. External account spending is separate.','유료 API 자동 재시도나 자동 대체는 없습니다. Pexels 설정 시 자동 콘텐츠에 검수된 사진 2~3장을 사용하며 신규 사진은 승인을 기다립니다. Pexels 미설정 시 기존 AI 이미지 흐름을 유지합니다. 전체 일/월 AI 예산과 생성 횟수 한도가 비용 안전장치로 적용됩니다. 다른 서비스의 API 사용액은 이 한도에 포함되지 않습니다.')}</p>{generation?.usage?.daily_budget_override_expires_at&&<p className="admin-help">{t('Temporary daily limit is active until midnight KST. It will automatically fall back to the normal $2.00 limit.','오늘만 임시 한도가 적용 중입니다. KST 자정이 지나면 기본 $2.00 한도로 자동 복귀합니다.')}</p>}
     {!generation?.provider?.configured&&<p className="admin-error">{t('OPENAI_API_KEY is missing from this deployment. Configure Vercel Production and redeploy.','이 배포에 OPENAI_API_KEY가 없습니다. Vercel Production 설정 후 재배포가 필요합니다.')}</p>}
@@ -504,6 +507,8 @@ export function AdminMarketing({locale}:{locale:Locale}){
      <label><span>{t('Maximum automatic posts per event','이벤트당 자동 홍보 최대 개수')}</span><input type="number" min={1} max={5} value={settings.event_campaign_max_posts??5} onChange={e=>setSettings({...settings,event_campaign_max_posts:Number(e.target.value)})}/></label>
      <p className="admin-help">{t('Event drafts use real event photos first, alternate Korean and English, and never publish without approval.','이벤트 홍보는 실제 이벤트 사진을 우선 사용하고 한국어와 영어를 번갈아 생성하며 승인 전에는 게시하지 않습니다.')}</p>
     </div>
+    <label className="check-row"><input type="checkbox" checked={settings.growth_mode_enabled===true} onChange={e=>setSettings({...settings,growth_mode_enabled:e.target.checked})}/>{t('Organic growth mode (balanced Seoul, Korea life, humor, people)','오가닉 성장 모드 (서울, 한국 생활, 공감, 사람 중심)')}</label>
+    <p className="admin-help">{t('Opt-in. Replaces the daily dating-heavy topic rotation with an evidence-gated growth calendar. The same AI budgets, photo review, quality review and manual publish approval stay in force.','선택형 기능입니다. 기존 소개팅 중심 일일 주제를 검증형 성장 편성으로 바꾸되 AI 예산, 사진 검수, 문구 품질 검사, 관리자 게시 승인은 그대로 유지합니다.')}</p>
     <label className="check-row"><input type="checkbox" checked={settings.growth_carousel_enabled} onChange={e=>setSettings({...settings,growth_carousel_enabled:e.target.checked})}/>Growth Carousel</label>
     <div>
      <span className="admin-field-label">{t('Growth Carousel days','Growth Carousel 요일')}</span>
