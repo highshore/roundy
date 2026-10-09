@@ -173,7 +173,7 @@ export async function reelsApi(req:NextRequest,db:Client,path:string[]){
   if(body.confirm_retry!==true||row.status!=='failed'||row.revision!==body.revision||!row.marketing_run_id)
    return json({error:'REEL_RETRY_UNAVAILABLE'},409);
   const run=checked(await service.from('marketing_runs').select('status').eq('id',row.marketing_run_id).single());
-  if(run.status!=='failed')return json({error:'REEL_PUBLISH_MAY_HAVE_STARTED'},409);
+  if(!run||run.status!=='failed')return json({error:'REEL_PUBLISH_MAY_HAVE_STARTED'},409);
   const attempt=checked(await service.from('instagram_reel_publish_attempts').select('stage').eq('run_id',row.marketing_run_id).maybeSingle());
   if(['publishing','sent'].includes(attempt?.stage))return json({error:'REEL_PUBLISH_MAY_HAVE_STARTED'},409);
   const updated=checked(await service.from('instagram_reel_drafts').update({
@@ -188,7 +188,7 @@ export async function reelsApi(req:NextRequest,db:Client,path:string[]){
   if(body.confirm_external_check!==true||typeof body.published!=='boolean'||row.status!=='needs_review_publish'||!row.marketing_run_id)
    return json({error:'MANUAL_EXTERNAL_CHECK_REQUIRED'},409);
   const run=checked(await service.from('marketing_runs').select('status').eq('id',row.marketing_run_id).single());
-  if(run.status!=='needs_review')return json({error:'REEL_RUN_STATUS_CHANGED'},409);
+  if(!run||run.status!=='needs_review')return json({error:'REEL_RUN_STATUS_CHANGED'},409);
   checked(await db.rpc('resolve_marketing_run',{p_run:row.marketing_run_id,p_published:body.published}));
   const updated=checked(await service.from('instagram_reel_drafts').update({
    status:body.published?'published':'failed',published_at:body.published?new Date().toISOString():null,
