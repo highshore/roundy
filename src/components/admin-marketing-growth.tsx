@@ -45,7 +45,9 @@ export function AdminMarketingGrowth({locale}:{locale:Locale}){
     <div><strong>{t('7-day net change','7일 순증감')}</strong><p><strong>{followers.change_7d===null||followers.change_7d===undefined?'—':(Number(followers.change_7d)>0?'+':'')+Number(followers.change_7d).toLocaleString()}</strong></p></div>
     <div><strong>{t('30-day net change','30일 순증감')}</strong><p><strong>{followers.change_30d===null||followers.change_30d===undefined?'—':(Number(followers.change_30d)>0?'+':'')+Number(followers.change_30d).toLocaleString()}</strong></p></div>
    </div>
-   <p className="admin-help">{followers.snapshot_date?t('Last measured day:','마지막 수집일:')+' '+followers.snapshot_date:t('The system will attempt a daily follower snapshot through the official Instagram profile API once the updated worker is deployed and authorized.','연동된 Instagram API가 허용하고 업데이트된 수집 워커가 배포되면 일일 팔로워 수를 수집합니다.')} {t('Net follower changes are account-level observations, not per-post conversions.','팔로워 순증감은 계정 단위 관측치이며 개별 게시물의 전환 성과가 아닙니다.')}</p>
+   <p className="admin-help">{followers.snapshot_date?t('Last measured day:','마지막 수집일:')+' '+followers.snapshot_date:t('No follower snapshot captured yet. The updated publishing worker needs to run with authorized Instagram insights access.','팔로워 데이터가 아직 수집되지 않았습니다. 업데이트된 게시 워커와 Instagram 접근 권한이 필요합니다.')} {t('Net follower changes are account-level observations, not per-post conversions.','팔로워 순증감은 계정 단위 관측치이며 개별 게시물의 전환 성과가 아닙니다.')}</p>
+   {followers.capture_status==='unavailable'&&<p className="admin-error" role="status">{t('Instagram follower collection failed on','Instagram 팔로워 수집에 실패한 날짜:')} {followers.last_capture_attempt}. {t('Check the connected account scope and worker logs.','Instagram 계정 권한과 워커 로그를 확인하세요.')} {followers.capture_error}</p>}
+   {followers.capture_status==='not_attempted'&&<p className="admin-help">{t('No profile API collection attempt has been recorded.','아직 Instagram 프로필 API 수집 시도 기록이 없습니다.')}</p>}
   </div>
   <div className="admin-two">
    <div className="marketing-settings-card"><strong>{t('Published posts (90d)','게시물 (90일)')}</strong><p><strong>{stats.published??0}</strong></p></div>
