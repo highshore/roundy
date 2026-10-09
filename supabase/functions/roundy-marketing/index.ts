@@ -143,8 +143,15 @@ const escapeHtml=(value:string)=>value.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'
 function validate(t:Template){
  if(!['instagram','koreapas'].includes(t.channel)||!t.caption?.trim())throw new Error('Add post copy before publishing');
  if(t.destination_url){const u=new URL(t.destination_url);if(u.protocol!=='https:'||u.username||u.password)throw new Error('Invalid destination URL');}
- if(!Array.isArray(t.images)||t.images.length>10||t.images.some(image=>!image.startsWith(url+'/storage/v1/object/public/wis-event-images/')||!/^[-a-f0-9]+\/[-a-f0-9]+\.jpg$/.test(image.split('/wis-event-images/')[1]??'')))throw new Error('Use uploaded JPEG marketing images');
- if(t.channel==='instagram'&&!t.images.length)throw new Error('Instagram needs at least one image');
+ if(t.media_kind==='reel'){
+  if(t.channel!=='instagram'||t.manual_reviewed!==true||!t.reel_id||!t.video_storage_path||
+     !Number.isInteger(t.reel_revision)||t.caption.length>2000)
+   throw new Error('INVALID_APPROVED_REEL_SNAPSHOT');
+ }else if(!Array.isArray(t.images)||t.images.length>10||
+  t.images.some(image=>!image.startsWith(url+'/storage/v1/object/public/wis-event-images/')||
+   !/^[-a-f0-9]+\/[-a-f0-9]+\.jpg$/.test(image.split('/wis-event-images/')[1]??'')))
+  throw new Error('Use uploaded JPEG marketing images');
+ if(t.channel==='instagram'&&t.media_kind!=='reel'&&!t.images.length)throw new Error('Instagram needs at least one image');
  if(t.channel==='koreapas'&&!t.title?.trim())throw new Error('Add a Koreapas title');
  if(!connection()[t.channel])throw new Error('Channel is not connected');
 }
@@ -152,7 +159,7 @@ function validate(t:Template){
 // Final fail-closed check before creating Instagram media containers.
 // A scheduled draft may have had its approved asset revoked after scheduling.
 async function validateReviewedStockDraft(t:Template){
- if(t.channel!=='instagram'||!t.draft_id)return;
+ if(t.channel!=='instagram'||t.media_kind==='reel'||!t.draft_id)return;
  const {data:draft,error:draftError}=await service.from('instagram_post_drafts')
   .select('id,visual_source,images').eq('id',t.draft_id).single();
  if(draftError||!draft)throw new Error('MARKETING_DRAFT_NOT_FOUND');
@@ -722,11 +729,37 @@ Deno.serve(async req=>{
     validate(t);
     await validateReviewedStockDraft(t);
     if(t.channel==='koreapas'&&await hasAdvertOnGopasFirstPage(t.title))outcome={status:'skipped',message:'A post with this title is already on the first Koreapas page.'};
-    else if(t.channel==='instagram'){const result=await publishInstagram(t,()=>{externalAttempt=true;});outcome={status:'sent',message:'Published to @roundy.meet',...result};}
+    else if(t.channel==='instagram'){
+     const result=t.media_kind==='reel'
+      ?await publishReel(t,String(run.id),()=>{externalAttempt=true;})
+      :await publishInstagram(t,()=>{externalAttempt=true;});
+     outcome={status:'sent',message:t.media_kind==='reel'?'Reel published to @roundy.meet':'Published to @roundy.meet',...result};
+    }
     else {const html='<p>'+escapeHtml(t.caption).replace(/\n/g,'<br>')+'</p>'+t.images.map(image=>'<p><img src="'+escapeHtml(image)+'" alt="Roundy event"></p>').join('')+(t.destination_url?'<p><a href="'+escapeHtml(t.destination_url)+'">'+escapeHtml(t.cta||t.destination_url)+'</a></p>':'');externalAttempt=true;const external_url=await publishToKoreapas(t.title,html);outcome={status:'sent',message:'Published to Koreapas',external_url};}
-   }catch(error){outcome={status:externalAttempt?'needs_review':'failed',message:(error instanceof Error?error.message:'Publishing failed').slice(0,500)};}
+   }catch(error){
+    if(error instanceof ReelProcessingPending){
+     const {error:pendingError}=await service.from('marketing_runs').update({
+      status:'queued',scheduled_for:new Date(Date.now()+2*60000).toISOString(),
+      message:'Meta Reel processing is pending; existing container ID is preserved.',
+      started_at:null
+     }).eq('id',run.id).eq('status','publishing');
+     if(pendingError)throw pendingError;
+     results.push({id:run.id,status:'queued',message:'Reel processing pending'});
+     continue;
+    }
+    outcome={status:externalAttempt?'needs_review':'failed',
+     message:(error instanceof Error?error.message:'Publishing failed').slice(0,500)};
+   }
    const finishedAt=new Date().toISOString();
    const {error:updateError}=await service.from('marketing_runs').update({...outcome,finished_at:finishedAt}).eq('id',run.id).eq('status','publishing');if(updateError)throw updateError;
+   if(t.media_kind==='reel'&&t.reel_id){
+    const reelStatus=outcome.status==='sent'?'published':
+      outcome.status==='needs_review'?'needs_review_publish':'failed';
+    const {error:reelError}=await service.from('instagram_reel_drafts')
+     .update({status:reelStatus,...(reelStatus==='published'?{published_at:finishedAt}:{}),updated_at:finishedAt})
+     .eq('id',t.reel_id).eq('marketing_run_id',run.id).eq('status','queued');
+    if(reelError)throw reelError;
+   }
    if(t.draft_id){
     const draftUpdate:Record<string,unknown>={marketing_run_id:run.id};
     if(outcome.status==='sent')Object.assign(draftUpdate,{status:'published',published_at:finishedAt});
