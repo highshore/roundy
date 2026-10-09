@@ -550,7 +550,7 @@ const insightMetric=(data:any,name:string)=>{
  const value=item?.value??item?.values?.[0]?.value??item?.total_value?.value;
  return Number.isFinite(Number(value))?Number(value):null;
 };
-async function mediaPerformance(mediaId:string){
+async function mediaPerformance(mediaId:string,isReel=false){
  const basic=await graph(mediaId+'?fields=like_count,comments_count').catch(()=>({}));
  const attempts=['views,reach,likes,comments,saved,shares,total_interactions','reach,likes,comments,saved,shares,total_interactions'];
  let rich:any=null;
@@ -559,9 +559,19 @@ async function mediaPerformance(mediaId:string){
  const comments=insightMetric(rich,'comments')??Number(basic.comments_count??0);
  const saves=insightMetric(rich,'saved')??0,shares=insightMetric(rich,'shares')??0;
  const reach=insightMetric(rich,'reach'),views=insightMetric(rich,'views'),total=insightMetric(rich,'total_interactions')??(likes+comments+saves+shares);
+ let reelAvgWatch:number|null=null,reelTotalWatch:number|null=null;
+ if(isReel){
+  // Optional Reel-specific metrics. Meta may restrict or rename these fields.
+  const watch=await graph(mediaId+'/insights?metric=ig_reels_avg_watch_time,ig_reels_video_view_total_time')
+   .catch(()=>null);
+  if(watch){
+   reelAvgWatch=insightMetric(watch,'ig_reels_avg_watch_time');
+   reelTotalWatch=insightMetric(watch,'ig_reels_video_view_total_time');
+  }
+ }
  const denominator=Math.max(1,reach??views??(likes+comments+1));
  const score=((likes+comments*2+saves*3+shares*4)/denominator)*1000+Math.log10(denominator+1)*10;
- return {source:rich?'insights':'basic',views,reach,likes,comments,saves,shares,total_interactions:total,performance_score:Number(score.toFixed(4))};
+ return {source:rich?'insights':'basic',views,reach,likes,comments,saves,shares,total_interactions:total,performance_score:Number(score.toFixed(4)),reel_avg_watch_time_ms:reelAvgWatch,reel_total_watch_time_ms:reelTotalWatch};
 }
 async function captureFollowerSnapshot(){
  // One daily account-level observation; never attribute it to an individual post.
@@ -610,13 +620,14 @@ async function captureDueInsights(){
   const finished=new Date(run.finished_at).getTime(),age=(Date.now()-finished)/3600000;
   const due:number[]=[];if(age>=24&&age<60&&!seen.has(run.id+':24'))due.push(24);if(age>=72&&!seen.has(run.id+':72'))due.push(72);
   if(!due.length)continue;
-  const performance=await mediaPerformance(String(run.external_id));
+  const performance=await mediaPerformance(String(run.external_id),(run.snapshot as Record<string,unknown>)?.media_kind==='reel');
   const published=kstNow(new Date(run.finished_at)),minute=published.hour*60+published.minute;
   for(const horizon of due){
    const {error:insertError}=await service.from('instagram_post_insights').upsert({
     run_id:run.id,horizon_hours:horizon,source:performance.source,published_dow:published.dow,published_minute:minute,
     views:performance.views,reach:performance.reach,likes:performance.likes,comments:performance.comments,saves:performance.saves,
-    shares:performance.shares,total_interactions:performance.total_interactions,performance_score:performance.performance_score
+    shares:performance.shares,total_interactions:performance.total_interactions,performance_score:performance.performance_score,
+     reel_avg_watch_time_ms:performance.reel_avg_watch_time_ms,reel_total_watch_time_ms:performance.reel_total_watch_time_ms
    },{onConflict:'run_id,horizon_hours'});
    if(insertError)throw insertError;changed=true;
   }
