@@ -1,3 +1,4 @@
+import {CONTENT_POLICY_VERSION} from './marketing-content-policy';
 import {savedCtaRecoverySource} from './marketing-output-recovery';
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
