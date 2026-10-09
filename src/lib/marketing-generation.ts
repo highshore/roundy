@@ -360,7 +360,7 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
    draft=await savePartial(db,draft,{...recoveryPatch,last_regeneration_mode:input.mode,last_regeneration_instruction:input.instruction});
   }else if(operation!=='photo'&&operation!=='render'){
    const copy=await generateCopy(db,draft,input,job,research);contentQuality=copy.quality_report;await progress(db,job,'saving_copy');
-   draft=await savePartial(db,draft,{...copy,target_slide_count:slideCount,headline_candidates:Array.isArray(copy.content_document?.headline_candidates)?copy.content_document.headline_candidates:[],generation_source:automatic?'automation':'manual',visual_source:visualSource,last_regeneration_mode:input.mode,last_regeneration_instruction:input.instruction,images:[]});
+   draft=await savePartial(db,draft,{...copy,target_slide_count:slideCount,headline_candidates:Array.isArray((copy.content_document as Row)?.headline_candidates)?(copy.content_document as Row).headline_candidates:[],generation_source:automatic?'automation':'manual',visual_source:visualSource,last_regeneration_mode:input.mode,last_regeneration_instruction:input.instruction,images:[]});
   }
   let stockPhotos:ReturnType<typeof photoSelectionSnapshot>=[],photoReviewRequired=false;
   if(uploadedVisuals){
