@@ -4,6 +4,8 @@ import {photoCreditCaption} from './marketing-stock-photo-policy';
 import {approvedStockCardAssets,listStockSelections,pexelsConfigured,photoSelectionSnapshot,prepareStockSelections,stockReady} from './marketing-stock-photos';
 import {CONTENT_POLICY_VERSION} from './marketing-content-policy';
 import {selectTrendForAutomaticContent,markTrendUsed} from './marketing-trend-radar';
+import {growthLearningWeights} from './marketing-growth';
+import {planGrowthSlot,type GrowthSlot} from './marketing-growth-planner';
 import 'server-only';
 import { createHash } from 'node:crypto';
 import { createElement } from 'react';
@@ -21,7 +23,7 @@ type DB=ReturnType<typeof createServiceRoleClient>;
 type ContentLanguage='ko'|'en';
 type VisualSource='auto_ai'|'uploaded'|'none'|'pexels';
 export type GenerationInput={request_key:string;revision:number;mode:'text'|'image'|'both';content_mode:'prelaunch'|'live_event'|'growth_carousel';visual_mode:'cards'|'photo';visual_source?:VisualSource;topic_type?:string;instruction?:string;language?:ContentLanguage;confirm_photo?:boolean;render_only?:boolean;campaign_pattern?:'auto'|'poster'|'problem_solution'|'how_it_works'|'benefit_stack'|'countdown';campaign_tone?:'modern_premium'|'soft_romantic'|'bold_teaser';launch_date?:string;event_id?:string;event_campaign_stage?:'auto'|'launch'|'experience'|'venue'|'participants'|'momentum'|'imminent'|'last_call';event_campaign_pattern?:'auto'|'event_poster'|'experience'|'social_proof'|'offer'|'last_call'};
-const topics=['mbti','dating_archetype','book_insight','trend_research','meme_remix','dating_myth','conversation_prompt','seoul_dating','mini_quiz'];
+const topics=['mbti','dating_archetype','book_insight','trend_research','meme_remix','dating_myth','conversation_prompt','seoul_dating','korea_life','mini_quiz'];
 const allowedTopics=[...topics,'seoul_trend'];
 const researchTopics=new Set(['book_insight','trend_research','dating_myth','seoul_dating','seoul_trend']);
 const COPY_MODEL='gpt-6-luna',IMAGE_MODEL='gpt-image-2.5-flare',MAX_INPUT_BYTES=16000;
@@ -415,13 +417,21 @@ export async function generationOverview(){
  const dailyBudget=temporaryActive?Number(control.temporary_daily_budget_usd):Number(control.daily_budget_usd);
  return {control,jobs:jobs.data,dispatch:dispatch.data,usage:{daily_reserved_usd:todayRows.reduce((sum,r)=>sum+Number(r.reserved_usd),0),daily_budget_usd:dailyBudget,daily_budget_override_expires_at:temporaryActive?control.temporary_daily_budget_expires_at:null,monthly_reserved_usd:rows.reduce((sum,r)=>sum+Number(r.reserved_usd),0),monthly_budget_usd:Number(control.monthly_budget_usd),daily_attempts:todayRows.filter(r=>Number(r.reserved_usd)>0).length,daily_calls:todayRows.filter(r=>Number(r.reserved_usd)>0&&['running','completed','uncertain'].includes(r.status)).length,daily_call_limit:5,monthly_call_limit:90,photo_daily_limit:5,photo_monthly_limit:90},provider:{configured:!!process.env.OPENAI_API_KEY?.trim(),pexels_configured:pexelsConfigured(),stock_photos_per_carousel:'2-3',stock_review_required:true,stock_cooldown_days:90,copy_model:COPY_MODEL,image_model:IMAGE_MODEL,automatic_photos:true,manual_uploaded_images:true,fresh_visuals_per_generation:3,static_photo_reuse:false,external_retries:0,copy_repair_limit:1,research_search_limit:3,verified_book_catalog:true,research_fallback:true,content_policy_version:CONTENT_POLICY_VERSION,prelaunch_campaign_version:CAMPAIGN_VERSION,prelaunch_campaign_patterns:CAMPAIGN_PATTERNS,research_reservation_usd:0.05}};
 }
-export async function todayDraft(selectedTrend:Row|null=null){
+export async function todayDraft(selectedTrend:Row|null=null,growthSlot:GrowthSlot|null=null){
  const db=createServiceRoleClient(),today=kstDate();
  const existing=checked(await db.from('instagram_post_drafts').select('*').eq('draft_date',today).eq('draft_role','workspace').eq('status','needs_approval').maybeSingle()).data as Row|null;
  const settings=checked(await db.from('marketing_automation_settings').select('*').eq('singleton',true).single()).data as Row,dow=new Date(today+'T12:00:00+09:00').getUTCDay();
- const rec=checked(await db.from('instagram_posting_time_recommendations').select('*').eq('dow',dow).maybeSingle()).data as Row|null,isGrowth=Boolean(selectedTrend||settings.growth_carousel_enabled&&settings.growth_days.includes(dow)),rotated=topics[Math.floor(Date.parse(today+'T00:00:00Z')/86400000)%topics.length],topic=selectedTrend?'seoul_trend':rotated,language=await nextContentLanguage(db,existing?.id);
- const reason=selectedTrend?'Trend Radar override: '+String(selectedTrend.display_name)+' · score '+Number(selectedTrend.adjusted_trend_score||selectedTrend.trend_score).toFixed(1)+' · '+String(selectedTrend.status):'Hidden generation workspace. Results are imported into independent drafts.';
- const base={draft_date:today,draft_role:'workspace',status:'needs_approval',generation_source:'automation',visual_source:'auto_ai',content_language:language,content_mode:settings.content_mode,draft_kind:isGrowth?'growth_carousel':'brand',growth_topic_type:isGrowth?topic:null,trend_id:selectedTrend?.id||null,content_pillar:selectedTrend?'seoul':'concept',caption:'',cta:'Follow @roundy.meet',destination_url:'https://roundy.team',images:[],carousel_slides:[],research_sources:[],research_status:isGrowth?'pending':'not_required',generation_reason:reason,render_style:isGrowth?'editorial':settings.content_mode==='prelaunch'?'campaign':null,campaign_pattern:null,campaign_tone:settings.content_mode==='prelaunch'?'modern_premium':null,campaign_version:settings.content_mode==='prelaunch'?CAMPAIGN_VERSION:null,launch_date:null,recommended_time_kst:rec?.recommended_time_kst||'21:00',window_start_kst:rec?.window_start_kst||'20:30',window_end_kst:rec?.window_end_kst||'21:30',scheduled_for:today+'T'+String(rec?.recommended_time_kst||'21:00').slice(0,5)+':00+09:00'};
+ const rec=checked(await db.from('instagram_posting_time_recommendations').select('*').eq('dow',dow).maybeSingle()).data as Row|null;
+ const plan=Boolean(settings.growth_mode_enabled)?(growthSlot||planGrowthSlot(today,await growthLearningWeights(db))):null;
+ const trendForPost=plan&&plan.pillar!=='seoul'?null:selectedTrend;
+ const isGrowth=plan?plan.pillar!=='brand':Boolean(selectedTrend||settings.growth_carousel_enabled&&settings.growth_days.includes(dow));
+ const rotated=topics[Math.floor(Date.parse(today+'T00:00:00Z')/86400000)%topics.length];
+ const topic=plan?(plan.pillar==='seoul'&&!trendForPost?'korea_life':plan.topic_type||'conversation_prompt'):(selectedTrend?'seoul_trend':rotated);
+ const language=plan?plan.language:await nextContentLanguage(db,existing?.id);
+ const reason=plan
+  ?'Growth engine: '+plan.pillar+' / '+plan.recommended_format+' / '+plan.editorial_goal+(plan.pillar==='seoul'&&!trendForPost?' Verified Seoul trend unavailable; use evergreen Korea-life post.':'')
+  :selectedTrend?'Trend Radar override: '+String(selectedTrend.display_name)+' · score '+Number(selectedTrend.adjusted_trend_score||selectedTrend.trend_score).toFixed(1)+' · '+String(selectedTrend.status):'Hidden generation workspace. Results are imported into independent drafts.';
+ const base={draft_date:today,draft_role:'workspace',status:'needs_approval',generation_source:'automation',visual_source:'auto_ai',content_language:language,content_mode:plan?'prelaunch':settings.content_mode,draft_kind:isGrowth?'growth_carousel':'brand',growth_topic_type:isGrowth?topic:null,trend_id:trendForPost?.id||null,content_pillar:plan?.pillar==='seoul'||trendForPost?'seoul':'concept',caption:'',cta:'Follow @roundy.meet',destination_url:'https://roundy.team',images:[],carousel_slides:[],research_sources:[],research_status:isGrowth?'pending':'not_required',generation_reason:reason,render_style:isGrowth?'editorial':settings.content_mode==='prelaunch'?'campaign':null,campaign_pattern:null,campaign_tone:settings.content_mode==='prelaunch'?'modern_premium':null,campaign_version:settings.content_mode==='prelaunch'?CAMPAIGN_VERSION:null,launch_date:null,recommended_time_kst:rec?.recommended_time_kst||'21:00',window_start_kst:rec?.window_start_kst||'20:30',window_end_kst:rec?.window_end_kst||'21:30',scheduled_for:today+'T'+String(rec?.recommended_time_kst||'21:00').slice(0,5)+':00+09:00'};
  if(existing){
   // Defensive reset: an automation workspace must reflect today's selected route only.
   // This prevents any stale/manual trend_id or copy from being reused by the daily job.
@@ -472,8 +482,10 @@ export async function automaticGeneration(){
  const db=createServiceRoleClient(),settings=checked(await db.from('marketing_automation_settings').select('*').eq('singleton',true).single()).data as Row,time=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date());
  if(!settings.daily_instagram_enabled||time<String(settings.draft_generation_time_kst).slice(0,5))return {skipped:true};
  const key='auto:'+kstDate(),existing=checked(await db.from('marketing_generation_jobs').select('id,status').eq('request_key',key).maybeSingle()).data;if(existing)return {deduplicated:true,job:existing};
- const selectedTrend=settings.trend_radar_enabled&&settings.trend_override_enabled?await selectTrendForAutomaticContent(db,Number(settings.trend_override_score||80)):null;
- const draft=await todayDraft(selectedTrend);if(draft.status!=='needs_approval')return {skipped:true};
+ const growthSlot=settings.growth_mode_enabled?planGrowthSlot(kstDate(),await growthLearningWeights(db)):null;
+ const trendScheduled=!growthSlot||growthSlot.pillar==='seoul';
+ const selectedTrend=trendScheduled&&settings.trend_radar_enabled&&settings.trend_override_enabled?await selectTrendForAutomaticContent(db,Number(settings.trend_override_score||80)):null;
+ const draft=await todayDraft(selectedTrend,growthSlot);if(draft.status!=='needs_approval')return {skipped:true};
  const trend=selectedTrend&&draft.trend_id===selectedTrend.id?selectedTrend:null,instruction=trend?[String(trend.display_name),String(trend.content_angle||trend.summary||'')].filter(Boolean).join(': ').slice(0,500):'';
  const result=await runGeneration(draft.id,{request_key:key,revision:draft.revision,mode:'both',visual_mode:'cards',visual_source:'auto_ai',content_mode:draft.draft_kind==='growth_carousel'?'growth_carousel':draft.content_mode,topic_type:draft.growth_topic_type||'conversation_prompt',instruction},null,true);
  if(trend&&result.job?.status==='completed')await markTrendUsed(db,trend.id);
