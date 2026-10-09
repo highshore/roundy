@@ -52,14 +52,30 @@ export async function growthLearningWeights(db:DB):Promise<GrowthWeights>{
 }
 export async function growthOverview(){
  const db=createServiceRoleClient();
- const [settings,evidence]=await Promise.all([
+ const [settings,evidence,followerRows]=await Promise.all([
   db.from('marketing_automation_settings').select('growth_mode_enabled,trend_radar_enabled,daily_instagram_enabled').eq('singleton',true).single(),
-  readGrowthEvidence(db)
+  readGrowthEvidence(db),
+  db.from('instagram_follower_snapshots').select('snapshot_date,followers_count,captured_at').order('snapshot_date',{ascending:false}).limit(90)
  ]);
  const config=checked(settings).data as Row;
- return {...evidence,enabled:config.growth_mode_enabled===true,automation_enabled:config.daily_instagram_enabled===true,
+ const followerHistory=(checked(followerRows).data||[]) as Row[];
+ const latest=followerHistory[0]||null;
+ // Compare to the most recent snapshot on/before the 7- or 30-day reference date.
+ const followerChange=(days:number)=>{
+  if(!latest)return null;
+  const reference=new Date(Date.parse(String(latest.snapshot_date)+'T00:00:00Z')-days*86400000).toISOString().slice(0,10);
+  const historical=followerHistory.find(row=>String(row.snapshot_date)<=reference);
+  return historical?Number(latest.followers_count)-Number(historical.followers_count):null;
+ };
+ const followers={
+  current:latest?Number(latest.followers_count):null,
+  snapshot_date:latest?.snapshot_date||null,
+  change_7d:followerChange(7),change_30d:followerChange(30),
+  snapshots:followerHistory.slice().reverse().map(row=>({date:row.snapshot_date,count:row.followers_count}))
+ };
+ return {...evidence,followers,enabled:config.growth_mode_enabled===true,automation_enabled:config.daily_instagram_enabled===true,
   trend_radar_enabled:config.trend_radar_enabled===true,
   week_plan:growthWeekPlan(todayKst(),evidence.weights),
   manual_reels_note:'Reel candidates are editorial recommendations only. Existing Instagram publisher currently uploads JPEG posts/carousels; video production and publishing require a separate reviewed workflow.',
-  metrics_note:'Organic follower conversion and profile visits are not provided by the current media-insights capture. Share/save rates are proxy signals, not follower growth.'};
+  metrics_note:'Follower totals are captured once daily when the Instagram profile API permits. Profile-to-follow conversion and post-level acquisition attribution remain unavailable; do not interpret share/save rates as new followers.'};
 }
