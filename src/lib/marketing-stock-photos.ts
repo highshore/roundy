@@ -47,7 +47,7 @@ export async function listStockSelections(db:DB,draftId:string):Promise<SourcePh
   return rows.map((item:Row)=>({...item.marketing_photo_assets,slot:item.slot,asset_id:item.asset_id})) as SourcePhoto[];
 }
 export async function importStockSelections(db:DB,draftId:string,photoSelections:unknown){
-  if(!Array.isArray(photoSelections)||photoSelections.length<2||photoSelections.length>3)throw new Error('STOCK_PHOTO_SNAPSHOT_UNAVAILABLE');
+  if(!Array.isArray(photoSelections)||photoSelections.length<1||photoSelections.length>3)throw new Error('STOCK_PHOTO_SNAPSHOT_UNAVAILABLE');
   const rows=photoSelections.map((item:Row)=>({draft_id:draftId,asset_id:String(item?.asset_id||''),slot:Number(item?.slot)}));
   if(rows.some(x=>!Number.isInteger(x.slot)||x.slot<0||x.slot>5||!/^[a-f0-9-]{36}$/i.test(x.asset_id))||new Set(rows.map(x=>x.asset_id)).size!==rows.length)throw new Error('INVALID_STOCK_PHOTO_SNAPSHOT');
   check(await db.from('marketing_draft_photos').upsert(rows,{onConflict:'draft_id,slot',ignoreDuplicates:true}));
