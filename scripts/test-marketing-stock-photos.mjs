@@ -13,15 +13,15 @@ const mod={exports:{}};
 new Function('exports','require','module',transpiled)(mod.exports,require,mod);
 const {requiredPhotoSlotsForRoles,allSelectedPhotosApproved,photoCreditCaption}=mod.exports;
 
-assert.deepEqual(requiredPhotoSlotsForRoles(['cover','content','cta']),[0,1]);
-assert.deepEqual(requiredPhotoSlotsForRoles(['cover','content','content','cta']),[0,1,2]);
-assert.deepEqual(requiredPhotoSlotsForRoles(['cover','fact','content','content','content','cta']),[0,1,3]);
-assert.ok(requiredPhotoSlotsForRoles(['cover','content','facts','cta']).every(slot=>slot<3));
-assert.throws(()=>requiredPhotoSlotsForRoles(['cover','cta']),/TWO_CONTENT_CARDS/);
-assert.throws(()=>requiredPhotoSlotsForRoles(['cta']),/TWO_CONTENT_CARDS/);
+assert.deepEqual(requiredPhotoSlotsForRoles(['cover','content','cta']),[1]);
+assert.deepEqual(requiredPhotoSlotsForRoles(['cover','content','content','cta']),[1,2]);
+assert.deepEqual(requiredPhotoSlotsForRoles(['cover','context','detail','value','cta']),[1,2,3]);
+assert.deepEqual(requiredPhotoSlotsForRoles(['cover','fact','content','content','content','cta']),[1,2,3]);
+assert.throws(()=>requiredPhotoSlotsForRoles(['cover','cta']),/VALID_CAROUSEL/);
+assert.throws(()=>requiredPhotoSlotsForRoles(['cta']),/VALID_CAROUSEL/);
 
-const roles=['cover','body','body','cta'];
-const valid=[0,1,2].map(slot=>({slot,review_status:'approved',storage_path:'stock/pexels/'+slot+'.jpg'}));
+const roles=['cover','context','detail','value','cta'];
+const valid=[1,2,3].map(slot=>({slot,review_status:'approved',storage_path:'stock/pexels/'+slot+'.jpg'}));
 assert.equal(allSelectedPhotosApproved(roles,valid),true);
 assert.equal(allSelectedPhotosApproved(roles,valid.slice(0,2)),false);
 assert.equal(allSelectedPhotosApproved(roles,[...valid,{slot:4,review_status:'approved',storage_path:'x'}]),false);
@@ -29,6 +29,7 @@ assert.equal(allSelectedPhotosApproved(roles,valid.map((photo,index)=>index===1?
 assert.equal(allSelectedPhotosApproved(roles,valid.map((photo,index)=>index===1?{...photo,review_status:'rejected'}:photo)),false);
 assert.equal(allSelectedPhotosApproved(roles,valid.map((photo,index)=>index===1?{...photo,storage_path:null}:photo)),false);
 assert.equal(allSelectedPhotosApproved(roles,[valid[1],valid[0],valid[2]]),false);
+assert.equal(allSelectedPhotosApproved(['cover','context','cta'],[valid[0]]),true);
 
 const credit=photoCreditCaption('Hello',['Alice','Bob','Alice']);
 assert.equal(credit,'Hello\n\nPhotos: Alice, Bob / Pexels');
