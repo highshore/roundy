@@ -15,7 +15,7 @@ import {generateEditorialCopy,draftQuality,editorialCard,editorialPhotoCover} fr
 import {generateCampaignCopy,campaignDraftQuality,CAMPAIGN_VERSION,CAMPAIGN_PATTERNS,CAMPAIGN_TONES} from './marketing-campaign';
 import {generateEventCampaignCopy,eventCampaignDraftQuality,EVENT_CAMPAIGN_VERSION,EVENT_CAMPAIGN_STAGES,EVENT_CAMPAIGN_PATTERNS,selectAutomaticEventCampaign,createAutomaticEventDraft,recordAutomaticEventCampaign,loadEventCampaignFacts} from './marketing-event-campaign';
 import {CAMPAIGN_PRESET,EVENT_CAMPAIGN_PRESET} from './marketing-presentation';
-import {renderPrelaunchCampaign,renderLiveEventCampaign} from './marketing-visuals';
+import {renderPrelaunchCampaign,renderLiveEventCampaign,titleLines,textUnits} from './marketing-visuals';
 // EDITORIAL_V2_INTEGRATED
 import { createServiceRoleClient } from './supabase/service';
 type Row=Record<string,any>;
@@ -157,12 +157,25 @@ async function storeImage(db:DB,job:Row,bytes:Buffer,index:number){
 }
 async function renderCardsWithAssets(db:DB,draft:Row,job:Row,assets:Awaited<ReturnType<typeof loadEditorialAssets>>,directCards:Record<number,Buffer>={}){
  const cards=draft.carousel_slides||[];
- if(!draft.content_document||!cards.length||cards.length>6)throw new Error('유형별 카드 문구가 없습니다. 품질 재작업 후 렌더하세요.');
+ if(!draft.content_document||![3,5].includes(cards.length))throw new Error('Card count must be exactly three or five. Regenerate the copy first.');
+ const typography=checked(await db.from('marketing_automation_settings').select('marketing_title_font_px,marketing_body_font_px').eq('singleton',true).single()).data as Row;
+ const titleScale=Number(typography.marketing_title_font_px||76)/76,bodyScale=Number(typography.marketing_body_font_px||40)/40;
+ for(const [index,card] of cards.entries()){
+  const title=String(card.title||''),body=String(card.body||'');
+  if(!title||!body)throw new GenerationError('CARD_LAYOUT_REVIEW_REQUIRED',`Card ${index+1} is missing copy.`);
+  const titlePx=Math.round((index===0?112:85)*titleScale),bodyPx=Math.round(41*bodyScale);
+  const titleLinesCount=titleLines(title,900/titlePx*.91).length;
+  const bodyLinesCount=titleLines(body,900/bodyPx*.91).length;
+  const options=Array.isArray(card.options)?card.options.filter(Boolean).length:0;
+  const estimatedHeight=titleLinesCount*titlePx*1.15+bodyLinesCount*bodyPx*1.49+options*62+(card.highlight?55:0)+145;
+  if(titleLinesCount>5||estimatedHeight>(index===0?1040:990)||title.split(/\\s+/).some((word:string)=>textUnits(word)>900/titlePx))
+   throw new GenerationError('CARD_LAYOUT_REVIEW_REQUIRED',`Card ${index+1} has excessive text. Shorten the headline or body before rendering.`);
+ }
  const urls:string[]=[];
  for(let i=0;i<cards.length;i++){
   await progress(db,job,'rendering_'+(i+1)+'_of_'+cards.length);
   if(directCards[i]){urls.push(await storeImage(db,job,directCards[i],i));continue;}
-  const document={...draft.content_document,slides:cards};
+  const document={...draft.content_document,slides:cards,typography:{title_px:Number(typography.marketing_title_font_px||76),body_px:Number(typography.marketing_body_font_px||40)}};
   const image=document.design_preset===CAMPAIGN_PRESET
    ?renderPrelaunchCampaign(cards[i],i,cards.length,document,assets)
    :document.design_preset===EVENT_CAMPAIGN_PRESET
