@@ -32,7 +32,7 @@ Until 30 measured posts, 5,000 cumulative reach, and at least 5 posts / 500 reac
 
 Posting-time optimizer ignores snapshots below 50 reach and uses measured slots only after >=15 qualifying posts and >=3,000 total reach. Earlier extremely small-sample interaction rates must not determine posting times.
 
-The account currently does not have follower conversion, profile visits, Reel watch-time or retention supplied by this analytics path. Never represent share or save rates as follower acquisition metrics.
+Account-level followers: production now has an admin-readable, service-role-written daily snapshot table. The Instagram worker attempts a read-only profile query for followers_count only on its existing authenticated scheduler, once per Korea-local date. Missing Meta scopes/fields never write a false zero and never block posting. On deployment, the Growth tab shows the latest count and 7/30-day net changes when historical reference days exist. These totals are NOT per-post follower attribution or a profile-to-follow conversion funnel; the media-insights collection has no such metric. Never represent shares/saves as follower acquisition.
 
 ## Human workflow
 
@@ -48,6 +48,6 @@ No fake followers, bought engagement, scraped personal profiles, unsolicited DM 
 
 Phase 2: 9:16 native video production (licensed or owned material), subtitle/title cover editor, rights-review queue, Meta Reel publishing action and asynchronous publish reconciliation.
 
-Phase 3: Add authorized account-level follower and profile-visit snapshots if supported by Meta permissions; design attribution carefully and do not claim single-post causality from daily follower deltas.
+Phase 3: Verify Meta followers_count on the connected account, inspect consecutive daily account snapshots, and consider separate authorized profile-visit metrics if supported by permissions. Do not claim single-post causality from follower count changes.
 
 Phase 4: controlled hook variations, organic creator collaborations with permission, and eventual pivot-relevant conversion tests.
