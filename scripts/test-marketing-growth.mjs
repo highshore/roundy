@@ -1,0 +1,44 @@
+import {readFileSync} from 'node:fs';
+import assert from 'node:assert/strict';
+import vm from 'node:vm';
+import ts from 'typescript';
+
+// Load only the pure planner. Tests make no live provider, Meta or Supabase calls.
+const source=readFileSync(new URL('../src/lib/marketing-growth-planner.ts',import.meta.url),'utf8');
+const js=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+const exports={};
+vm.runInNewContext(js,{module:{exports},exports});
+const {BASE_GROWTH_WEIGHTS,GROWTH_PILLARS,aggregateGrowthSignals,recommendGrowthWeights,planGrowthSlot,growthWeekPlan,growthPillarForTopic}=exports;
+assert.equal(growthPillarForTopic('korea_life','growth_carousel'),'culture');
+assert.equal(growthPillarForTopic('seoul_trend','growth_carousel'),'seoul');
+assert.equal(growthPillarForTopic('meme_remix','growth_carousel'),'humor');
+assert.equal(growthPillarForTopic(null,'brand'),'brand');
+const anchor=Date.parse('2026-01-01T00:00:00Z');
+const slots=Array.from({length:100},(_,i)=>planGrowthSlot(new Date(anchor+i*86400000).toISOString().slice(0,10)));
+const counts=Object.fromEntries(GROWTH_PILLARS.map(p=>[p,slots.filter(s=>s.pillar===p).length]));
+for(const p of GROWTH_PILLARS)assert.equal(counts[p],BASE_GROWTH_WEIGHTS[p],p+' 100-day allocation');
+const languages=growthWeekPlan('2026-10-09').map(s=>s.language);
+assert.equal(languages.filter(l=>l==='en').length,5);
+assert.equal(languages.filter(l=>l==='ko').length,2);
+assert.deepEqual(planGrowthSlot('2026-10-09'),planGrowthSlot('2026-10-09'));
+assert.throws(()=>planGrowthSlot('2026-02-30'),/INVALID_GROWTH_DATE/);
+assert.equal(slots.every(s=>s.pillar==='brand'?s.content_mode==='prelaunch':s.content_mode==='growth_carousel'),true);
+const weak=aggregateGrowthSignals([{pillar:'humor',reach:3,shares:1,saves:0,comments:0,likes:1}]);
+assert.equal(recommendGrowthWeights(weak).learning,false,'a 3-person reach is not a growth signal');
+const strong=GROWTH_PILLARS.flatMap((pillar,i)=>Array.from({length:pillar==='brand'?5:8},()=>({
+ pillar,reach:900,shares:i===2?30:5,saves:i===0?20:4,comments:1,likes:6
+})));
+const trained=recommendGrowthWeights(aggregateGrowthSignals(strong));
+assert.equal(trained.learning,true,'learning should unlock with sustained evidence across all cohorts');
+assert.ok(trained.weights.humor>BASE_GROWTH_WEIGHTS.humor,'high-sharing humor can gain limited allocation');
+assert.ok(Math.abs(GROWTH_PILLARS.reduce((n,p)=>n+trained.weights[p],0)-100)<1e-6,'weights sum to 100');
+assert.equal(trained.weights.brand,5,'brand exposure cap');
+const broken=strong.filter(s=>s.pillar!=='culture');
+assert.equal(recommendGrowthWeights(aggregateGrowthSignals(broken)).learning,false,'no extrapolation from untested pillar');
+const generation=readFileSync(new URL('../src/lib/marketing-generation.ts',import.meta.url),'utf8');
+assert.match(generation,/growth_mode_enabled/);
+assert.match(generation,/Verified Seoul trend unavailable; use evergreen Korea-life post/);
+const publisher=readFileSync(new URL('../supabase/functions/roundy-marketing/index.ts',import.meta.url),'utf8');
+assert.match(publisher,/Number\(row\.reach\)>=50/);
+assert.match(publisher,/total>=15&&totalReach>=3000/);
+console.log('Instagram growth engine tests passed: balanced schedule, bilingual slots, confidence gating, feedback weights, safe trend fallback and tiny-reach time guard.');
