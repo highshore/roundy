@@ -431,6 +431,17 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
   const growthDays:number[]=Array.isArray(body?.growth_days)?body.growth_days.map((value:unknown)=>Number(value)):[];
   const growthCount=Number(body?.growth_posts_per_week),trendThreshold=Number(body?.trend_override_score??80),eventMax=Number(body?.event_campaign_max_posts??5);
   const trendRadar=body?.trend_radar_enabled??true,trendOverride=body?.trend_override_enabled??true,eventCampaign=body?.event_campaign_enabled??true,growthMode=body?.growth_mode_enabled??false;
+  const maxFeed=Number(body?.max_feed_posts_per_kst_day??1),slideMode=body?.carousel_slide_mode??'fixed',
+    fixedSlides=Number(body?.carousel_default_slides??5),minReal=Number(body?.min_real_photos_per_five??3),
+    titlePx=Number(body?.marketing_title_font_px??76),bodyPx=Number(body?.marketing_body_font_px??40),
+    coverAI=body?.ai_cover_enabled??false,answerFirst=body?.answer_first_enabled??true,
+    storyPreview=body?.story_preview_enabled??true;
+  if(!Number.isInteger(maxFeed)||maxFeed<1||maxFeed>3||!['fixed','alternating'].includes(slideMode)
+    ||![3,5].includes(fixedSlides)||![3,4].includes(minReal)
+    ||!Number.isInteger(titlePx)||titlePx<62||titlePx>104
+    ||!Number.isInteger(bodyPx)||bodyPx<32||bodyPx>56
+    ||typeof coverAI!=='boolean'||typeof answerFirst!=='boolean'||typeof storyPreview!=='boolean')
+    return json({error:'Invalid Instagram content settings'},400);
   if(!body||typeof body.daily_instagram_enabled!=='boolean'||typeof body.auto_reply_enabled!=='boolean'||typeof body.optimization_enabled!=='boolean'||typeof body.growth_carousel_enabled!=='boolean'||typeof trendRadar!=='boolean'||typeof trendOverride!=='boolean'||typeof eventCampaign!=='boolean'||typeof growthMode!=='boolean'||typeof body.daily_time_kst!=='string'||typeof body.draft_generation_time_kst!=='string'||!['prelaunch','live_event'].includes(body.content_mode)||!timePattern.test(body.daily_time_kst)||!timePattern.test(body.draft_generation_time_kst)||!Number.isInteger(growthCount)||growthCount<0||growthCount>7||growthDays.some(day=>!Number.isInteger(day)||day<0||day>6)||new Set(growthDays).size!==growthDays.length||growthDays.length!==growthCount||!Number.isInteger(trendThreshold)||trendThreshold<60||trendThreshold>100||!Number.isInteger(eventMax)||eventMax<1||eventMax>5)return json({error:'Invalid automation settings'},400);
   const {data,error}=await db.from('marketing_automation_settings').update({
    daily_instagram_enabled:body.daily_instagram_enabled,
@@ -448,7 +459,16 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
    trend_override_enabled:trendOverride,
    trend_override_score:trendThreshold,
    event_campaign_enabled:eventCampaign,
-   event_campaign_max_posts:eventMax
+   event_campaign_max_posts:eventMax,
+   max_feed_posts_per_kst_day:maxFeed,
+   carousel_slide_mode:slideMode,
+   carousel_default_slides:fixedSlides,
+   min_real_photos_per_five:minReal,
+   ai_cover_enabled:coverAI,
+   answer_first_enabled:answerFirst,
+   story_preview_enabled:storyPreview,
+   marketing_title_font_px:titlePx,
+   marketing_body_font_px:bodyPx
   }).eq('singleton',true).select('*').single();
   if(error)throw error;return json({settings:data});
  }
