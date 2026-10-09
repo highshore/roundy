@@ -10,6 +10,7 @@ import { createServiceRoleClient } from './supabase/service';
 import { marketingApi as legacyMarketingApi } from './marketing-legacy';
 import { generationOverview, kstDate, runGeneration, validateGenerationInput } from './marketing-generation';
 import {runTrendRadar,trendOverview} from './marketing-trend-radar';
+import {growthOverview} from './marketing-growth';
 import {CAMPAIGN_VERSION} from './marketing-campaign';
 import {EVENT_CAMPAIGN_VERSION} from './marketing-event-campaign';
 type Client=Awaited<ReturnType<typeof createClient>>;
@@ -197,6 +198,7 @@ if(id==='uploads'&&path.length===1&&req.method==='GET'){
   const patch=body.enabled?{enabled:true,blocked_reason:null,updated_at:new Date().toISOString()}:{enabled:false,updated_at:new Date().toISOString()};
   checked(await service.from('marketing_ai_control').update(patch).eq('singleton',true));return json(await generationOverview());
  }
+ if(id==='growth'&&path.length===1&&req.method==='GET')return json(await growthOverview());
  if(id==='trend-radar'&&path.length===1&&req.method==='GET')return json(await trendOverview());
  if(id==='trend-radar'&&path[1]==='run'&&path.length===2&&req.method==='POST'){
   const body=await req.json().catch(()=>({}));if(body.confirm_paid_scan!==true)return json({error:'TREND_SCAN_CONFIRMATION_REQUIRED'},400);
