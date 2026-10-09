@@ -159,17 +159,22 @@ function validate(t:Template){
 // Final fail-closed check before creating Instagram media containers.
 // A scheduled draft may have had its approved asset revoked after scheduling.
 async function validateReviewedStockDraft(t:Template){
- if(t.channel!=='instagram'||t.media_kind==='reel'||!t.draft_id)return;
+ if(t.channel!=='instagram'||t.media_kind==='reel'||t.media_kind==='story'||!t.draft_id)return;
  const {data:draft,error:draftError}=await service.from('instagram_post_drafts')
-  .select('id,visual_source,images').eq('id',t.draft_id).single();
+  .select('id,visual_source,images,carousel_slides,status').eq('id',t.draft_id).single();
  if(draftError||!draft)throw new Error('MARKETING_DRAFT_NOT_FOUND');
- if(draft.visual_source!=='pexels')return;
+ const count=Array.isArray(draft.carousel_slides)?draft.carousel_slides.length:0;
+ if(![3,5].includes(count)||draft.visual_source!=='pexels')throw new Error('REVIEWED_PHOTOGRAPHY_REQUIRED_FOR_CAROUSEL');
+ if(!Array.isArray(draft.images)||draft.images.length!==count)throw new Error('CAROUSEL_SLIDE_COUNT_MISMATCH');
+ const required=count===5?[1,2,3]:[1];
  const {data:rows,error}=await service.from('marketing_draft_photos')
-  .select('asset_id,marketing_photo_assets(review_status,storage_path)').eq('draft_id',t.draft_id);
- if(error||!rows||rows.length<2||rows.length>3||
-  rows.some((row:Record<string,any>)=>{
+  .select('slot,asset_id,marketing_photo_assets(review_status,storage_path,source_url,license_name,license_url,license_checked_at,content_sha256)')
+  .eq('draft_id',t.draft_id).order('slot',{ascending:true});
+ if(error||!rows||rows.length!==required.length||
+  rows.some((row:Record<string,any>,index:number)=>{
    const photo=Array.isArray(row.marketing_photo_assets)?row.marketing_photo_assets[0]:row.marketing_photo_assets;
-   return !photo||photo.review_status!=='approved'||!photo.storage_path;
+   return row.slot!==required[index]||!photo||photo.review_status!=='approved'||!photo.storage_path||
+      !photo.source_url||!photo.license_name||!photo.license_url||!photo.license_checked_at||!photo.content_sha256;
   }))throw new Error('STOCK_PHOTO_REVIEW_REQUIRED');
  if(JSON.stringify(draft.images)!==JSON.stringify(t.images))throw new Error('STOCK_RENDER_CHANGED_AFTER_APPROVAL');
 }
