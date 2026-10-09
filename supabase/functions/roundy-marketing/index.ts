@@ -523,7 +523,7 @@ const preferredByDow=[1260,1140,1140,1080,750,1260,1260];
 const nearestCandidate=(minute:number)=>candidateMinutes.reduce((best,item)=>Math.abs(item-minute)<Math.abs(best-minute)?item:best,candidateMinutes[0]);
 const average=(values:number[])=>values.length?values.reduce((sum,value)=>sum+value,0)/values.length:0;
 async function refreshTimeRecommendations(){
- const {data:insights,error}=await service.from('instagram_post_insights').select('run_id,horizon_hours,published_dow,published_minute,performance_score').order('horizon_hours',{ascending:false});
+ const {data:insights,error}=await service.from('instagram_post_insights').select('run_id,horizon_hours,published_dow,published_minute,performance_score,reach,source').order('horizon_hours',{ascending:false});
  if(error)throw error;
  const best=new Map<string,any>();for(const row of insights??[])if(!best.has(row.run_id))best.set(row.run_id,row);
  const runIds=[...best.keys()];let eligible=new Set<string>();
@@ -532,14 +532,16 @@ async function refreshTimeRecommendations(){
   if(runError)throw runError;
   eligible=new Set((runs??[]).filter(run=>(run.snapshot as any)?.eligible_for_optimization!==false).map(run=>run.id));
  }
- const rows=[...best.values()].filter(row=>eligible.has(row.run_id));const total=rows.length;
+ // A handful of 2-5-person posts can show 500+ interaction points. Do not learn from those.
+ const rows=[...best.values()].filter(row=>eligible.has(row.run_id)&&row.source==='insights'&&Number(row.reach)>=50);
+ const total=rows.length,totalReach=rows.reduce((n,row)=>n+Number(row.reach||0),0);
  const global=new Map<number,number[]>(),day=new Map<string,number[]>();
  for(const row of rows){
   const slot=nearestCandidate(Number(row.published_minute)),score=Number(row.performance_score||0);
   global.set(slot,[...(global.get(slot)??[]),score]);const key=row.published_dow+':'+slot;day.set(key,[...(day.get(key)??[]),score]);
  }
  const globalMeans=candidateMinutes.map(slot=>average(global.get(slot)??[])),globalMax=Math.max(1,...globalMeans);
- const dataWeight=Math.min(.65,total/30*.65),priorWeight=1-dataWeight;
+ const dataWeight=total>=15&&totalReach>=3000?Math.min(.65,(total-10)/30*.65):0,priorWeight=1-dataWeight;
  const updates=[];
  for(let dow=0;dow<7;dow++){
   const dayMeans=candidateMinutes.map(slot=>average(day.get(dow+':'+slot)??[])),dayMax=Math.max(1,...dayMeans);let bestSlot=candidateMinutes[0],bestScore=-1;
@@ -551,11 +553,11 @@ async function refreshTimeRecommendations(){
    const score=priorWeight*prior+dataWeight*(.7*globalNorm+.3*(dayNorm||globalNorm))+explore;
    if(score>bestScore){bestScore=score;bestSlot=slot;}
   }
-  const source=total>=20?'learned':total>=5?'benchmark+learning':'benchmark';
+  const source=dataWeight===0?'benchmark':total>=30?'learned':'benchmark+learning';
   updates.push({
    dow,recommended_time_kst:minutesTime(bestSlot),window_start_kst:minutesTime(bestSlot-30),window_end_kst:minutesTime(bestSlot+30),
    sample_size:total,score:Number(bestScore.toFixed(4)),source,
-   rationale:source==='benchmark'?'Using the initial benchmark while Roundy gathers enough post performance data.':'Blends the initial benchmark with Roundy reach and weighted engagement from '+total+' measured posts. Saves and shares receive the most weight.',
+   rationale:source==='benchmark'?'Benchmark only: fewer than 15 posts with reach >=50 or fewer than 3,000 cumulative reach; tiny-sample engagement is excluded.':'Blends the initial benchmark with Roundy reach and weighted engagement from '+total+' measured posts. Saves and shares receive the most weight.',
    updated_at:new Date().toISOString()
   });
  }
