@@ -32,7 +32,8 @@
     "test:auth-security": "node scripts/test-auth-security.mjs",
     "configure:stream": "node --env-file-if-exists=.env.local scripts/configure-stream-channel-types.mjs",
     "test:marketing-stock": "node scripts/test-marketing-stock-photos.mjs",
-    "test:marketing-growth": "node scripts/test-marketing-growth.mjs"
+    "test:marketing-growth": "node scripts/test-marketing-growth.mjs",
+    "test:marketing-reels": "node scripts/test-marketing-reels.mjs"
   },
   "engines": {
     "node": ">=22"
