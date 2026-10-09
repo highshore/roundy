@@ -10,6 +10,7 @@ ALTER TABLE public.marketing_automation_settings
  ADD COLUMN IF NOT EXISTS marketing_title_font_px smallint NOT NULL DEFAULT 76 CHECK (marketing_title_font_px BETWEEN 62 AND 104),
  ADD COLUMN IF NOT EXISTS marketing_body_font_px smallint NOT NULL DEFAULT 40 CHECK (marketing_body_font_px BETWEEN 32 AND 56);
 ALTER TABLE public.instagram_post_drafts
+ ADD COLUMN IF NOT EXISTS target_slide_count smallint NOT NULL DEFAULT 5 CHECK (target_slide_count IN (3,5)),
  ADD COLUMN IF NOT EXISTS headline_candidates jsonb NOT NULL DEFAULT '[]'::jsonb,
  ADD COLUMN IF NOT EXISTS selected_headline text,
  ADD COLUMN IF NOT EXISTS publication_validation jsonb NOT NULL DEFAULT '{}'::jsonb;
@@ -81,6 +82,20 @@ CREATE TRIGGER assign_instagram_feed_day BEFORE INSERT OR UPDATE OF scheduled_fo
 FOR EACH ROW EXECUTE FUNCTION roundy_private.assign_instagram_feed_day();
 
 -- The approval RPC must use the date allocated by the queue trigger.
+CREATE OR REPLACE FUNCTION roundy_private.expected_instagram_feed_slide_count()
+RETURNS smallint LANGUAGE plpgsql SECURITY DEFINER SET search_path TO '' AS $
+DECLARE prefs public.marketing_automation_settings%rowtype; feed_count integer;
+BEGIN
+ SELECT * INTO prefs FROM public.marketing_automation_settings WHERE singleton=true;
+ IF coalesce(prefs.carousel_slide_mode,'fixed')='fixed' THEN
+  RETURN coalesce(prefs.carousel_default_slides,5);
+ END IF;
+ SELECT count(*) INTO feed_count FROM public.marketing_runs
+ WHERE channel='instagram' AND status IN ('queued','publishing','needs_review','sent')
+   AND coalesce(snapshot->>'media_kind','feed')='feed';
+ RETURN CASE WHEN feed_count%2=0 THEN 3 ELSE 5 END;
+END $;
+
 CREATE OR REPLACE FUNCTION public.approve_marketing_draft(p_id uuid, p_revision integer, p_actor uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -90,6 +105,11 @@ declare d public.instagram_post_drafts; r public.marketing_runs; scheduled times
 begin
  perform pg_advisory_xact_lock(70361005);
  select * into d from public.instagram_post_drafts where id=p_id for update;
+ -- The publication queue, not a client-side guess, is authoritative.
+ if jsonb_array_length(coalesce(d.carousel_slides,'[]'::jsonb))
+     <> roundy_private.expected_instagram_feed_slide_count() then
+   raise exception 'CAROUSEL_SLIDE_SEQUENCE_CHANGED_REGENERATE';
+ end if;
  if not found or d.status<>'needs_approval' or d.revision<>p_revision then raise exception 'DRAFT_CHANGED_REFRESH_FIRST'; end if;
  if exists(select 1 from public.marketing_generation_jobs where draft_id=p_id and status='running' and created_at>now()-interval '5 minutes') then raise exception 'GENERATION_ALREADY_RUNNING'; end if;
  if trim(d.caption)='' or cardinality(d.images)=0 then raise exception 'COMPLETE_COPY_AND_IMAGES_FIRST'; end if;
@@ -125,6 +145,11 @@ declare d public.instagram_post_drafts; r public.marketing_runs;
 begin
  perform pg_advisory_xact_lock(70361005);
  select * into d from public.instagram_post_drafts where id=p_id for update;
+ -- The publication queue, not a client-side guess, is authoritative.
+ if jsonb_array_length(coalesce(d.carousel_slides,'[]'::jsonb))
+     <> roundy_private.expected_instagram_feed_slide_count() then
+   raise exception 'CAROUSEL_SLIDE_SEQUENCE_CHANGED_REGENERATE';
+ end if;
  if not found or d.status<>'needs_approval' or d.revision<>p_revision then raise exception 'DRAFT_CHANGED_REFRESH_FIRST'; end if;
  if exists(select 1 from public.marketing_generation_jobs where draft_id=p_id and status='running' and created_at>now()-interval '5 minutes') then raise exception 'GENERATION_ALREADY_RUNNING'; end if;
  if trim(d.caption)='' or cardinality(d.images)=0 then raise exception 'COMPLETE_COPY_AND_IMAGES_FIRST'; end if;
