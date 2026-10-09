@@ -26,6 +26,12 @@ const ROLE_MAP:Record<CampaignPattern,string[]>={
  benefit_stack:['hook','benefit','benefit','benefit','cta'],
  countdown:['hook','countdown','benefit','benefit','cta'],
 };
+function rolesForCampaign(pattern:CampaignPattern,count:3|5=5):string[]{
+ const full=ROLE_MAP[pattern];
+ if(count===5)return full;
+ const key:Record<CampaignPattern,string>={poster:'benefit',problem_solution:'solution',how_it_works:'step',benefit_stack:'benefit',countdown:'countdown'};
+ return ['hook',key[pattern],'cta'];
+}
 const GOAL_MAP:Record<CampaignPattern,string>={
  poster:'awareness',
  problem_solution:'differentiation',
@@ -94,8 +100,8 @@ function choosePattern(requested:unknown,history:CampaignRow[],launchDate:string
  for(const p of candidates){cursor+=WEIGHTS[p];if(roll<cursor)return p;}
  return candidates[0]||'poster';
 }
-function campaignSchema(pattern:CampaignPattern,tone:CampaignTone,language:string){
- const roles=ROLE_MAP[pattern],primaryTitle=language==='en'?45:24,primaryBody=language==='en'?80:42,secondaryBody=language==='en'?42:80;
+function campaignSchema(pattern:CampaignPattern,tone:CampaignTone,language:string,count:3|5=5){
+ const roles=rolesForCampaign(pattern,count),primaryTitle=language==='en'?45:24,primaryBody=language==='en'?80:42,secondaryBody=language==='en'?42:80;
  const str=(maxLength:number,minLength=0)=>({type:'string',minLength,maxLength});
  const slide={
   type:'object',
@@ -131,7 +137,7 @@ function campaignSchema(pattern:CampaignPattern,tone:CampaignTone,language:strin
   required:['schema_version','campaign_version','design_preset','post_type','campaign_pattern','campaign_tone','campaign_goal','caption_ko','caption_en','headline_candidates','slides'],
  };
 }
-function campaignInstructions(pattern:CampaignPattern,tone:CampaignTone,language:string,launchDate:string|null){
+function campaignInstructions(pattern:CampaignPattern,tone:CampaignTone,language:string,launchDate:string|null,count:3|5=5){
  const limits=language==='en'?'headline <= 45 characters; subcopy <= 80 characters':'headline <= 24 characters; subcopy <= 42 characters';
  const patternGuide:Record<CampaignPattern,string>={
   poster:'POSTER: hook = one arresting brand statement; benefit = one supporting product truth; CTA = a clean launch/follow invitation. Treat every card like a campaign poster, not a page of information.',
@@ -149,7 +155,7 @@ function campaignInstructions(pattern:CampaignPattern,tone:CampaignTone,language
   'Create a PRE-LAUNCH ADVERTISING CAMPAIGN for Roundy, a Seoul-based offline-first Rotation Dating service.',
   'This is NOT editorial content, NOT a magazine carousel, NOT an article, and NOT educational long-form content.',
   'Goal: present a specific product truth first, then explain how and why it matters. Avoid generic question headlines or clickbait. Generate three concrete distinct cover headline_candidates and choose the strongest as slide 1 title.',
-  'Use ONLY the selected campaign pattern: '+pattern+'. Exact card roles in order: '+ROLE_MAP[pattern].join(' -> ')+'.',
+  'Use ONLY the selected campaign pattern: '+pattern+'. Exact card roles in order: '+rolesForCampaign(pattern,count).join(' -> ')+'.',
   patternGuide[pattern],
   'Campaign tone: '+tone+'. '+toneGuide[tone],
   'ONE message per card. '+limits+'. body is optional short subcopy, never a paragraph. Do not fill the maximum just because it exists.',
@@ -173,8 +179,8 @@ function parseDocument(result:CampaignRow){
  if(choice?.finish_reason!=='stop'||choice.message?.refusal||typeof raw!=='string')throw new Error('CAMPAIGN_RESPONSE_INCOMPLETE');
  try{return {document:JSON.parse(raw) as CampaignRow,raw};}catch{throw new Error('AI_RETURNED_INVALID_JSON');}
 }
-function normalizeCampaignDocument(raw:CampaignRow,language:string,pattern:CampaignPattern,tone:CampaignTone,launchDate:string|null,draftDate:string){
- const ko=language!=='en',roles=ROLE_MAP[pattern],inputSlides=Array.isArray(raw.slides)?raw.slides:[];
+function normalizeCampaignDocument(raw:CampaignRow,language:string,pattern:CampaignPattern,tone:CampaignTone,launchDate:string|null,draftDate:string,count:3|5=5){
+ const ko=language!=='en',roles=rolesForCampaign(pattern,count),inputSlides=Array.isArray(raw.slides)?raw.slides:[];
  const slides=roles.map((role,index)=>{
   const source=inputSlides[index]||{},main=clean(source.body),secondary=clean(source.secondary_body);
   const normalized:CampaignRow={
@@ -223,7 +229,7 @@ function buildCampaignCaption(document:CampaignRow){
 }
 export function evaluateCampaignDocument(document:CampaignRow,language:string,recentHooks:string[]=[],launchDate:string|null=null){
  const issues:string[]=[],add=(value:string)=>{if(!issues.includes(value))issues.push(value);};
- const pattern=document?.campaign_pattern as CampaignPattern,tone=document?.campaign_tone as CampaignTone,roles=(CAMPAIGN_PATTERNS as readonly string[]).includes(pattern)?ROLE_MAP[pattern]:[];
+ const pattern=document?.campaign_pattern as CampaignPattern,tone=document?.campaign_tone as CampaignTone,roles=(CAMPAIGN_PATTERNS as readonly string[]).includes(pattern)?rolesForCampaign(pattern,document.slides?.length===3?3:5):[];
  const slides=Array.isArray(document?.slides)?document.slides:[];
  if(document?.design_preset!==CAMPAIGN_PRESET||document?.campaign_version!==CAMPAIGN_VERSION||document?.post_type!=='prelaunch'||document?.schema_version!==2)add('오픈 전 캠페인 버전 또는 렌더 프리셋이 맞지 않습니다.');
  if(!(CAMPAIGN_PATTERNS as readonly string[]).includes(pattern))add('허용되지 않은 오픈 전 캠페인 패턴입니다.');
@@ -258,8 +264,8 @@ export function evaluateCampaignDocument(document:CampaignRow,language:string,re
  const caption=buildCampaignCaption(document);if(caption.length>900)add('오픈 전 홍보 캡션은 최종 900자 이하로 작성해야 합니다.');
  return {version:2,status:issues.length?'rejected':'passed',issues,review_required:true};
 }
-function prepareCampaign(document:CampaignRow,language:string,pattern:CampaignPattern,tone:CampaignTone,launchDate:string|null,draftDate:string,recentHooks:string[]){
- const normalized=normalizeCampaignDocument(document,language,pattern,tone,launchDate,draftDate);
+function prepareCampaign(document:CampaignRow,language:string,pattern:CampaignPattern,tone:CampaignTone,launchDate:string|null,draftDate:string,recentHooks:string[],count:3|5=5){
+ const normalized=normalizeCampaignDocument(document,language,pattern,tone,launchDate,draftDate,count);
  const report=evaluateCampaignDocument(normalized,language,recentHooks,launchDate);
  return {document:normalized,report,slides:normalized.slides,caption:buildCampaignCaption(normalized),cta:normalized.cta,sources:[]};
 }
@@ -278,11 +284,12 @@ export async function generateCampaignCopy(db:any,draft:CampaignRow,input:Campai
  const language=input.language==='en'?'en':'ko',history=await recentCampaignHistory(db),launchDate=validDate(input.launch_date||draft.launch_date);
  const requested=input.campaign_pattern||draft.campaign_pattern||'auto',tone=((CAMPAIGN_TONES as readonly string[]).includes(String(input.campaign_tone||draft.campaign_tone))?String(input.campaign_tone||draft.campaign_tone):'modern_premium') as CampaignTone;
  const pattern=choosePattern(requested,history,launchDate,String(draft.id)+':'+String(draft.draft_date)+':'+String(input.instruction||'')),recentHooks=history.slice(0,10).map(x=>x.hook).filter(Boolean);
- const schema=campaignSchema(pattern,tone,language),goal=GOAL_MAP[pattern],countdown=pattern==='countdown'&&launchDate?countdownLabel(launchDate,String(draft.draft_date||''),language):null;
+ const count:3|5=input.carousel_slide_count===3?3:5;
+ const schema=campaignSchema(pattern,tone,language,count),goal=GOAL_MAP[pattern],countdown=pattern==='countdown'&&launchDate?countdownLabel(launchDate,String(draft.draft_date||''),language):null;
  let inputTokens=0,outputTokens=0;
  const record=async(result:CampaignRow)=>{inputTokens+=Number(result.usage?.input_tokens||result.usage?.prompt_tokens||0);outputTokens+=Number(result.usage?.output_tokens||result.usage?.completion_tokens||0);ok(await db.from('marketing_generation_jobs').update({input_tokens:inputTokens,output_tokens:outputTokens}).eq('id',job.id));};
  const write=async(repair?:{document:CampaignRow;issues:string[]})=>{
-  const instructions=campaignInstructions(pattern,tone,language,launchDate)+(repair?'\nREPAIR PASS: Fix ONLY the listed issues. Keep the same campaign pattern, tone and product truths. Return the full corrected JSON.':'');
+  const instructions=campaignInstructions(pattern,tone,language,launchDate,count)+(repair?'\nREPAIR PASS: Fix ONLY the listed issues. Keep the same campaign pattern, tone and product truths. Return the full corrected JSON.':'');
   const payload={
    campaign_pattern:pattern,
    campaign_tone:tone,
@@ -300,15 +307,16 @@ export async function generateCampaignCopy(db:any,draft:CampaignRow,input:Campai
   const result=await call('chat/completions',{model:MODEL,reasoning_effort:'none',max_completion_tokens:2800,response_format:{type:'json_schema',json_schema:{name:'roundy_prelaunch_campaign_v1',strict:true,schema}},messages:[{role:'system',content:instructions},{role:'user',content:JSON.stringify(payload)}]},55000);
   await record(result);return {...parseDocument(result),result};
  };
- let written=await write(),prepared=prepareCampaign(written.document,language,pattern,tone,launchDate,String(draft.draft_date||''),recentHooks),repairUsed=false;
+ let written=await write(),prepared=prepareCampaign(written.document,language,pattern,tone,launchDate,String(draft.draft_date||''),recentHooks,count),repairUsed=false;
  if(prepared.report.status!=='passed'){
-  repairUsed=true;written=await write({document:prepared.document,issues:prepared.report.issues});prepared=prepareCampaign(written.document,language,pattern,tone,launchDate,String(draft.draft_date||''),recentHooks);
+  repairUsed=true;written=await write({document:prepared.document,issues:prepared.report.issues});prepared=prepareCampaign(written.document,language,pattern,tone,launchDate,String(draft.draft_date||''),recentHooks,count);
  }
  const recovery={requested_type:'prelaunch',effective_type:'prelaunch',fallback_reason:null,repair_used:repairUsed,campaign_pattern:pattern,campaign_tone:tone};
  const quality={...prepared.report,recovery};
  const patch={
   caption:prepared.caption,
   cta:prepared.cta,
+  target_slide_count:count,
   content_document:{...prepared.document,generation_recovery:recovery},
   quality_report:quality,
   carousel_slides:prepared.slides,
