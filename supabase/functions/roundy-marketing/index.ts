@@ -501,16 +501,32 @@ async function captureFollowerSnapshot(){
   .select('snapshot_date').eq('snapshot_date',date).maybeSingle();
  if(lookupError)throw lookupError;
  if(existing)return false;
- // followers_count is exposed on supported Instagram Business/Creator profile accounts.
- // Absence or denied scope must NOT result in a zero count or disrupt posting.
- const profile=await graph(userId()+'?fields=followers_count');
- const count=profile?.followers_count;
- if(!Number.isSafeInteger(count)||count<0)throw new Error('INSTAGRAM_FOLLOWERS_METRIC_UNAVAILABLE');
- const {error:saveError}=await service.from('instagram_follower_snapshots').upsert({
-  snapshot_date:date,followers_count:count,source:'instagram_profile',captured_at:new Date().toISOString()
- },{onConflict:'snapshot_date'});
- if(saveError)throw saveError;
- return true;
+ // Claim the daily attempt before using Meta. A denied API permission must not
+ // cause repeated paid/rate-limited calls on every publisher cron invocation.
+ const claim=await service.from('instagram_follower_snapshot_attempts').upsert({
+  snapshot_date:date,status:'started',attempted_at:new Date().toISOString(),error_code:null
+ },{onConflict:'snapshot_date',ignoreDuplicates:true}).select('snapshot_date');
+ if(claim.error)throw claim.error;
+ if(!claim.data?.length)return false;
+ try{
+  // Unsupported profile fields are not silently stored as zero.
+  const profile=await graph(userId()+'?fields=followers_count');
+  const count=profile?.followers_count;
+  if(!Number.isSafeInteger(count)||count<0)throw new Error('INSTAGRAM_FOLLOWERS_METRIC_UNAVAILABLE');
+  const {error:saveError}=await service.from('instagram_follower_snapshots').upsert({
+   snapshot_date:date,followers_count:count,source:'instagram_profile',captured_at:new Date().toISOString()
+  },{onConflict:'snapshot_date'});
+  if(saveError)throw saveError;
+  const {error:statusError}=await service.from('instagram_follower_snapshot_attempts')
+   .update({status:'captured',error_code:null}).eq('snapshot_date',date);
+  if(statusError)throw statusError;
+  return true;
+ }catch(error){
+  const reason=(error instanceof Error?error.message:'UNKNOWN_FOLLOWER_METRIC_ERROR').slice(0,100);
+  await service.from('instagram_follower_snapshot_attempts')
+   .update({status:'unavailable',error_code:reason}).eq('snapshot_date',date);
+  throw error;
+ }
 }
 async function captureDueInsights(){
  const since=new Date(Date.now()-4*86400000).toISOString();
