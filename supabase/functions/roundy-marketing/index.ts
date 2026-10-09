@@ -9,7 +9,7 @@ const apiVersion=()=>Deno.env.get('INSTAGRAM_API_VERSION')||'v25.0';
 const connection=()=>({instagram:Boolean(token()&&userId()),koreapas:Boolean(Deno.env.get('KOREAPAS_USER_ID')&&Deno.env.get('KOREAPAS_PASSWORD'))});
 const json=(data:unknown,status=200)=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
 
-type Template={channel:'instagram'|'koreapas';title:string;caption:string;cta:string;destination_url:string;images:string[];name?:string;draft_id?:string;eligible_for_optimization?:boolean;content_pillar?:string};
+type Template={channel:'instagram'|'koreapas';title:string;caption:string;cta:string;destination_url:string;images:string[];name?:string;draft_id?:string;eligible_for_optimization?:boolean;content_pillar?:string;media_kind?:string;reel_id?:string;reel_revision?:number;video_storage_path?:string;video_duration_seconds?:number;manual_reviewed?:boolean};
 type EventRow={
  id:string;slug:string;title:string;starts_at:string;venue:string;neighborhood:string;
  age_min:number;age_max:number;capacity:number;seats_remaining:number;images:string[];
@@ -54,6 +54,76 @@ async function publishInstagram(t:Template,beforePublish:()=>void){
  await ready(container);beforePublish();const post=await graph(userId()+'/media_publish',{creation_id:container});
  const details=await graph(post.id+'?fields=permalink').catch(()=>({}));return {external_id:post.id,external_url:details.permalink??'https://www.instagram.com/roundy.meet/'};
 }
+class ReelProcessingPending extends Error{
+ constructor(){super('REEL_VIDEO_PROCESSING');}
+}
+async function waitForReelContainer(id:string){
+ // Meta video transcodes asynchronously. A pending container is persisted and
+ // retried by the regular queue, not recreated or prematurely published.
+ for(let n=0;n<6;n++){
+  const status=await graph(id+'?fields=status_code');
+  if(status.status_code==='FINISHED')return true;
+  if(['ERROR','EXPIRED','FAILED'].includes(String(status.status_code)))throw new Error('REEL_META_PROCESSING_FAILED');
+  await new Promise(resolve=>setTimeout(resolve,1800));
+ }
+ return false;
+}
+async function publishReel(t:Template,runId:string,beforePublish:()=>void){
+ const account=await graph('me?fields=user_id,username');
+ if(account.username?.toLowerCase()!=='roundy.meet'||String(account.user_id)!==userId())throw new Error('REEL_INSTAGRAM_ACCOUNT_MISMATCH');
+ if(!t.reel_id||!t.video_storage_path||!t.reel_revision)throw new Error('REEL_SNAPSHOT_INVALID');
+ const {data:draft,error:readError}=await service.from('instagram_reel_drafts')
+  .select('id,status,approved_revision,marketing_run_id,video_storage_path,caption,rights_attested')
+  .eq('id',t.reel_id).single();
+ if(readError||!draft||draft.status!=='queued'||draft.rights_attested!==true||
+   Number(draft.approved_revision)!==Number(t.reel_revision)||draft.marketing_run_id!==runId||
+   draft.video_storage_path!==t.video_storage_path||draft.caption!==t.caption)
+  throw new Error('REEL_APPROVED_SNAPSHOT_CHANGED');
+ const validPath=new RegExp('^'+t.reel_id+'/[0-9a-f-]{36}[.]mp4$','i').test(t.video_storage_path);
+ if(!validPath)throw new Error('REEL_VIDEO_PATH_INVALID');
+ const {data:saved,error:savedError}=await service.from('instagram_reel_publish_attempts')
+  .select('creation_id,stage').eq('run_id',runId).maybeSingle();
+ if(savedError)throw savedError;
+ if(saved&&['publishing','sent'].includes(saved.stage)){
+  beforePublish();
+  throw new Error('REEL_MEDIA_PUBLISH_ALREADY_ATTEMPTED_REVIEW_REQUIRED');
+ }
+ let creationId=String(saved?.creation_id||'');
+ if(!creationId){
+  const signed=await service.storage.from('marketing-reels').createSignedUrl(t.video_storage_path,3600);
+  if(signed.error||!signed.data?.signedUrl)throw new Error('REEL_SIGNED_VIDEO_NOT_AVAILABLE');
+  // Only a temporary read URL is sent to Meta. The original video remains in private storage.
+  const container=await graph(userId()+'/media',{media_type:'REELS',video_url:signed.data.signedUrl,
+   caption:t.caption,share_to_feed:'true'});
+  creationId=String(container?.id||'');
+  if(!creationId)throw new Error('REEL_META_CONTAINER_MISSING');
+  const {error:attemptError}=await service.from('instagram_reel_publish_attempts')
+   .insert({run_id:runId,reel_id:t.reel_id,creation_id:creationId,stage:'container_created'});
+  if(attemptError)throw attemptError;
+ }
+ const readyForPublishing=await waitForReelContainer(creationId);
+ if(!readyForPublishing){
+  const {error:progressError}=await service.from('instagram_reel_publish_attempts')
+   .update({stage:'awaiting_ready',updated_at:new Date().toISOString()}).eq('run_id',runId);
+  if(progressError)throw progressError;
+  throw new ReelProcessingPending();
+ }
+ const {error:publishingError}=await service.from('instagram_reel_publish_attempts')
+  .update({stage:'publishing',updated_at:new Date().toISOString()})
+  .eq('run_id',runId).in('stage',['container_created','awaiting_ready']);
+ if(publishingError)throw publishingError;
+ // From this point, an unknown Meta response might represent a successful
+ // publish. Any exception must be marked needs_review; NEVER auto-retry.
+ beforePublish();
+ const post=await graph(userId()+'/media_publish',{creation_id:creationId});
+ const id=String(post?.id||'');
+ if(!id)throw new Error('REEL_META_PUBLISH_ID_MISSING');
+ const {error:sentError}=await service.from('instagram_reel_publish_attempts')
+  .update({stage:'sent',updated_at:new Date().toISOString()}).eq('run_id',runId);
+ if(sentError)throw sentError;
+ const details=await graph(id+'?fields=permalink').catch(()=>({}));
+ return {external_id:id,external_url:details.permalink||'https://www.instagram.com/roundy.meet/'};
+}
 async function sendInstagramDm(recipientId:string,message:string){
  const result=await graphJson(userId()+'/messages',{recipient:{id:recipientId},message:{text:message}});
  return String(result.message_id??result.id??'');
@@ -73,8 +143,15 @@ const escapeHtml=(value:string)=>value.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'
 function validate(t:Template){
  if(!['instagram','koreapas'].includes(t.channel)||!t.caption?.trim())throw new Error('Add post copy before publishing');
  if(t.destination_url){const u=new URL(t.destination_url);if(u.protocol!=='https:'||u.username||u.password)throw new Error('Invalid destination URL');}
- if(!Array.isArray(t.images)||t.images.length>10||t.images.some(image=>!image.startsWith(url+'/storage/v1/object/public/wis-event-images/')||!/^[-a-f0-9]+\/[-a-f0-9]+\.jpg$/.test(image.split('/wis-event-images/')[1]??'')))throw new Error('Use uploaded JPEG marketing images');
- if(t.channel==='instagram'&&!t.images.length)throw new Error('Instagram needs at least one image');
+ if(t.media_kind==='reel'){
+  if(t.channel!=='instagram'||t.manual_reviewed!==true||!t.reel_id||!t.video_storage_path||
+     !Number.isInteger(t.reel_revision)||t.caption.length>2000)
+   throw new Error('INVALID_APPROVED_REEL_SNAPSHOT');
+ }else if(!Array.isArray(t.images)||t.images.length>10||
+  t.images.some(image=>!image.startsWith(url+'/storage/v1/object/public/wis-event-images/')||
+   !/^[-a-f0-9]+\/[-a-f0-9]+\.jpg$/.test(image.split('/wis-event-images/')[1]??'')))
+  throw new Error('Use uploaded JPEG marketing images');
+ if(t.channel==='instagram'&&t.media_kind!=='reel'&&!t.images.length)throw new Error('Instagram needs at least one image');
  if(t.channel==='koreapas'&&!t.title?.trim())throw new Error('Add a Koreapas title');
  if(!connection()[t.channel])throw new Error('Channel is not connected');
 }
@@ -82,7 +159,7 @@ function validate(t:Template){
 // Final fail-closed check before creating Instagram media containers.
 // A scheduled draft may have had its approved asset revoked after scheduling.
 async function validateReviewedStockDraft(t:Template){
- if(t.channel!=='instagram'||!t.draft_id)return;
+ if(t.channel!=='instagram'||t.media_kind==='reel'||!t.draft_id)return;
  const {data:draft,error:draftError}=await service.from('instagram_post_drafts')
   .select('id,visual_source,images').eq('id',t.draft_id).single();
  if(draftError||!draft)throw new Error('MARKETING_DRAFT_NOT_FOUND');
@@ -478,9 +555,9 @@ async function regenerateDraft(draftId:string){
 const insightMetric=(data:any,name:string)=>{
  const item=Array.isArray(data?.data)?data.data.find((entry:any)=>entry?.name===name):null;
  const value=item?.value??item?.values?.[0]?.value??item?.total_value?.value;
- return Number.isFinite(Number(value))?Number(value):null;
+ return value===null||value===undefined||value===''?null:Number.isFinite(Number(value))?Number(value):null;
 };
-async function mediaPerformance(mediaId:string){
+async function mediaPerformance(mediaId:string,isReel=false){
  const basic=await graph(mediaId+'?fields=like_count,comments_count').catch(()=>({}));
  const attempts=['views,reach,likes,comments,saved,shares,total_interactions','reach,likes,comments,saved,shares,total_interactions'];
  let rich:any=null;
@@ -489,9 +566,54 @@ async function mediaPerformance(mediaId:string){
  const comments=insightMetric(rich,'comments')??Number(basic.comments_count??0);
  const saves=insightMetric(rich,'saved')??0,shares=insightMetric(rich,'shares')??0;
  const reach=insightMetric(rich,'reach'),views=insightMetric(rich,'views'),total=insightMetric(rich,'total_interactions')??(likes+comments+saves+shares);
+ let reelAvgWatch:number|null=null,reelTotalWatch:number|null=null;
+ if(isReel){
+  // Optional Reel-specific metrics. Meta may restrict or rename these fields.
+  const watch=await graph(mediaId+'/insights?metric=ig_reels_avg_watch_time,ig_reels_video_view_total_time')
+   .catch(()=>null);
+  if(watch){
+   reelAvgWatch=insightMetric(watch,'ig_reels_avg_watch_time');
+   reelTotalWatch=insightMetric(watch,'ig_reels_video_view_total_time');
+  }
+ }
  const denominator=Math.max(1,reach??views??(likes+comments+1));
  const score=((likes+comments*2+saves*3+shares*4)/denominator)*1000+Math.log10(denominator+1)*10;
- return {source:rich?'insights':'basic',views,reach,likes,comments,saves,shares,total_interactions:total,performance_score:Number(score.toFixed(4))};
+ return {source:rich?'insights':'basic',views,reach,likes,comments,saves,shares,total_interactions:total,performance_score:Number(score.toFixed(4)),reel_avg_watch_time_ms:reelAvgWatch,reel_total_watch_time_ms:reelTotalWatch};
+}
+async function captureFollowerSnapshot(){
+ // One daily account-level observation; never attribute it to an individual post.
+ if(!connection().instagram||!userId())return false;
+ const date=kstNow().date;
+ const {data:existing,error:lookupError}=await service.from('instagram_follower_snapshots')
+  .select('snapshot_date').eq('snapshot_date',date).maybeSingle();
+ if(lookupError)throw lookupError;
+ if(existing)return false;
+ // Claim the daily attempt before using Meta. A denied API permission must not
+ // cause repeated paid/rate-limited calls on every publisher cron invocation.
+ const claim=await service.from('instagram_follower_snapshot_attempts').upsert({
+  snapshot_date:date,status:'started',attempted_at:new Date().toISOString(),error_code:null
+ },{onConflict:'snapshot_date',ignoreDuplicates:true}).select('snapshot_date');
+ if(claim.error)throw claim.error;
+ if(!claim.data?.length)return false;
+ try{
+  // Unsupported profile fields are not silently stored as zero.
+  const profile=await graph(userId()+'?fields=followers_count');
+  const count=profile?.followers_count;
+  if(!Number.isSafeInteger(count)||count<0)throw new Error('INSTAGRAM_FOLLOWERS_METRIC_UNAVAILABLE');
+  const {error:saveError}=await service.from('instagram_follower_snapshots').upsert({
+   snapshot_date:date,followers_count:count,source:'instagram_profile',captured_at:new Date().toISOString()
+  },{onConflict:'snapshot_date'});
+  if(saveError)throw saveError;
+  const {error:statusError}=await service.from('instagram_follower_snapshot_attempts')
+   .update({status:'captured',error_code:null}).eq('snapshot_date',date);
+  if(statusError)throw statusError;
+  return true;
+ }catch(error){
+  const reason=(error instanceof Error?error.message:'UNKNOWN_FOLLOWER_METRIC_ERROR').slice(0,100);
+  await service.from('instagram_follower_snapshot_attempts')
+   .update({status:'unavailable',error_code:reason}).eq('snapshot_date',date);
+  throw error;
+ }
 }
 async function captureDueInsights(){
  const since=new Date(Date.now()-4*86400000).toISOString();
@@ -505,13 +627,14 @@ async function captureDueInsights(){
   const finished=new Date(run.finished_at).getTime(),age=(Date.now()-finished)/3600000;
   const due:number[]=[];if(age>=24&&age<60&&!seen.has(run.id+':24'))due.push(24);if(age>=72&&!seen.has(run.id+':72'))due.push(72);
   if(!due.length)continue;
-  const performance=await mediaPerformance(String(run.external_id));
+  const performance=await mediaPerformance(String(run.external_id),(run.snapshot as Record<string,unknown>)?.media_kind==='reel');
   const published=kstNow(new Date(run.finished_at)),minute=published.hour*60+published.minute;
   for(const horizon of due){
    const {error:insertError}=await service.from('instagram_post_insights').upsert({
     run_id:run.id,horizon_hours:horizon,source:performance.source,published_dow:published.dow,published_minute:minute,
     views:performance.views,reach:performance.reach,likes:performance.likes,comments:performance.comments,saves:performance.saves,
-    shares:performance.shares,total_interactions:performance.total_interactions,performance_score:performance.performance_score
+    shares:performance.shares,total_interactions:performance.total_interactions,performance_score:performance.performance_score,
+     reel_avg_watch_time_ms:performance.reel_avg_watch_time_ms,reel_total_watch_time_ms:performance.reel_total_watch_time_ms
    },{onConflict:'run_id,horizon_hours'});
    if(insertError)throw insertError;changed=true;
   }
@@ -523,7 +646,7 @@ const preferredByDow=[1260,1140,1140,1080,750,1260,1260];
 const nearestCandidate=(minute:number)=>candidateMinutes.reduce((best,item)=>Math.abs(item-minute)<Math.abs(best-minute)?item:best,candidateMinutes[0]);
 const average=(values:number[])=>values.length?values.reduce((sum,value)=>sum+value,0)/values.length:0;
 async function refreshTimeRecommendations(){
- const {data:insights,error}=await service.from('instagram_post_insights').select('run_id,horizon_hours,published_dow,published_minute,performance_score').order('horizon_hours',{ascending:false});
+ const {data:insights,error}=await service.from('instagram_post_insights').select('run_id,horizon_hours,published_dow,published_minute,performance_score,reach,source').order('horizon_hours',{ascending:false});
  if(error)throw error;
  const best=new Map<string,any>();for(const row of insights??[])if(!best.has(row.run_id))best.set(row.run_id,row);
  const runIds=[...best.keys()];let eligible=new Set<string>();
@@ -532,14 +655,16 @@ async function refreshTimeRecommendations(){
   if(runError)throw runError;
   eligible=new Set((runs??[]).filter(run=>(run.snapshot as any)?.eligible_for_optimization!==false).map(run=>run.id));
  }
- const rows=[...best.values()].filter(row=>eligible.has(row.run_id));const total=rows.length;
+ // A handful of 2-5-person posts can show 500+ interaction points. Do not learn from those.
+ const rows=[...best.values()].filter(row=>eligible.has(row.run_id)&&row.source==='insights'&&Number(row.reach)>=50);
+ const total=rows.length,totalReach=rows.reduce((n,row)=>n+Number(row.reach||0),0);
  const global=new Map<number,number[]>(),day=new Map<string,number[]>();
  for(const row of rows){
   const slot=nearestCandidate(Number(row.published_minute)),score=Number(row.performance_score||0);
   global.set(slot,[...(global.get(slot)??[]),score]);const key=row.published_dow+':'+slot;day.set(key,[...(day.get(key)??[]),score]);
  }
  const globalMeans=candidateMinutes.map(slot=>average(global.get(slot)??[])),globalMax=Math.max(1,...globalMeans);
- const dataWeight=Math.min(.65,total/30*.65),priorWeight=1-dataWeight;
+ const dataWeight=total>=15&&totalReach>=3000?Math.min(.65,(total-10)/30*.65):0,priorWeight=1-dataWeight;
  const updates=[];
  for(let dow=0;dow<7;dow++){
   const dayMeans=candidateMinutes.map(slot=>average(day.get(dow+':'+slot)??[])),dayMax=Math.max(1,...dayMeans);let bestSlot=candidateMinutes[0],bestScore=-1;
@@ -551,11 +676,11 @@ async function refreshTimeRecommendations(){
    const score=priorWeight*prior+dataWeight*(.7*globalNorm+.3*(dayNorm||globalNorm))+explore;
    if(score>bestScore){bestScore=score;bestSlot=slot;}
   }
-  const source=total>=20?'learned':total>=5?'benchmark+learning':'benchmark';
+  const source=dataWeight===0?'benchmark':total>=30?'learned':'benchmark+learning';
   updates.push({
    dow,recommended_time_kst:minutesTime(bestSlot),window_start_kst:minutesTime(bestSlot-30),window_end_kst:minutesTime(bestSlot+30),
    sample_size:total,score:Number(bestScore.toFixed(4)),source,
-   rationale:source==='benchmark'?'Using the initial benchmark while Roundy gathers enough post performance data.':'Blends the initial benchmark with Roundy reach and weighted engagement from '+total+' measured posts. Saves and shares receive the most weight.',
+   rationale:source==='benchmark'?'Benchmark only: fewer than 15 posts with reach >=50 or fewer than 3,000 cumulative reach; tiny-sample engagement is excluded.':'Blends the initial benchmark with Roundy reach and weighted engagement from '+total+' measured posts. Saves and shares receive the most weight.',
    updated_at:new Date().toISOString()
   });
  }
@@ -591,6 +716,8 @@ Deno.serve(async req=>{
    }
   }
   if(schedulerKey){
+   // Optional metrics must never block the established publisher or insights worker.
+   await captureFollowerSnapshot().catch(error=>console.warn('Instagram daily follower snapshot unavailable:',error instanceof Error?error.message:'Unknown error'));
    const insightsChanged=await captureDueInsights();
    if(insightsChanged)await refreshTimeRecommendations();
   }
@@ -602,11 +729,37 @@ Deno.serve(async req=>{
     validate(t);
     await validateReviewedStockDraft(t);
     if(t.channel==='koreapas'&&await hasAdvertOnGopasFirstPage(t.title))outcome={status:'skipped',message:'A post with this title is already on the first Koreapas page.'};
-    else if(t.channel==='instagram'){const result=await publishInstagram(t,()=>{externalAttempt=true;});outcome={status:'sent',message:'Published to @roundy.meet',...result};}
+    else if(t.channel==='instagram'){
+     const result=t.media_kind==='reel'
+      ?await publishReel(t,String(run.id),()=>{externalAttempt=true;})
+      :await publishInstagram(t,()=>{externalAttempt=true;});
+     outcome={status:'sent',message:t.media_kind==='reel'?'Reel published to @roundy.meet':'Published to @roundy.meet',...result};
+    }
     else {const html='<p>'+escapeHtml(t.caption).replace(/\n/g,'<br>')+'</p>'+t.images.map(image=>'<p><img src="'+escapeHtml(image)+'" alt="Roundy event"></p>').join('')+(t.destination_url?'<p><a href="'+escapeHtml(t.destination_url)+'">'+escapeHtml(t.cta||t.destination_url)+'</a></p>':'');externalAttempt=true;const external_url=await publishToKoreapas(t.title,html);outcome={status:'sent',message:'Published to Koreapas',external_url};}
-   }catch(error){outcome={status:externalAttempt?'needs_review':'failed',message:(error instanceof Error?error.message:'Publishing failed').slice(0,500)};}
+   }catch(error){
+    if(error instanceof ReelProcessingPending){
+     const {error:pendingError}=await service.from('marketing_runs').update({
+      status:'queued',scheduled_for:new Date(Date.now()+2*60000).toISOString(),
+      message:'Meta Reel processing is pending; existing container ID is preserved.',
+      started_at:null
+     }).eq('id',run.id).eq('status','publishing');
+     if(pendingError)throw pendingError;
+     results.push({id:run.id,status:'queued',message:'Reel processing pending'});
+     continue;
+    }
+    outcome={status:externalAttempt?'needs_review':'failed',
+     message:(error instanceof Error?error.message:'Publishing failed').slice(0,500)};
+   }
    const finishedAt=new Date().toISOString();
    const {error:updateError}=await service.from('marketing_runs').update({...outcome,finished_at:finishedAt}).eq('id',run.id).eq('status','publishing');if(updateError)throw updateError;
+   if(t.media_kind==='reel'&&t.reel_id){
+    const reelStatus=outcome.status==='sent'?'published':
+      outcome.status==='needs_review'?'needs_review_publish':'failed';
+    const {error:reelError}=await service.from('instagram_reel_drafts')
+     .update({status:reelStatus,...(reelStatus==='published'?{published_at:finishedAt}:{}),updated_at:finishedAt})
+     .eq('id',t.reel_id).eq('marketing_run_id',run.id).eq('status','queued');
+    if(reelError)throw reelError;
+   }
    if(t.draft_id){
     const draftUpdate:Record<string,unknown>={marketing_run_id:run.id};
     if(outcome.status==='sent')Object.assign(draftUpdate,{status:'published',published_at:finishedAt});
