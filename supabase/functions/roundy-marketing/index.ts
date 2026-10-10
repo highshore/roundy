@@ -43,11 +43,14 @@ async function ready(id:string){
  for(let i=0;i<8;i++){const data=await graph(id+'?fields=status_code');if(data.status_code==='FINISHED')return;if(['ERROR','EXPIRED'].includes(data.status_code))throw new Error('Instagram rejected the media container');await new Promise(resolve=>setTimeout(resolve,1500));}
  throw new Error('Instagram media processing timed out');
 }
-async function publishInstagram(t:Template,beforePublish:()=>void){
+async function publishInstagram(t:Template,beforePublish:()=>void,beforeFirstExternalPost:()=>Promise<void>){
  const account=await graph('me?fields=user_id,username');
  if(account.username?.toLowerCase()!=='roundy.meet'||String(account.user_id)!==userId())throw new Error('Instagram credentials must belong to @roundy.meet');
  const caption=[t.caption,[t.cta,t.destination_url].filter(Boolean).join('\n')].filter(Boolean).join('\n\n');
  if(caption.length>2200)throw new Error('Instagram caption including the link exceeds 2,200 characters');
+ // Reserve external-side-effect evidence in Postgres BEFORE the first Meta POST.
+ // No request can be auto-retried if Meta's response is missing or uncertain.
+ await beforeFirstExternalPost();
  let container:string;
  if(t.images.length===1)container=(await graph(userId()+'/media',{image_url:t.images[0],caption})).id;
  else {const children:string[]=[];for(const image of t.images){const child=await graph(userId()+'/media',{image_url:image,is_carousel_item:'true'});await ready(child.id);children.push(child.id);}container=(await graph(userId()+'/media',{media_type:'CAROUSEL',children:children.join(','),caption})).id;}
@@ -732,7 +735,11 @@ Deno.serve(async req=>{
     else if(t.channel==='instagram'){
      const result=t.media_kind==='reel'
       ?await publishReel(t,String(run.id),()=>{externalAttempt=true;})
-      :await publishInstagram(t,()=>{externalAttempt=true;});
+      :await publishInstagram(t,()=>{externalAttempt=true;},async()=>{
+        externalAttempt=true;
+        const {data:marked,error:markError}=await service.rpc('mark_marketing_feed_external_attempt',{p_run:run.id});
+        if(markError||marked!==true)throw new Error('FEED_EXTERNAL_ATTEMPT_NOT_DURABLE');
+       });
      outcome={status:'sent',message:t.media_kind==='reel'?'Reel published to @roundy.meet':'Published to @roundy.meet',...result};
     }
     else {const html='<p>'+escapeHtml(t.caption).replace(/\n/g,'<br>')+'</p>'+t.images.map(image=>'<p><img src="'+escapeHtml(image)+'" alt="Roundy event"></p>').join('')+(t.destination_url?'<p><a href="'+escapeHtml(t.destination_url)+'">'+escapeHtml(t.cta||t.destination_url)+'</a></p>':'');externalAttempt=true;const external_url=await publishToKoreapas(t.title,html);outcome={status:'sent',message:'Published to Koreapas',external_url};}
