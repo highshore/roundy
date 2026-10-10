@@ -88,6 +88,10 @@ assert.match(sql,/old\.status is distinct from 'needs_approval'/,'approval trans
 assert.match(sql,/quality_revision is distinct from d\.revision/);
 assert.match(sql,/actual_manifest is distinct from pf->'photo_manifest'/);
 assert.match(sql,/new\.approved_by is null/);
+const scoped=fs.readFileSync('supabase/migrations/20261010131500_marketing_preflight_trigger_scoped_fields.sql','utf8');
+assert.match(scoped,/if TG_TABLE_NAME='instagram_post_drafts' then[\s\S]*?new\.approved_by is null/);
+assert.doesNotMatch(scoped,/TG_TABLE_NAME='instagram_post_drafts' and \(new\.approved_by/);
+
 assert.match(sql,/preflight/);
 assert.doesNotMatch(sql,/truncate|delete from public\.instagram_post_drafts|drop table public\.instagram_post_drafts/i);
 const route=fs.readFileSync('src/lib/marketing.ts','utf8');
