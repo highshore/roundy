@@ -75,7 +75,7 @@ begin
     continue;
    end if;
   end if;
-  if exists(select 1 from public.marketing_runs prior
+  if not is_feed and exists(select 1 from public.marketing_runs prior
    where prior.channel=r.channel and prior.status='sent'
     and prior.finished_at>now()-interval '24 hours'
     and (r.channel='koreapas' or
@@ -85,15 +85,9 @@ begin
        else prior.snapshot->>'caption'=r.snapshot->>'caption'
         and prior.snapshot->'images'=r.snapshot->'images' end))
   ) then
-   if is_feed then
-    update public.marketing_runs set status='needs_review',
-      message='POSSIBLE_DUPLICATE_CONTENT: Approved Feed item was retained for review.',
-      finished_at=now() where id=r.id;
-   else
-    update public.marketing_runs set status='skipped',
-      message='Recent duplicate or channel posting interval (24 hours).',
-      finished_at=now() where id=r.id;
-   end if;
+   update public.marketing_runs set status='skipped',
+     message='Recent duplicate or channel posting interval (24 hours).',
+     finished_at=now() where id=r.id;
    continue;
   end if;
   update public.marketing_runs set status='publishing',started_at=now(),message=''
