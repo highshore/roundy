@@ -1,10 +1,10 @@
 import {readTrendFactPack,trendFactPackIssues,trendGuideRoles} from './marketing-trend-guide';
-import {fiveEditorialRoles,editorialRolesForCount,withAnswerFirstSchema,answerFirstPrompt,answerFirstIssues} from './marketing-answer-first';
-import {savedCarouselPlan,mobileCarouselFit,type CarouselPlan} from './marketing-carousel-template';
-import {captionCtaIssues,EDITORIAL_PRESET, compactContentSchema, compactWritingInstructions, normalizeCompactDocument, compactQualityIssues, buildBilingualCaption, isCompactDocument, hasObsoletePositioning} from './marketing-presentation';
+import {fiveEditorialRoles,editorialRolesForCount,magazineRolesForCount,magazineAnswerFirstPrompt,withAnswerFirstSchema,answerFirstPrompt,answerFirstIssues} from './marketing-answer-first';
+import {savedCarouselPlan,mobileCarouselFit,magazineCarouselFit,type CarouselPlan} from './marketing-carousel-template';
+import {captionCtaIssues,EDITORIAL_AD_CTA, compactContentSchema, compactWritingInstructions, normalizeCompactDocument, compactQualityIssues, buildBilingualCaption, isCompactDocument, isMagazineDocument, hasObsoletePositioning} from './marketing-presentation';
 // Shared deterministic content contracts. This module never calls a paid API.
 export type Row = Record<string, any>;
-export const CONTENT_POLICY_VERSION = 12;
+export const CONTENT_POLICY_VERSION = 13;
 export const CONTENT_PROFILES = {
  prelaunch:{roles:['cover','concept','cta'],research:false,label:'오픈 전 홍보',brief:'A concrete social friction, the in-person Rotation Dating format, then launch-update CTA. No invented dates, bookings, testimonials, seats or discounts.'},
  live_event:{roles:['cover','event','cta'],research:false,label:'이벤트 모집',brief:'Invite around the actual supplied event. The event card uses only server-supplied date/location/prices. No fabricated participants, scarcity or discounts.'},
@@ -138,7 +138,7 @@ export function researchInstructions(type:PostType,language:string,instruction:s
 }
 function roleContentSchema(type:PostType,variant='',answerFirst=false,plan:CarouselPlan|null=null){
  const existing=type==='seoul_trend'?trendGuideRoles(variant):CONTENT_PROFILES[type].roles;
- const roles=plan?editorialRolesForCount(type,existing,plan.slide_count):answerFirst?fiveEditorialRoles(type,existing):existing;
+ const roles=plan?magazineRolesForCount(plan.slide_count):answerFirst?fiveEditorialRoles(type,existing):existing;
  const text={type:'string'},object=(properties:Row)=>({type:'object',properties,required:Object.keys(properties),additionalProperties:false});
  const venue=object({name:text,area:text,category:text,why_date_worthy:text,best_for:text,best_time:text,practical_tip:text,hours:text,price:text,source_ids:{type:'array',items:text,minItems:1,maxItems:3}});
  return object({schema_version:{type:'integer',enum:[2]},post_type:{type:'string',enum:[type]},caption:text,cta:text,
@@ -152,10 +152,10 @@ function roleContentSchema(type:PostType,variant='',answerFirst=false,plan:Carou
   ...(type==='dating_myth'?{myth:object({claim:text,myth_key:{type:'string',enum:DATING_MYTH_KEYS},verdict:{type:'string',enum:['supported','mixed','not_well_supported']},selection_reason:text})}:{}),
   ...(type==='seoul_dating'?{seoul:object({format:{type:'string',enum:['places','course']},theme:text,venues:{type:'array',minItems:3,maxItems:3,items:venue},verified_at:text})}:{}),
   ...(type==='seoul_trend'?{trend:object({trend_id:text,trend_key:text,display_name:text,category:text,status:{type:'string',enum:['emerging','rising','peak']},observed_at:text,summary:text,content_angle:text,source_ids:{type:'array',items:text,minItems:2,maxItems:8}})}:{}),
-  slides:{type:'array',minItems:roles.length,maxItems:roles.length,items:object({role:{type:'string',enum:roles},eyebrow:text,title:text,body:text,highlight:text,options:{type:'array',items:text,maxItems:3},source_ids:{type:'array',items:text,maxItems:3}})}});
+  slides:{type:'array',minItems:roles.length,maxItems:roles.length,items:object({role:{type:'string',enum:[...new Set(roles)]},eyebrow:text,title:text,body:text,highlight:text,options:{type:'array',items:text,maxItems:3},source_ids:{type:'array',items:text,maxItems:3}})}});
 }
 export function contentSchema(type:PostType,language='ko',variant='',answerFirst=false,plan:CarouselPlan|null=null){
- return withAnswerFirstSchema(compactContentSchema(roleContentSchema(type,variant,answerFirst,plan),language),language,answerFirst);
+ return withAnswerFirstSchema(compactContentSchema(roleContentSchema(type,variant,answerFirst,plan),language,Boolean(plan)),language,answerFirst);
 }
 const AIISH_PHRASES={
  ko:['진정한 인연','특별한 인연','의미 있는 연결','소중한 인연','품격 있는 만남','프리미엄 경험','진정성 있는 교류','새로운 가능성을 발견','잊지 못할 순간','진짜 대화, 진짜 만남'],
@@ -196,17 +196,18 @@ function toneGuide(type:PostType,language:string){
 }
 
 export function writingInstructions(type:PostType,language:string,variant='',answerFirst=false,plan:CarouselPlan|null=null){
+ const magazine=Boolean(plan);
  const banned=(language==='en'?AIISH_PHRASES.en:AIISH_PHRASES.ko).join(', ');
  return ['Write an original Instagram carousel that sounds like a real person or editor, not a generic AI advertisement. Follow the supplied strict schema.',
   'Editorial type: '+type+'. '+CONTENT_PROFILES[type].brief,
   'VOICE: '+toneGuide(type,language),
-  'Roles in EXACT order: '+(plan?editorialRolesForCount(type,type==='seoul_trend'?trendGuideRoles(variant):CONTENT_PROFILES[type].roles,plan.slide_count):answerFirst?fiveEditorialRoles(type,type==='seoul_trend'?trendGuideRoles(variant):CONTENT_PROFILES[type].roles):type==='seoul_trend'?trendGuideRoles(variant):CONTENT_PROFILES[type].roles).join(', ')+'. Each slide must move the idea forward with a different title AND different body. Never pad or restate the same idea.',
+  'Roles in EXACT order: '+(plan?magazineRolesForCount(plan.slide_count):answerFirst?fiveEditorialRoles(type,type==='seoul_trend'?trendGuideRoles(variant):CONTENT_PROFILES[type].roles):type==='seoul_trend'?trendGuideRoles(variant):CONTENT_PROFILES[type].roles).join(', ')+'. Each slide must move the idea forward with a different title AND different body. Never pad or restate the same idea.',
   'Prefer concrete scenes, actions, questions and observable details over abstract emotional nouns. One main idea per sentence. Vary sentence length. Contractions and fragments are fine when natural.',
   'Do NOT use these generic AI/marketing phrases or close paraphrases: '+banned+'. Also avoid formulaic openings such as "혹시 ~ 하신가요?", "오늘은 ~ 알아볼게요", "함께 알아봅시다", "In today\'s fast-paced world", "Whether you\'re...", or "Here\'s the thing".',
   'Avoid stacked adjectives, motivational slogans, empty superlatives, excessive em dashes, and repeated "not X, but Y" constructions. Do not add emoji unless it carries actual information.',
   'COVER: short specific tension/question or useful promise. Aim for Korean 8-22 characters or English 3-9 words. Short subhead, no dense paragraph. No fake urgency or algorithm promises.',
   'Body cards: one concrete point, Korean 25-65 characters / English 6-16 words. Make every phrase concise enough for large, mobile-first lettering. One optional highlight, not a repeated paragraph. options only for contrast/options/checklist. CAPTION: do not narrate the carousel card-by-card. Start with a short hook, then 1-3 compact context paragraphs. caption_ko and caption_en must not contain CTA language, handles, URLs, hashtags, source labels or the Roundy footer; the server appends one content-type action and the fixed brand footer after validation.',
-  'For growth content, the MODEL must mention Roundy only on the final CTA card, never inside caption_ko/caption_en. The server adds the Roundy caption footer after validation. Earlier slides must stand alone as useful editorial content.',
+  magazine?'Magazine feed cards must NEVER contain CTA buttons, calls to click, join, learn more or forced brand pitches. On final editorial_closing choose summary or insight unless a short brand_outro genuinely suits the article. Every other slide has closing_type none. No sales CTA in caption.':'For growth content, the MODEL must mention Roundy only on the final CTA card, never inside caption_ko/caption_en. The server adds the Roundy caption footer after validation. Earlier slides must stand alone as useful editorial content.',
   'Roundy is a Rotation Dating service in Seoul for Korean and international adults, including Korean-Korean meetings, NOT a language class or language exchange. In Korean, call the service 로테이션 소개팅; in English, call it Rotation Dating. Do not label it 1:1 Mingle. Convey thoughtful, respectful conversation subtly; never claim screened/qualified/elite people, selection by income/employer/appearance/nationality, or fake reviews.',
   language==='en'?'Primary title/body/highlight are English; secondary_body is Korean.':'Primary title/body/highlight are Korean; secondary_body is English. Original book titles/authors may remain English on the book card.',
   (['trend_research','dating_myth'].includes(type)?'Fill study.title, publication_year, sample_context, limitation and source_id from the cited evidence. Preserve the original study title and year, never guess missing metadata.':''),
@@ -231,9 +232,9 @@ export function writingInstructions(type:PostType,language:string,variant='',ans
   ].join(' '):'',
   type==='seoul_trend'?[
    'Fill trend.trend_id/trend_key/display_name/category/status/observed_at/summary/content_angle/source_ids strictly from the supplied evidence/context. Never invent a trend identity.',
-   variant&&trendGuideRoles(variant)[1]==='facts'
+   !magazine&&variant&&trendGuideRoles(variant)[1]==='facts'
     ?'FACT-PACK GUIDE LAYOUT '+variant+': cover = precise hook; facts = venue/date/price/booking information rendered by the server; experience = named actual program/activity; date_plan = one realistic plan; practical = actionable logistics; practice = cultural application; cta = Roundy. Output ONLY the exact listed slide roles.'
-    :'Legacy layout: cover, trend, why_now, date_version, practical, cta.',
+    :magazine?'Magazine layout: cover, context, insight, insight, editorial_closing (or cover, key_insight, editorial_closing). Embed cited dates and events only in relevant insight cards.':'Legacy layout: cover, trend, why_now, date_version, practical, cta.',
    'For a Fact Pack guide, never replace specifics with vague advice such as check before going, explore your tastes or plan ahead. State a concrete program, venue or action.',
    'Do not claim trending or rising interest based solely on listings. No fabricated search traffic, social momentum, audience size, routes or durations.',
    'Factual roles require source IDs. Named places, price, dates, times, rules, reservation or opening details must be directly supported.',
@@ -241,8 +242,8 @@ export function writingInstructions(type:PostType,language:string,variant='',ans
   ].join(' '):'',
   CONTENT_PROFILES[type].research?'Include source IDs for source-dependent cards. Do not convert uncertain evidence into a stronger claim.':'No book/research/statistical/trending claims. All source_ids must be empty.',
   type==='live_event'?'Event facts are authoritative server data. Do not invent additional facts.':'No invented event dates, prices, seats, launches, actual attendees or testimonials. Invite follows for launch updates, not booking.',
-  'MBTI/archetypes/quizzes are entertainment and self-reflection only. No diagnostic scores or gender stereotypes. No Middle Dot in Korean prose.'].join('\n')+'\n'+compactWritingInstructions(language)+(answerFirst?'\n'+answerFirstPrompt(language,plan?.slide_count||5):'')
- +(plan?.slide_count===3?'\nCOMPACT 3-CARD FORMAT: Result on cover, ONE dense-but-legible Value/Detail evidence card, last card gentle Roundy CTA. Retain verified sources, real venue names, study limitations and uncertainty without introducing new facts. For Seoul dating, the ONE detail card must name all three verified venues and cite their source IDs. For conversation prompts, include opener AND follow-up on the Value/Detail card. Use no overlong paragraphs.':'');
+  'MBTI/archetypes/quizzes are entertainment and self-reflection only. No diagnostic scores or gender stereotypes. No Middle Dot in Korean prose.'].join('\n')+'\n'+compactWritingInstructions(language,magazine)+(answerFirst?'\n'+(magazine?magazineAnswerFirstPrompt(plan!.slide_count):answerFirstPrompt(language,plan?.slide_count||5)):'')
+ +(plan?.slide_count===3?'\nCOMPACT 3-CARD FORMAT: Result on cover, ONE dense-but-legible Value/Detail evidence card, last card editorial closing with no sales CTA. Retain verified sources, real venue names, study limitations and uncertainty without introducing new facts. For Seoul dating, the ONE detail card must name all three verified venues and cite their source IDs. For conversation prompts, include opener AND follow-up on the key insight card. Use no overlong paragraphs.':'');
 }
 export function evaluateContent(value:unknown,type:PostType,language:string,sources:Evidence[]=[]):QualityReport{
  const issues:string[]=[],add=(s:string)=>{if(!issues.includes(s))issues.push(s);};
@@ -250,18 +251,22 @@ export function evaluateContent(value:unknown,type:PostType,language:string,sour
  const c=normalizeCompactDocument(value as Row,language),slides=Array.isArray(c.slides)?c.slides:[],profile=CONTENT_PROFILES[type];
  const existingRoles=type==='seoul_trend'&&c.trend_layout?trendGuideRoles(String(c.trend_layout)):profile.roles;
  const plan=savedCarouselPlan(c);
- const expectedRoles=plan?editorialRolesForCount(type,existingRoles,plan.slide_count):c.answer_first===true?fiveEditorialRoles(type,existingRoles):existingRoles;
+ const magazine=isMagazineDocument(c);
+ const expectedRoles=magazine?magazineRolesForCount(plan?.slide_count===3?3:5):plan?editorialRolesForCount(type,existingRoles,plan.slide_count):c.answer_first===true?fiveEditorialRoles(type,existingRoles):existingRoles;
  for(const issue of compactQualityIssues(c,language))add(issue);
  for(const issue of answerFirstIssues(c,language))add(issue);
  if(plan){
   slides.forEach((slide:Row,index:number)=>{
-   try{mobileCarouselFit(slide,plan,index,language);}
+   try{magazine?magazineCarouselFit(slide,plan,index,language):mobileCarouselFit(slide,plan,index,language);}
    catch(error){add(error instanceof Error?error.message:'CAROUSEL_TEXT_OVERFLOW');}
   });
  }
  if(c.schema_version!==2||c.post_type!==type)add('콘텐츠 유형 또는 버전이 맞지 않습니다.');
  if(slides.length!==expectedRoles.length)add('유형별 카드 구성이 완성되지 않았습니다.');
- for(const issue of captionCtaIssues(c.caption,c.cta))add(issue);
+ if(magazine){
+  if(!str(c.caption)||str(c.caption).length>2000)add('캡션이 비어 있거나 2,000자를 넘었습니다.');
+  if(EDITORIAL_AD_CTA.test([c.caption,c.caption_ko,c.caption_en].map(str).join(' ')))add('에디토리얼 캡션에 광고형 CTA가 들어 있습니다.');
+ }else for(const issue of captionCtaIssues(c.caption,c.cta))add(issue);
  const known=new Map(sources.map(s=>[s.id,s]));
  slides.forEach((s:Row,i:number)=>{
   if(!s||typeof s!=='object'){add('빈 카드가 있습니다.');return;}
@@ -392,7 +397,7 @@ export function prepareContent(value:Row,type:PostType,language:string,sources:E
  const slides=(document.slides||[]).map((s:Row,i:number)=>{
   const labels=(s.source_ids||[]).map((id:string)=>sources.find(x=>x.id===id)?.title).filter(Boolean);
   const source=type==='book_insight'&&['book','insight'].includes(s.role)?document.book.title+' / '+document.book.author:document.study?.title&&['finding','context','limitation'].includes(s.role)?document.study.title+' ('+document.study.publication_year+')':labels.join(' / ');
-  return {...s,variant:s.role==='cover'?'hook':s.role==='cta'?'roundy':s.role,source_label:source,footer_note:s.role==='cta'?(language==='ko'?disclaimerKo:disclaimerEn):''};
+  return {...s,variant:s.role==='cover'?'hook':s.role==='cta'?'roundy':s.role==='editorial_closing'?'editorial_closing':s.role,source_label:source,footer_note:['cta','editorial_closing'].includes(s.role)?(language==='ko'?disclaimerKo:disclaimerEn):''};
  });
  let caption:string;
  if(isCompactDocument(document))caption=buildBilingualCaption(document,cited,disclaimerKo,disclaimerEn);
