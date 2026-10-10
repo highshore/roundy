@@ -84,6 +84,7 @@ assert.equal(mergePreflightQuality(copy,rejected,false).preflight.status,'reject
 const sql=fs.readFileSync('supabase/migrations/20261010130000_marketing_preflight_gate.sql','utf8');
 assert.match(sql,/guard_marketing_preflight_runs/);
 assert.match(sql,/guard_marketing_preflight_draft/);
+assert.match(sql,/old\.status is distinct from 'needs_approval'/,'approval transition must not skip its own guard');
 assert.match(sql,/quality_revision is distinct from d\.revision/);
 assert.match(sql,/actual_manifest is distinct from pf->'photo_manifest'/);
 assert.match(sql,/new\.approved_by is null/);
