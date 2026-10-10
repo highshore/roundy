@@ -3,7 +3,7 @@ do $$
 declare
  ids uuid[]:='{}'; rids uuid[]:='{}';
  actor uuid; d uuid; a uuid; manifest jsonb; quality jsonb;
- dates date[]; info jsonb; claimed jsonb; claimed_stories jsonb; story_row jsonb; story_id uuid; msg text; i integer; j integer; attempts integer;
+ dates date[]; info jsonb; claimed jsonb; claimed_stories jsonb; story_row jsonb; v_story_id uuid; msg text; i integer; j integer; attempts integer;
  today_kst date:=(now() at time zone 'Asia/Seoul')::date;
  slides jsonb:='[{"role":"cover","title":"Result"},{"role":"context","title":"Context"},{"role":"detail","title":"Detail"},{"role":"value","title":"Value"},{"role":"cta","title":"Follow Roundy"}]'::jsonb;
 begin
@@ -84,47 +84,47 @@ begin
   -- never makes a real Meta request. All rows are discarded by this DO block.
   if (select (scheduled_for at time zone 'Asia/Seoul')::date
       from public.marketing_runs where id=rids[2])=today_kst+1 then
-   story_id:=gen_random_uuid();
+   v_story_id:=gen_random_uuid();
    insert into public.marketing_story_previews(
     id,feed_run_id,feed_draft_id,feed_scheduled_for,feed_date_kst,
     preview_date_kst,source_cover_url,teaser_title,language,status,
     image_path,image_url
-   ) select story_id,r.id,ids[2],r.scheduled_for,today_kst+1,today_kst,
+   ) select v_story_id,r.id,ids[2],r.scheduled_for,today_kst+1,today_kst,
      r.snapshot->'images'->>0,'내일 올라올 콘텐츠 미리보기','ko',
      'generated',
-     'story-previews/'||story_id::text||'/'||gen_random_uuid()::text||'.jpg',
+     'story-previews/'||v_story_id::text||'/'||gen_random_uuid()::text||'.jpg',
      'https://test-only.roundy.team/mock-story.jpg'
    from public.marketing_runs r where r.id=rids[2];
    begin
-    perform public.schedule_marketing_story_preview(story_id,actor);
+    perform public.schedule_marketing_story_preview(v_story_id,actor);
     raise exception 'UNAPPROVED_STORY_WAS_SCHEDULED';
    exception when others then
     get stacked diagnostics msg=message_text;
     if msg not like 'STORY_MUST_BE_APPROVED_FIRST%'
      then raise exception 'STORY_APPROVAL_GUARD_FAILED: %',msg;end if;
    end;
-   story_row:=public.approve_marketing_story_preview(story_id,actor);
+   story_row:=public.approve_marketing_story_preview(v_story_id,actor);
    if story_row->>'status'<>'approved'
     then raise exception 'STORY_APPROVAL_NOT_RECORDED';end if;
-   story_row:=public.schedule_marketing_story_preview(story_id,actor);
+   story_row:=public.schedule_marketing_story_preview(v_story_id,actor);
    if story_row->>'status'<>'scheduled' then
     raise exception 'STORY_SCHEDULE_STATE_INCORRECT: %',story_row;end if;
    update public.marketing_story_previews set scheduled_for=now()-interval '1 minute'
-    where id=story_id;
+    where id=v_story_id;
    claimed_stories:=public.claim_marketing_story_previews();
    if jsonb_array_length(claimed_stories)<>1
-     or claimed_stories->0->>'id'<>story_id::text
+     or claimed_stories->0->>'id'<>v_story_id::text
    then raise exception 'STORY_WAS_NOT_CLAIMED_ONCE: %',claimed_stories;end if;
    if jsonb_array_length(public.claim_marketing_story_previews())<>0
    then raise exception 'DUPLICATE_STORY_CLAIMED';end if;
-   if public.mark_marketing_story_external_attempt(story_id) is distinct from true
+   if public.mark_marketing_story_external_attempt(v_story_id) is distinct from true
    then raise exception 'STORY_EXTERNAL_ATTEMPT_NOT_RECORDED';end if;
    update public.marketing_story_previews set status='needs_review',
     error_code='MOCK_PROVIDER_TIMEOUT',error_message='Simulated Meta uncertain outcome'
-   where id=story_id;
+   where id=v_story_id;
    update public.marketing_story_publish_attempts set
     state='needs_review',finished_at=now(),error_code='MOCK_PROVIDER_TIMEOUT'
-   where marketing_story_publish_attempts.story_id=story_id;
+   where marketing_story_publish_attempts.story_id=v_story_id;
    if jsonb_array_length(public.claim_marketing_story_previews())<>0
    then raise exception 'UNCONFIRMED_STORY_WAS_AUTO_RETRIED';end if;
   end if;
