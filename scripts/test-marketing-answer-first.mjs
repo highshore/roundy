@@ -71,6 +71,10 @@ assert.equal(answerFirstIssues({...generated,thumbnail_candidates:[headlines[0],
 assert.equal(answerFirstIssues({...generated,thumbnail_candidates:['어디서 데이트할까?',headlines[1],headlines[2]]},'ko').some(x=>x.includes('질문')),true);
 assert.equal(answerFirstIssues({...generated,thumbnail_candidates:[headlines[0],'충격 무조건 성공하는 데이트',headlines[2]]},'ko').some(x=>x.includes('클릭베이트')),true);
 assert.equal(answerFirstIssues({...generated,slides:slides.slice(0,3)},'ko').some(x=>x.includes('5장')),true);
+const emptyTease='이것만 기억하고 지금 확인하세요';
+const vague={...generated,thumbnail_candidates:[emptyTease,headlines[1],headlines[2]],
+ slides:[{...slides[0],title:emptyTease},...slides.slice(1)]};
+assert.ok(answerFirstIssues(vague,'ko').some(x=>x.includes('구체')), 'generic teaser without a takeaway is not Answer-First');
 assert.equal(answerFirstIssues({slides},'ko').length,0,'old documents stay valid');
 const admin=read('src/lib/marketing.ts');
 assert.match(admin,/path\[2\]==='thumbnail'&&req\.method==='PATCH'/);
