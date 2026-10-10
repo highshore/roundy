@@ -7,8 +7,8 @@ let checks=0;const check=(f)=>{f();checks++;};
 const id='4b9066d0-e01b-4cc4-92d1-469f56317a04';
 const eventId='11111111-1111-4111-8111-111111111111';
 const base={request_key:'manual:quality-test-001',revision:1,mode:'both',content_mode:'prelaunch',language:'en',visual_mode:'cards',instruction:''};
-function harness({denied=false,network=false,badSources=false,duplicate=false,photo403=false}={}){
- const tables={instagram_post_drafts:[{id,status:'needs_approval',revision:1,caption:'Original',cta:'Follow',images:[],carousel_slides:[],content_mode:'prelaunch'}],marketing_generation_jobs:[],marketing_ai_control:[{singleton:true,enabled:true,blocked_reason:null}],marketing_uploaded_images:[],events:[{id:eventId,slug:'fixture',title:'Fixture event',title_ko:'테스트 모임',status:'live',deleted_at:null,marketing_enabled:true,starts_at:'2099-12-01T10:00:00Z',ends_at:'2099-12-01T12:00:00Z',venue:'Fixture public venue',capacity:12,seats_remaining:12,price_ladies:29000,price_gents:49000,event_language:'either',images:[]}]};
+function harness({denied=false,network=false,badSources=false,duplicate=false,photo403=false,answerFirst=false}={}){
+ const tables={instagram_post_drafts:[{id,status:'needs_approval',revision:1,caption:'Original',cta:'Follow',images:[],carousel_slides:[],content_mode:'prelaunch'}],marketing_generation_jobs:[],marketing_ai_control:[{singleton:true,enabled:true,blocked_reason:null}],marketing_automation_settings:[{singleton:true,carousel_answer_first_enabled:answerFirst}],marketing_uploaded_images:[],events:[{id:eventId,slug:'fixture',title:'Fixture event',title_ko:'테스트 모임',status:'live',deleted_at:null,marketing_enabled:true,starts_at:'2099-12-01T10:00:00Z',ends_at:'2099-12-01T12:00:00Z',venue:'Fixture public venue',capacity:12,seats_remaining:12,price_ladies:29000,price_gents:49000,event_language:'either',images:[]}]};
  const requests=[],stored=[];
  class Q{
   constructor(t){this.rows=tables[t]||[];this.pred=[];this.patch=null;this.n=Infinity;}
@@ -53,10 +53,11 @@ function harness({denied=false,network=false,badSources=false,duplicate=false,ph
   let c;
   // Campaigns have their own model schemas; an editorial fixture is not a
   // valid campaign response. Mock the schema/roles actually sent to the model.
+  const answerFirstSchema=Boolean(body.response_format?.json_schema?.schema?.properties?.thumbnail_candidates);
   if(data.campaign_pattern||data.event_campaign_stage){
    const schema=body.response_format.json_schema.schema.properties;
    const pattern=data.campaign_pattern||data.event_campaign_pattern;
-   const roles={
+   const oldRoles={
     poster:['hook','benefit','cta'],
     problem_solution:['hook','problem','solution','benefit','cta'],
     how_it_works:['hook','step','step','step','cta'],
@@ -68,7 +69,9 @@ function harness({denied=false,network=false,badSources=false,duplicate=false,ph
     offer:['hook','offer','facts','cta'],
     last_call:['hook','status','facts','cta']
    }[pattern];
-   if(!roles)throw new Error('UNMOCKED_CAMPAIGN_PATTERN: '+pattern);
+   if(!oldRoles)throw new Error('UNMOCKED_CAMPAIGN_PATTERN: '+pattern);
+   const helper=load('src/lib/marketing-answer-first.ts');
+   const roles=answerFirstSchema?(data.campaign_pattern?helper.fiveCampaignRoles(pattern,oldRoles):helper.fiveEventRoles(pattern,oldRoles)):oldRoles;
    const ko=data.language==='ko';
    const enTitles=['Beyond the screen','One conversation at a time','Meet in Seoul','Focus on the person','Make room for a real story'];
    const koTitles=['화면 밖에서 시작하기','한 사람과 한 번의 대화','서울에서 직접 만나요','서로의 이야기에 집중하기','다음 이야기를 위한 여유'];
@@ -96,6 +99,20 @@ function harness({denied=false,network=false,badSources=false,duplicate=false,ph
   }else{
    if(!data.editorial_type)throw new Error('UNMOCKED_EDITORIAL_REQUEST');
    c=fixture(data.editorial_type,data.language,load('src/lib/marketing-content-policy.ts').CONTENT_PROFILES);
+  }
+  if(answerFirstSchema){
+   const language=data.language==='en'?'en':'ko';
+   const headlines=language==='ko'
+    ?['서울에서 한 사람씩 직접 만나기','로테이션 소개팅으로 대화 시작하기','서울에서 서로를 알아가는 방법']
+    :['Meet people face to face in Seoul','Try one-on-one conversations in Seoul','Choose matches mutually after talking'];
+   c.thumbnail_candidates=headlines;
+   if(data.editorial_type){
+    const helper=load('src/lib/marketing-answer-first.ts');
+    const roles=helper.fiveEditorialRoles(data.editorial_type,c.slides.map(x=>x.role));
+    c.slides=roles.map(role=>c.slides.find(x=>x.role===role));
+    if(c.slides.some(x=>!x))throw new Error('ANSWER_FIRST_TEST_ROLE_MISSING:'+data.editorial_type);
+   }
+   c.slides[0].title=headlines[0];
   }
   if(data.editorial_type==='dating_myth'&&data.myth_candidate==='backup'){
    const ko=data.language==='ko';c.myth={claim:ko?'침묵이 생기면 첫 데이트가 망한 것이다':'Silence means a first date is going badly',myth_key:'silence_means_failure',verdict:'not_well_supported',selection_reason:ko?'첫 후보와 다른 주제이며 대화 맥락 연구로 검토할 수 있습니다.':'A distinct backup belief with relevant conversation evidence.'};
@@ -146,6 +163,24 @@ for(const language of ['en','ko'])for(const type of Object.keys(harness().policy
 {const p=harness().policy;check(()=>assert.equal(p.CONTENT_POLICY_VERSION,12));const ko=fixture('prelaunch','ko',p.CONTENT_PROFILES);ko.caption='진정한 인연을 위한 특별한 만남';check(()=>assert.equal(p.evaluateContent(ko,'prelaunch','ko').status,'rejected'));const en=fixture('prelaunch','en',p.CONTENT_PROFILES);en.caption='Discover meaningful human connections in a premium experience.';check(()=>assert.equal(p.evaluateContent(en,'prelaunch','en').status,'rejected'));check(()=>assert.match(p.writingInstructions('conversation_prompt','ko'),/실제 SNS|당장 써볼 수|AI\/마케팅 표현|AI\/marketing|상투적인|generic AI/i));}
 
 {const p=harness().policy;check(()=>assert.equal(p.qualitySeverity('실제 인용된 출처가 없습니다.'),'critical'));check(()=>assert.equal(p.qualitySeverity('카드 제목이 중복되거나 지나치게 유사합니다.'),'quality'));const presentation=harness().api?null:null;}
+for(const [type,language] of [['prelaunch','ko'],['live_event','en'],['conversation_prompt','ko'],['seoul_dating','en'],['trend_research','en']]){
+ const h=harness({answerFirst:true}),input={...base,request_key:'manual:answer-first-'+type,language,
+  content_mode:type==='prelaunch'||type==='live_event'?type:'growth_carousel',
+  ...(type==='prelaunch'?{campaign_pattern:'poster'}:{}),
+  ...(type==='live_event'?{event_id:eventId,event_campaign_stage:'launch'}:{}),
+  ...(type==='conversation_prompt'||type==='seoul_dating'||type==='trend_research'?{topic_type:type}:{})};
+ const r=await h.api.runGeneration(id,input,null);
+ check(()=>assert.equal(r.job.status,'completed','Answer-First '+type+': '+JSON.stringify(r.job.error_message||r.draft.quality_report)));
+ check(()=>assert.equal(r.draft.quality_report.status,'passed','Answer-First '+type));
+ check(()=>assert.equal(r.draft.carousel_slides.length,5));
+ check(()=>assert.equal(r.draft.images.length,5));
+ check(()=>assert.equal(r.draft.content_document.answer_first,true));
+ check(()=>assert.equal(r.draft.content_document.thumbnail_candidates.length,3));
+ check(()=>assert.equal(r.draft.carousel_slides[0].title,r.draft.content_document.thumbnail_candidates[0]));
+ const write=h.requests.find(x=>x.url.endsWith('chat/completions')).body;
+ check(()=>assert.equal(write.response_format.json_schema.schema.properties.thumbnail_candidates.minItems,3));
+ check(()=>assert.match(write.messages[0].content,/ANSWER-FIRST \(REQUIRED\)/));
+}
 const adminMarketingSource=fs.readFileSync(new URL('../src/components/admin-marketing.tsx',import.meta.url),'utf8');
 check(()=>assert.ok(adminMarketingSource.includes("...(basis==='growth_carousel'?{topic_type:topic}:{})")));
 check(()=>assert.ok(adminMarketingSource.includes("request.content_mode==='growth_carousel'")));
