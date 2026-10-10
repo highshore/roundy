@@ -57,8 +57,8 @@ export function evaluateMarketingPreflight(draft:Record<string,any>,settings:Rec
  if(intended&&slides.length!==intended)countErr.push('카드뉴스 '+intended+'장이 필요하지만 문구는 '+slides.length+'장입니다.');
  if(intended&&images.length!==intended)countErr.push('완성 이미지 '+intended+'장이 필요하지만 현재 '+images.length+'장입니다.');
  if(intended&&Array.isArray(doc.slides)&&doc.slides.length!==intended)countErr.push('문구 원본과 카드 장수가 일치하지 않습니다.');
- if(plan?.mode==='alternating'&&(!Number.isInteger(plan.reservation_number)||plan.reservation_number!<1||
-   (plan.reservation_number!%2===1?3:5)!==plan.slide_count))countErr.push('예약 발행 순번에 배정된 3장/5장 구성이 일치하지 않습니다.');
+ if(plan?.mode==='alternating'&&(!Number.isInteger(plan.reservation_number)||Number(plan.reservation_number)<1||
+   (Number(plan.reservation_number)%2===1?3:5)!==plan.slide_count))countErr.push('예약 발행 순번에 배정된 3장/5장 구성이 일치하지 않습니다.');
  add('slide_count',countErr,intended+'장 카드뉴스 및 이미지 개수가 일치합니다.');
 
  const photoPolicy=savedPhotoSourcingPolicy(doc.photo_sourcing);
