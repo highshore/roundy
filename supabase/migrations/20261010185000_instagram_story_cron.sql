@@ -17,7 +17,7 @@ begin
  if setting.story_preview_auto_enabled then
   select exists (
    select 1 from public.marketing_runs r
-   join public.instagram_post_drafts d on d.id=(r.snapshot->>'draft_id')::uuid
+   join public.instagram_post_drafts d on d.id::text=r.snapshot->>'draft_id'
    where r.channel='instagram' and r.status='queued'
     and r.snapshot ? 'draft_id'
     and coalesce(r.snapshot->>'media_kind','feed')='feed'
