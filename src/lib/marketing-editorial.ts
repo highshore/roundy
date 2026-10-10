@@ -202,7 +202,7 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
   if(isSeoulVenueFailure(seoulIssues.critical)){
    effectiveType='conversation_prompt';sources=[];fallbackReason='insufficient_verified_places:seoul_dating->conversation_prompt';
    ok(await db.from('marketing_generation_jobs').update({stage:'writing_fallback'}).eq('id',job.id));
-   written=await write(effectiveType);prepared=prepareContent(applyAnswerFirstDocument(written.document,answerFirst),effectiveType,language,sources);
+   written=await write(effectiveType);prepared=prepareContent(applyAnswerFirstDocument(written.document,answerFirst,plan),effectiveType,language,sources);
   }
  }
  if(requestedType==='trend_research'&&effectiveType==='trend_research'){
@@ -210,19 +210,19 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
   if(repeat||isTrendGroundingFailure(trendIssues.critical)){
    effectiveType='conversation_prompt';sources=[];fallbackReason=(repeat||'research_grounding_failed')+':trend_research->conversation_prompt';
    ok(await db.from('marketing_generation_jobs').update({stage:'writing_fallback'}).eq('id',job.id));
-   written=await write(effectiveType);prepared=prepareContent(applyAnswerFirstDocument(written.document,answerFirst),effectiveType,language,sources);
+   written=await write(effectiveType);prepared=prepareContent(applyAnswerFirstDocument(written.document,answerFirst,plan),effectiveType,language,sources);
   }
  }
  if(requestedType==='dating_myth'&&effectiveType==='dating_myth'){
   let repeat=datingMythRepeatReason((prepared.document as Row)?.myth,mythItems),mythIssues=classifyQualityIssues(prepared.report.issues);
   if(repeat||isDatingMythGroundingFailure(mythIssues.critical)){
    mythAlternateUsed=true;
-   written=await write(effectiveType,undefined,'backup');prepared=prepareContent(applyAnswerFirstDocument(written.document,answerFirst),effectiveType,language,sources);
+   written=await write(effectiveType,undefined,'backup');prepared=prepareContent(applyAnswerFirstDocument(written.document,answerFirst,plan),effectiveType,language,sources);
    repeat=datingMythRepeatReason((prepared.document as Row)?.myth,mythItems);mythIssues=classifyQualityIssues(prepared.report.issues);
    if(repeat||isDatingMythGroundingFailure(mythIssues.critical)){
     effectiveType='conversation_prompt';sources=[];fallbackReason=(repeat||'myth_grounding_failed')+':dating_myth->conversation_prompt';
     ok(await db.from('marketing_generation_jobs').update({stage:'writing_fallback'}).eq('id',job.id));
-    written=await write(effectiveType);prepared=prepareContent(applyAnswerFirstDocument(written.document,answerFirst),effectiveType,language,sources);
+    written=await write(effectiveType);prepared=prepareContent(applyAnswerFirstDocument(written.document,answerFirst,plan),effectiveType,language,sources);
    }
   }
  }
@@ -238,7 +238,7 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
    repairUsed=true;
    written=await write(effectiveType,{document:prepared.document,issues:repairIssues});
    written.document=lockTrendGrounding(lockSeoulGrounding(lockVerifiedBook(written.document)));
-   prepared=prepareContent(applyAnswerFirstDocument(written.document,answerFirst),effectiveType,language,sources);
+   prepared=prepareContent(applyAnswerFirstDocument(written.document,answerFirst,plan),effectiveType,language,sources);
   }
  }
  const document=prepared.document;
