@@ -182,6 +182,18 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
   }):document.slides;
   return {...document,seoul:{...document.seoul,format:seoulFormat,verified_at:new Date().toISOString().slice(0,10),venues},slides};
  };
+ const lockMythGrounding=(document:Row)=>{
+  if(effectiveType!=='dating_myth'||plan?.slide_count!==3)return document;
+  const claim=String(document?.myth?.claim||'').trim();
+  if(!claim)return document;
+  const slides=Array.isArray(document.slides)?document.slides.map((slide:Row)=>{
+   if(slide.role!=='finding')return slide;
+   const body=String(slide.body||'').trim();
+   const prefix=language==='en'?'Belief to examine: ':'검토할 통념: ';
+   return {...slide,body:body.includes(claim)?body:prefix+claim+'\n'+body};
+  }):document.slides;
+  return {...document,slides};
+ };
  const lockTrendGrounding=(document:Row)=>{
   if(effectiveType!=='seoul_trend'||!trendContext)return document;
   const sourceIds=sources.map(source=>source.id),factIds=trendPack?[...new Set(trendPack.facts.flatMap(f=>f.source_ids))].slice(0,3):sourceIds;
@@ -195,7 +207,7 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
  let written=await write(effectiveType);
  ok(await db.from('marketing_generation_jobs').update({result_snapshot:{draft_id:draft.id,content_language:language,growth_topic_type:input.content_mode==='growth_carousel'?effectiveType:null,raw_content:written.raw.slice(0,24000),research_sources:sources,images:[],carousel_slides:[],caption:'',quality_report:{version:3,status:'unchecked',issues:[]},generation_recovery:{fallback_reason:fallbackReason||null,repair_used:false}}}).eq('id',job.id));
 
- written.document=lockTrendGrounding(lockSeoulGrounding(lockVerifiedBook(written.document)));
+ written.document=lockTrendGrounding(lockSeoulGrounding(lockVerifiedBook(lockMythGrounding(written.document))));
  let prepared=prepareContent(applyAnswerFirstDocument(written.document,answerFirst,plan),effectiveType,language,sources);
  if(requestedType==='seoul_dating'&&effectiveType==='seoul_dating'&&prepared.report.status!=='passed'){
   const seoulIssues=classifyQualityIssues(prepared.report.issues);
@@ -237,7 +249,7 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
   if(repairIssues.length){
    repairUsed=true;
    written=await write(effectiveType,{document:prepared.document,issues:repairIssues});
-   written.document=lockTrendGrounding(lockSeoulGrounding(lockVerifiedBook(written.document)));
+   written.document=lockTrendGrounding(lockSeoulGrounding(lockVerifiedBook(lockMythGrounding(written.document))));
    prepared=prepareContent(applyAnswerFirstDocument(written.document,answerFirst,plan),effectiveType,language,sources);
   }
  }
