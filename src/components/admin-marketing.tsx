@@ -224,6 +224,30 @@ export function AdminMarketing({locale}:{locale:Locale}){
   if(!r.ok||r.data.error)throw new Error(r.data.error||'Request failed');
   return r.data;
  }
+ async function upgradeLegacyDraftToMagazine(){
+  if(!draft||draft.status!=='needs_approval'||draft.content_document?.design_preset==='roundy_magazine_editorial_v2')return;
+  if(dirty&&!window.confirm(t('Discard unsaved changes before converting this draft?','매거진 전환 전 저장하지 않은 수정사항을 버릴까요?')))return;
+  if(!window.confirm(t('Regenerate the copy and visuals of this UNPUBLISHED draft as Magazine Editorial v2? This uses a new paid AI copy generation, keeps published posts unchanged, and requires fresh licensing/photo approval. Your existing draft copy and images will be replaced only after generation succeeds.','이 미발행 초안을 Magazine Editorial v2로 다시 생성할까요? AI 문구 생성 비용이 발생하며, 기존 게시물은 변경되지 않습니다. 새 사진은 저작권 승인 후 사용합니다. 생성 성공 시 이 초안의 기존 문구와 이미지만 교체됩니다.')))return;
+  await work(async()=>{
+   const mode=String(draft.draft_kind)==='growth_carousel'?'growth_carousel':String(draft.content_mode||'prelaunch');
+   const cover=String(draft.content_document?.slides?.[0]?.title||draft.carousel_slides?.[0]?.title||'');
+   const payload={request_key:'magazine-upgrade:'+crypto.randomUUID(),revision:draft.revision,
+    mode:'both',content_mode:mode,visual_mode:'cards',visual_source:'stock',
+    language:draft.content_language==='en'?'en':'ko',
+    ...(mode==='growth_carousel'?{topic_type:draft.growth_topic_type||'conversation_prompt'}:{}),
+    ...(mode==='live_event'?{event_id:draft.event_id,event_campaign_stage:draft.event_campaign_stage||'launch'}:{}),
+    instruction:cover?'Rebuild the existing story about '+cover+'. Stay grounded in verified sources. Editorial closing, never a feed CTA.':'Rebuild the existing story with verified evidence and an editorial closing. No feed CTA.',
+    confirm_photo:false,render_only:false};
+   const result=await request('/draft/'+draft.id+'/regenerate',payload);
+   if(!result.ok||result.data.error||['failed','uncertain'].includes(result.data.job?.status))throw new Error(result.data.job?.error_message||result.data.error||'MAGAZINE_UPGRADE_FAILED');
+   if(result.data.job?.status==='running'){setNotice(t('The request already exists in Generation history. No duplicate AI call was sent.','동일한 요청이 생성 기록에 있습니다. AI 중복 호출은 발생하지 않았습니다.'));return;}
+   await load(draft.id);
+   if(result.data.draft)selectDraft(result.data.draft);
+   await refreshStock(draft.id);
+   setActiveTab('draft');
+   setNotice(t('Magazine v2 saved to this draft. Review all newly sourced photos and run all seven checks before approval.','이 초안이 Magazine v2로 갱신되었습니다. 신규 사진을 승인하고 발행 전 7개 검증을 다시 실행하세요.'));
+  });
+ }
  async function generate(today=false,renderOnly=false){
   if(renderOnly&&!draft)return;
   if(renderOnly&&dirty&&!window.confirm(t('Discard unsaved edits before rendering?','저장하지 않은 수정을 버리고 이미지를 다시 렌더할까요?')))return;
@@ -417,13 +441,14 @@ export function AdminMarketing({locale}:{locale:Locale}){
  function contentRecordForAttempts(attempts:Row[]){const ids=new Set(attempts.map((attempt:Row)=>String(attempt.id)));return contentRecords.find((record:Row)=>ids.has(String(record.source_generation_job_id||'')))||null;}
  function runForContent(record:Row|null){if(!record)return null;const runId=String(record.marketing_run_id||''),draftId=String(record.id||'');return (runId?channelRuns.find((run:Row)=>String(run.id)===runId):null)||channelRuns.find((run:Row)=>String(run.snapshot?.draft_id||'')===draftId)||null;}
  function publicationInfo(record:Row|null,runOverride:Row|null=null){const run=runOverride||runForContent(record),runStatus=String(run?.status||''),draftStatus=String(record?.status||'');if(runStatus==='sent'||draftStatus==='published'||draftStatus==='sent')return {status:'sent',label:t('Published','게시됨')};if(runStatus==='sending')return {status:'sending',label:t('Publishing','게시 중')};if(['queued','scheduled'].includes(runStatus)||draftStatus==='scheduled')return {status:'scheduled',label:t('Scheduled','예약됨')};if(runStatus==='failed'||draftStatus==='failed')return {status:'failed',label:t('Publish failed','게시 실패')};if(runStatus==='needs_review')return {status:'needs_review',label:t('Publish needs review','게시 확인 필요')};if(draftStatus==='needs_approval')return {status:'needs_review',label:t('Awaiting approval','승인 대기')};return {status:'unpublished',label:t('Not published','미게시')};}
+ const isMagazine=draft?.content_document?.design_preset==='roundy_magazine_editorial_v2';
  const currentPreflight=draft&&preflightState?.draft_id===draft.id&&preflightState?.revision===draft.revision?preflightState:null;
  const preflightChecks=Array.isArray(currentPreflight?.preflight?.checks)?currentPreflight.preflight.checks as Row[]:[];
  const preflightReady=currentPreflight?.preflight?.status==='passed'&&currentPreflight?.quality_report?.status==='passed';
  const localizedCheck:Record<string,string>={
   slide_count:'Slide count / images',real_photos:'Minimum authentic photos',
   photo_sources:'Photo sources / license',photo_approval:'Admin photo approval',
-  answer_first:'Answer-First cover',final_cta:'Final CTA',mobile_render:'Mobile readability / margins'
+  answer_first:'Answer-First cover',final_cta:'Final CTA (legacy)',editorial_closing:'Editorial Closing / no CTA',mobile_render:'Mobile readability / margins'
  };
  if(loading)return <p role="status">{t('Loading marketing workspace…','마케팅 정보를 불러오는 중입니다…')}</p>;
  return <section className="admin-panel marketing-panel marketing-workspace">
@@ -520,7 +545,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
       <div className="marketing-copy-options-head"><span className="admin-kicker">COPY OPTIONS / 03</span>
        <strong>{t('Choose from three headline copy options','썸네일 카피 후보 3개 중 선택')}</strong>
       </div>
-      <p className="admin-help">{t('Choose one of three concrete, evidence-aware result headlines. Result → Context → Detail → Value → CTA.','핵심 결론과 검증된 정보 중심의 썸네일 문구 3개 중 하나를 선택하세요. Result → Context → Detail → Value → CTA.')}</p>
+      <p className="admin-help">{t(isMagazine?'Choose an answer-first cover headline. Cover → Context → Insights → Editorial Closing.':'Choose one of three evidence-aware result headlines.',isMagazine?'핵심 결론형 표지를 선택하세요. 표지 → 배경 → 인사이트 → 에디토리얼 마무리.':'핵심 결론을 담은 표지 문구를 선택하세요.')}</p>
       <div className="marketing-copy-options-grid">
        {(draft.content_document.thumbnail_candidates as string[]).map((title:string,index:number)=>{
         const selected=Number(draft.content_document.thumbnail_selected_index??0)===index;
@@ -546,6 +571,13 @@ export function AdminMarketing({locale}:{locale:Locale}){
         <p className="admin-help">{t('Uses the existing image-only regeneration process; AI image costs may apply. No automatic publication.','기존 이미지 재생성 기능을 사용하며 AI 이미지 생성 비용이 발생할 수 있습니다. 자동 발행하지 않습니다.')}</p>
        </div>}
      </div>}
+    {!isMagazine&&draft.status==='needs_approval'&&Array.isArray(draft.carousel_slides)&&draft.carousel_slides.length>0&&
+     <div className="marketing-setup">
+      <strong>MAGAZINE EDITORIAL V2</strong>
+      <p className="admin-help">{t('Historical published assets stay untouched. Rebuild ONLY this unpublished draft with CTA-free copy and newly reviewed photo panels. Standard image-only render preserves the original template.','기존 게시물은 보존합니다. 이 미발행 초안만 CTA 없는 매거진 문구와 사진 레이아웃으로 재생성할 수 있습니다. 일반 이미지 재렌더는 원래 버전을 유지합니다.')}</p>
+      <button type="button" className="admin-secondary" disabled={busy||!!running||dirty}
+       onClick={()=>void upgradeLegacyDraftToMagazine()}>{t('Rebuild this draft as Magazine v2','이 초안을 Magazine v2로 전환해 재생성')}</button>
+     </div>}
     <div className="marketing-setup marketing-preflight-status" role="group" aria-label={t('Seven pre-publication checks','발행 전 자동 검증 7개 항목')}>
      <strong>{t('Pre-publication checks (7)','발행 전 자동 검증 (7개 항목)')} — {preflightReady?t('All passed; human approval still required','모두 통과, 관리자 최종 승인 필요'):t('Publishing blocked until every check passes','검증 완료 전 발행 차단')}</strong>
      {!currentPreflight&&<p className="admin-error" role="status">{t('Checking saved copy, selected photos and render margins. Publishing remains disabled.','저장된 문구와 사진 승인, 렌더링 여백을 확인하고 있습니다. 검증 결과가 나오기 전에는 발행할 수 없습니다.')}</p>}
@@ -566,7 +598,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
     </div>
     {['pexels','stock'].includes(String(draft.visual_source))&&<div className="marketing-setup">
       <strong>{t('Licensed photo rights review','라이선스 확인 사진 저작권 검수')}</strong>
-      <p className="admin-help">{t('Review the original source, provider license, commercial edit rights, photographer, depicted people and trademarks. Existing card typography overlays the approved photos.','원본 출처, 라이선스, 상업적 수정 권한, 사진가, 인물 및 상표를 검수하세요. 기존 카드 디자인에서 승인 사진 위에 텍스트를 오버레이합니다.')}</p>
+      <p className="admin-help">{t('Review the original source, license, commercial edit rights, photographer, people and trademarks. Photographs appear in clean separate magazine panels.','원본 출처, 라이선스, 상업적 수정 권한, 사진가, 인물 및 상표를 검수하세요. 승인된 실사 사진은 밝은 매거진 카드의 독립된 사진 영역에 표시됩니다.')}</p>
       <p className="admin-help" role="status">{t('Approved real photos','승인된 실제 사진')} {stockReview?.approved??stockPhotos.filter((p:Row)=>p.review_status==='approved').length}/{stockReview?.minimum??draft.content_document?.photo_sourcing?.min_real_photos??3} — {stockReview?.ready?t('Ready for rendering','렌더링 준비 완료'):t('Awaiting human review or more photos','관리자 검수 또는 추가 사진 대기')}</p>
       {stockReview?.configured===false&&<p className="admin-error" role="alert">{t('Some sources need API keys, but Wikimedia Commons and Openverse work without one.','일부 이미지 제공자는 API 키가 필요하지만 Commons와 Openverse는 키 없이 검색 가능합니다.')}</p>}
       <div className="marketing-draft-inbox">{stockPhotos.length?stockPhotos.map((photo:Row)=><article className="marketing-draft-card" key={photo.asset_id}>
@@ -590,8 +622,15 @@ export function AdminMarketing({locale}:{locale:Locale}){
      <button type="button" className="admin-primary" disabled={busy||!!running||dirty||uploadedImages.length===0} onClick={()=>void work(renderUploaded)}>{t('Render with uploaded images — $0 image AI','업로드 이미지로 렌더 — 이미지 AI $0')}</button>
     </div>}
     <label><span>{t('Caption','캡션')}</span><textarea rows={10} value={draft.caption||''} maxLength={2000} disabled={busy||!!running||draft.status!=='needs_approval'} onChange={e=>changeDraft('caption',e.target.value)}/></label>
-    <label><span>CTA</span><input value={draft.cta||''} maxLength={70} disabled={busy||!!running||draft.status!=='needs_approval'} onChange={e=>changeDraft('cta',e.target.value)}/></label>
-    <label><span>{t('Destination','연결 주소')}</span><input value={draft.destination_url||''} disabled={busy||!!running||draft.status!=='needs_approval'} onChange={e=>changeDraft('destination_url',e.target.value)}/></label>
+    {isMagazine?<div className="marketing-setup">
+      <strong>MAGAZINE EDITORIAL / {t('Slide structure','슬라이드 구성')}</strong>
+      <p className="admin-help">{t('Feed cards have no buttons or forced sales actions. The last card summarizes the story, adds perspective or introduces Roundy quietly. Story and ad actions are independent.', '일반 피드에는 버튼이나 강제 홍보 문구가 없습니다. 마지막 장은 내용 요약, 새로운 관점 또는 짧은 브랜드 소개 중 하나이며 스토리와 광고 CTA는 별도로 관리합니다.')}</p>
+      <div className="marketing-draft-inbox">{(draft.carousel_slides||[]).map((slide:Row,index:number)=><article className="marketing-draft-card" key={index}>
+       <div className="marketing-draft-copy"><small>{String(slide.role||'').replaceAll('_',' ').toUpperCase()}{slide.role==='editorial_closing'?' / '+String(slide.closing_type||'SUMMARY').toUpperCase():''}</small>
+       <strong>{slide.title}</strong><p>{draft.content_language==='en'?slide.body_en||slide.body:slide.body_ko||slide.body}</p></div>
+      </article>)}</div>
+     </div>:<><label><span>CTA</span><input value={draft.cta||''} maxLength={70} disabled={busy||!!running||draft.status!=='needs_approval'} onChange={e=>changeDraft('cta',e.target.value)}/></label>
+    <label><span>{t('Destination','연결 주소')}</span><input value={draft.destination_url||''} disabled={busy||!!running||draft.status!=='needs_approval'} onChange={e=>changeDraft('destination_url',e.target.value)}/></label></>}
     {draft.research_status==='generated_without_sources'&&<p className="admin-error" role="alert">{t('Web Search completed, but OpenAI did not return source metadata. Fact-check this draft manually before publishing.','Web Search는 완료됐지만 OpenAI가 출처 메타데이터를 반환하지 않았습니다. 게시 전에 내용의 사실관계를 직접 확인하세요.')}</p>}
     {!!draft.research_sources?.length&&<div className="growth-sources">{draft.research_sources.map((s:Row)=><a key={s.url} href={s.url} target="_blank" rel="noreferrer">{s.publisher||s.title}</a>)}</div>}
     {draft.status==='needs_approval'&&<div className="admin-form-actions"><button type="button" className="admin-secondary" disabled={busy||!!running||!dirty} onClick={()=>void work(async()=>{await mutate('/draft/'+draft.id,{revision:draft.revision,caption:draft.caption,cta:draft.cta,destination_url:draft.destination_url},'PUT');await load(draft.id);})}>{t('Save edits','수정 저장')}</button><button type="button" className="admin-primary" disabled={busy||!!running||dirty||!preflightReady||!draft.caption?.trim()||!draft.images?.length||draft.quality_report?.status!=='passed'||draft.quality_revision!==draft.revision} onClick={()=>{if(window.confirm(t('Approve this exact revision and schedule it for Instagram?','현재 버전의 문구와 이미지를 승인하고 Instagram 게시를 예약할까요?')))void work(async()=>{const result=await mutate('/draft/'+draft.id+'/approve',{revision:draft.revision});await load(draft.id);

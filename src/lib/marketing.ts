@@ -473,7 +473,9 @@ if(id==='uploads'&&path.length===1&&req.method==='GET'){
   }
   if(path.length===2&&req.method==='PUT'){
    const v=await req.json();
-   if(!Number.isInteger(v.revision)||typeof v.caption!=='string'||!v.caption.trim()||v.caption.length>2000||typeof v.cta!=='string'||v.cta.trim().length>70||!v.cta.trim()||typeof v.destination_url!=='string')return json({error:'Check the caption, CTA and draft revision.'},400);
+   const currentDraft=checked(await service.from('instagram_post_drafts').select('content_document,status').eq('id',path[1]).maybeSingle());
+   const magazine=currentDraft?.content_document?.design_preset==='roundy_magazine_editorial_v2';
+   if(!Number.isInteger(v.revision)||typeof v.caption!=='string'||!v.caption.trim()||v.caption.length>2000||typeof v.cta!=='string'||v.cta.trim().length>70||(!magazine&&!v.cta.trim())||(magazine&&!!v.cta.trim())||typeof v.destination_url!=='string')return json({error:'Check the caption, editorial CTA rules and draft revision.'},400);
    try{const u=new URL(v.destination_url);if(u.protocol!=='https:'||u.username||u.password)throw new Error();}catch{return json({error:'Use a valid HTTPS destination URL.'},400);}
    if(v.images!==undefined)return json({error:'Images are saved by the protected generation worker. Use render saved cards or generate photo.'},400);
    return json({draft:checked(await service.rpc('edit_marketing_draft',{p_id:path[1],p_revision:v.revision,p_patch:{caption:v.caption.trim(),cta:v.cta.trim(),destination_url:v.destination_url.trim()}}))});

@@ -1,9 +1,10 @@
 import {answerFirstIssues} from './marketing-answer-first';
-import {mobileCarouselFit,savedCarouselPlan,resolveCarouselPlan} from './marketing-carousel-template';
+import {mobileCarouselFit,magazineCarouselFit,savedCarouselPlan,resolveCarouselPlan} from './marketing-carousel-template';
 import {requiredPhotoSlotsForRoles,savedPhotoSourcingPolicy} from './marketing-stock-photo-policy';
 import {photoRightsIssues,captionHasRequiredCredits} from './marketing-photo-rights';
+import {isMagazineDocument,EDITORIAL_AD_CTA} from './marketing-presentation';
 
-export type PreflightId='slide_count'|'real_photos'|'photo_sources'|'photo_approval'|'answer_first'|'final_cta'|'mobile_render';
+export type PreflightId='slide_count'|'real_photos'|'photo_sources'|'photo_approval'|'answer_first'|'final_cta'|'editorial_closing'|'mobile_render';
 export type PreflightCheck={id:PreflightId;label:string;passed:boolean;detail:string;issues:string[]};
 export type PhotoRow=Record<string,unknown>;
 export type PreflightReport={
@@ -31,7 +32,7 @@ export function photoReviewManifest(photos:PhotoRow[]):Record<string,unknown>[]{
 }
 export function evaluateMarketingPreflight(draft:Record<string,any>,settings:Record<string,any>,photos:PhotoRow[],now=new Date()):PreflightReport{
  const slides=Array.isArray(draft.carousel_slides)?draft.carousel_slides:[],images=Array.isArray(draft.images)?draft.images:[],
-  doc=draft.content_document||{},plan=savedCarouselPlan(doc),
+  doc=draft.content_document||{},plan=savedCarouselPlan(doc),magazine=isMagazineDocument(doc),
   labels:Record<PreflightId,string>={
    slide_count:'카드뉴스 장수 및 이미지 수',
    real_photos:'실제 사진 최소 개수 및 배치',
@@ -39,6 +40,7 @@ export function evaluateMarketingPreflight(draft:Record<string,any>,settings:Rec
    photo_approval:'신규 사진 관리자 승인',
    answer_first:'Answer-First 썸네일',
    final_cta:'마지막 카드 CTA',
+   editorial_closing:'마지막 카드 에디토리얼 마무리',
    mobile_render:'모바일 가독성 및 안전 여백'
   };
  const checks:PreflightCheck[]=[];
@@ -107,6 +109,19 @@ export function evaluateMarketingPreflight(draft:Record<string,any>,settings:Rec
  add('answer_first',answerIssues,'썸네일은 결론형이며 선택한 문구와 카드가 일치합니다.');
 
  const ctaIssues:string[]=[],last=slides.at(-1);
+ if(magazine){
+  const expected=intended===3?['cover','key_insight','editorial_closing']:['cover','context','insight','insight','editorial_closing'];
+  if(slides.some((slide:Record<string,any>,index:number)=>str(slide.role)!==expected[index]))
+   ctaIssues.push('Magazine Editorial 슬라이드 역할과 순서를 확인하세요.');
+  if(last?.role!=='editorial_closing'||!['summary','insight','brand_outro'].includes(str(last?.closing_type)))
+   ctaIssues.push('마지막 카드는 Summary, Insight 또는 Brand Outro 에디토리얼 마무리여야 합니다.');
+  if(!str(last?.title)||!str(last?.body))ctaIssues.push('마지막 장은 내용 있는 제목과 설명이 필요합니다.');
+  if(slides.some((s:Record<string,any>)=>EDITORIAL_AD_CTA.test([s.title,s.body,s.highlight].map(str).join(' '))))
+   ctaIssues.push('에디토리얼 피드 이미지에는 광고형 CTA나 가짜 버튼 문구를 포함할 수 없습니다.');
+  if(EDITORIAL_AD_CTA.test(str(draft.caption)))ctaIssues.push('에디토리얼 캡션에는 광고형 CTA를 넣을 수 없습니다.');
+  if(!str(draft.caption).includes('@roundy.meet'))ctaIssues.push('캡션에 발행 계정 정보가 필요합니다.');
+  add('editorial_closing',ctaIssues,'에디토리얼 마무리와 비광고형 캡션이 확인되었습니다.');
+ }else{
  if(last?.role!=='cta')ctaIssues.push('마지막 카드가 CTA 역할이 아닙니다.');
  if(!str(last?.title)||!str(last?.body))ctaIssues.push('마지막 카드에 제목과 자연스러운 행동 안내가 필요합니다.');
  if(!str(draft.cta))ctaIssues.push('저장된 CTA 문구가 비어 있습니다.');
@@ -123,6 +138,8 @@ export function evaluateMarketingPreflight(draft:Record<string,any>,settings:Rec
   ctaIssues.push('캡션에 Roundy 공식 웹사이트 또는 Instagram 계정이 누락되었습니다.');
  add('final_cta',ctaIssues,'마지막 카드의 안내 문구와 Roundy 연결 정보가 확인되었습니다.');
 
+ }
+
  const mobileIssues:string[]=[];
  if(!plan)mobileIssues.push('표준 1080×1350 템플릿 정보가 없습니다. 새 템플릿으로 재생성하세요.');
  if(plan&&plan.slide_count!==slides.length)mobileIssues.push('렌더링 템플릿 장수와 실제 카드 수가 다릅니다.');
@@ -132,7 +149,7 @@ export function evaluateMarketingPreflight(draft:Record<string,any>,settings:Rec
    if(str(slide.body)&&str(shownBody)&&str(slide.body)!==str(shownBody))
     mobileIssues.push((i+1)+'장: 원본 카드 본문과 실제 렌더링 본문이 다릅니다. 다시 생성하세요.');
    try{
-    const fit=mobileCarouselFit(slide,plan,i,draft.content_language==='en'?'en':'ko');
+    const fit=magazine?magazineCarouselFit(slide,plan,i,draft.content_language==='en'?'en':'ko'):mobileCarouselFit(slide,plan,i,draft.content_language==='en'?'en':'ko');
     if(fit.margin<80||fit.contentWidth>920)mobileIssues.push((i+1)+'장: 안전 여백이 80px 미만입니다.');
    }catch(error){
     mobileIssues.push((i+1)+'장: 텍스트가 안전 영역을 초과합니다 ('+(error instanceof Error?error.message:'CAROUSEL_TEXT_OVERFLOW')+'). 문구를 줄이거나 다시 생성하세요.');

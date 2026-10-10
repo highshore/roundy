@@ -17,7 +17,7 @@ export function configuredPhotoSourcingPolicy(settings:Record<string,unknown>|nu
  if(typeof requested!=='number'||!Number.isInteger(requested)||requested<0||requested>count)return null;
  // The legacy reviewed-photo publication safety guard requires at least two images.
  const minimum=Math.max(2,requested);
- const others=roles.filter((role,index)=>index>0&&role!=='cta').length;
+ const others=roles.filter((role,index)=>index>0&&role!=='cta'&&role!=='editorial_closing').length;
  const wantsAi=settings?.carousel_ai_thumbnail_enabled===true;
  const useAi=wantsAi&&count===5&&others>=minimum;
  return {version:1,slide_count:count,min_real_photos:minimum,ai_thumbnail_enabled:useAi,requested_ai_thumbnail:wantsAi};
@@ -34,14 +34,14 @@ export type ReviewedPhoto={slot:number;review_status:string;storage_path?:string
 export function requiredPhotoSlotsForRoles(roles:string[],policy?:PhotoSourcingPolicy|null):number[]{
  if(policy){
   if(roles.length!==policy.slide_count)throw new Error('STOCK_PHOTO_POLICY_SLIDE_COUNT_CHANGED');
-  const eligible=roles.map((role,index)=>({role,index})).filter(row=>row.role!=='cta'&&(!policy.ai_thumbnail_enabled||row.index!==0)).map(row=>row.index);
+  const eligible=roles.map((role,index)=>({role,index})).filter(row=>row.role!=='cta'&&row.role!=='editorial_closing'&&(!policy.ai_thumbnail_enabled||row.index!==0)).map(row=>row.index);
   if(eligible.length<2)throw new Error('STOCK_PHOTOS_REQUIRE_TWO_CONTENT_CARDS');
   // Existing DB review guard supports up to three assigned photos. Never silently
   // relax a higher admin minimum: stockReady below will remain false for >3.
   return eligible.slice(0,Math.min(3,policy.min_real_photos));
  }
  const needed=Math.min(3,Math.max(2,roles.length-1));
- const eligible=roles.map((role,index)=>({role,index})).filter(row=>row.role!=='cta').map(row=>row.index);
+ const eligible=roles.map((role,index)=>({role,index})).filter(row=>row.role!=='cta'&&row.role!=='editorial_closing').map(row=>row.index);
  if(eligible.length<2)throw new Error('STOCK_PHOTOS_REQUIRE_TWO_CONTENT_CARDS');
  const others=eligible.filter(index=>index!==0),chosen:number[]=eligible.includes(0)?[0]:[];
  while(chosen.length<needed&&others.length){

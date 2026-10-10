@@ -1,8 +1,8 @@
 import {createElement as h} from 'react';
 import {ImageResponse} from 'next/og';
 import {readTrendFactPack,selectGuideFacts,factLabel} from './marketing-trend-guide';
-import {ROUNDY_IDENTITY as BRAND, EDITORIAL_PRESET, CAMPAIGN_PRESET, EVENT_CAMPAIGN_PRESET, type PresentationRow as Row} from './marketing-presentation';
-import {savedCarouselPlan,mobileCarouselFit,carouselNarrative,CAROUSEL_CANVAS} from './marketing-carousel-template';
+import {ROUNDY_IDENTITY as BRAND, EDITORIAL_PRESET, MAGAZINE_EDITORIAL_PRESET, isMagazineDocument, CAMPAIGN_PRESET, EVENT_CAMPAIGN_PRESET, type PresentationRow as Row} from './marketing-presentation';
+import {savedCarouselPlan,mobileCarouselFit,magazineCarouselFit,carouselNarrative,CAROUSEL_CANVAS} from './marketing-carousel-template';
 
 export type EditorialAssets = {
  photo?: string|null;
@@ -360,6 +360,83 @@ function brightOutro(slide:Row,document:Row,fit:ReturnType<typeof mobileCarousel
    text(BRAND.instagram,26,{fontWeight:700,color:BRIGHT_EDITORIAL.muted}),
    text(BRAND.website,26,{fontWeight:700,color:BRIGHT_EDITORIAL.muted})));
 }
+
+/**
+ * Magazine Editorial V2.
+ * Every photo is a separate, unaltered image frame (never a dark text scrim).
+ * This renderer is opt-in by immutable design_preset; legacy cards keep their pixels.
+ */
+function magazineCover(slide:Row,document:Row,assets:EditorialAssets,fit:ReturnType<typeof magazineCarouselFit>){
+ const language=document.content_language==='en'?'en':'ko',photoSrc=selectedPhoto(assets,0,true);
+ const subtitleY=247+fit.title.height+21;
+ const photoY=Math.max(796,subtitleY+fit.body.height+37);
+ if(photoY>917)throw new Error('MAGAZINE_COVER_IMAGE_COLLISION');
+ return box({position:'relative',width:1080,height:1350,background:BRIGHT_EDITORIAL.paper,
+  color:BRIGHT_EDITORIAL.ink,overflow:'hidden'},
+  brightHeader(),
+  brightEyebrow(String(slide.eyebrow||'SEOUL / LIFESTYLE').slice(0,24),174),
+  box({position:'absolute',left:80,right:80,top:247},brightHeadline(fit.title.lines,fit.title.fontSize)),
+  box({position:'absolute',left:80,right:80,top:subtitleY},
+   fittedRows(fit.body.lines,fit.body.fontSize,BRIGHT_EDITORIAL.body,500,1.26)),
+  brightPhotoFrame(photoSrc,0,photoY,1205-photoY,language,String(slide.highlight||'')),
+  brightPhotoCredit(photoSrc?String(assets.cardCredits?.[0]||''):'',0));
+}
+function magazineInformation(slide:Row,index:number,document:Row,assets:EditorialAssets,fit:ReturnType<typeof magazineCarouselFit>){
+ const language=document.content_language==='en'?'en':'ko',photoSrc=selectedPhoto(assets,index);
+ const photographFirst=index%2===1;
+ const titleY=photographFirst?731:235;
+ const bodyY=titleY+fit.title.height+22;
+ const copyEnd=bodyY+fit.body.height;
+ if(photographFirst&&copyEnd>1187)throw new Error('MAGAZINE_PHOTO_FIRST_COPY_COLLISION');
+ if(!photographFirst&&copyEnd>707)throw new Error('MAGAZINE_COPY_FIRST_PHOTO_COLLISION');
+ const label=index===1?(language==='ko'?'CONTEXT / 핵심 배경':'CONTEXT / THE STORY')
+  :language==='ko'?'EDITORIAL / 인사이트':'EDITORIAL / INSIGHT';
+ const frameY=photographFirst?232:756,frameHeight=photographFirst?426:448;
+ return box({position:'relative',width:1080,height:1350,background:BRIGHT_EDITORIAL.paper,
+  color:BRIGHT_EDITORIAL.ink,overflow:'hidden'},
+  brightHeader(),brightEyebrow(label,175),
+  photographFirst?brightPhotoFrame(photoSrc,index,frameY,frameHeight,language,String(slide.highlight||'')):null,
+  box({position:'absolute',left:80,right:80,top:titleY},brightHeadline(fit.title.lines,fit.title.fontSize)),
+  box({position:'absolute',left:80,right:80,top:bodyY},
+   fittedRows(fit.body.lines,fit.body.fontSize,BRIGHT_EDITORIAL.body,500,1.26)),
+  !photographFirst?brightPhotoFrame(photoSrc,index,frameY,frameHeight,language,String(slide.highlight||'')):null,
+  brightPhotoCredit(photoSrc?String(assets.cardCredits?.[index]||''):'',index));
+}
+function magazineClosing(slide:Row,document:Row,fit:ReturnType<typeof magazineCarouselFit>){
+ const language=document.content_language==='en'?'en':'ko',type=String(slide.closing_type||'summary');
+ if(!['summary','insight','brand_outro'].includes(type))throw new Error('MAGAZINE_CLOSING_TYPE_INVALID');
+ const label=type==='brand_outro'?'ROUNDY / SEOUL':type==='insight'?'EDITORIAL / PERSPECTIVE':'EDITORIAL / SUMMARY';
+ const bodyY=349+fit.title.height+42;
+ if(bodyY+fit.body.height>984)throw new Error('MAGAZINE_CLOSING_COPY_COLLISION');
+ return box({position:'relative',width:1080,height:1350,background:BRIGHT_EDITORIAL.paper,
+  color:BRIGHT_EDITORIAL.ink,overflow:'hidden'},
+  brightHeader(),brightEyebrow(label,207),
+  box({position:'absolute',left:80,right:80,top:349},brightHeadline(fit.title.lines,fit.title.fontSize)),
+  box({position:'absolute',left:80,right:80,top:bodyY},
+   fittedRows(fit.body.lines,fit.body.fontSize,BRIGHT_EDITORIAL.body,500,1.31)),
+  box({position:'absolute',left:80,top:1112,width:75,height:5,background:BRIGHT_EDITORIAL.coral,borderRadius:3}),
+  box({position:'absolute',left:80,right:80,top:1161},
+   text(type==='brand_outro'?BRAND.instagram:
+    language==='ko'?'ROUNDY / 서울 라이프스타일 에디토리얼':'ROUNDY / SEOUL LIFESTYLE EDITORIAL',
+    26,{fontWeight:650,color:BRIGHT_EDITORIAL.muted,letterSpacing:.2})));
+}
+export function magazineCarouselTree(slide:Row,index:number,total:number,document:Row,assets:EditorialAssets={}){
+ const plan=savedCarouselPlan(document);
+ if(!isMagazineDocument(document)||!plan||total!==plan.slide_count||index<0||index>=total)
+  throw new Error('MAGAZINE_TEMPLATE_MISMATCH');
+ const role=slide.role,expected=total===3?['cover','key_insight','editorial_closing']:
+  ['cover','context','insight','insight','editorial_closing'];
+ if(role!==expected[index])throw new Error('MAGAZINE_SLIDE_ROLE_MISMATCH');
+ const language=document.content_language==='en'?'en':'ko';
+ const fit=magazineCarouselFit(slide,plan,index,language);
+ const fontFamily=language==='ko'?(assets.fonts?.length?'Noto Sans KR, sans-serif':'sans-serif'):
+  (assets.fonts?.length?'DM Sans, sans-serif':'sans-serif');
+ const card=index===0?magazineCover(slide,document,assets,fit):
+  index===total-1?magazineClosing(slide,document,fit):
+  magazineInformation(slide,index,document,assets,fit);
+ return box({width:1080,height:1350,fontFamily,background:BRIGHT_EDITORIAL.paper},card);
+}
+
 export function standardCarouselTree(slide:Row,index:number,total:number,document:Row,assets:EditorialAssets={}){
  const plan=savedCarouselPlan(document);
  if(!plan||plan.slide_count!==total||index<0||index>=total)throw new Error('CAROUSEL_TEMPLATE_LAYOUT_MISMATCH');
@@ -376,7 +453,7 @@ export function standardCarouselTree(slide:Row,index:number,total:number,documen
 
 export function compactEditorialTree(slide:Row,index:number,total:number,document:Row,assets:EditorialAssets={}){
  const language=document.content_language==='en'?'en':'ko';
- const tree=savedCarouselPlan(document)?standardCarouselTree(slide,index,total,document,assets):slide.role==='cover'?cover(slide,index,total,assets,document):slide.role==='cta'?outro(index,total,document):slide.role==='facts'&&document.trend_fact_pack?trendFactSheet(slide,document):content(slide,index,total,document,assets);
+ const tree=isMagazineDocument(document)?magazineCarouselTree(slide,index,total,document,assets):savedCarouselPlan(document)?standardCarouselTree(slide,index,total,document,assets):slide.role==='cover'?cover(slide,index,total,assets,document):slide.role==='cta'?outro(index,total,document):slide.role==='facts'&&document.trend_fact_pack?trendFactSheet(slide,document):content(slide,index,total,document,assets);
  return box({
   width:1080,
   height:1350,
@@ -388,7 +465,7 @@ export function renderCompactEditorial(slide:Row,index:number,total:number,docum
   width:1080,
   height:1350,
   ...(assets.fonts?.length?{fonts:assets.fonts}:{}),
-  headers:{'x-roundy-design-preset':EDITORIAL_PRESET}
+  headers:{'x-roundy-design-preset':isMagazineDocument(document)?MAGAZINE_EDITORIAL_PRESET:EDITORIAL_PRESET}
  });
 }
 

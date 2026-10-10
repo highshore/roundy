@@ -14,9 +14,12 @@ export function MarketingMobilePreview({draft,locale}:{draft:Row;locale:Locale})
  const shownImage=images[active]||null,slide=slides[active]||{};
  const title=String(slide.title||''),text=String((draft.content_language==='en'?slide.body_en:slide.body_ko)||slide.body||'');
  const canNavigate=total>1;
+ const magazine=draft.content_document?.design_preset==='roundy_magazine_editorial_v2';
+ const role=String(slide.role||'').replaceAll('_',' ');
+ const closingLabel=slide.role==='editorial_closing'?String(slide.closing_type||'summary').replaceAll('_',' '):'';
  return <aside className="marketing-mobile-preview" aria-label={t('Mobile card preview','모바일 카드뉴스 미리보기')}>
   <div className="marketing-mobile-preview-head">
-   <div><p className="admin-kicker">MOBILE PREVIEW</p><strong>{t('How your cards look on a phone','모바일 화면 미리보기')}</strong></div>
+   <div><p className="admin-kicker">{magazine?'MAGAZINE EDITORIAL / 4:5':'MOBILE PREVIEW'}</p><strong>{t('How your cards look on a phone','모바일 화면 미리보기')}</strong></div>
    <button type="button" className={'marketing-preview-toggle '+(guides?'active':'')}
     aria-pressed={guides} onClick={()=>setGuides(v=>!v)}>
     <Ruler size={15}/>{t('Safe margins','안전 여백')}</button>
@@ -35,7 +38,7 @@ export function MarketingMobilePreview({draft,locale}:{draft:Row;locale:Locale})
       </div>:<div className="marketing-phone-empty"><ImageIcon size={26}/>
        {t('Generate cards to preview here.','카드 생성 후 여기에 표시됩니다.')}</div>}
     {guides&&<div className="marketing-phone-safe-guide" aria-label={t('80px design safe area','디자인 안전 여백 80px')}/>}
-    {total>0&&<span className="marketing-phone-counter">{active+1} / {total}</span>}
+    {!magazine&&total>0&&<span className="marketing-phone-counter">{active+1} / {total}</span>}
    </div>
    <div className="marketing-phone-bottom">
     <div className="marketing-phone-dots" aria-hidden="true">
@@ -49,7 +52,7 @@ export function MarketingMobilePreview({draft,locale}:{draft:Row;locale:Locale})
    <button className="admin-secondary" type="button" disabled={!canNavigate||active===0}
     onClick={()=>setIndex(v=>Math.max(0,v-1))} aria-label={t('Previous card','이전 카드')}>
     <ChevronLeft size={16}/></button>
-   <div aria-live="polite">{t('Card','카드')} <strong>{total?active+1:0}</strong> / {total}</div>
+   <div aria-live="polite">{magazine&&<span>{role.toUpperCase()}{closingLabel?' / '+closingLabel.toUpperCase():''} — </span>}{t('Card','카드')} <strong>{total?active+1:0}</strong> / {total}</div>
    <button className="admin-secondary" type="button" disabled={!canNavigate||active===total-1}
     onClick={()=>setIndex(v=>Math.min(total-1,v+1))} aria-label={t('Next card','다음 카드')}>
     <ChevronRight size={16}/></button>

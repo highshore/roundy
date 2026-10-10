@@ -125,6 +125,73 @@ function harness({denied=false,network=false,badSources=false,duplicate=false,ph
   }else{
    if(!data.editorial_type)throw new Error('UNMOCKED_EDITORIAL_REQUEST');
    c=fixture(data.editorial_type,data.language,load('src/lib/marketing-content-policy.ts').CONTENT_PROFILES);
+   // Real AI replies honor the STRICT versioned JSON schema. Retrofit the mock
+   // model too: old fixtures are used for legacy campaigns, but Magazine v2
+   // must never return the old 5-card CTA or sales caption as if schema-valid.
+   const schema=body.response_format.json_schema.schema;
+   if(schema.properties.design_preset?.enum?.[0]==='roundy_magazine_editorial_v2'){
+    const type=data.editorial_type,ko=data.language==='ko',old=c.slides;
+    const translation=fixture(type,ko?'en':'ko',load('src/lib/marketing-content-policy.ts').CONTENT_PROFILES).slides;
+    const source=(role)=>old.find(s=>s.role===role)||old.find(s=>s.role==='insight')||old[1];
+    const prefer=type==='seoul_dating'?['scenario','etiquette','plan']:
+     type==='dating_myth'?['myth','finding','limitation']:
+     type==='book_insight'?['book','insight','practice']:
+     type==='trend_research'?['finding','context','limitation']:
+     type==='seoul_trend'?['trend','why_now','practical']:
+     type==='conversation_prompt'?['opener','followup','listen']:
+     type==='mini_quiz'?['question','options','reveal']:
+     old.slice(1,-1).map(s=>s.role);
+    const magazineRoles=requestedSlides===3?['cover','key_insight','editorial_closing']:
+     ['cover','context','insight','insight','editorial_closing'];
+    c.design_preset='roundy_magazine_editorial_v2';
+    c.cta='';
+    c.caption_ko='서울의 일상에 관한 작고 분명한 이야기.\n\n서로 다른 관점을 살펴보면 일상의 작은 장면이 달라집니다.';
+    c.caption_en='A closer look at the everyday details of Seoul.\n\nDifferent perspectives can change what we notice.';
+    c.caption=ko?c.caption_ko:c.caption_en;
+    c.tagline=ko?'서울 라이프스타일 이야기':'Seoul lifestyle observations';
+    c.hashtags=[];
+    c.slides=magazineRoles.map((role,i)=>{
+     const final=i===requestedSlides-1;
+     const picked=i===0?old[0]:final?old[old.length-2]:
+      source(prefer[Math.min(i-1,prefer.length-1)]);
+     const other=translation.find(s=>s.role===picked.role)||translation[1];
+     const clone={...picked,role,closing_type:final?'summary':'none',options:picked.options||[],
+      secondary_body:other.body};
+     if((type==='prelaunch'||type==='live_event')&&final){
+      clone.title=ko?'한 가지 남겨 둘 관점':'The perspective to keep';
+      clone.body=ko?'한 번의 대화에는 서로의 속도를 존중하는 시간이 필요합니다.':'Each conversation deserves time and attention to the person in front of us.';
+      clone.secondary_body=ko?'Each conversation deserves time and attention to the person in front of us.':'한 번의 대화에는 서로의 속도를 존중하는 시간이 필요합니다.';
+     }
+     if((type==='prelaunch'||type==='live_event')&&i>1&&!final){
+      clone.title=ko?(i===2?'경험의 속도를 바꿔 보기':'작은 대화의 단서'):i===2?'A slower way to meet':'A detail worth noticing';
+      clone.body=ko?(i===2?'주변의 소음을 줄이면 누군가의 이야기에 머물기 쉬워집니다.':'상대가 건넨 짧은 말에서 다음 이야깃거리를 찾을 수 있습니다.')
+       :i===2?'A quieter exchange gives one person room to finish a story.':'One small detail in an answer can lead to another perspective.';
+      clone.secondary_body=ko?(i===2?'A quieter exchange gives one person room to finish a story.':'One small detail in an answer can lead to another perspective.')
+       :i===2?'주변의 소음을 줄이면 누군가의 이야기에 머물기 쉬워집니다.':'상대가 건넨 짧은 말에서 다음 이야깃거리를 찾을 수 있습니다.';
+     }
+     if(role==='key_insight'&&type==='seoul_dating'){
+      clone.body=c.seoul.venues.map(v=>v.name).join(' / ');
+      clone.secondary_body=fixture(type,ko?'en':'ko',load('src/lib/marketing-content-policy.ts').CONTENT_PROFILES).seoul.venues.map(v=>v.name).join(' / ');
+      clone.source_ids=['S1','S2','S3'];
+     }
+     if(role==='key_insight'&&type==='dating_myth'){
+      clone.title=ko?'이 통념은 사실일까요?':'What does evidence suggest?';
+      clone.body=c.myth.claim;
+      clone.secondary_body=ko?'The more questions you ask, the more they like you':'질문을 많이 할수록 상대가 더 좋아한다';
+     }
+     if(!final&&i>0&&load('src/lib/marketing-content-policy.ts').CONTENT_PROFILES[type].research){
+      clone.source_ids=type==='seoul_dating'?(requestedSlides===3?['S1','S2','S3']:['S'+Math.min(i,3)]):type==='seoul_trend'?['S1','S2']:['S1'];
+     }
+     if(role==='key_insight'&&type==='conversation_prompt'){
+      clone.body=ko?'첫 질문: 요즘 재미있었던 건 뭐예요? 후속 질문: 어떤 점이 좋았어요?':'First question: What did you enjoy recently? Follow-up: What stood out?';
+      clone.secondary_body=ko?'First question: What did you enjoy recently? Follow-up: What stood out?':'첫 질문: 요즘 재미있었던 건 뭐예요? 후속 질문: 어떤 점이 좋았어요?';
+     }
+     if(role==='editorial_closing'&&picked.role==='cta'){
+      clone.title=ko?'오늘의 핵심 정리':'One lasting takeaway';clone.body=ko?'좋은 대화는 서로의 답에 귀 기울이는 데서 시작합니다.':'Good conversation begins by listening to the reply.';
+     }
+     return clone;
+    });
+   }
   }
   if(answerFirstSchema){
    const language=data.language==='en'?'en':'ko';
@@ -134,9 +201,11 @@ function harness({denied=false,network=false,badSources=false,duplicate=false,ph
    c.thumbnail_candidates=headlines;
    if(data.editorial_type){
     const helper=load('src/lib/marketing-answer-first.ts');
-    const roles=requestedSlides===3?helper.editorialRolesForCount(data.editorial_type,c.slides.map(x=>x.role),3):helper.fiveEditorialRoles(data.editorial_type,c.slides.map(x=>x.role));
-    c.slides=roles.map(role=>c.slides.find(x=>x.role===role));
-    if(c.slides.some(x=>!x))throw new Error('ANSWER_FIRST_TEST_ROLE_MISSING:'+data.editorial_type);
+    if(c.design_preset!=='roundy_magazine_editorial_v2'){
+     const roles=requestedSlides===3?helper.editorialRolesForCount(data.editorial_type,c.slides.map(x=>x.role),3):helper.fiveEditorialRoles(data.editorial_type,c.slides.map(x=>x.role));
+     c.slides=roles.map(role=>c.slides.find(x=>x.role===role));
+     if(c.slides.some(x=>!x))throw new Error('ANSWER_FIRST_TEST_ROLE_MISSING:'+data.editorial_type);
+    }
    }
    c.slides[0].title=headlines[0];
    if(requestedSlides===3&&data.editorial_type==='conversation_prompt'){
@@ -220,7 +289,7 @@ for(const language of ['en','ko'])for(const type of Object.keys(harness().policy
 {const p=harness().policy,c=fixture('dating_myth','ko',p.CONTENT_PROFILES);c.caption_ko='연구가 증명했다. 이 통념은 완전히 거짓이다.';c.caption=c.caption_ko;const q=p.evaluateContent(c,'dating_myth','ko',[{id:'S1',url:'https://doi.org/10.1234/attentive.2024',title:'Attentive Conversation Study (2024)',evidence:'Attentive Conversation Study 2024 limited sample association'}]);check(()=>assert.equal(q.status,'rejected'));check(()=>assert.ok(q.issues.some(x=>x.includes('단정'))));}
 {const p=harness().policy,c=fixture('trend_research','en',p.CONTENT_PROFILES);c.caption_en='Recent research suggests this pattern matters.';c.caption=c.caption_en;const q=p.evaluateContent(c,'trend_research','en',[{id:'S1',url:'https://doi.org/10.1234/attentive.2024',title:'Attentive Conversation Study (2024)',evidence:'Attentive Conversation Study 2024 limited sample association'}]);check(()=>assert.equal(q.status,'rejected'));check(()=>assert.ok(q.issues.some(x=>x.includes('현재 연도'))));}
 {const p=harness().policy,c=fixture('book_insight','en',p.CONTENT_PROFILES);const q=p.evaluateContent(c,'book_insight','en',[{id:'S1',url:'https://english-school.example',title:'English lessons',evidence:'Unrelated tutoring services'}]);check(()=>assert.equal(q.status,'rejected'));const quiz=fixture('mini_quiz','en',p.CONTENT_PROFILES);quiz.slides[2].options=['Same','Same'];check(()=>assert.equal(p.evaluateContent(quiz,'mini_quiz','en').status,'rejected'));}
-{const p=harness().policy;check(()=>assert.equal(p.CONTENT_POLICY_VERSION,12));const ko=fixture('prelaunch','ko',p.CONTENT_PROFILES);ko.caption='진정한 인연을 위한 특별한 만남';check(()=>assert.equal(p.evaluateContent(ko,'prelaunch','ko').status,'rejected'));const en=fixture('prelaunch','en',p.CONTENT_PROFILES);en.caption='Discover meaningful human connections in a premium experience.';check(()=>assert.equal(p.evaluateContent(en,'prelaunch','en').status,'rejected'));check(()=>assert.match(p.writingInstructions('conversation_prompt','ko'),/실제 SNS|당장 써볼 수|AI\/마케팅 표현|AI\/marketing|상투적인|generic AI/i));}
+{const p=harness().policy;check(()=>assert.equal(p.CONTENT_POLICY_VERSION,13));const ko=fixture('prelaunch','ko',p.CONTENT_PROFILES);ko.caption='진정한 인연을 위한 특별한 만남';check(()=>assert.equal(p.evaluateContent(ko,'prelaunch','ko').status,'rejected'));const en=fixture('prelaunch','en',p.CONTENT_PROFILES);en.caption='Discover meaningful human connections in a premium experience.';check(()=>assert.equal(p.evaluateContent(en,'prelaunch','en').status,'rejected'));check(()=>assert.match(p.writingInstructions('conversation_prompt','ko'),/실제 SNS|당장 써볼 수|AI\/마케팅 표현|AI\/marketing|상투적인|generic AI/i));}
 
 {const p=harness().policy;check(()=>assert.equal(p.qualitySeverity('실제 인용된 출처가 없습니다.'),'critical'));check(()=>assert.equal(p.qualitySeverity('카드 제목이 중복되거나 지나치게 유사합니다.'),'quality'));const presentation=harness().api?null:null;}
 for(const language of ['ko','en'])for(const type of Object.keys(harness().policy.CONTENT_PROFILES)){
