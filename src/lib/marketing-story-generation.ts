@@ -15,7 +15,7 @@ const kstDate=(date=new Date())=>new Intl.DateTimeFormat('en-CA',{
  timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'
 }).format(date);
 const nextKstDate=(date:string)=>kstDate(new Date(Date.parse(date+'T00:00:00+09:00')+86400000));
-const validUuid=(s:string)=>/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+const validUuid=(s:string)=>/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
 export function eligibleFeed(run:Row,draft:Row|undefined,tomorrow:string){
  const cover=String(run?.snapshot?.images?.[0]||'');
  return Boolean(draft&&run?.status==='queued'&&run?.channel==='instagram'
