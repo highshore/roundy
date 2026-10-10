@@ -35,7 +35,7 @@ export function magazineRolesForCount(count:3|5):string[]{
 }
 export function magazineAnswerFirstPrompt(count:3|5):string{
  return [
-  'SEOUL MAGAZINE EDITORIAL: Deliver a precise conclusion first, then verifiable context, one idea per slide. This is reader service journalism, not an advertising campaign.',
+  'ANSWER-FIRST (REQUIRED): SEOUL MAGAZINE EDITORIAL. Deliver a precise conclusion first, then verifiable context, one idea per slide. This is reader service journalism, not an advertising campaign.',
   count===3?'Three cards: cover with answer-first headline, key_insight with a concrete and source-grounded fact, editorial_closing with a thoughtful summary, insight or subtle brand outro.':'Five cards: cover with answer-first headline, context giving real background, two distinct insights with verifiable details, editorial_closing with a useful summary, insight or subtle brand outro.',
   'Never generate a call-to-action, signup, visit, explore, learn more, click-like UI, promotional caption action, or compulsory brand promotion.',
   'Preserve all attribution and limitations, source IDs and truthful specific Seoul venue names. Never invent statistics or claim venue availability.',
