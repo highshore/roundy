@@ -232,48 +232,148 @@ function outro(_index:number,_total:number,document:Row){
  );
 }
 
-// Unified new-generation cards; older documents use their original branded templates.
+// The new carousel renderer is shared by manual generation, automatic generation,
+// regeneration, previews, and the saved Feed/Story image pipeline. Legacy snapshots
+// without carousel_template deliberately retain their original renderers.
+const BRIGHT_EDITORIAL={
+ paper:BRAND.paper,ink:BRAND.ink,coral:BRAND.accent,body:'#454740',
+ blush:'#fff1ed',softBlush:'#fff7f3',border:'#f0e1db',muted:BRAND.muted
+} as const;
+function fittedRows(items:string[],size:number,color:string,weight:number,lineHeight=1.26){
+ return box({width:'100%',flexDirection:'column',alignItems:'flex-start',gap:0},
+  ...items.map(line=>text(line||' ',size,{whiteSpace:'nowrap',fontWeight:weight,
+   color,lineHeight,letterSpacing:weight>=700?-1:0})));
+}
+// Emphasize a meaningful final token (including Hangul with no spaces) without
+// altering the approved Answer-First headline or discarding any source text.
+function brightHeadline(lines:string[],fontSize:number){
+ return box({width:'100%',flexDirection:'column',alignItems:'flex-start',gap:0},
+  ...lines.map((line,i)=>{
+   const common={fontWeight:900,lineHeight:1.22,letterSpacing:-1.5,whiteSpace:'nowrap'} as Row;
+   if(i!==lines.length-1)return text(line||' ',fontSize,{...common,color:BRIGHT_EDITORIAL.ink});
+   const cut=line.lastIndexOf(' ');
+   if(cut<=0)return text(line,fontSize,{...common,color:BRIGHT_EDITORIAL.coral});
+   // An actual gap is needed: trailing spaces collapse between flex children
+   // in Satori, otherwise Hangul words visually run together.
+   return box({width:'100%',alignItems:'baseline',gap:Math.max(8,Math.round(fontSize*.14))},
+    text(line.slice(0,cut),fontSize,{...common,color:BRIGHT_EDITORIAL.ink}),
+    text(line.slice(cut+1),fontSize,{...common,color:BRIGHT_EDITORIAL.coral}));
+  }));
+}
+function brightPhotoFrame(src:string|null,index:number,y:number,height:number,language:string,note?:string){
+ const fallback=String(note|| (language==='ko'?'대화에서 중요한 한 가지':'ONE THING TO REMEMBER')).trim();
+ // A missing approved photo becomes an intentional editorial note, NEVER
+ // fake stock photography or an unreviewed third-party image.
+ return box({position:'absolute',left:80,top:y,width:920,height,overflow:'hidden',
+  borderRadius:30,background:BRIGHT_EDITORIAL.softBlush,border:'1px solid '+BRIGHT_EDITORIAL.border},
+  src?photo(src,{objectPosition:index%2===1?'center 44%':'center 54%'}):
+   box({width:'100%',height:'100%',background:BRIGHT_EDITORIAL.blush,
+    flexDirection:'column',alignItems:'center',justifyContent:'center',gap:20,padding:'38px 80px'},
+    box({width:68,height:5,background:BRIGHT_EDITORIAL.coral,borderRadius:5}),
+    text('ROUNDY NOTE',23,{fontWeight:800,color:BRIGHT_EDITORIAL.coral,letterSpacing:2}),
+    text(fallback,Math.max(29,Math.min(44,Math.floor(780/Math.max(1,textUnits(fallback))))),
+     {fontWeight:750,color:BRIGHT_EDITORIAL.ink,lineHeight:1.34,textAlign:'center',wordBreak:'keep-all'})));
+}
+function brightPhotoCredit(value:string,index:number){
+ // photoCardSourceLabel already bounds this credit and preserves full URLs in captions.
+ return value?box({position:'absolute',left:80,right:80,top:1224,width:920},
+  text(value,20,{color:BRIGHT_EDITORIAL.muted,fontWeight:500,whiteSpace:'nowrap',
+   letterSpacing:0,lineHeight:1.3})):null;
+}
+function brightHeader(){
+ return box({position:'absolute',left:80,top:69},
+  officialRoundyLogo(false,47));
+}
+function brightEyebrow(value:string,top:number){
+ return box({position:'absolute',left:80,right:80,top,height:38,alignItems:'center',gap:13},
+  box({width:11,height:11,borderRadius:11,background:BRIGHT_EDITORIAL.coral}),
+  text(value,24,{fontWeight:800,color:BRIGHT_EDITORIAL.body,letterSpacing:1.2}));
+}
+function brightCover(slide:Row,document:Row,assets:EditorialAssets,fit:ReturnType<typeof mobileCarouselFit>){
+ const language=document.content_language==='en'?'en':'ko';
+ const src=selectedPhoto(assets,0,true),body=fit.body.lines;
+ const label=String(slide.eyebrow|| (language==='ko'?'ROUNDY / 서울 가이드':'ROUNDY / SEOUL GUIDE')).slice(0,35);
+ const bodyTop=253+fit.title.height+16;
+ const frameTop=Math.max(743,bodyTop+fit.body.height+34);
+ if(frameTop>890)throw new Error('CAROUSEL_COVER_PHOTO_SPACE_EXCEEDED');
+ const cardCredit=src?String(assets.cardCredits?.[0]||''):'';
+ return box({position:'relative',width:1080,height:1350,background:BRIGHT_EDITORIAL.paper,
+  color:BRIGHT_EDITORIAL.ink,overflow:'hidden'},
+  brightHeader(),brightEyebrow(label,177),
+  box({position:'absolute',left:80,right:80,top:253},brightHeadline(fit.title.lines,fit.title.fontSize)),
+  box({position:'absolute',left:80,right:80,top:bodyTop},
+   fittedRows(body,fit.body.fontSize,BRIGHT_EDITORIAL.body,500,1.26)),
+  brightPhotoFrame(src,0,frameTop,1196-frameTop,language),
+  brightPhotoCredit(cardCredit,0),
+  !src?box({position:'absolute',left:80,top:1232},
+   text(language==='ko'?'이미지 미확정 · 관리자 검토 필요':'No approved photo · review required',19,
+    {color:BRIGHT_EDITORIAL.muted})):null);
+}
+function brightInformation(slide:Row,index:number,document:Row,assets:EditorialAssets,fit:ReturnType<typeof mobileCarouselFit>){
+ const language=document.content_language==='en'?'en':'ko',src=selectedPhoto(assets,index);
+ const bodyTop=251+fit.title.height+21;
+ const highlightTop=bodyTop+fit.body.height+17;
+ const hasHighlight=fit.highlight.lines.length>0;
+ const textBottom=highlightTop+(hasHighlight?fit.highlight.height+26:0);
+ const frameTop=Math.max(720,textBottom+32);
+ if(frameTop>960)throw new Error('CAROUSEL_CONTENT_PHOTO_SPACE_EXCEEDED');
+ const credit=src?String(assets.cardCredits?.[index]||''):'';
+ return box({position:'relative',width:1080,height:1350,background:BRIGHT_EDITORIAL.paper,
+  color:BRIGHT_EDITORIAL.ink,overflow:'hidden'},
+  brightHeader(),brightEyebrow('TIP '+String(index).padStart(2,'0'),172),
+  box({position:'absolute',left:80,right:80,top:251},brightHeadline(fit.title.lines,fit.title.fontSize)),
+  box({position:'absolute',left:80,right:80,top:bodyTop},
+   fittedRows(fit.body.lines,fit.body.fontSize,BRIGHT_EDITORIAL.body,500,1.26)),
+  hasHighlight&&!!src?box({position:'absolute',left:80,top:highlightTop,padding:'12px 22px',
+   background:BRIGHT_EDITORIAL.blush,borderRadius:17,
+   border:'1px solid '+BRIGHT_EDITORIAL.border},
+   fittedRows(fit.highlight.lines,fit.highlight.fontSize,BRIGHT_EDITORIAL.coral,750,1.18)):null,
+  brightPhotoFrame(src,index,frameTop,1196-frameTop,language,String(slide.highlight||slide.title||'')),
+  brightPhotoCredit(credit,index),
+  !src&&slide.source_label?box({position:'absolute',left:80,top:1231},
+   text(language==='ko'?'자료 출처는 캡션에 표기':'Research sources in caption',19,
+    {color:BRIGHT_EDITORIAL.muted})):null);
+}
+function brightOutro(slide:Row,document:Row,fit:ReturnType<typeof mobileCarouselFit>){
+ const language=document.content_language==='en'?'en':'ko';
+ const ko=language==='ko';
+ const bodyTop=368+fit.title.height+34;
+ return box({position:'relative',width:1080,height:1350,background:BRIGHT_EDITORIAL.paper,
+  color:BRIGHT_EDITORIAL.ink,overflow:'hidden'},
+  brightHeader(),brightEyebrow(ko?'다음 만남은 ROUNDY에서':'YOUR NEXT CONVERSATION',212),
+  box({position:'absolute',left:80,right:80,top:368},brightHeadline(fit.title.lines,fit.title.fontSize)),
+  box({position:'absolute',left:80,right:80,top:bodyTop},
+   fittedRows(fit.body.lines,fit.body.fontSize,BRIGHT_EDITORIAL.body,500,1.3)),
+  box({position:'absolute',left:80,right:80,top:836,height:1,background:BRIGHT_EDITORIAL.border}),
+  box({position:'absolute',left:80,right:80,top:869,flexDirection:'column',gap:10},
+   text(ko?'직접 만나고, 서로에게 끌릴 때 연결됩니다.':'Meet face to face. Connect when the feeling is mutual.',31,
+    {fontWeight:700,color:BRIGHT_EDITORIAL.ink}),
+   text(ko?'서울에서 시작하는 새로운 연결':'New connections, starting in Seoul',27,
+    {fontWeight:500,color:BRIGHT_EDITORIAL.body})),
+  box({position:'absolute',left:80,top:1037,width:450,height:83,
+   borderRadius:999,background:BRIGHT_EDITORIAL.coral,alignItems:'center',
+   justifyContent:'center',gap:18},
+   text(ko?'Roundy 둘러보기':'Explore Roundy',32,
+    {fontWeight:900,color:BRIGHT_EDITORIAL.ink})),
+  box({position:'absolute',left:80,right:80,top:1197,
+   flexDirection:'row',justifyContent:'space-between'},
+   text(BRAND.instagram,26,{fontWeight:700,color:BRIGHT_EDITORIAL.muted}),
+   text(BRAND.website,26,{fontWeight:700,color:BRIGHT_EDITORIAL.muted})));
+}
 export function standardCarouselTree(slide:Row,index:number,total:number,document:Row,assets:EditorialAssets={}){
  const plan=savedCarouselPlan(document);
  if(!plan||plan.slide_count!==total||index<0||index>=total)throw new Error('CAROUSEL_TEMPLATE_LAYOUT_MISMATCH');
- const language=document.content_language==='en'?'en':'ko',fit=mobileCarouselFit(slide,plan,index,language);
- const cover=index===0,cta=index===total-1,src=cta?null:selectedPhoto(assets,index,cover);
- const cardCredit=src?String(assets.cardCredits?.[index]||''):'';
- const dark=!!src||cover||cta,fg=dark?BRAND.paper:BRAND.ink;
+ const language=document.content_language==='en'?'en':'ko';
+ const fit=mobileCarouselFit(slide,plan,index,language);
  const typeface=language==='ko'?(assets.fonts?.length?'Noto Sans KR, sans-serif':'sans-serif')
    :(assets.fonts?.length?'DM Sans, sans-serif':'sans-serif');
- const lines=(items:string[],size:number,color:string,weight:number,lh:number)=>
-  box({width:'100%',flexDirection:'column',alignItems:'flex-start',gap:2},
-   ...items.map(line=>text(line||' ',size,{whiteSpace:'nowrap',fontWeight:weight,lineHeight:lh,color,letterSpacing:weight>=700?-1:0})));
- return box({position:'relative',width:CAROUSEL_CANVAS.width,height:CAROUSEL_CANVAS.height,
-  background:dark?BRAND.ink:BRAND.paper,color:fg,overflow:'hidden',fontFamily:typeface},
-  src?photo(src):null,
-  // Opaque photographic scrim prevents bright imagery from reducing text contrast.
-  // Satori/ImageResponse does not reliably paint shorthand inset:0 overlays.
-  // Explicit dimensions and edges ensure bright photographs retain text contrast.
-  src?box({position:'absolute',top:0,left:0,width:CAROUSEL_CANVAS.width,
-   height:CAROUSEL_CANVAS.height,backgroundColor:'rgba(13,18,15,.83)'}):null,
-  box({position:'absolute',left:80,right:80,top:66,alignItems:'center',justifyContent:'space-between'},
-   officialRoundyLogo(dark,48),
-   text(String(index+1).padStart(2,'0')+' / '+String(total).padStart(2,'0'),23,
-    {fontWeight:700,color:dark?'#ffffff':'#454740',letterSpacing:2})),
-  box({position:'absolute',left:80,right:80,top:cover?320:cta?345:280,bottom:cover?145:cta?174:140,
-   flexDirection:'column',justifyContent:'center',alignItems:'flex-start',gap:22},
-   text(carouselNarrative(total)[index]||'ROUNDY',23,{fontWeight:900,color:dark?'#ffffff':BRAND.accent,letterSpacing:2.6}),
-   lines(fit.title.lines,fit.title.fontSize,fg,900,1.14),
-   box({height:5,width:74,background:BRAND.accent,marginTop:10,marginBottom:8}),
-   lines(fit.body.lines,fit.body.fontSize,dark?'#ffffff':'#30352f',500,1.32),
-   fit.highlight.lines.length?lines(fit.highlight.lines,fit.highlight.fontSize,dark?'#ffe0d8':BRAND.accent,700,1.26):null,
-   cta?box({flexDirection:'column',gap:12,marginTop:20},text(BRAND.instagram,30,{fontWeight:700,color:fg}),
-    text(BRAND.website,28,{fontWeight:700,color:fg})):null),
-  !cta&&slide.source_label?box({position:'absolute',left:80,bottom:cardCredit?109:64,right:80},
-   text(language==='en'?'Sources in caption':'출처는 본문에서 확인',22,{fontWeight:600,color:dark?'#ffffff':'#555b53'})):null,
-  cardCredit?box({position:'absolute',left:80,right:80,bottom:65,width:920,
-   alignItems:'center',justifyContent:'flex-start'},
-   text(cardCredit,21,{fontWeight:600,color:'#ffffff',whiteSpace:'nowrap',lineHeight:1.2,
-    textShadow:'0px 1px 3px rgba(0,0,0,.78)'})):null
- );
+ const card=index===0?brightCover(slide,document,assets,fit)
+   :index===total-1?brightOutro(slide,document,fit)
+   :brightInformation(slide,index,document,assets,fit);
+ return box({width:CAROUSEL_CANVAS.width,height:CAROUSEL_CANVAS.height,fontFamily:typeface,
+  background:BRIGHT_EDITORIAL.paper},card);
 }
+
 export function compactEditorialTree(slide:Row,index:number,total:number,document:Row,assets:EditorialAssets={}){
  const language=document.content_language==='en'?'en':'ko';
  const tree=savedCarouselPlan(document)?standardCarouselTree(slide,index,total,document,assets):slide.role==='cover'?cover(slide,index,total,assets,document):slide.role==='cta'?outro(index,total,document):slide.role==='facts'&&document.trend_fact_pack?trendFactSheet(slide,document):content(slide,index,total,document,assets);

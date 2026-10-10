@@ -245,7 +245,7 @@ async function generateVisualSet(db:DB,draft:Row,input:GenerationInput,job:Row){
   'The server supplies all event facts and adds all typography later. Do not render any date, price, venue name, seat count, logo, sign, watermark, text, letters, UI, ticket, poster, or branded object.',
   'Show believable contemporary Seoul social-event atmosphere: natural one-on-one conversation, arrival/venue atmosphere, or a neutral detail/environmental frame. Do not pretend the generated image depicts the named real venue.',
   'People should look like real adults in a respectful social setting, smart-casual and candid. Avoid staged romance, physical intimacy, nightlife excess, alcohol focus, hand hearts, wedding styling, stock-photo smiles, or fake signage.',
-  'Portrait 4:5. Leave negative space for server-rendered campaign copy.',
+  'Portrait 4:5. Bright natural photography for a separate rounded panel; the server places copy outside the photograph.',
   'Event campaign stage: '+String(draft.event_campaign_stage||draft.content_document?.event_campaign_stage||'launch')+'. Pattern: '+String(draft.event_campaign_pattern||draft.content_document?.event_campaign_pattern||'event_poster')+'.'
  ]:campaign?[
   'Generate THREE distinct but visually coherent premium lifestyle PHOTOGRAPHS for one Roundy pre-launch advertising campaign. Each returned image is a separate photograph, not a collage.',
@@ -255,7 +255,7 @@ async function generateVisualSet(db:DB,draft:Row,input:GenerationInput,job:Row){
   'People should look like real adults in natural social situations, not posed romantic partners. Smart-casual styling, natural skin texture, contemporary Seoul atmosphere, restrained premium lighting.',
   'Avoid wedding/couple-shoot styling, exaggerated romance, physical intimacy, hand hearts, staged luxury, crowded nightlife, visible alcohol as the focal point, stock-photo smiles, repeated café compositions, and fake event details.',
   'ABSOLUTELY NO text, letters, typography, logos, signs, watermarks, UI, screenshots, cards, posters, or branded objects inside the photographs.',
-  'Portrait 4:5 composition. Leave useful negative space for server-rendered campaign copy.',
+  'Portrait 4:5 composition. Bright, natural light and room for cropping inside a separate photo frame; typography stays on ivory outside the photograph.',
   'Campaign pattern: '+String(draft.campaign_pattern||draft.content_document?.campaign_pattern||'poster')+'. Tone: '+String(draft.campaign_tone||draft.content_document?.campaign_tone||'modern_premium')+'.'
  ]:[
   'Generate THREE distinct but visually coherent editorial lifestyle photographs for one Roundy Instagram carousel. Each returned image is a separate photograph from the same campaign, not a collage.',
@@ -263,7 +263,7 @@ async function generateVisualSet(db:DB,draft:Row,input:GenerationInput,job:Row){
   'Vary locations naturally across believable Seoul settings such as a neighborhood street, riverside, restaurant, lounge, rooftop, gallery-like social space, or café only when it genuinely fits. Vary framing as well: one strong cover composition with negative space, one natural conversational medium shot, and one detail/environmental lifestyle shot.',
   'People should look like real adults in a natural social moment, not posed romantic partners. Smart-casual styling, natural skin texture, imperfect gestures, genuine conversation, contemporary Seoul atmosphere.',
   'Magazine-editorial photography: restrained, premium, warm, modern, documentary-natural. Avoid exaggerated romance, physical intimacy, flowers-as-romance clichés, hand hearts, wedding/couple-shoot styling, glamour/luxury cues, crowded parties, visible alcohol, stock-photo smiles, repeated café setups, fake signage, text, logos, watermarks, or invented event facts.',
-  'Portrait 4:5 composition. Leave useful negative space where editorial typography can be placed by the server. Do not render any words or Roundy branding inside the photographs.',
+  'Portrait 4:5 composition. Bright natural photography cropped into a separate photo frame; the server places all typography outside the image. Do not render any words or Roundy branding inside the photographs.',
   draft.growth_topic_type==='seoul_dating'
    ?'IMPORTANT FOR SEOUL DATING POSTS: the named venues in the copy are factual recommendations, but these generated photographs are mood/editorial illustrations only. Do NOT attempt to depict, reconstruct or label any named venue as if this were a real photo of that place. Use a generic Seoul date atmosphere that matches the category (park, gallery, street, restaurant, riverside, etc.) with no identifiable venue signage.'
    :'',

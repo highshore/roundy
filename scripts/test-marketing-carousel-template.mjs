@@ -56,7 +56,11 @@ assert.equal(mobileCarouselFit(samples[1],three,1,'ko').body.fontSize,42,
  '36px body baseline must render larger in the standardized template');
 const visuals=read('src/lib/marketing-visuals.ts');
 assert.match(visuals,/standardCarouselTree\(/);
-assert.ok(visuals.includes("backgroundColor:'rgba(13,18,15,.83)'"),'Satori scrim must be explicitly sized and visible');
+assert.ok(!visuals.includes("backgroundColor:'rgba(13,18,15,.83)'"),'Bright editorial cards must never cover photography with the legacy 83% dark scrim');
+assert.match(visuals,/brightPhotoFrame\(/);
+assert.match(visuals,/BRIGHT_EDITORIAL\.coral/);
+assert.match(visuals,/brightHeader\(\)/);
+assert.ok(!visuals.slice(visuals.indexOf('export function standardCarouselTree'),visuals.indexOf('export function compactEditorialTree')).includes('padStart(2,\'0\')+\' / \''),'Page number counters are forbidden');
 assert.match(visuals,/left:80,right:80/);
 assert.match(visuals,/fontWeight:900/);
 assert.match(visuals,/savedCarouselPlan\(document\)\?standardCarouselTree/);
