@@ -245,7 +245,10 @@ export function standardCarouselTree(slide:Row,index:number,total:number,documen
   background:dark?BRAND.ink:BRAND.paper,color:fg,overflow:'hidden',fontFamily:typeface},
   src?photo(src):null,
   // Opaque photographic scrim prevents bright imagery from reducing text contrast.
-  src?box({position:'absolute',inset:0,background:'rgba(13,18,15,.80)'}):null,
+  // Satori/ImageResponse does not reliably paint shorthand inset:0 overlays.
+  // Explicit dimensions and edges ensure bright photographs retain text contrast.
+  src?box({position:'absolute',top:0,left:0,width:CAROUSEL_CANVAS.width,
+   height:CAROUSEL_CANVAS.height,backgroundColor:'rgba(13,18,15,.83)'}):null,
   box({position:'absolute',left:80,right:80,top:66,alignItems:'center',justifyContent:'space-between'},
    officialRoundyLogo(dark,48),
    text(String(index+1).padStart(2,'0')+' / '+String(total).padStart(2,'0'),23,
