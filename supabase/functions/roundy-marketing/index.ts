@@ -189,6 +189,14 @@ async function validateReviewedStockDraft(t:Template){
    (p.license_name==='CC BY 4.0'&&p.license_url==='https://creativecommons.org/licenses/by/4.0/'));
   if(!free&&(!licensing[p.provider]||p.license_name!==licensing[p.provider][0]||
    p.license_url!==licensing[p.provider][1]))throw new Error('STOCK_LICENSE_UNSUPPORTED');
+  const labels:Record<string,string>={
+   pexels:'Pexels',unsplash:'Unsplash',pixabay:'Pixabay',
+   wikimedia:'Wikimedia Commons',openverse:'Openverse (Wikimedia Commons)'
+  };
+  const caption=String(t.caption||'');
+  if(!labels[p.provider]||!caption.includes(labels[p.provider])||
+   !caption.includes(String(p.photographer))||!caption.includes(String(p.source_url)))
+   throw new Error('STOCK_SOURCE_CREDIT_REQUIRED');
   if(p.attribution_required===true&&(
    !String(t.caption||'').includes(String(p.photographer))||
    !String(t.caption||'').includes(String(p.source_url))||
@@ -196,6 +204,7 @@ async function validateReviewedStockDraft(t:Template){
    !String(t.caption||'').includes('(cropped and text overlaid)')))
     throw new Error('STOCK_REQUIRED_ATTRIBUTION_MISSING');
  }
+ if(String(draft.caption||'')!==String(t.caption||''))throw new Error('STOCK_CAPTION_CHANGED_AFTER_APPROVAL');
  if(JSON.stringify(draft.images)!==JSON.stringify(t.images))throw new Error('STOCK_RENDER_CHANGED_AFTER_APPROVAL');
 }
 

@@ -8,7 +8,13 @@ const module={exports:{}};
 const js=ts.transpileModule(source('src/lib/marketing-stock-photo-policy.ts'),{
  compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}
 }).outputText;
-vm.runInNewContext(js,{module,exports:module.exports});
+const rights={exports:{}};
+const rightsJs=ts.transpileModule(source('src/lib/marketing-photo-rights.ts'),{
+ compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}
+}).outputText;
+vm.runInNewContext(rightsJs,{module:rights,exports:rights.exports,URL});
+vm.runInNewContext(js,{module,exports:module.exports,
+ require:name=>name==='./marketing-photo-rights'?rights.exports:(()=>{throw Error('Unmocked import '+name)})()});
 const {configuredPhotoSourcingPolicy,savedPhotoSourcingPolicy,
  requiredPhotoSlotsForRoles,allSelectedPhotosApproved}=module.exports;
 const roles5=['cover','scenario','detail','practice','cta'],roles3=['cover','context','cta'];

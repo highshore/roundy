@@ -1,4 +1,5 @@
 // Pure invariants shared by all licensed-photo providers and publisher-facing review.
+import {creditForPhoto,validLicensedPhoto} from './marketing-photo-rights';
 
 export type PhotoSourcingPolicy={
  version:1;
@@ -57,25 +58,29 @@ export function allSelectedPhotosApproved(roles:string[],photos:ReviewedPhoto[],
  return photos.length===slots.length
   &&photos.every((photo,index)=>photo.slot===slots[index]&&photo.review_status==='approved'&&!!photo.storage_path);
 }
-// Append required credits to the actual publishing caption, preserving legacy string[] support.
+// Every externally sourced photo has a creator, provider and original URL in the
+// Instagram caption, even when attribution is not legally required (CC0/PDM).
+// The per-card index maps credits back to the rendered photo. If the full credit
+// cannot fit the existing caption limit, block generation rather than truncate it.
 export function photoCreditCaption(caption:string,photos:Array<string|Record<string,any>>,limit=2000){
- const base=caption.replace(/\n\nPhotos: [\s\S]*$/,'');
- const items=[...new Set(photos.map(photo=>{
-  if(typeof photo==='string')return photo.trim().slice(0,64);
-  const by=String(photo.photographer||'').trim().slice(0,100);
-  if(!by)return '';
-  if(photo.attribution_required===true){
-   const source=String(photo.source_url||'').trim(),license=String(photo.license_url||'').trim();
-   const name=String(photo.license_name||'').trim();
-   if(!source||!license||!name)throw new Error('STOCK_ATTRIBUTION_EVIDENCE_REQUIRED');
-   return by+' / '+name+' / '+license+' / '+source+' (cropped and text overlaid)';
-  }
-  const provider=String(photo.provider||'pexels').trim().toLowerCase();
-  return by+' / '+(provider==='pexels'?'Pexels':provider==='unsplash'?'Unsplash':provider==='pixabay'?'Pixabay':provider==='wikimedia'?'Wikimedia Commons':'Openverse');
- }).filter(Boolean))];
- if(!items.length)throw new Error('STOCK_PHOTOGRAPHER_REQUIRED');
- const legacy=photos.every(p=>typeof p==='string');
- const result=base+'\n\nPhotos: '+(legacy?items.join(', ')+' / Pexels':items.join(' | '));
+ const base=caption.replace(/\n\n(?:Photos:|Photo sources \/ 사진 출처:)[\s\S]*$/,'');
+ if(!photos.length)throw new Error('STOCK_PHOTOGRAPHER_REQUIRED');
+ const legacy=photos.every(photo=>typeof photo==='string');
+ let block:string;
+ if(legacy){
+  const names=[...new Set(photos.map(photo=>String(photo||'').trim().slice(0,64)).filter(Boolean))];
+  if(!names.length)throw new Error('STOCK_PHOTOGRAPHER_REQUIRED');
+  block='Photos: '+names.join(', ')+' / Pexels';
+ }else{
+  const items=photos.map((photo,index)=>{
+   if(typeof photo==='string'||!validLicensedPhoto(photo))
+    throw new Error('STOCK_PHOTO_CREDIT_SOURCE_REQUIRED');
+   const slot=Number.isInteger(photo.slot)&&photo.slot>=0&&photo.slot<=5?photo.slot:index;
+   return String(slot+1).padStart(2,'0')+' / '+creditForPhoto(photo);
+  });
+  block='Photo sources / 사진 출처:\n'+items.join('\n');
+ }
+ const result=base+'\n\n'+block;
  if(result.length>limit)throw new Error('STOCK_CAPTION_CREDIT_LIMIT');
  return result;
 }

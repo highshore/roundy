@@ -82,16 +82,44 @@ export function photoRightsIssues(photo:LicensedPhoto):string[]{
  return issues;
 }
 export const validLicensedPhoto=(p:LicensedPhoto)=>photoRightsIssues(p).length===0;
-export function creditForPhoto(p:LicensedPhoto){
- const author=s(p.photographer).slice(0,120),provider=s(p.provider);
- if(p.attribution_required===true){
-  return author+' / '+s(p.license_name)+' / '+s(p.license_url)+' / '+s(p.source_url)+' (cropped and text overlaid)';
+export function providerCreditName(provider:unknown):string{
+ const names:Record<string,string>={
+  pexels:'Pexels',unsplash:'Unsplash',pixabay:'Pixabay',
+  wikimedia:'Wikimedia Commons',openverse:'Openverse (Wikimedia Commons)'
+ };
+ return names[s(provider)]||'';
+}
+export function photoCardSourceLabel(photo:LicensedPhoto):string{
+ if(!validLicensedPhoto(photo))throw new Error('PHOTO_SOURCE_LABEL_RIGHTS_NOT_VERIFIED');
+ const label='Photo: '+providerCreditName(photo.provider)+' / '+s(photo.photographer).replace(/\s+/g,' ');
+ // Keep text entirely inside a 920 px image-safe region, including Korean names.
+ let value='',units=0;
+ for(const ch of label){
+  const size=/[\u1100-\u11ff\u3000-\u9fff\uac00-\ud7af]/.test(ch)?1:ch===' '?0.32:0.58;
+  if(units+size>42)return value.trimEnd()+'…';
+  value+=ch;units+=size;
  }
- return author+' / '+(provider==='wikimedia'?'Wikimedia Commons':provider==='openverse'?'Openverse':provider==='pixabay'?'Pixabay':provider==='unsplash'?'Unsplash':'Pexels');
+ return value;
+}
+export function creditForPhoto(p:LicensedPhoto){
+ const author=s(p.photographer),provider=providerCreditName(p.provider);
+ const source=s(p.source_url),license=s(p.license_url);
+ if(!provider||!author||!source)throw new Error('PHOTO_CREDIT_SOURCE_REQUIRED');
+ const basic=provider+' / '+author+'\nOriginal: '+source;
+ if(p.attribution_required===true)
+  return basic+'\nLicense: '+s(p.license_name)+' '+license+'\n(cropped and text overlaid)';
+ return basic;
 }
 export function captionHasRequiredCredits(caption:string,photos:LicensedPhoto[]):boolean{
- return photos.every(p=>p.attribution_required!==true||(
-  caption.includes(s(p.photographer))&&caption.includes(s(p.source_url))&&
-  caption.includes(s(p.license_url))&&caption.includes('(cropped and text overlaid)')
- ));
+ if(typeof caption!=='string'||!caption.trim())return false;
+ return photos.every(p=>{
+  const provider=providerCreditName(p.provider),author=s(p.photographer);
+  const origin=s(p.source_url);
+  if(!provider||!origin||!author)return false;
+  if(!caption.includes(provider)||!caption.includes(author)||!caption.includes(origin))return false;
+  return p.attribution_required!==true||(
+   caption.includes(s(p.license_name))&&caption.includes(s(p.license_url))&&
+   caption.includes('(cropped and text overlaid)')
+  );
+ });
 }

@@ -28,7 +28,11 @@ for(const language of ['en','ko'])for(const count of [3,5]){
  const doc={design_preset:'roundy_compact_editorial_v1',content_language:language,
   carousel_template:plan};
  for(let i=0;i<count;i++){
-  const image=standard.renderCompactEditorial(cards[i],i,count,doc,{cardPhotos:{0:backdrop,1:backdrop},reusePhotos:false});
+  const image=standard.renderCompactEditorial(cards[i],i,count,doc,{
+   cardPhotos:{0:backdrop,1:backdrop},
+   cardCredits:{0:'Photo: Pexels / Demo Photographer',1:'Photo: Wikimedia Commons / Creator'},
+   reusePhotos:false
+  });
   const jpg=Buffer.from(await image.arrayBuffer());
   const meta=await sharp(jpg).metadata();
   assert.equal(meta.width,1080);assert.equal(meta.height,1350);
@@ -54,6 +58,20 @@ for(const language of ['en','ko'])for(const count of [3,5]){
  }
 }
 assert.equal(standardCards,16);
+// The small visible photo-source label is rendered only on photographic cards,
+// within the 80px edge-safe content width of the existing 1080×1350 template.
+const samplePlan=layout.resolveCarouselPlan({carousel_mode:'fixed'},null);
+const sampleCards=[{role:'cover',title:'Meet in Seoul',body:'Roundy source test'},
+ {role:'content',title:'Original source',body:'Photo with an on-card credit'},
+ {role:'content',title:'Information',body:'Roundy source test'},
+ {role:'content',title:'Information',body:'Roundy source test'},
+ {role:'cta',title:'Join Roundy',body:'Learn more'}];
+const sampleTree=standard.standardCarouselTree(sampleCards[1],1,5,{
+ content_language:'en',carousel_template:samplePlan
+},{cardPhotos:{1:backdrop},cardCredits:{1:'Photo: Wikimedia Commons / Creator'},reusePhotos:false});
+const treeText=JSON.stringify(sampleTree);
+assert.ok(treeText.includes('Photo: Wikimedia Commons / Creator'),'On-card source should be visible in exported image');
+assert.ok(treeText.includes('"bottom":65'),'On-card credit must remain inside lower safe margin');
 const source=fs.readFileSync('src/lib/marketing-visuals.ts','utf8');
 assert.ok(source.includes('M22 40C28.6274'));
 assert.ok(source.includes('compactEditorialTree'));

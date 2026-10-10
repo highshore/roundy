@@ -8,6 +8,7 @@ export type EditorialAssets = {
  photo?: string|null;
  photos?: string[];
  cardPhotos?: Record<number,string>;
+ cardCredits?: Record<number,string>;
  reusePhotos?: boolean;
  fonts?: Array<{name:string;data:ArrayBuffer;weight:400|700|900;style:'normal'}>;
 };
@@ -237,6 +238,7 @@ export function standardCarouselTree(slide:Row,index:number,total:number,documen
  if(!plan||plan.slide_count!==total||index<0||index>=total)throw new Error('CAROUSEL_TEMPLATE_LAYOUT_MISMATCH');
  const language=document.content_language==='en'?'en':'ko',fit=mobileCarouselFit(slide,plan,index,language);
  const cover=index===0,cta=index===total-1,src=cta?null:selectedPhoto(assets,index,cover);
+ const cardCredit=src?String(assets.cardCredits?.[index]||''):'';
  const dark=!!src||cover||cta,fg=dark?BRAND.paper:BRAND.ink;
  const typeface=language==='ko'?(assets.fonts?.length?'Noto Sans KR, sans-serif':'sans-serif')
    :(assets.fonts?.length?'DM Sans, sans-serif':'sans-serif');
@@ -264,8 +266,12 @@ export function standardCarouselTree(slide:Row,index:number,total:number,documen
    fit.highlight.lines.length?lines(fit.highlight.lines,fit.highlight.fontSize,dark?'#ffe0d8':BRAND.accent,700,1.26):null,
    cta?box({flexDirection:'column',gap:12,marginTop:20},text(BRAND.instagram,30,{fontWeight:700,color:fg}),
     text(BRAND.website,28,{fontWeight:700,color:fg})):null),
-  !cta&&slide.source_label?box({position:'absolute',left:80,bottom:64,right:80},
-   text(language==='en'?'Sources in caption':'출처는 본문에서 확인',22,{fontWeight:600,color:dark?'#ffffff':'#555b53'})):null
+  !cta&&slide.source_label?box({position:'absolute',left:80,bottom:cardCredit?109:64,right:80},
+   text(language==='en'?'Sources in caption':'출처는 본문에서 확인',22,{fontWeight:600,color:dark?'#ffffff':'#555b53'})):null,
+  cardCredit?box({position:'absolute',left:80,right:80,bottom:65,width:920,
+   alignItems:'center',justifyContent:'flex-start'},
+   text(cardCredit,21,{fontWeight:600,color:'#ffffff',whiteSpace:'nowrap',lineHeight:1.2,
+    textShadow:'0px 1px 3px rgba(0,0,0,.78)'})):null
  );
 }
 export function compactEditorialTree(slide:Row,index:number,total:number,document:Row,assets:EditorialAssets={}){

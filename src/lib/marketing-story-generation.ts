@@ -5,6 +5,7 @@ import sharp from 'sharp';
 import {createServiceRoleClient} from './supabase/service';
 import {loadEditorialAssets} from './marketing-render-assets';
 import {fitCarouselCopy} from './marketing-carousel-template';
+import {photoCardSourceLabel} from './marketing-photo-rights';
 import {ROUNDY_IDENTITY} from './marketing-presentation';
 import {randomUUID} from 'node:crypto';
 
@@ -46,7 +47,7 @@ function safeOwnedCover(url:string){
   throw new Error('STORY_COVER_STORAGE_PATH_UNSUPPORTED');
  return path;
 }
-async function drawStory(db:DB,sourceCoverUrl:string,title:string,language:string){
+async function drawStory(db:DB,sourceCoverUrl:string,title:string,language:string,photoSource?:string){
  const path=safeOwnedCover(sourceCoverUrl);
  const downloaded=await db.storage.from('wis-event-images').download(path);
  if(downloaded.error||!downloaded.data)throw new Error('STORY_FEED_THUMBNAIL_UNAVAILABLE');
@@ -89,6 +90,8 @@ async function drawStory(db:DB,sourceCoverUrl:string,title:string,language:strin
     fontWeight:900,lineHeight:1.18,fontFamily:font,color:'#fffefa',whiteSpace:'nowrap'}},line))),
   h('div',{style:{display:'flex',height:5,width:100,marginTop:37,backgroundColor:ROUNDY_IDENTITY.accent}}),
   h('div',{style:{display:'flex',marginTop:36}},t(description,31,400,'#fffefa')),
+  photoSource?h('div',{style:{display:'flex',position:'absolute',bottom:256,left:84,right:84}},
+   t(photoSource,23,600,'#fffefa')):null,
   h('div',{style:{display:'flex',position:'absolute',bottom:155,left:84,right:84,
    alignItems:'center',justifyContent:'space-between'}},
    t('@roundy.meet',29,700),t('ROUNDY  /  SEOUL',26,700,'#ff9999'))
@@ -129,7 +132,19 @@ export async function generateStoryForFeed(db:DB,feed:Awaited<ReturnType<typeof 
  const row=attempt.data?.[0] as Row|undefined;
  if(!row)return {skipped:true,reason:'STORY_ALREADY_CREATED',feed_run_id:run.id};
  try{
-  const output=await drawStory(db,cover,title,language);
+  // Stories have no captions. Credit any licensed cover on the image itself.
+  let photoSource:string|undefined;
+  if(['pexels','stock'].includes(String(draft.visual_source))&&
+     draft.content_document?.photo_sourcing?.ai_thumbnail_enabled!==true){
+   const linked=checked(await db.from('marketing_draft_photos')
+     .select('slot,marketing_photo_assets(*)').eq('draft_id',draft.id)
+     .eq('slot',0).maybeSingle()) as Row|null;
+   const asset=linked?(Array.isArray(linked.marketing_photo_assets)
+    ?linked.marketing_photo_assets[0]:linked.marketing_photo_assets):null;
+   if(!asset)throw new Error('STORY_COVER_PHOTO_CREDIT_REQUIRED');
+   photoSource=photoCardSourceLabel(asset);
+  }
+  const output=await drawStory(db,cover,title,language,photoSource);
   const mediaPath='story-previews/'+row.id+'/'+randomUUID()+'.jpg';
   checked(await db.storage.from('wis-event-images').upload(mediaPath,output,{contentType:'image/jpeg',upsert:false}));
   const publicUrl=db.storage.from('wis-event-images').getPublicUrl(mediaPath).data.publicUrl;
