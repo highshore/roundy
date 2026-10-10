@@ -672,7 +672,50 @@ export function AdminMarketing({locale}:{locale:Locale}){
     const imageUrl=Array.isArray(r.snapshot?.images)?r.snapshot.images[0]:null,record=contentRecordForRun(r),language=(record?.content_language||r.snapshot?.content_language)==='en'?'EN':(record?.content_language||r.snapshot?.content_language)==='ko'?'KO':channel;
     return <details className={'marketing-log-row publishing '+r.status} key={r.id}>
      <summary>{imageUrl?<img className="marketing-log-thumb" src={imageUrl} alt=""/>:<span className="marketing-log-thumb placeholder"/>}<div className="marketing-log-main"><span className={'marketing-status-dot '+r.status}/><div><strong>{contentTitle(record||r)}</strong><small>{contentLabel(record||r)} · {language} · {new Date(r.created_at||r.scheduled_for).toLocaleString(locale,{timeZone:'Asia/Seoul'})}</small></div></div><div className="marketing-log-end"><span className={'marketing-status-pill '+r.status}>{statusText(r.status)}</span></div></summary>
-     <div className="marketing-log-detail"><p>{r.message||t('No additional message.','추가 메시지가 없습니다.')}</p><dl><div><dt>{t('Run ID','게시 ID')}</dt><dd>{r.id}</dd></div>{r.external_id&&<div><dt>Instagram ID</dt><dd>{r.external_id}</dd></div>}</dl>{r.external_url&&<a className="admin-secondary" href={r.external_url} target="_blank" rel="noreferrer">{t('Open published post','게시물 보기')}</a>}{r.status==='needs_review'&&<div className="admin-form-actions">{[true,false].map(published=><button key={String(published)} type="button" className="admin-secondary" disabled={busy} onClick={()=>{if(window.confirm(t('Confirm you checked the external channel.','외부 채널에서 실제 게시 여부를 확인했나요?')))void work(async()=>{await mutate('/resolve',{run_id:r.id,published});await load(draft?.id);});}}>{published?t('Confirmed published','게시됨 확인'):t('Confirmed not published','게시 안 됨 확인')}</button>)}</div>}</div>
+      <div className="marketing-log-detail">
+       <p>{r.message||t('No additional message.','추가 메시지가 없습니다.')}</p>
+       <dl>
+        <div><dt>{t('Run ID','게시 ID')}</dt><dd>{r.id}</dd></div>
+        {r.scheduled_for&&<div><dt>{t('Reserved KST time','KST 발행 예정')}</dt><dd>{new Date(r.scheduled_for).toLocaleString(locale,{timeZone:'Asia/Seoul'})} KST</dd></div>}
+        {r.snapshot?.feed_sequence&&<div><dt>{t('Feed order','Feed 발행 순번')}</dt><dd>#{r.snapshot.feed_sequence}</dd></div>}
+        {r.external_id&&<div><dt>Instagram ID</dt><dd>{r.external_id}</dd></div>}
+       </dl>
+       {r.external_url&&<a className="admin-secondary" href={r.external_url} target="_blank" rel="noreferrer">{t('Open published post','게시물 보기')}</a>}
+       {channel==='instagram'&&r.snapshot?.draft_id&&r.snapshot?.media_kind!=='reel'&&<>
+        <button type="button" className="admin-secondary" disabled={busy}
+         onClick={()=>void work(async()=>{
+          const response=await request('/runs/'+r.id+'/attempts',undefined,'GET');
+          if(!response.ok)throw new Error(response.data.error||'Attempt history unavailable');
+          setFeedAttempts(prev=>({...prev,[r.id]:response.data}));
+         })}>{t('View publication attempt history','발행 시도 이력 보기')}</button>
+        {feedAttempts[r.id]&&<div className="marketing-quality-status">
+         <strong>{t('Saved Feed attempts','Feed 시도 기록')}</strong>
+         {!feedAttempts[r.id].attempts?.length&&<p>{t('No external attempts yet.','외부 발행 시도 기록이 없습니다.')}</p>}
+         {(feedAttempts[r.id].attempts||[]).map((a:Row)=><p key={a.id}>
+          #{a.attempt_no} — {statusText(a.state)} —
+          {' '+new Date(a.started_at).toLocaleString(locale,{timeZone:'Asia/Seoul'})} KST
+          {a.error_message?' — '+a.error_message:''}
+          {a.external_requested_at?t(' — Meta API attempted',' — Meta API 호출 시도 있음'):''}
+         </p>)}
+         {(feedAttempts[r.id].reviews||[]).map((review:Row)=><p key={'review-'+review.attempt_no}>
+          {t('Admin verified not published, attempt #','관리자 미게시 확인, 시도 #')}{review.attempt_no} — {review.review_note}
+         </p>)}
+        </div>}
+        {['needs_review','failed'].includes(r.status)&&<button type="button" className="admin-secondary" disabled={busy}
+         onClick={()=>{
+          if(!window.confirm(t('Have you personally checked Instagram and confirmed NO post was published? Never retry an uncertain result before verifying.','Instagram에서 실제로 게시물이 발행되지 않았음을 직접 확인했습니까? 결과가 불확실하면 확인 전 재시도하면 안 됩니다.')))return;
+          const note=window.prompt(t('Record how you verified NO post on Instagram (12 characters or more).','Instagram 미게시를 어떻게 확인했는지 12자 이상 기록하세요.'))||'';
+          if(!note.trim())return;
+          void work(async()=>{
+           const result=await mutate('/runs/'+r.id+'/retry',{confirm_no_post:true,note:note.trim()});
+           setFeedAttempts(prev=>{const next={...prev};delete next[r.id];return next;});
+           await load(draft?.id);
+           setNotice(t('Verified no post. Retry scheduled for ','미게시 확인 완료. 재시도 예약: ')+String(result.feed_date_kst)+' KST');
+          });
+         }}>{t('Verify no post & schedule a retry','미게시 확인 후 재시도 예약')}</button>}
+       </>}
+       {r.status==='needs_review'&&<div className="admin-form-actions">{[true,false].map(published=><button key={String(published)} type="button" className="admin-secondary" disabled={busy} onClick={()=>{if(window.confirm(t('Confirm you checked the external channel.','외부 채널에서 실제 게시 여부를 확인했나요?')))void work(async()=>{await mutate('/resolve',{run_id:r.id,published});await load(draft?.id);});}}>{published?t('Confirmed published','게시됨 확인'):t('Confirmed not published','게시 안 됨 확인')}</button>)}</div>}
+      </div>
     </details>;
    }):<p className="admin-empty">{t('No publishing history yet.','아직 게시 기록이 없습니다.')}</p>}</div>
    {channelRuns.length>publishVisible&&<button type="button" className="marketing-load-more" onClick={()=>setPublishVisible(v=>v+20)}>{t('Load 20 more','20개 더 보기')}</button>}
