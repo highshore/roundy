@@ -135,7 +135,7 @@ export async function generateStoryForFeed(db:DB,feed:Awaited<ReturnType<typeof 
   }).eq('id',row.id).eq('status','generating').select('*').single());
   return {story:saved,created:true};
  }catch(error){
-  const detail=error instanceof Error?error.message:'Story preview generation failed';
+  const detail=error instanceof Error?error.message:String((error as {message?:unknown})?.message||'Story preview generation failed');
   checked(await db.from('marketing_story_previews').update({
    status:'failed',error_code:'STORY_GENERATION_FAILED',error_message:detail.slice(0,500),updated_at:new Date().toISOString()
   }).eq('id',row.id).eq('status','generating'));
