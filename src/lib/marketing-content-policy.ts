@@ -301,7 +301,7 @@ export function evaluateContent(value:unknown,type:PostType,language:string,sour
  if(type==='prelaunch'&&/\d+\s*(?:원|명|석|월|일)|book now|tickets available|신청 마감|매진 임박|얼리버드/i.test(all))add('오픈 전 콘텐츠에 확인되지 않은 모집 정보가 있습니다.');
  if(profile.research){
   if(!sources.length)add('실제 인용된 출처가 없습니다.');
-  const factual=type==='book_insight'?['book','insight']:type==='seoul_dating'?['scenario','etiquette','plan']:type==='seoul_trend'?(c.trend_layout?['facts','experience','practical']:['trend','why_now','practical']):['finding','context','limitation'];
+  const factual=magazine?['context','key_insight','insight']:type==='book_insight'?['book','insight']:type==='seoul_dating'?['scenario','etiquette','plan']:type==='seoul_trend'?(c.trend_layout?['facts','experience','practical']:['trend','why_now','practical']):['finding','context','limitation'];
   for(const s of slides.filter((s:Row)=>factual.includes(s.role)))if(!s.source_ids?.length)add('핵심 주장 카드에 출처 연결이 없습니다.');
  }
  if(type==='book_insight'){
@@ -324,7 +324,7 @@ export function evaluateContent(value:unknown,type:PostType,language:string,sour
     if(!tokens.length||tokens.filter((x:string)=>evidence.includes(x)).length<Math.min(2,tokens.length))add('서울 데이트 장소명이 인용된 자료에서 확인되지 않습니다.');
    }
    for(const field of ['hours','price']){const value=norm(v?.[field]);if(value&&(!evidence||!evidence.includes(value)))add('서울 데이트 장소의 가격/영업시간은 인용된 자료에서 직접 확인될 때만 표시할 수 있습니다.');}
-   const slide=plan?.slide_count===3?slides[1]:slides.find((x:Row)=>x.role===placeRoles[index]);
+   const slide=magazine?(plan?.slide_count===3?slides[1]:slides[index+1]):plan?.slide_count===3?slides[1]:slides.find((x:Row)=>x.role===placeRoles[index]);
    if(slide){
     const combined=norm(str(slide.title)+' '+str(slide.body)+' '+(Array.isArray(slide.options)?slide.options.join(' '):''));
     if(name&&!combined.includes(name))add('장소 추천 카드에 실제 장소명을 명확히 표시해야 합니다.');
@@ -346,13 +346,13 @@ export function evaluateContent(value:unknown,type:PostType,language:string,sour
    const pack=readTrendFactPack(c.trend_fact_pack,[...known.keys()]);
    for(const reason of trendFactPackIssues(pack,str(trend.category)))add('서울 트렌드 Fact Pack 검증 실패: '+reason);
    if(pack&&String(c.trend_layout)!==pack.layout)add('서울 트렌드 Fact Pack 레이아웃이 일치하지 않습니다.');
-   const primary=slides.filter((x:Row)=>!['cover','cta'].includes(x.role)).map((x:Row)=>[x.title,x.body,x.highlight].map(str).join(' ')).join(' ');
+   const primary=slides.filter((x:Row)=>!['cover','cta','editorial_closing'].includes(x.role)).map((x:Row)=>[x.title,x.body,x.highlight].map(str).join(' ')).join(' ');
    const weak=/(?:방문\s*전|출발\s*전|가기\s*전).{0,18}(?:확인|체크)|(?:check|confirm).{0,25}(?:before you go|before heading out|latest)/i;
    if(weak.test(primary)&&(!pack||pack.facts.length<4))add('서울 트렌드 카드에 구체적인 일정·장소·프로그램 없이 방문 전 확인 문구가 반복됩니다.');
-   const actionable=slides.filter((x:Row)=>['facts','experience','date_plan','practical','practice'].includes(x.role));
+   const actionable=slides.filter((x:Row)=>magazine?['context','key_insight','insight'].includes(x.role):['facts','experience','date_plan','practical','practice'].includes(x.role));
    if(!actionable.length||actionable.every((x:Row)=>str(x.body).length<18))add('서울 트렌드의 구체적인 경험 또는 실행 방법이 부족합니다.');
   }
-  const practical=slides.find((x:Row)=>x.role==='practical'),practicalText=str(practical?.title)+' '+str(practical?.body)+' '+str(practical?.highlight);
+  const practical=magazine?slides[plan?.slide_count===3?1:3]:slides.find((x:Row)=>x.role==='practical'),practicalText=str(practical?.title)+' '+str(practical?.body)+' '+str(practical?.highlight);
   if(/₩|\bwon\b|\d{1,2}:\d{2}|\d+\s*(?:원|월|일|시|분)|예약|영업|운영시간|입장료|교통|지하철|버스|reservation|opening hours|admission|subway|bus/i.test(practicalText)&&!practical?.source_ids?.length)add('서울 트렌드의 가격, 일정, 운영, 예약 또는 이동 정보에는 직접 근거 출처가 필요합니다.');
  }
  if(['trend_research','dating_myth'].includes(type)){
@@ -373,15 +373,18 @@ export function evaluateContent(value:unknown,type:PostType,language:string,sour
    const url=source?canonicalSourceUrl(source.url):null,host=url?new URL(url).hostname.toLowerCase():'';
    const scholarly=!!url&&(host==='doi.org'||host.endsWith('.edu')||host.includes('.edu.')||host.endsWith('.ac.kr')||host.includes('.ac.')||/pubmed|pmc\.ncbi|ncbi\.nlm\.nih|journals?\.|springer|sciencedirect|sagepub|tandfonline|wiley|frontiersin|nature\.com|pnas\.org|apa\.org|psycnet|osf\.io|psyarxiv|ssrn|cambridge\.org|oup\.com|academic\.oup/.test(host));
    if(!scholarly)add('연애 통념은 원 논문, DOI, 저널, 대학 또는 연구기관 출처가 최소 하나 필요합니다.');
-   const mythSlide=plan?.slide_count===3?slides[1]:slides.find((slide:Row)=>slide.role==='myth'),mythCardText=(str(mythSlide?.title)+' '+str(mythSlide?.body)).trim();
-   if(str(myth.claim)&&mythCardText&&(plan?.slide_count===3?!norm(mythCardText).includes(norm(myth.claim)):similarity(str(myth.claim),mythCardText)<.34))add('통념 카드에 선택한 연애 통념 주장을 명확히 표시해야 합니다.');
+   const mythSlide=magazine?slides[1]:plan?.slide_count===3?slides[1]:slides.find((slide:Row)=>slide.role==='myth'),mythCardText=(str(mythSlide?.title)+' '+str(mythSlide?.body)).trim();
+   if(str(myth.claim)&&mythCardText&&((magazine||plan?.slide_count===3)?!norm(mythCardText).includes(norm(myth.claim)):similarity(str(myth.claim),mythCardText)<.34))add('통념 카드에 선택한 연애 통념 주장을 명확히 표시해야 합니다.');
    const allCopy=[c.caption,c.caption_ko,c.caption_en,...slides.flatMap((slide:Row)=>[slide?.title,slide?.body,slide?.secondary_body,slide?.highlight])].map(str).join(' ');
    if(/과학적으로\s*틀렸다|연구가\s*증명했다|무조건\s*사실|완전히\s*거짓|scientifically\s+false|science\s+proves|definitely\s+true|completely\s+false/i.test(allCopy))add('연애 통념을 과학적 사실/거짓으로 단정하는 표현은 사용할 수 없습니다.');
   }
  }
  if(language==='ko')for(const s of slides){if(!s)continue;const titleNeedsKorean=s.role!=='book',bodyNeedsKorean=!['opener','followup','example'].includes(s.role);if(titleNeedsKorean&&!/[가-힣]/.test(str(s.title)))add('한국어 카드 제목은 한국어로 작성해야 합니다. 원서 제목은 책 소개 카드에서만 영문을 허용합니다.');if(bodyNeedsKorean&&!/[가-힣]/.test(str(s.body)))add('한국어 카드 설명은 한국어로 작성해야 합니다.');}
- if(type==='conversation_prompt')for(const role of (plan?.slide_count===3?['opener']:['opener','followup'])){const s=slides.find((v:Row)=>v.role===role);if(!s||!/[?？]/.test(s.body+' '+s.highlight))add('실제로 사용할 질문과 후속 질문이 필요합니다.');}
- if(type==='conversation_prompt'&&plan?.slide_count===3){
+ if(type==='conversation_prompt'&&magazine){
+  const factCards=slides.slice(1,-1),questions=factCards.reduce((n:number,s:Row)=>n+((String(s.body||'')+' '+String(s.highlight||'')).match(/[?？]/g)?.length||0),0);
+  if(questions<2)add('에디토리얼 대화 질문에는 실제 첫 질문과 후속 질문이 필요합니다.');
+ }else if(type==='conversation_prompt')for(const role of (plan?.slide_count===3?['opener']:['opener','followup'])){const s=slides.find((v:Row)=>v.role===role);if(!s||!/[?？]/.test(s.body+' '+s.highlight))add('실제로 사용할 질문과 후속 질문이 필요합니다.');}
+ if(type==='conversation_prompt'&&!magazine&&plan?.slide_count===3){
   const detail=slides[1],questionCount=(String(detail?.body||'')+' '+String(detail?.highlight||'')+' '+(Array.isArray(detail?.options)?detail.options.join(' '):'')).match(/[?？]/g)?.length||0;
   if(questionCount<2)add('3장 구성에도 실제 첫 질문과 후속 질문이 모두 필요합니다.');
  }
