@@ -14,14 +14,58 @@ alter table public.marketing_automation_settings
   add column if not exists carousel_title_font_size_px smallint not null default 72,
   add column if not exists carousel_body_font_size_px smallint not null default 36;
 
-alter table public.marketing_automation_settings
-  add constraint marketing_feed_daily_max_posts_check check (feed_daily_max_posts between 1 and 10),
-  add constraint marketing_carousel_mode_check check (carousel_mode in ('fixed', 'alternating')),
-  add constraint marketing_carousel_default_slides_check check (carousel_default_slides in (3, 5)),
-  add constraint marketing_carousel_min_real_photos_5_check check (carousel_min_real_photos_5 between 0 and 5),
-  add constraint marketing_carousel_min_real_photos_3_check check (carousel_min_real_photos_3 between 0 and 3),
-  add constraint marketing_carousel_title_font_size_check check (carousel_title_font_size_px between 24 and 160),
-  add constraint marketing_carousel_body_font_size_check check (carousel_body_font_size_px between 16 and 80);
+-- The migration is safe to re-run when Supabase migration history and git are synchronized later.
+do $$ begin
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid='public.marketing_automation_settings'::regclass and conname='marketing_feed_daily_max_posts_check'
+  ) then
+    alter table public.marketing_automation_settings
+      add constraint marketing_feed_daily_max_posts_check check (feed_daily_max_posts between 1 and 10);
+  end if;
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid='public.marketing_automation_settings'::regclass and conname='marketing_carousel_mode_check'
+  ) then
+    alter table public.marketing_automation_settings
+      add constraint marketing_carousel_mode_check check (carousel_mode in ('fixed', 'alternating'));
+  end if;
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid='public.marketing_automation_settings'::regclass and conname='marketing_carousel_default_slides_check'
+  ) then
+    alter table public.marketing_automation_settings
+      add constraint marketing_carousel_default_slides_check check (carousel_default_slides in (3, 5));
+  end if;
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid='public.marketing_automation_settings'::regclass and conname='marketing_carousel_min_real_photos_5_check'
+  ) then
+    alter table public.marketing_automation_settings
+      add constraint marketing_carousel_min_real_photos_5_check check (carousel_min_real_photos_5 between 0 and 5);
+  end if;
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid='public.marketing_automation_settings'::regclass and conname='marketing_carousel_min_real_photos_3_check'
+  ) then
+    alter table public.marketing_automation_settings
+      add constraint marketing_carousel_min_real_photos_3_check check (carousel_min_real_photos_3 between 0 and 3);
+  end if;
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid='public.marketing_automation_settings'::regclass and conname='marketing_carousel_title_font_size_check'
+  ) then
+    alter table public.marketing_automation_settings
+      add constraint marketing_carousel_title_font_size_check check (carousel_title_font_size_px between 24 and 160);
+  end if;
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid='public.marketing_automation_settings'::regclass and conname='marketing_carousel_body_font_size_check'
+  ) then
+    alter table public.marketing_automation_settings
+      add constraint marketing_carousel_body_font_size_check check (carousel_body_font_size_px between 16 and 80);
+  end if;
+end $$;
 
 comment on column public.marketing_automation_settings.feed_daily_max_posts is
   'Target maximum automatic Feed publications per Seoul calendar day. Manual extra publication remains permitted. Not enforced until a later phase.';
