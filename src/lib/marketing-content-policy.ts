@@ -199,7 +199,7 @@ export function writingInstructions(type:PostType,language:string,variant='',ans
  const magazine=Boolean(plan);
  const banned=(language==='en'?AIISH_PHRASES.en:AIISH_PHRASES.ko).join(', ');
  return ['Write an original Instagram carousel that sounds like a real person or editor, not a generic AI advertisement. Follow the supplied strict schema.',
-  'Editorial type: '+type+'. '+CONTENT_PROFILES[type].brief,
+  'Editorial type: '+type+'. '+(magazine&&type==='prelaunch'?'Explain how face-to-face social formats work in Seoul with clear, useful editorial context; never invent an opening date or invite follows, registrations or clicks.':magazine&&type==='live_event'?'Explain ONE verified upcoming Seoul event as service journalism; date, location, program and pricing only from supplied server facts. No tickets, buy, RSVP, Book Now, link or other sales action.':CONTENT_PROFILES[type].brief),
   'VOICE: '+toneGuide(type,language),
   'Roles in EXACT order: '+(plan?magazineRolesForCount(plan.slide_count):answerFirst?fiveEditorialRoles(type,type==='seoul_trend'?trendGuideRoles(variant):CONTENT_PROFILES[type].roles):type==='seoul_trend'?trendGuideRoles(variant):CONTENT_PROFILES[type].roles).join(', ')+'. Each slide must move the idea forward with a different title AND different body. Never pad or restate the same idea.',
   'Prefer concrete scenes, actions, questions and observable details over abstract emotional nouns. One main idea per sentence. Vary sentence length. Contractions and fragments are fine when natural.',
@@ -241,7 +241,7 @@ export function writingInstructions(type:PostType,language:string,variant='',ans
    'Do not reproduce source photos, article wording, creator captions, meme screenshots or watermarks. The server generates an original Roundy editorial interpretation.'
   ].join(' '):'',
   CONTENT_PROFILES[type].research?'Include source IDs for source-dependent cards. Do not convert uncertain evidence into a stronger claim.':'No book/research/statistical/trending claims. All source_ids must be empty.',
-  type==='live_event'?'Event facts are authoritative server data. Do not invent additional facts.':'No invented event dates, prices, seats, launches, actual attendees or testimonials. Invite follows for launch updates, not booking.',
+  type==='live_event'?'Event facts are authoritative server data. Do not invent additional facts, urgency or promotional call-to-action.':magazine?'No invented event dates, prices, seats, launches, actual attendees, testimonials, follower requests or bookings.':'No invented event dates, prices, seats, launches, actual attendees or testimonials. Invite follows for launch updates, not booking.',
   'MBTI/archetypes/quizzes are entertainment and self-reflection only. No diagnostic scores or gender stereotypes. No Middle Dot in Korean prose.'].join('\n')+'\n'+compactWritingInstructions(language,magazine)+(answerFirst?'\n'+(magazine?magazineAnswerFirstPrompt(plan!.slide_count):answerFirstPrompt(language,plan?.slide_count||5)):'')
  +(plan?.slide_count===3?'\nCOMPACT 3-CARD FORMAT: Result on cover, ONE dense-but-legible Value/Detail evidence card, last card editorial closing with no sales CTA. Retain verified sources, real venue names, study limitations and uncertainty without introducing new facts. For Seoul dating, the ONE detail card must name all three verified venues and cite their source IDs. For conversation prompts, include opener AND follow-up on the key insight card. Use no overlong paragraphs.':'');
 }
