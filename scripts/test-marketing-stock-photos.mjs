@@ -9,8 +9,11 @@ const require=createRequire(import.meta.url);
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const file=fs.readFileSync(path.join(root,'src/lib/marketing-stock-photo-policy.ts'),'utf8');
 const transpiled=ts.transpileModule(file,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+const rights={exports:{}};
+const rightsJs=ts.transpileModule(fs.readFileSync(path.join(root,'src/lib/marketing-photo-rights.ts'),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+new Function('exports','require','module',rightsJs)(rights.exports,require,rights);
 const mod={exports:{}};
-new Function('exports','require','module',transpiled)(mod.exports,require,mod);
+new Function('exports','require','module',transpiled)(mod.exports,name=>name==='./marketing-photo-rights'?rights.exports:require(name),mod);
 const {requiredPhotoSlotsForRoles,allSelectedPhotosApproved,photoCreditCaption}=mod.exports;
 
 assert.deepEqual(requiredPhotoSlotsForRoles(['cover','content','cta']),[0,1]);
