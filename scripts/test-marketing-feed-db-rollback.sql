@@ -3,7 +3,7 @@ do $$
 declare
  ids uuid[]:='{}'; rids uuid[]:='{}';
  actor uuid; d uuid; a uuid; manifest jsonb; quality jsonb;
- dates date[]; info jsonb; msg text; i integer; j integer;
+ dates date[]; info jsonb; claimed jsonb; msg text; i integer; j integer; attempts integer;
  today_kst date:=(now() at time zone 'Asia/Seoul')::date;
  slides jsonb:='[{"role":"cover","title":"Result"},{"role":"context","title":"Context"},{"role":"detail","title":"Detail"},{"role":"value","title":"Value"},{"role":"cta","title":"Follow Roundy"}]'::jsonb;
 begin
@@ -80,6 +80,44 @@ begin
   if (select count(*) from public.marketing_runs
       where id=any(rids) and status='queued')<>3
   then raise exception 'APPROVED_POSTS_LOST_FROM_QUEUE';end if;
+  -- Simulate a due Feed run WITHOUT calling the Instagram API.
+  update public.marketing_runs set scheduled_for=now()-interval '1 minute'
+   where id=rids[1];
+  claimed:=public.claim_marketing();
+  if jsonb_array_length(claimed)<>1
+   or claimed->0->>'id' is distinct from rids[1]::text
+   then raise exception 'DID_NOT_CLAIM_ONLY_FIRST_POST: %',claimed;end if;
+  select count(*) into attempts from public.marketing_feed_publish_attempts
+   where run_id=rids[1] and state='publishing';
+  if attempts<>1 then raise exception 'ATTEMPT_HISTORY_NOT_CREATED';end if;
+  if public.mark_marketing_feed_external_attempt(rids[1]) is distinct from true
+   then raise exception 'EXTERNAL_ATTEMPT_MARKER_MISSING';end if;
+  update public.marketing_runs set status='needs_review',
+   message='Mock network timeout after Meta POST',finished_at=now() where id=rids[1];
+  select count(*) into attempts from public.marketing_feed_publish_attempts
+   where run_id=rids[1] and state='needs_review' and external_requested_at is not null
+    and error_message like 'Mock network timeout%';
+  if attempts<>1 then raise exception 'UNKNOWN_EXTERNAL_ATTEMPT_NOT_QUARANTINED';end if;
+  if jsonb_array_length(public.claim_marketing())<>0
+   then raise exception 'BLIND_AUTO_RETRY_WAS_ALLOWED';end if;
+  begin
+   perform public.retry_marketing_feed_after_review(
+    rids[1],actor,false,'Mock checked Instagram profile; no post found');
+   raise exception 'RETRY_WITHOUT_ATTESTATION_WAS_ALLOWED';
+  exception when others then
+   get stacked diagnostics msg=message_text;
+   if msg not like 'CONFIRM_NOT_PUBLISHED_AND_REVIEW_NOTE_REQUIRED%'
+    then raise exception 'UNEXPECTED_RETRY_CHECK: %',msg;end if;
+  end;
+  info:=public.retry_marketing_feed_after_review(
+   rids[1],actor,true,'Mock admin checked Instagram account and verified no post');
+  if (info->>'feed_date_kst')::date<=today_kst
+    or info->'run'->>'status'<>'queued'
+   then raise exception 'RECONCILED_RETRY_NOT_RESCHEDULED';end if;
+  if (select count(*) from public.marketing_feed_retry_reviews where run_id=rids[1])<>1
+   then raise exception 'ADMIN_RECONCILIATION_NOT_AUDITED';end if;
+  if (select count(*) from public.marketing_feed_publish_attempts where run_id=rids[1])<>1
+   then raise exception 'RETRY_CREATED_UNEXPECTED_EXTERNAL_ATTEMPT';end if;
   raise exception 'EXPECTED_FULL_ROLLBACK';
  exception when others then
   get stacked diagnostics msg=message_text;
