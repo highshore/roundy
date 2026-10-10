@@ -8,7 +8,7 @@ export function AdminMarketingSettings({locale,settings,onChange,onSave,busy}:{
  locale:Locale;settings:Row;onChange:(next:Row)=>void;onSave:()=>void;busy:boolean
 }){
  const t=(en:string,ko:string)=>tr(locale,en,ko);
- const value=<K extends keyof MarketingEditorialSettings>(key:K)=>settings[key]??EDITORIAL_SETTINGS_DEFAULTS[key];
+ const value=<K extends keyof MarketingEditorialSettings,>(key:K)=>settings[key]??EDITORIAL_SETTINGS_DEFAULTS[key];
  const set=(key:keyof MarketingEditorialSettings,next:unknown)=>onChange({...settings,[key]:next});
  const min5=Number(value('carousel_min_real_photos_5')),min3=Number(value('carousel_min_real_photos_3'));
  const photoInvalid=!Number.isInteger(min5)||min5<2||min5>3||min3!==2;
