@@ -2,6 +2,8 @@ import 'server-only';
 import {createHash} from 'node:crypto';
 import sharp from 'sharp';
 import {allSelectedPhotosApproved,requiredPhotoSlotsForRoles,savedPhotoSourcingPolicy} from './marketing-stock-photo-policy';
+import {licensedImageUrl,validLicensedPhoto,photoRightsIssues,type PhotoProvider,PHOTO_PROVIDERS} from './marketing-photo-rights';
+import {searchLicensedPhotos,providerConfigured,trackUnsplashDownload} from './marketing-photo-providers';
 import type {createServiceRoleClient} from './supabase/service';
 
 type DB=ReturnType<typeof createServiceRoleClient>;
@@ -9,7 +11,8 @@ type Row=Record<string,any>;
 type SourcePhoto=Row & {slot:number;asset_id:string;review_status:string;storage_path:string|null;content_sha256:string;photographer:string;provider_photo_id:string;image_url:string};
 const PHOTO_COOLDOWN_DAYS=90;
 const MAX_IMAGE_BYTES=9*1024*1024;
-const PEXELS_LICENSE_URL='https://www.pexels.com/license/';
+const MAX_PROVIDER_ATTEMPTS=8;
+const ATTEMPTS_PER_PROVIDER=2;
 
 const SEARCHES:Record<string,string[]>={
   prelaunch:['Seoul cafe friends conversation lifestyle','friends meeting cozy restaurant'],
@@ -26,13 +29,7 @@ const SEARCHES:Record<string,string[]>={
   mini_quiz:['friends having coffee and chatting','casual people talking cafe']
 };
 const check=<T extends {error:unknown}>(value:T):T=>{if(value.error)throw value.error;return value;};
-const photoId=(value:unknown)=>String(value||'').match(/^[0-9]{1,20}$/)?.[0]||null;
-const httpsUrl=(value:unknown,host:string)=>{
-  if(typeof value!=='string'||value.length>1200)return null;
-  try{const url=new URL(value);return url.protocol==='https:'&&url.hostname===host&&!url.username&&!url.password?url.toString():null;}catch{return null;}
-};
-
-export function pexelsConfigured(){return Boolean(process.env.PEXELS_API_KEY?.trim());}
+export function pexelsConfigured(){return providerConfigured('pexels');}
 export function photoTopic(draft:Row){
   const topic=draft.draft_kind==='growth_carousel'?String(draft.growth_topic_type||'conversation_prompt'):String(draft.content_mode||'prelaunch');
   return SEARCHES[topic]?topic:'conversation_prompt';
@@ -57,7 +54,7 @@ export async function importStockSelections(db:DB,draftId:string,photoSelections
 export function photoSelectionSnapshot(rows:SourcePhoto[]){
   return rows.map(row=>({asset_id:row.asset_id,slot:row.slot,provider:row.provider,
   provider_photo_id:row.provider_photo_id,source_url:row.source_url,
-  license_url:row.license_url,photographer:row.photographer,review_status:row.review_status}));
+  license_url:row.license_url,photographer:row.photographer,attribution_required:row.attribution_required,review_status:row.review_status}));
 }
 
 async function usedRecently(db:DB,excludeDraftId:string){
@@ -65,38 +62,20 @@ async function usedRecently(db:DB,excludeDraftId:string){
   const rows=check(await db.from('marketing_draft_photos').select('draft_id,asset_id').neq('draft_id',excludeDraftId).gte('created_at',from).order('created_at',{ascending:false}).limit(5000)).data||[];
   return new Set(rows.map((row:Row)=>row.asset_id));
 }
-function parsePexelsPhoto(photo:Row,topic:string){
-  const id=photoId(photo.id);if(!id||!photo.src)return null;
-  const source=httpsUrl(photo.url,'www.pexels.com');
-  const photographerUrl=httpsUrl(photo.photographer_url,'www.pexels.com');
-  const imageUrl=httpsUrl(photo.src.large2x||photo.src.portrait||photo.src.large,'images.pexels.com');
-  const preview=httpsUrl(photo.src.medium,'images.pexels.com');
-  if(!source||!source.includes('/photo/')||!photographerUrl||!imageUrl||!preview
-    ||!new URL(imageUrl).pathname.startsWith('/photos/'+id+'/')
-    ||!Number.isInteger(photo.width)||!Number.isInteger(photo.height)
-    ||photo.width<700||photo.height<900||!String(photo.photographer||'').trim())return null;
-  return {
-    provider:'pexels',provider_photo_id:id,source_url:source,image_url:imageUrl,
-    preview_url:preview,photographer:String(photo.photographer).slice(0,180),
-    photographer_url:photographerUrl,width:photo.width,height:photo.height,
-    topic_key:topic,license_name:'Pexels License',license_url:PEXELS_LICENSE_URL
-  };
+// Search terms combine the content pillar with each unfilled card's own subject.
+export function photoSearchQuery(draft:Row,topic:string,slot:number,attempt:number){
+ const slide=Array.isArray(draft.carousel_slides)?draft.carousel_slides[slot]||{}:{};
+ const base=(SEARCHES[topic]||SEARCHES.conversation_prompt)[attempt%2];
+ const parts=[slide.title_en,slide.body_en,slide.title,slide.body].filter((x):x is string=>typeof x==='string');
+ const english=parts.join(' ').match(/[A-Za-z]{4,}/g)?.filter(x=>!/^(roundy|follow|slide|content|meeting|your|this|that|with|from)$/i.test(x)).slice(0,3).join(' ')||'';
+ return (base+(english?' '+english:'')).slice(0,100);
 }
-async function pexelsSearch(topic:string,index:number):Promise<Row[]>{
-  const key=process.env.PEXELS_API_KEY?.trim();
-  if(!key)throw new Error('PEXELS_API_KEY_MISSING');
-  const url=new URL('https://api.pexels.com/v1/search');
-  url.searchParams.set('query',(SEARCHES[topic]||SEARCHES.conversation_prompt)[index%2]);
-  url.searchParams.set('orientation','portrait');
-  url.searchParams.set('per_page','30');
-  const response=await fetch(url.toString(),{
-    headers:{Authorization:key,Accept:'application/json'},redirect:'error',
-    cache:'no-store',signal:AbortSignal.timeout(9000)
-  });
-  if(!response.ok)throw new Error('PEXELS_SEARCH_HTTP_'+response.status);
-  const payload=await response.json().catch(()=>null);
-  if(!payload||!Array.isArray(payload.photos))throw new Error('PEXELS_INVALID_SEARCH_RESPONSE');
-  return payload.photos;
+async function logProviderAttempt(db:DB,draftId:string,provider:PhotoProvider,query:string,status:string,code:string,count:number){
+ const result=await db.from('marketing_photo_source_attempts').insert({
+  draft_id:draftId,provider,search_query:query,status,
+  error_code:code.slice(0,90),result_count:Math.max(0,count)
+ });
+ if(result.error)throw result.error;
 }
 function rank(photo:Row){
   const aspect=Number(photo.width)/Number(photo.height);
@@ -115,6 +94,7 @@ export async function prepareStockSelections(db:DB,draft:Row,opts:{replace?:bool
   if(picked.length>=slots.length)break;
   if(asset.slot!==slots[picked.length]||asset.review_status==='rejected')continue;
   if(asset.review_status==='approved'&&!asset.storage_path)continue;
+  if(!validLicensedPhoto(asset))continue;
   if(picked.some(item=>item.id===asset.asset_id))continue;
   picked.push(asset);
  }
@@ -123,38 +103,54 @@ export async function prepareStockSelections(db:DB,draft:Row,opts:{replace?:bool
   .eq('topic_key',topic).eq('review_status','approved').order('reviewed_at',{ascending:false}).limit(150)).data||[];
  for(const asset of existing){
   if(picked.length>=slots.length)break;
-  if(!asset.storage_path||recently.has(asset.id)||picked.some(item=>item.id===asset.id)
+  if(!asset.storage_path||!validLicensedPhoto(asset)||recently.has(asset.id)||picked.some(item=>item.id===asset.id)
     ||(opts.replace&&previousIds.has(asset.id)))continue;
   picked.push(asset);
  }
- // Pexels is always the FIRST new-photo provider. An API failure or insufficient
- // search results leaves the draft waiting for admin review; it is never AI-filled.
- if(picked.length<slots.length&&pexelsConfigured()){
-  for(let attempt=0;attempt<2&&picked.length<slots.length;attempt++){
+ // Bounded provider fallback. Candidates are never used before human approval.
+ let attempts=0;
+ for(const provider of PHOTO_PROVIDERS){
+  if(picked.length>=slots.length||attempts>=MAX_PROVIDER_ATTEMPTS)break;
+  for(let attempt=0;attempt<ATTEMPTS_PER_PROVIDER&&picked.length<slots.length&&attempts<MAX_PROVIDER_ATTEMPTS;attempt++){
+   const slot=slots[Math.min(picked.length,slots.length-1)];
+   const query=photoSearchQuery(draft,topic,slot,attempt);
+   if(!providerConfigured(provider)){
+    await logProviderAttempt(db,draft.id,provider,query,'skipped','API_KEY_NOT_CONFIGURED',0);
+    break;
+   }
+   attempts++;
    let photos:Row[];
    try{
-    photos=(await pexelsSearch(topic,attempt)).map((photo:Row)=>parsePexelsPhoto(photo,topic)).filter(Boolean) as Row[];
+    const result=await searchLicensedPhotos(provider,query,topic);
+    photos=result.photos;
+    await logProviderAttempt(db,draft.id,provider,query,photos.length?'found':'empty','',photos.length);
    }catch(error){
-    if(error instanceof Error&&/^(PEXELS_SEARCH_HTTP_|PEXELS_INVALID_SEARCH_RESPONSE|PEXELS_API_KEY_MISSING)/.test(error.message))break;
-    if(error instanceof TypeError||(error instanceof Error&&['AbortError','TimeoutError'].includes(error.name)))break;
-    throw error;
+    const raw=error instanceof Error?error.message:'PROVIDER_UNKNOWN_FAILURE';
+    const reason=/^PHOTO_PROVIDER_(HTTP_\d+|RESPONSE_INVALID)$/.test(raw)?raw:
+     (error instanceof Error&&['AbortError','TimeoutError'].includes(error.name))?'PHOTO_PROVIDER_TIMEOUT':'PHOTO_PROVIDER_UNAVAILABLE';
+    await logProviderAttempt(db,draft.id,provider,query,'failed',reason,0);
+    continue;
    }
-   const ids=photos.map(x=>x.provider_photo_id);
+   // Store at most 8 candidates per query to prevent review-library flooding.
+   const eligible=photos.filter(p=>validLicensedPhoto(p)).sort((a,b)=>{
+    const priority=(p:Row)=>/CC0|Public Domain/i.test(String(p.license_name))?1000:0;
+    return priority(b)-priority(a)+rank(b)-rank(a);
+   }).slice(0,8);
+   const ids=eligible.map(p=>String(p.provider_photo_id));
    if(!ids.length)continue;
    const known=check(await db.from('marketing_photo_assets').select('*')
-    .eq('provider','pexels').in('provider_photo_id',ids)).data||[];
-   const byId=new Map(known.map((photo:Row)=>[String(photo.provider_photo_id),photo]));
-   const missing=photos.filter(photo=>!byId.has(photo.provider_photo_id));
-   if(missing.length){
-    check(await db.from('marketing_photo_assets')
-     .upsert(missing,{onConflict:'provider,provider_photo_id',ignoreDuplicates:true}));
-   }
+    .eq('provider',provider).in('provider_photo_id',ids)).data||[];
+   const existingIds=new Set(known.map((p:Row)=>String(p.provider_photo_id)));
+   const newPhotos=eligible.filter(p=>!existingIds.has(String(p.provider_photo_id)));
+   if(newPhotos.length)check(await db.from('marketing_photo_assets')
+    .upsert(newPhotos,{onConflict:'provider,provider_photo_id',ignoreDuplicates:true}));
    const pool=check(await db.from('marketing_photo_assets').select('*')
-    .eq('provider','pexels').in('provider_photo_id',ids)).data||[];
+    .eq('provider',provider).in('provider_photo_id',ids)).data||[];
    pool.sort((a:Row,b:Row)=>rank(b)-rank(a));
    for(const asset of pool){
     if(picked.length>=slots.length)break;
-    if(asset.review_status==='rejected'||recently.has(asset.id)||picked.some(item=>item.id===asset.id)
+    if(asset.review_status==='rejected'||!validLicensedPhoto(asset)
+      ||recently.has(asset.id)||picked.some(item=>item.id===asset.id)
       ||(opts.replace&&previousIds.has(asset.id)))continue;
     if(asset.review_status==='approved'&&!asset.storage_path)continue;
     picked.push(asset);
@@ -175,18 +171,20 @@ export function stockReady(draft:Row,photos:SourcePhoto[]){
  const slides=Array.isArray(draft.carousel_slides)?draft.carousel_slides:[];
  return allSelectedPhotosApproved(slides.map((slide:Row)=>String(slide.role||'')),photos,savedPhotoSourcingPolicy(draft.content_document?.photo_sourcing));
 }
-async function getRemotePhoto(url:string,id:string){
-  const uri=httpsUrl(url,'images.pexels.com');
-  if(!uri||!new URL(uri).pathname.startsWith('/photos/'+id+'/'))throw new Error('UNTRUSTED_STOCK_IMAGE_URL');
-  const response=await fetch(uri,{cache:'no-store',redirect:'error',signal:AbortSignal.timeout(12000)});
-  if(!response.ok||!/^image\/(jpeg|png|webp)/i.test(response.headers.get('content-type')||''))throw new Error('PEXELS_IMAGE_FETCH_FAILED');
-  if(Number(response.headers.get('content-length')||0)>MAX_IMAGE_BYTES)throw new Error('PEXELS_IMAGE_TOO_LARGE');
-  const data=Buffer.from(await response.arrayBuffer());
-  if(!data.length||data.length>MAX_IMAGE_BYTES)throw new Error('PEXELS_IMAGE_TOO_LARGE');
-  const meta=await sharp(data).metadata();
-  if(!meta.width||!meta.height||meta.width<700||meta.height<800)throw new Error('PEXELS_IMAGE_DIMENSIONS_INVALID');
-  return sharp(data).rotate().resize(1080,1350,{fit:'cover'})
-    .jpeg({quality:88}).toBuffer();
+async function getRemotePhoto(asset:Row){
+ const provider=String(asset.provider) as PhotoProvider;
+ const uri=licensedImageUrl(asset.image_url,provider);
+ if(!uri||!validLicensedPhoto(asset))throw new Error('UNTRUSTED_STOCK_IMAGE_URL');
+ const response=await fetch(uri,{cache:'no-store',redirect:'error',signal:AbortSignal.timeout(12000)});
+ if(!response.ok||!/^image\/(jpeg|png|webp)/i.test(response.headers.get('content-type')||''))
+  throw new Error('STOCK_IMAGE_FETCH_FAILED');
+ if(Number(response.headers.get('content-length')||0)>MAX_IMAGE_BYTES)throw new Error('STOCK_IMAGE_TOO_LARGE');
+ const data=Buffer.from(await response.arrayBuffer());
+ if(!data.length||data.length>MAX_IMAGE_BYTES)throw new Error('STOCK_IMAGE_TOO_LARGE');
+ const meta=await sharp(data).metadata();
+ if(!meta.width||!meta.height||meta.width<700||meta.height<650)throw new Error('STOCK_IMAGE_DIMENSIONS_INVALID');
+ return sharp(data).rotate().resize(1080,1350,{fit:'cover'})
+   .jpeg({quality:88}).toBuffer();
 }
 async function pixelHash(image:Buffer){
   const data=await sharp(image).resize(9,8,{fit:'fill'}).greyscale().raw().toBuffer();
@@ -217,15 +215,16 @@ export async function reviewStockAsset(db:DB,assetId:string,choice:'approved'|'r
       review_note:note.slice(0,500),updated_at:new Date().toISOString()
     }).eq('id',assetId).select('*').single()).data;
   }
-  if(!asset.source_url.startsWith('https://www.pexels.com/photo/')||
-    asset.license_url!==PEXELS_LICENSE_URL)throw new Error('STOCK_LICENSE_SOURCE_INVALID');
-  const bytes=await getRemotePhoto(asset.image_url,String(asset.provider_photo_id));
+  const rightsIssues=photoRightsIssues(asset);
+  if(rightsIssues.length)throw new Error('STOCK_LICENSE_SOURCE_INVALID: '+rightsIssues.join(','));
+  await trackUnsplashDownload(asset);
+  const bytes=await getRemotePhoto(asset);
   const digest=createHash('sha256').update(bytes).digest('hex'),hash=await pixelHash(bytes);
   const approved=check(await db.from('marketing_photo_assets').select('id,content_sha256,perceptual_hash')
     .eq('review_status','approved').neq('id',assetId).limit(1500)).data||[];
   if(approved.some((other:Row)=>other.content_sha256===digest||bitDistance(String(other.perceptual_hash||''),hash)<=5))
     throw new Error('DUPLICATE_OR_NEAR_DUPLICATE_STOCK_PHOTO');
-  const storagePath='stock/pexels/'+asset.provider_photo_id+'.jpg';
+  const storagePath='stock/'+asset.provider+'/'+asset.provider_photo_id+'.jpg';
   check(await db.storage.from('marketing-images').upload(storagePath,bytes,{contentType:'image/jpeg',upsert:true}));
   return check(await db.from('marketing_photo_assets').update({
     review_status:'approved',reviewed_at:new Date().toISOString(),reviewed_by:actor,
@@ -242,6 +241,7 @@ export async function approvedStockCardAssets(db:DB,draft:Row){
   if(!stockReady(draft,photos))throw new Error('STOCK_PHOTOS_NOT_APPROVED');
   const cardPhotos:Record<number,string>={};
   for(const photo of photos){
+    if(!validLicensedPhoto(photo))throw new Error('STOCK_LICENSE_REVOKED_OR_INCOMPLETE');
     if(!photo.storage_path)throw new Error('STOCK_PHOTO_ARCHIVE_MISSING');
     const blob=check(await db.storage.from('marketing-images').download(photo.storage_path)).data as Blob;
     const raw=Buffer.from(await blob.arrayBuffer());
