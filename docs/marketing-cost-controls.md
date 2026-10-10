@@ -2,13 +2,17 @@
 
 Generation and publishing remain separate. Generation never inserts publishing runs. A reviewed draft is scheduled only through the admin approval endpoint, atomically with its revision check.
 
-## Defaults and costs
+## Defaults and costs (updated 2026-10-11)
 
-Automatic generation: one daily copy/research request, then 2–3 brand cards or 4–6 Growth Carousel cards rendered server-side. No paid photos automatically. Copy model: fixed gpt-4.1-mini, 4,096 output token cap, 16,000 supplied prompt byte cap. Book/research/meme topics allow at most one low-context web search. Other topics do not search. Paid photos require per-request confirmation and use gpt-image-2, low, 1024x1024, n=1, with 1/day and 10/month limits.
+Generation and publishing remain separate. All Instagram marketing AI jobs share a single KST-bound application budget, regardless of which administrator starts them.
 
-Application reservations are conservative estimates, not invoices: copy $0.02; research $0.05; photo $0.05; copy+photo $0.07; render saved cards $0. Paid work stops at $0.25/day, $3/calendar month, 5 paid jobs/day or 90/month. A copy+photo job can make two paid HTTP requests, so the maximum is six paid HTTP requests/day, with at most one photo request. Free render jobs are limited to 10/day. Day/month boundaries use Asia/Seoul. Limits are global, not per process or administrator.
+- **Application spending reservations:** $5.00/day and $20.00/calendar month (previously $2.00/day and $6.00/month). These are estimates reserved before calling an AI provider, **not actual billed totals**.
+- **Paid generation jobs:** at most 10/day and 180/calendar month (previously 5/day and 90/month). Failed attempts may retain reservations; only running, completed, and uncertain paid jobs count toward these job-count caps.
+- **Operations:** copy $0.02; research $0.05; image-only $0.15; combined copy + image $0.20; render saved cards $0. A job may involve more than one provider HTTP request and the reservation is not a per-request charge.
+- **Unchanged protections:** 10 saved-card render jobs/day, 30-second generation cooldown, global running-job lock, no automatic paid retries, idempotency keys, administrator pause and the existing quality/photo-rights review.
+- A temporary daily limit can override the daily budget while active; it does not override the monthly budget or job-count caps.
 
-Provider pricing may change. Spending from other routes/projects/users or leaked keys is outside this ledger. Configure provider-side project/key limits independently. Never describe the application reservation budget as an unconditional invoice guarantee.
+OpenAI and other upstream API provider project/organization budgets are **separate**. A provider-side billing cap or rate limit cannot be raised through this application migration, and spending elsewhere is outside this ledger.
 
 ## No retry loop
 
@@ -46,7 +50,7 @@ Failed manual jobs persist their normalized generation settings in `request_payl
 
 A completed Web Search no longer fails the draft solely because source metadata is absent. The server collects sources from search-action sources, open-page/find-in-page URLs, result items, and URL citations. If a completed search still has no source metadata, the draft is saved as `generated_without_sources` and the admin UI requires manual fact-checking before publication. This fallback makes no extra provider call.
 
-Deterministic application-validation failures do not trip the global circuit breaker or consume the 5-job safety counter, but their conservative dollar reservation remains in the daily/monthly budget because a provider request may already have incurred cost. Running, completed, and uncertain jobs still count toward the 5-job limit; all paid attempts remain bounded by the dollar budget.
+Deterministic application-validation failures do not trip the global circuit breaker or consume the paid-job safety counter, but their conservative dollar reservation remains in the daily/monthly budget because a provider request may already have incurred cost. Running, completed, and uncertain jobs still count toward the 10-job daily limit; all paid attempts remain bounded by the dollar budget.
 
 
 ## Generation threads
