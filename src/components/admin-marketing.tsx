@@ -8,6 +8,13 @@ import { OrderedImages } from './ordered-images';
 import {AdminMarketingGrowth} from './admin-marketing-growth';
 import {AdminMarketingReels} from './admin-marketing-reels';
 import {AdminMarketingStories} from './admin-marketing-stories';
+import {AdminMarketingOverview} from './admin-marketing-overview';
+import {AdminMarketingAssets} from './admin-marketing-assets';
+import {AdminMarketingQueue} from './admin-marketing-queue';
+import {AdminMarketingSettings} from './admin-marketing-settings';
+import {MarketingMobilePreview} from './marketing-mobile-preview';
+import {LayoutDashboard,FileText,Images,CalendarDays,History,Film,Compass,Settings2,Link2,BarChart3,BookOpen,RefreshCw} from 'lucide-react';
+import './admin-marketing-workspace.css';
 import {CONTENT_PROFILES,postType} from '@/lib/marketing-content-policy';
 import {EDITORIAL_SETTINGS_DEFAULTS} from '@/lib/marketing-editorial-settings';
 import {factPackReady,groupTrendsByUsage} from '@/lib/marketing-trend-guide';
@@ -44,7 +51,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
  const [uploadedImages,setUploadedImages]=useState<Row[]>([]),[uploadAssetType,setUploadAssetType]=useState<'photo'|'completed_card'>('photo');
  const [pendingMarketingImages,setPendingMarketingImages]=useState<PendingMarketingImage[]>([]),[pendingAssetType,setPendingAssetType]=useState<'photo'|'completed_card'>('photo');
  const [resultPreview,setResultPreview]=useState<Row|null>(null);
- const [activeTab,setActiveTab]=useState<'draft'|'growth'|'reels'|'stories'|'generation'|'trend'|'publishing'|'automation'|'connection'>('draft');
+ const [activeTab,setActiveTab]=useState<'overview'|'draft'|'assets'|'queue'|'growth'|'reels'|'stories'|'generation'|'trend'|'publishing'|'automation'|'connection'>('overview');
  const [generationFilter,setGenerationFilter]=useState<'all'|'completed'|'failed'|'running'>('all');
  const [trendLanguage,setTrendLanguage]=useState<'ko'|'en'>('ko');
  const [trendUsageView,setTrendUsageView]=useState<'unused'|'used'>('unused');
@@ -383,16 +390,20 @@ export function AdminMarketing({locale}:{locale:Locale}){
  const contentRecords=((data.content_records||[]) as Row[]);
  const visibleRuns=channelRuns.slice(0,publishVisible);
  const tabItems=[
-  ['draft',t('Draft','초안')],
-  ['growth',t('Growth','성장 분석')],
-  ['reels',t('Reel Studio','릴스 스튜디오')],
-  ['stories',t('Stories','스토리')],
-  ['generation',t('Generation','생성 기록')],
-  ['trend',t('Seoul Trend','서울 트렌드')],
-  ['publishing',t('Publishing','게시 기록')],
-  ['automation',t('Automation','자동화')],
-  ['connection',t('Connection','연결')]
+  ['overview',t('Overview','개요'),LayoutDashboard],
+  ['draft',t('Content studio','콘텐츠 작업'),FileText],
+  ['assets',t('Photo library','사진 자산'),Images],
+  ['queue',t('Publishing schedule','발행 일정'),CalendarDays],
+  ['stories',t('Stories','스토리'),BookOpen],
+  ['generation',t('Generation history','생성 기록'),History],
+  ['reels',t('Reel Studio','릴스 스튜디오'),Film],
+  ['growth',t('Growth insights','성장 분석'),BarChart3],
+  ['trend',t('Seoul Trend','서울 트렌드'),Compass],
+  ['publishing',t('Feed history','Feed 발행 기록'),CalendarDays],
+  ['automation',t('Marketing settings','마케팅 설정'),Settings2],
+  ['connection',t('Connections','연결'),Link2]
  ] as const;
+ const primaryMarketingTabs=new Set<string>(['overview','draft','assets','queue','stories']);
  function statusText(status:string){const labels:Record<string,[string,string]>={completed:['Completed','완료'],failed:['Failed','실패'],running:['Running','진행 중'],uncertain:['Needs review','확인 필요'],sent:['Published','게시됨'],queued:['Scheduled','예약됨'],sending:['Publishing','게시 중'],needs_review:['Needs review','확인 필요'],scheduled:['Scheduled','예약됨']};return labels[status]?t(...labels[status]):status;}
  function operationLabel(row:Row){const labels:Record<string,[string,string]>={copy:['Copy creation','문구 생성'],research:['Research + copy','주제 조사 + 문구 생성'],render:['Card rendering','이미지 카드 렌더'],photo:['Visual generation','이미지 생성 + 렌더'],copy_photo:['Copy + visuals','문구 + 이미지 생성']};return labels[row.operation]?t(...labels[row.operation]):t('Generation step','생성 단계');}
  function contentLabel(row:Row){const request=row.request_payload||{},snapshot=row.result_snapshot||row.snapshot||row||{},growth=request.content_mode==='growth_carousel'||snapshot.draft_kind==='growth_carousel'||row.draft_kind==='growth_carousel',kind=growth?(request.topic_type||snapshot.growth_topic_type||row.growth_topic_type||'growth_carousel'):(request.content_mode||snapshot.content_mode||row.content_mode||snapshot.draft_kind||row.draft_kind||row.operation||'content');const ko:Record<string,string>={prelaunch:'오픈 전 홍보',live_event:'이벤트 모집',book_insight:'책 속 공감',trend_research:'연구로 보는 관계',mbti:'MBTI와 대화',dating_archetype:'대화 스타일',meme_remix:'공감 상황극',dating_myth:'연애 통념 점검',conversation_prompt:'첫 대화 질문',seoul_dating:'서울에서 만나기',seoul_trend:'서울 트렌드',korea_life:'한국 생활',mini_quiz:'대화 미니 퀴즈',growth_carousel:'Growth Carousel',brand:'브랜드 콘텐츠',copy:'일반 콘텐츠',research:'검색 콘텐츠'};return locale==='ko'?(ko[kind]||String(kind).replaceAll('_',' ')):String(kind).replaceAll('_',' ');}
@@ -411,11 +422,57 @@ export function AdminMarketing({locale}:{locale:Locale}){
   answer_first:'Answer-First cover',final_cta:'Final CTA',mobile_render:'Mobile readability / margins'
  };
  if(loading)return <p role="status">{t('Loading marketing workspace…','마케팅 정보를 불러오는 중입니다…')}</p>;
- return <section className="admin-panel marketing-panel">
-  <div className="admin-heading"><p className="admin-kicker">ROUNDY ADMIN</p><Heading level={1}>{t('Marketing','마케팅')}</Heading><p>{t('Generate safely. Review once. Publish only after approval.','안전하게 생성하고 검토한 뒤, 승인한 콘텐츠만 게시합니다.')}</p></div>
-  <div className="admin-form-actions">{(['instagram','koreapas'] as const).map(c=><button type="button" key={c} className={channel===c?'admin-primary':'admin-secondary'} onClick={()=>setChannel(c)}>{c==='instagram'?'Instagram @roundy.meet':'Koreapas'}</button>)}<button type="button" className="admin-secondary" disabled={busy} onClick={()=>void work(()=>channel==='instagram'&&activeTab==='trend'?loadTrend():load(draft?.id))}>{t('Refresh status','상태 새로고침')}</button></div>
-  {error&&<p className="admin-error" role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}
-  {channel==='instagram'&&<nav className="marketing-subtabs" aria-label={t('Marketing sections','마케팅 메뉴')} role="tablist">{tabItems.map(([value,label])=><button key={value} type="button" role="tab" aria-selected={activeTab===value} className={activeTab===value?'active':''} onClick={()=>setActiveTab(value)}>{label}{value==='generation'&&generationThreads.some((thread:Row)=>thread.status==='failed')&&<span className="marketing-tab-dot" aria-label={t('Failed generation exists','실패한 생성 있음')}/>}</button>)}</nav>}
+ return <section className="admin-panel marketing-panel marketing-workspace">
+  <header className="marketing-workspace-header">
+   <div className="marketing-workspace-header-title">
+    <span className="marketing-workspace-eyebrow">ROUNDY / MARKETING</span>
+    <Heading level={1}>{t('Marketing workspace','마케팅 관리')}</Heading>
+    <p>{t('Create, review and schedule Feed and Story content in one organized workspace.',
+     '콘텐츠 생성부터 검수와 승인, Feed 및 Story 예약 발행까지 한곳에서 관리합니다.')}</p>
+   </div>
+   <div className="marketing-workspace-header-actions">
+    <div className="marketing-workspace-channel" role="group" aria-label={t('Marketing channel','마케팅 채널')}>
+     {(['instagram','koreapas'] as const).map(c=><button type="button" key={c}
+      aria-pressed={channel===c} disabled={busy} onClick={()=>setChannel(c)}>
+      {c==='instagram'?'Instagram':'Koreapas'}</button>)}
+    </div>
+    <button type="button" className="admin-secondary marketing-workspace-refresh"
+     disabled={busy} onClick={()=>void work(()=>channel==='instagram'&&activeTab==='trend'?loadTrend():load(draft?.id))}>
+     <RefreshCw size={16}/>{t('Refresh','새로고침')}</button>
+   </div>
+  </header>
+  {error&&<p className="admin-error" role="alert">{error}</p>}
+  {notice&&<p role="status" className="marketing-workspace-feedback">{notice}</p>}
+  {channel==='instagram'&&<nav className="marketing-subtabs marketing-workspace-nav" aria-label={t('Marketing sections','마케팅 메뉴')}>
+   {[
+    {group:'WORKSPACE',tabs:tabItems.filter(([id])=>primaryMarketingTabs.has(id))},
+    {group:'TOOLS & OPERATIONS',tabs:tabItems.filter(([id])=>!primaryMarketingTabs.has(id))}
+   ].map(group=><div className="marketing-workspace-nav-group" key={group.group}>
+    <span className="marketing-workspace-nav-label">{group.group}</span>
+    <div className="marketing-workspace-nav-links" role="tablist" aria-label={group.group}>
+     {group.tabs.map(([value,label,Icon])=><button type="button" key={value}
+      role="tab" aria-selected={activeTab===value}
+      className={activeTab===value?'active':''} onClick={()=>setActiveTab(value)}>
+      <Icon size={16} aria-hidden="true"/><span>{label}</span>
+      {value==='generation'&&generationThreads.some((thread:Row)=>thread.status==='failed')&&
+       <span className="marketing-tab-dot" aria-label={t('Failed generation exists','실패한 생성 있음')}/>}
+     </button>)}
+    </div>
+   </div>)}
+  </nav>}
+  {channel==='instagram'&&activeTab==='overview'&&
+   <AdminMarketingOverview locale={locale} drafts={data.drafts||[]} runs={data.runs||[]} settings={settings}
+    onNavigate={tab=>setActiveTab(tab)}/>}
+  {channel==='instagram'&&activeTab==='assets'&&
+   <AdminMarketingAssets locale={locale} onOpenDraft={id=>{
+    const related=(data.drafts||[]).find((item:Row)=>item.id===id);
+    if(related){selectDraft(related);setActiveTab('draft');}
+    else {setActiveTab('publishing');setNotice(t(
+     'This photo is linked to an earlier or already scheduled draft. Check publication history.',
+     '해당 사진은 이전 초안 또는 발행 예약 콘텐츠에 연결되어 있습니다. 게시 기록을 확인하세요.'));}
+   }}/>}
+  {channel==='instagram'&&activeTab==='queue'&&
+   <AdminMarketingQueue locale={locale} runs={data.runs||[]} onNavigate={tab=>setActiveTab(tab)}/>}
   {channel==='instagram'&&activeTab==='growth'&&<AdminMarketingGrowth locale={locale}/>}
   {channel==='instagram'&&activeTab==='reels'&&<AdminMarketingReels locale={locale}/>}
   {channel==='instagram'&&activeTab==='stories'&&<AdminMarketingStories locale={locale}/>}
@@ -455,21 +512,24 @@ export function AdminMarketing({locale}:{locale:Locale}){
    <div className="marketing-draft-inbox">{data.drafts.length?data.drafts.map((item:Row)=>{const publication=publicationInfo(item);return <article className={'marketing-draft-card '+(draft?.id===item.id?'selected':'')} key={item.id}>{item.images?.[0]?<img src={item.images[0]} alt="" />:<span className="marketing-draft-thumb placeholder"/>}<div className="marketing-draft-copy"><strong>{contentTitle(item)}</strong><p>{contentLabel(item)} · {item.content_language==='en'?'EN':'KO'} · {item.quality_report?.status==='passed'?t('Ready for review','검토 가능'):t('Needs quality review','품질 검토 필요')}</p><small><span className={'marketing-status-pill '+publication.status}>{publication.label}</span> · {new Date(item.imported_at||item.updated_at).toLocaleString(locale,{timeZone:'Asia/Seoul'})}</small></div><button type="button" className={draft?.id===item.id?'admin-primary':'admin-secondary'} disabled={busy||!!running} onClick={()=>{if(dirty&&!window.confirm(t('Discard unsaved changes?','저장하지 않은 수정을 버릴까요?')))return;selectDraft(item);}}>{draft?.id===item.id?t('Editing','편집 중'):t('Edit','편집')}</button></article>}):<div className="admin-empty"><p>{t('No editable drafts yet. Generate content, then add a completed result from Generation history.','아직 편집 가능한 초안이 없습니다. 콘텐츠를 생성한 뒤 생성 기록의 완료 결과를 초안으로 가져오세요.')}</p><button type="button" className="admin-secondary" onClick={()=>setActiveTab('generation')}>{t('Open Generation history','생성 기록 열기')}</button></div>}</div>
    {!draft?<p className="admin-empty">{t('Select a working draft above to edit it.','위 작업함에서 편집할 초안을 선택하세요.')}</p>:<div className="marketing-layout"><div className="admin-form marketing-editor"><p>{draft.generation_reason}</p><p>{draft.draft_date} / v{draft.revision} / {draft.status} / {draft.content_language==='en'?t('English content','영어 콘텐츠'):t('Korean content','한국어 콘텐츠')}</p><p>{t('Recommended window','추천 게시 시간')}: {draft.window_start_kst?.slice(0,5)}–{draft.window_end_kst?.slice(0,5)} KST</p>
     {draft.content_document?.answer_first===true&&Array.isArray(draft.content_document?.thumbnail_candidates)&&
-     <div className="marketing-setup">
-      <strong>{t('Answer-First cover headlines','Answer-First 썸네일 문구')}</strong>
+     <div className="marketing-setup marketing-copy-options">
+      <div className="marketing-copy-options-head"><span className="admin-kicker">COPY OPTIONS / 03</span>
+       <strong>{t('Choose from three headline copy options','썸네일 카피 후보 3개 중 선택')}</strong>
+      </div>
       <p className="admin-help">{t('Choose one of three concrete, evidence-aware result headlines. Result → Context → Detail → Value → CTA.','핵심 결론과 검증된 정보 중심의 썸네일 문구 3개 중 하나를 선택하세요. Result → Context → Detail → Value → CTA.')}</p>
-      <div className="marketing-draft-inbox">
+      <div className="marketing-copy-options-grid">
        {(draft.content_document.thumbnail_candidates as string[]).map((title:string,index:number)=>{
         const selected=Number(draft.content_document.thumbnail_selected_index??0)===index;
-        return <article className="marketing-draft-card" key={index}>
-         <div className="marketing-draft-copy"><strong>{index+1}. {title}</strong><small>{selected?t('Selected cover','선택한 썸네일'):t('Alternative','다른 후보')}</small></div>
+        return <article className={'marketing-copy-option '+(selected?'selected':'')} key={index}>
+         <div className="marketing-copy-option-number">{String(index+1).padStart(2,'0')}</div>
+         <div className="marketing-draft-copy"><strong>{title}</strong><small>{selected?t('Selected headline','선택된 썸네일 카피'):t('Alternative headline','다른 썸네일 카피')}</small></div>
          <button type="button" className={selected?'admin-primary':'admin-secondary'} aria-pressed={selected}
           disabled={busy||!!running||dirty||draft.status!=='needs_approval'||selected}
           onClick={()=>void work(async()=>{
            const response=await mutate('/draft/'+draft.id+'/thumbnail',{revision:draft.revision,index},'PATCH');
            await load(draft.id);
            setNotice(response.rerender_required?t('Headline selected. Re-render the cover before publishing.','썸네일 문구를 선택했습니다. 게시 전에 기존 이미지를 다시 렌더링하세요.'):t('Headline selected. Run the free quality recheck before publishing.','문구 선택을 저장했습니다. 게시 전 무료 품질 검사를 실행하세요.'));
-          })}>{selected?t('Selected','선택됨'):t('Use this headline','이 문구 선택')}</button>
+          })}>{selected?t('Selected','선택됨'):t('Choose copy','카피 선택')}</button>
         </article>;
        })}
       </div>
@@ -534,7 +594,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
   const when=result.run?.scheduled_for?new Date(result.run.scheduled_for).toLocaleString(locale,{timeZone:'Asia/Seoul'}):'';
   setNotice(t('Approved and reserved for ','승인 완료, 발행 예약: ')+when+' KST');});}}>{t('Approve & schedule','승인 후 예약')}</button><button type="button" className="admin-secondary" disabled={busy||!!running||dirty||!preflightReady||!draft.caption?.trim()||!draft.images?.length||draft.quality_report?.status!=='passed'||draft.quality_revision!==draft.revision} onClick={()=>{if(window.confirm(t('Publish this exact saved revision to @roundy.meet NOW? This bypasses the recommended posting time and cannot be undone here.','현재 저장된 버전을 @roundy.meet에 지금 바로 게시할까요? 추천 게시 시간을 무시하며 여기서 게시를 되돌릴 수 없습니다.')))void work(async()=>{const result=await mutate('/draft/'+draft.id+'/publish-now',{revision:draft.revision});await load(draft.id);setNotice(result.published?t('Published to @roundy.meet.','@roundy.meet에 바로 게시했습니다.'):result.needs_review?t('Publish attempt needs review. Check Instagram before resolving it.','게시 결과 확인이 필요합니다. 처리 전에 Instagram에서 실제 게시 여부를 확인하세요.'):result.deferred?t('Daily Feed limit reached. Reserved for '+String(result.feed_date_kst)+' KST.','Feed 일일 한도를 초과해 '+String(result.feed_date_kst)+' KST로 예약했습니다.'):t('Queued for immediate publishing. Refresh status before trying again.','즉시 게시 큐에 넣었습니다. 다시 누르기 전에 상태를 새로고침하세요.'));});}}>{t('Publish now','바로 게시')}</button><button type="button" className="admin-secondary" disabled={busy||!!running} onClick={()=>void work(async()=>{await mutate('/draft/'+draft.id+'/skip',{});await load();})}>{t('Skip','건너뛰기')}</button></div>}
     <p className="admin-help">{t('Generation never publishes. Copy is saved before images, so an image failure does not lose it.','생성만으로는 게시되지 않습니다. 이미지를 만들기 전에 문구부터 저장하므로 이미지 생성이 실패해도 문구는 남습니다.')}</p>
-   </div><aside className="marketing-preview"><strong>{t('Saved preview','저장된 미리보기')}</strong>{draft.images?.length?draft.images.map((url:string,i:number)=><img key={url} src={url} alt={'Roundy card '+(i+1)} style={{width:'100%',height:'auto',marginTop:12}}/>):<p>{t('No saved image. Generate cards or a photo.','저장된 이미지가 없습니다. 카드나 사진을 생성하세요.')}</p>}</aside></div>}
+   </div><MarketingMobilePreview draft={draft} locale={locale}/></div>}
   </>}
   {channel==='instagram'&&activeTab==='generation'&&<section className="marketing-tab-panel">
    <div className="admin-section-title"><div><p className="admin-kicker">{t('Activity','활동')}</p><Heading level={2}>{t('Generation history','생성 기록')}</Heading></div><button type="button" className="admin-secondary" disabled={busy} onClick={()=>void work(()=>load(draft?.id))}>{t('Refresh','새로고침')}</button></div>
@@ -595,7 +655,15 @@ export function AdminMarketing({locale}:{locale:Locale}){
     </article>})}</div>:<p className="admin-empty">{trendUsageView==='used'?t('No previously used trends yet.','아직 콘텐츠 생성에 사용한 트렌드가 없습니다.'):t('No unused trends are available. Check the used trends archive or wait for new research.','미사용 트렌드가 없습니다. 사용 기록을 확인하거나 새로운 후보를 기다려주세요.')}</p>}
    </div>
   </section>}
-  {channel==='instagram'&&activeTab==='automation'&&<section className="marketing-tab-panel">   {settings&&<div className="marketing-settings-card"><div className="admin-section-title"><div><p className="admin-kicker">{t('Schedule','스케줄')}</p><Heading level={2}>{t('Automation settings','자동화 설정')}</Heading></div></div><form className="admin-form" onSubmit={e=>{e.preventDefault();void work(async()=>{await mutate('/settings',settings,'PUT');await load(draft?.id);setNotice(t('Automation saved.','자동화 설정을 저장했습니다.'));});}}>
+  {channel==='instagram'&&activeTab==='automation'&&<section className="marketing-tab-panel marketing-workspace-settings">
+   {settings&&<AdminMarketingSettings locale={locale} settings={settings} onChange={setSettings}
+    busy={busy} onSave={()=>void work(async()=>{
+     const editorial=Object.fromEntries(Object.keys(EDITORIAL_SETTINGS_DEFAULTS).map(key=>
+      [key,settings[key]??EDITORIAL_SETTINGS_DEFAULTS[key as keyof typeof EDITORIAL_SETTINGS_DEFAULTS]]));
+     await mutate('/settings',editorial,'PATCH');
+     await load(draft?.id);
+     setNotice(t('Feed & carousel settings saved.','Feed 및 카드뉴스 설정을 저장했습니다.'));
+    })}/>}   {settings&&<div className="marketing-settings-card"><div className="admin-section-title"><div><p className="admin-kicker">{t('Schedule','스케줄')}</p><Heading level={2}>{t('Daily generation & campaigns','일일 생성 및 캠페인 설정')}</Heading></div></div><form className="admin-form" onSubmit={e=>{e.preventDefault();void work(async()=>{await mutate('/settings',settings,'PUT');await load(draft?.id);setNotice(t('Automation saved.','자동화 설정을 저장했습니다.'));});}}>
     <label className="check-row"><input type="checkbox" checked={settings.daily_instagram_enabled} onChange={e=>setSettings({...settings,daily_instagram_enabled:e.target.checked})}/>{t('One automatic draft per day','매일 완성된 초안 1개 자동 생성')}</label><label>{t('Generation time KST','생성 시간 KST')}<input type="time" value={settings.draft_generation_time_kst.slice(0,5)} onChange={e=>setSettings({...settings,draft_generation_time_kst:e.target.value})}/></label><p className="admin-help">{t('Checked every 15 minutes after this time. One dispatch per date, even on failure.','이 시간 이후 15분 간격으로 확인합니다. 실패해도 해당 날짜에는 자동 호출을 반복하지 않습니다.')}</p>
     <label>{t('Daily basis','일일 콘텐츠 기준')}<select value={settings.content_mode} onChange={e=>setSettings({...settings,content_mode:e.target.value})}><option value="prelaunch">{t('Pre-launch','오픈 전 홍보')}</option><option value="live_event">{t('Live event','정식 이벤트')}</option></select></label>
     <div className="marketing-setup">
@@ -621,49 +689,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
     </div>
     <label className="check-row"><input type="checkbox" checked={settings.optimization_enabled} onChange={e=>setSettings({...settings,optimization_enabled:e.target.checked})}/>{t('Optimize posting time','게시 시간 최적화')}</label><label>{t('Fallback posting time KST','기본 게시 시간 KST')}<input type="time" value={settings.daily_time_kst.slice(0,5)} onChange={e=>setSettings({...settings,daily_time_kst:e.target.value})}/></label><label className="check-row"><input type="checkbox" checked={settings.auto_reply_enabled} onChange={e=>setSettings({...settings,auto_reply_enabled:e.target.checked})}/>{t('Existing comments/DM auto-replies','기존 댓글 및 DM 자동 응답')}</label><button disabled={busy} className="admin-primary">{t('Save automation','자동화 저장')}</button>
    </form></div>}
-   {settings&&<div className="marketing-settings-card">
-    <div className="admin-section-title"><div>
-     <p className="admin-kicker">{t('Next phase','다음 단계 준비')}</p>
-     <Heading level={2}>{t('Feed & carousel preferences','Feed 및 카드뉴스 설정')}</Heading>
-     <p>{t('New copy and image template settings apply to newly generated cards. Instagram publishing schedules and existing posts remain unchanged.','신규 카드뉴스에 생성 및 템플릿 설정이 적용됩니다. 기존 게시물과 Instagram 발행 스케줄러는 변경하지 않습니다.')}</p>
-    </div></div>
-    <form className="admin-form" onSubmit={e=>{e.preventDefault();void work(async()=>{
-     const editorial=Object.fromEntries(Object.keys(EDITORIAL_SETTINGS_DEFAULTS).map(key=>[key,settings[key]??EDITORIAL_SETTINGS_DEFAULTS[key as keyof typeof EDITORIAL_SETTINGS_DEFAULTS]]));
-     await mutate('/settings',editorial,'PATCH');
-     await load(draft?.id);
-     setNotice(t('Feed and carousel preferences saved.','Feed 및 카드뉴스 설정을 저장했습니다.'));
-    });}}>
-     <div className="admin-two">
-      <label><span>{t('Maximum automatic Feed posts / day','Feed 일일 자동 발행 최대 횟수')}</span>
-       <input type="number" min={1} max={10} step={1} value={settings.feed_daily_max_posts??EDITORIAL_SETTINGS_DEFAULTS.feed_daily_max_posts} onChange={e=>setSettings({...settings,feed_daily_max_posts:Number(e.target.value)})}/></label>
-      <label><span>{t('Carousel mode','카드뉴스 모드')}</span>
-       <select value={settings.carousel_mode??EDITORIAL_SETTINGS_DEFAULTS.carousel_mode} onChange={e=>setSettings({...settings,carousel_mode:e.target.value})}>
-        <option value="fixed">Fixed</option><option value="alternating">Alternating</option>
-       </select></label>
-     </div>
-     <p className="admin-help">{t('Active KST daily limit for scheduled AND Publish-now Feed posts. Extra approved posts remain queued for the next eligible KST day. Reels are separate.','예약 및 바로 게시 Feed 모두 KST 일일 한도를 적용합니다. 초과 콘텐츠는 삭제 없이 다음 발행 가능 날짜에 보관합니다. 릴스는 별도입니다.')}</p>
-     <div className="admin-two">
-      <label><span>{t('Default carousel slides','기본 카드뉴스 장수')}</span>
-       <select value={5} disabled aria-label={t('Fixed five-card baseline','5장 기본 구성')}>
-        <option value={5}>{t('5 slides','5장')}</option><option value={3}>{t('3 slides','3장')}</option>
-       </select></label>
-      <label><span>{t('Minimum real photos in 5 slides','5장 중 실제 사진 최소 개수')}</span>
-       <input type="number" min={0} max={5} step={1} value={settings.carousel_min_real_photos_5??EDITORIAL_SETTINGS_DEFAULTS.carousel_min_real_photos_5} onChange={e=>setSettings({...settings,carousel_min_real_photos_5:Number(e.target.value)})}/></label>
-     </div>
-     <label><span>{t('Minimum real photos in 3 slides','3장 중 실제 사진 최소 개수')}</span>
-      <input type="number" min={0} max={3} step={1} value={settings.carousel_min_real_photos_3??EDITORIAL_SETTINGS_DEFAULTS.carousel_min_real_photos_3} onChange={e=>setSettings({...settings,carousel_min_real_photos_3:Number(e.target.value)})}/></label>
-     <label className="check-row"><input type="checkbox" checked={settings.carousel_ai_thumbnail_enabled??EDITORIAL_SETTINGS_DEFAULTS.carousel_ai_thumbnail_enabled} onChange={e=>setSettings({...settings,carousel_ai_thumbnail_enabled:e.target.checked})}/>{t('AI-generated thumbnail','AI 썸네일 활성화')}</label>
-     <label className="check-row"><input type="checkbox" checked={settings.carousel_answer_first_enabled??EDITORIAL_SETTINGS_DEFAULTS.carousel_answer_first_enabled} onChange={e=>setSettings({...settings,carousel_answer_first_enabled:e.target.checked})}/>{t('Answer-First copywriting','Answer-First 카피라이팅 활성화')}</label>
-     <label className="check-row"><input type="checkbox" checked={settings.story_preview_auto_enabled??EDITORIAL_SETTINGS_DEFAULTS.story_preview_auto_enabled} onChange={e=>setSettings({...settings,story_preview_auto_enabled:e.target.checked})}/>{t('Automatically generate Story previews','Story 미리보기 자동 생성')}</label>
-     <div className="admin-two">
-      <label><span>{t('Carousel title font (px)','카드뉴스 제목 폰트 크기 (px)')}</span>
-       <input type="number" min={24} max={160} step={1} value={settings.carousel_title_font_size_px??EDITORIAL_SETTINGS_DEFAULTS.carousel_title_font_size_px} onChange={e=>setSettings({...settings,carousel_title_font_size_px:Number(e.target.value)})}/></label>
-      <label><span>{t('Carousel body font (px)','카드뉴스 본문 폰트 크기 (px)')}</span>
-       <input type="number" min={16} max={80} step={1} value={settings.carousel_body_font_size_px??EDITORIAL_SETTINGS_DEFAULTS.carousel_body_font_size_px} onChange={e=>setSettings({...settings,carousel_body_font_size_px:Number(e.target.value)})}/></label>
-     </div>
-     <button className="admin-primary" disabled={busy}>{t('Save Feed & carousel preferences','Feed 및 카드뉴스 설정 저장')}</button>
-    </form>
-   </div>}
+   
   </section>}
   {channel==='instagram'&&activeTab==='connection'&&<section className="marketing-tab-panel">
    <div className="marketing-settings-card"><div className="admin-section-title"><div><p className="admin-kicker">Instagram</p><Heading level={2}>{t('Connection and webhook','연결 및 Webhook')}</Heading></div></div><p>{data.connection?.instagram?t('Publisher configured','게시 계정 설정됨'):t('Publisher needs setup','게시 계정 연결 확인 필요')}</p><p>{t('Comment/DM webhook verification','댓글 및 DM Webhook 인증')}: {data.webhook?.verified_at||t('Not verified','미인증')}</p>{!data.webhook?.verified_at&&<><label>Callback URL<input readOnly value={data.webhook?.callback_url||''}/></label><label>Verify token<input readOnly value={data.webhook?.verify_token||''}/></label></>}</div>
