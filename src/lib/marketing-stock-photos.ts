@@ -135,7 +135,7 @@ export async function prepareStockSelections(db:DB,draft:Row,opts:{replace?:bool
     photos=(await pexelsSearch(topic,attempt)).map((photo:Row)=>parsePexelsPhoto(photo,topic)).filter(Boolean) as Row[];
    }catch(error){
     if(error instanceof Error&&/^(PEXELS_SEARCH_HTTP_|PEXELS_INVALID_SEARCH_RESPONSE|PEXELS_API_KEY_MISSING)/.test(error.message))break;
-    if(error instanceof TypeError||error instanceof DOMException)break;
+    if(error instanceof TypeError||(error instanceof Error&&['AbortError','TimeoutError'].includes(error.name)))break;
     throw error;
    }
    const ids=photos.map(x=>x.provider_photo_id);
