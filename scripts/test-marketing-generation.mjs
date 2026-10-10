@@ -7,8 +7,8 @@ let checks=0;const check=(f)=>{f();checks++;};
 const id='4b9066d0-e01b-4cc4-92d1-469f56317a04';
 const eventId='11111111-1111-4111-8111-111111111111';
 const base={request_key:'manual:quality-test-001',revision:1,mode:'both',content_mode:'prelaunch',language:'en',visual_mode:'cards',instruction:''};
-function harness({denied=false,network=false,badSources=false,duplicate=false,photo403=false,answerFirst=false}={}){
- const tables={instagram_post_drafts:[{id,status:'needs_approval',revision:1,caption:'Original',cta:'Follow',images:[],carousel_slides:[],content_mode:'prelaunch'}],marketing_generation_jobs:[],marketing_ai_control:[{singleton:true,enabled:true,blocked_reason:null}],marketing_automation_settings:[{singleton:true,carousel_answer_first_enabled:answerFirst}],marketing_uploaded_images:[],events:[{id:eventId,slug:'fixture',title:'Fixture event',title_ko:'테스트 모임',status:'live',deleted_at:null,marketing_enabled:true,starts_at:'2099-12-01T10:00:00Z',ends_at:'2099-12-01T12:00:00Z',venue:'Fixture public venue',capacity:12,seats_remaining:12,price_ladies:29000,price_gents:49000,event_language:'either',images:[]}]};
+function harness({denied=false,network=false,badSources=false,duplicate=false,photo403=false,answerFirst=false,photoSettings=null,photoFixture='none'}={}){
+ const tables={instagram_post_drafts:[{id,status:'needs_approval',revision:1,caption:'Original',cta:'Follow',images:[],carousel_slides:[],content_mode:'prelaunch'}],marketing_generation_jobs:[],marketing_ai_control:[{singleton:true,enabled:true,blocked_reason:null}],marketing_automation_settings:[{singleton:true,carousel_answer_first_enabled:answerFirst,...(photoSettings||{})}],marketing_uploaded_images:[],events:[{id:eventId,slug:'fixture',title:'Fixture event',title_ko:'테스트 모임',status:'live',deleted_at:null,marketing_enabled:true,starts_at:'2099-12-01T10:00:00Z',ends_at:'2099-12-01T12:00:00Z',venue:'Fixture public venue',capacity:12,seats_remaining:12,price_ladies:29000,price_gents:49000,event_language:'either',images:[]}]};
  const requests=[],stored=[];
  class Q{
   constructor(t){this.rows=tables[t]||[];this.pred=[];this.patch=null;this.n=Infinity;}
@@ -24,7 +24,26 @@ function harness({denied=false,network=false,badSources=false,duplicate=false,ph
  },storage:{from:bucket=>({upload:async(path,bytes)=>{stored.push({bucket,path,bytes});return {error:null};},download:async(path)=>({data:{arrayBuffer:async()=>Buffer.alloc(1600)},error:null}),remove:async()=>({data:[],error:null}),getPublicUrl:path=>({data:{publicUrl:'https://storage.example/'+path}})})}};
  const cache={};
  function load(file){if(cache[file])return cache[file];const context={exports:{},Buffer,URL,AbortSignal,Intl,Date,console,setTimeout,clearTimeout,process:{env:{OPENAI_API_KEY:'mock-only'}},require:name=>{
-  if(name==='./marketing-render-assets')return {loadEditorialAssets:async()=>({photo:null,photos:[],fonts:[]})};if(name==='server-only')return {};if(name==='./supabase/service')return {createServiceRoleClient:()=>db};
+  if(name==='./marketing-render-assets')return {loadEditorialAssets:async()=>({photo:null,photos:[],fonts:[]})};
+  if(photoSettings&&name==='./marketing-stock-photos'){
+   const policy=load('src/lib/marketing-stock-photo-policy.ts');
+   const current=()=>tables.instagram_post_drafts[0];
+   const slotsFor=d=>policy.requiredPhotoSlotsForRoles((d.carousel_slides||[]).map(s=>s.role),policy.savedPhotoSourcingPolicy(d.content_document?.photo_sourcing));
+   const rowsFor=d=>photoFixture==='none'?[]:slotsFor(d).map(slot=>({slot,asset_id:'photo-'+slot,provider:'pexels',
+    provider_photo_id:String(slot+1),source_url:'https://www.pexels.com/photo/test-'+slot+'/',
+    license_url:'https://www.pexels.com/license/',photographer:'Fixture Photographer',
+    review_status:photoFixture==='ready'?'approved':'pending',storage_path:photoFixture==='ready'?'stock/'+slot+'.jpg':null}));
+   return {
+    pexelsConfigured:()=>false,requiredStockSlots:slotsFor,
+    listStockSelections:async()=>rowsFor(current()),
+    prepareStockSelections:async(_db,d)=>rowsFor(d),
+    stockReady:(d,photos)=>policy.allSelectedPhotosApproved((d.carousel_slides||[]).map(s=>s.role),photos,policy.savedPhotoSourcingPolicy(d.content_document?.photo_sourcing)),
+    approvedStockCardAssets:async(_db,d)=>({photo:null,photos:[],reusePhotos:false,
+      cardPhotos:Object.fromEntries(rowsFor(d).map(x=>[x.slot,'data:image/jpeg;base64,'+Buffer.alloc(200).toString('base64')]))}),
+    photoSelectionSnapshot:rows=>rows.map(x=>({...x}))
+   };
+  }
+  if(name==='server-only')return {};if(name==='./supabase/service')return {createServiceRoleClient:()=>db};
   if(name==='react')return {createElement:(tag,props,...children)=>({tag,props,children})};
   if(name==='next/og')return {ImageResponse:class{constructor(tree){this.tree=tree;}arrayBuffer(){return Promise.resolve(Buffer.from(JSON.stringify(this.tree)));}}};
   if(name==='sharp')return bytes=>{const api={metadata:async()=>({width:1080,height:1350}),rotate:()=>api,resize:()=>api,jpeg:()=>api,toBuffer:async()=>Buffer.from(bytes)};return api;};
@@ -180,6 +199,43 @@ for(const language of ['ko','en'])for(const type of Object.keys(harness().policy
  const write=h.requests.find(x=>x.url.endsWith('chat/completions')).body;
  check(()=>assert.equal(write.response_format.json_schema.schema.properties.thumbnail_candidates.minItems,3));
  check(()=>assert.match(write.messages[0].content,/ANSWER-FIRST \(REQUIRED\)/));
+}
+{
+ const baseConfig={carousel_min_real_photos_5:3,carousel_min_real_photos_3:2,carousel_ai_thumbnail_enabled:false};
+ for(const status of ['none','pending','ready']){
+  const h=harness({answerFirst:true,photoSettings:baseConfig,photoFixture:status});
+  const r=await h.api.runGeneration(id,{...base,request_key:'manual:photo-first-'+status,visual_source:'auto_ai'},null);
+  check(()=>assert.equal(r.job.status,'completed',JSON.stringify(r.job)));
+  check(()=>assert.equal(r.draft.visual_source,'pexels','auto AI routes through actual Pexels assets'));
+  check(()=>assert.equal(r.draft.content_document.photo_sourcing.min_real_photos,3));
+  check(()=>assert.equal(r.draft.content_document.photo_sourcing.ai_thumbnail_enabled,false));
+  check(()=>assert.equal(r.draft.images.length,status==='ready'?5:0));
+  check(()=>assert.equal(r.job.stage,status==='ready'?'complete':'photo_review_required'));
+  check(()=>assert.equal(h.requests.some(x=>x.url.endsWith('images/generations')),false));
+ }
+ for(const status of ['pending','ready']){
+  const h=harness({answerFirst:true,photoSettings:{...baseConfig,carousel_ai_thumbnail_enabled:true},photoFixture:status});
+  const r=await h.api.runGeneration(id,{...base,request_key:'manual:photo-ai-cover-'+status,visual_source:'auto_ai'},null);
+  check(()=>assert.equal(r.job.status,'completed',JSON.stringify(r.job)));
+  check(()=>assert.equal(r.draft.content_document.photo_sourcing.ai_thumbnail_enabled,true));
+  check(()=>assert.equal(r.draft.images.length,status==='ready'?5:0));
+  check(()=>assert.equal(r.job.stage,status==='ready'?'complete':'photo_review_required'));
+  check(()=>assert.deepEqual(r.job.result_snapshot.stock_photo_selections.map(p=>p.slot),[1,2,3]));
+  const imageCalls=h.requests.filter(x=>x.url.endsWith('images/generations'));
+  check(()=>assert.equal(imageCalls.length,status==='ready'?1:0,'AI cover must NOT run before review'));
+  if(status==='ready')check(()=>assert.equal(imageCalls[0].body.n,1,'cover uses one image only'));
+ }
+ {
+  const h=harness({answerFirst:false,photoSettings:{...baseConfig,carousel_ai_thumbnail_enabled:true},photoFixture:'ready'});
+  const r=await h.api.runGeneration(id,{...base,request_key:'manual:photo-3card',
+    campaign_pattern:'poster',visual_source:'auto_ai'},null);
+  check(()=>assert.equal(r.job.status,'completed',JSON.stringify(r.job)));
+  check(()=>assert.equal(r.draft.carousel_slides.length,3));
+  check(()=>assert.equal(r.draft.content_document.photo_sourcing.min_real_photos,2));
+  check(()=>assert.equal(r.draft.content_document.photo_sourcing.ai_thumbnail_enabled,false));
+  check(()=>assert.deepEqual(r.job.result_snapshot.stock_photo_selections.map(p=>p.slot),[0,1]));
+  check(()=>assert.equal(h.requests.some(x=>x.url.endsWith('images/generations')),false));
+ }
 }
 const adminMarketingSource=fs.readFileSync(new URL('../src/components/admin-marketing.tsx',import.meta.url),'utf8');
 check(()=>assert.ok(adminMarketingSource.includes("...(basis==='growth_carousel'?{topic_type:topic}:{})")));
