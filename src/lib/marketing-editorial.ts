@@ -213,6 +213,19 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
 
  written.document=lockTrendGrounding(lockSeoulGrounding(lockVerifiedBook(lockMythGrounding(written.document))));
  let prepared=prepareContent(applyAnswerFirstDocument(written.document,answerFirst,plan),effectiveType,language,sources);
+ if(requestedType==='seoul_trend'&&effectiveType==='korea_life'&&fallbackReason){
+  // No cited source means no recent trend, event date, current ranking or price
+  // may be stated as a fact. Fail closed instead of paying for another repair.
+  const visible=[prepared.document?.caption,prepared.document?.caption_ko,prepared.document?.caption_en,
+   ...(Array.isArray(prepared.document?.slides)?prepared.document.slides.slice(0,-1).flatMap(
+    (slide:Row)=>[slide.title,slide.body,slide.highlight,slide.secondary_body]):[])
+  ].filter(Boolean).join(' ');
+  const temporalClaim=/(?:요즘|최근|지금).{0,6}(?:인기|화제|유행|핫|뜨는|급상승)|핫플|바이럴|(?:currently|now|just)\\s+(?:trending|viral|popular)|\\b(?:latest trend|most popular|just opened|sold out)\\b/i;
+  const specificClaim=/(?:20[2-9]\\d)[-.\\/]\\d{1,2}|\\b\\d{1,2}:\\d{2}\\b|\\d[\\d,]*\\s*(?:원|KRW)|(?:연구|조사)\\s*(?:결과|에 따르면)/i;
+  if(temporalClaim.test(visible)||specificClaim.test(visible))
+   throw new Error('UNVERIFIED_SEOUL_TREND_FALLBACK_CLAIM: 인용 근거 없이 최근 인기, 일정, 가격이나 조사 결과를 주장할 수 없습니다.');
+ }
+
  if(requestedType==='seoul_dating'&&effectiveType==='seoul_dating'&&prepared.report.status!=='passed'){
   const seoulIssues=classifyQualityIssues(prepared.report.issues);
   if(isSeoulVenueFailure(seoulIssues.critical)){
