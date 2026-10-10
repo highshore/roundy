@@ -1,4 +1,5 @@
 // Editorial-only Answer-First contract. Does not generate images or schedule publication.
+import {type CarouselPlan,withCarouselPlan,savedCarouselPlan} from './marketing-carousel-template';
 export type CopyRow=Record<string,any>;
 export const ANSWER_FIRST_VERSION=1;
 const clean=(v:unknown)=>typeof v==='string'?v.replace(/\r\n?/g,'\n').trim():'';
@@ -17,6 +18,31 @@ const FIVE_ROLE_CHOICES:Record<string,string[]>={
  korea_life:['cover','scenario','example','reflection','cta'],
  mini_quiz:['cover','question','options','reveal','cta'],
 };
+const THREE_ROLE_CHOICES:Record<string,string[]>={
+ book_insight:['cover','insight','cta'],trend_research:['cover','finding','cta'],
+ mbti:['cover','example','cta'],dating_archetype:['cover','example','cta'],
+ meme_remix:['cover','punchline','cta'],dating_myth:['cover','finding','cta'],
+ conversation_prompt:['cover','opener','cta'],seoul_dating:['cover','plan','cta'],
+ seoul_trend:['cover','practical','cta'],korea_life:['cover','example','cta'],
+ mini_quiz:['cover','reveal','cta']
+};
+export function threeEditorialRoles(type:string,legacy:readonly string[]):string[]{
+ if(type==='seoul_trend'&&legacy.includes('facts'))return ['cover','facts','cta'];
+ return THREE_ROLE_CHOICES[type]||[legacy[0],legacy.find(x=>x!=='cover'&&x!=='cta')||legacy[1],legacy[legacy.length-1]];
+}
+export function editorialRolesForCount(type:string,legacy:readonly string[],count:3|5){
+ return count===3?threeEditorialRoles(type,legacy):fiveEditorialRoles(type,legacy);
+}
+export function campaignRolesForCount(pattern:string,legacy:readonly string[],count:3|5){
+ if(count===5)return fiveCampaignRoles(pattern,legacy);
+ const middle=pattern==='problem_solution'?'solution':pattern==='how_it_works'?'step':pattern==='countdown'?'countdown':'benefit';
+ return ['hook',middle,'cta'];
+}
+export function eventRolesForCount(pattern:string,legacy:readonly string[],count:3|5){
+ if(count===5)return fiveEventRoles(pattern,legacy);
+ const middle=pattern==='event_poster'?'facts':pattern==='social_proof'?'participants':pattern==='offer'?'offer':pattern==='last_call'?'status':'step';
+ return ['hook',middle,'cta'];
+}
 export function fiveEditorialRoles(type:string,legacy:readonly string[]):string[]{
  if(type==='seoul_trend'&&legacy.includes('facts')){
   // Fact Pack: retain verified facts, program/experience and sourced practical guidance.
@@ -43,10 +69,10 @@ export function withAnswerFirstSchema(schema:CopyRow,language:string,enabled:boo
   type:'array',minItems:3,maxItems:3,items:{type:'string',minLength:6,maxLength:max}
  }},required:[...schema.required,'thumbnail_candidates']};
 }
-export function answerFirstPrompt(language:string){
+export function answerFirstPrompt(language:string,count:3|5=5){
  return [
   'ANSWER-FIRST (REQUIRED): Start with a practical answer, concrete takeaway, recommendation, or a defensible finding. NEVER open with a vague abstract question or a suspense hook.',
-  'Exactly FIVE slides, in order: 1 Result = the conclusion on the cover; 2 Context = situation and why it matters; 3 Detail = specific example/evidence; 4 Value = useful practice, limitations or next step; 5 CTA = concise recap and a subtle, truthful Roundy connection.',
+  count===3?'Exactly THREE slides: 1 Result = verified actionable conclusion; 2 Value/Detail = specific verified evidence, practical next step, critical limitations or context compressed without distorting claims; 3 CTA = subtle truthful Roundy reference.':'Exactly FIVE slides, in order: 1 Result = the conclusion on the cover; 2 Context = situation and why it matters; 3 Detail = specific example/evidence; 4 Value = useful practice, limitations or next step; 5 CTA = concise recap and a subtle, truthful Roundy connection.',
   'Keep the existing role names in the JSON schema: slide POSITION dictates Result / Context / Detail / Value / CTA. The role labels may differ for source verification, but the narrative must follow the five-part order.',
   'Return EXACTLY three different thumbnail_candidates. Each is a short, natural, factual, specific RESULT-FIRST headline in the primary post language. Candidate 1 MUST exactly equal slides[0].title. Never suggest an unrelated angle or a stronger claim than the verified body.',
   'Example: instead of "어디서 데이트할까?" use "성수 첫 데이트, 서울숲부터 시작하는 코스" ONLY if 서울숲 is actually verified in supplied facts/sources. This is a style example, NEVER a factual instruction to name 서울숲.',
@@ -63,9 +89,10 @@ export function answerFirstIssues(doc:CopyRow,language:string):string[]{
  const issues:string[]=[];
  const add=(x:string)=>{if(!issues.includes(x))issues.push(x);};
  const slides=Array.isArray(doc.slides)?doc.slides:[];
- if(slides.length!==5)add('Answer-First 카드뉴스는 Result, Context, Detail, Value, CTA 순서로 정확히 5장이 필요합니다.');
+ const count=savedCarouselPlan(doc)?.slide_count||5;
+ if(slides.length!==count)add('Answer-First 카드뉴스는 설정한 '+count+'장 구성이 필요합니다.');
  if(slides[0]?.role!=='cover'&&slides[0]?.role!=='hook')add('Answer-First 첫 장은 결론형 표지여야 합니다.');
- if(slides[4]?.role!=='cta')add('Answer-First 다섯 번째 장은 CTA여야 합니다.');
+ if(slides[count-1]?.role!=='cta')add('Answer-First 마지막 장은 CTA여야 합니다.');
  const choices=doc.thumbnail_candidates;
  if(!Array.isArray(choices)||choices.length<3)add('썸네일 문구 후보가 최소 3개 필요합니다.');
  else{
@@ -89,12 +116,12 @@ export function answerFirstIssues(doc:CopyRow,language:string):string[]{
   add('추상적인 광고 문구 대신 구체적인 정보와 실행 가능한 가치를 제공하세요.');
  return issues;
 }
-export function applyAnswerFirstDocument(raw:CopyRow,enabled:boolean){
- if(!enabled)return raw;
+export function applyAnswerFirstDocument(raw:CopyRow,enabled:boolean,plan:CarouselPlan|null=null){
+ if(!enabled)return withCarouselPlan(raw,plan);
  // The first AI headline must be one of the three separately reviewable candidates.
  const choices=Array.isArray(raw.thumbnail_candidates)?raw.thumbnail_candidates.map(clean):[];
  const slides=Array.isArray(raw.slides)?raw.slides:[];
- return {...raw,answer_first:true,answer_first_version:ANSWER_FIRST_VERSION,
+ return {...withCarouselPlan(raw,plan),answer_first:true,answer_first_version:ANSWER_FIRST_VERSION,
   thumbnail_candidates:choices,thumbnail_selected_index:0,thumbnail_render_pending:false,
   slides:slides.map((s:CopyRow,i:number)=>i===0&&choices[0]?{...s,title:choices[0]}:s)};
 }
