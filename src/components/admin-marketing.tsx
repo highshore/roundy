@@ -268,7 +268,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
     }
     await load(candidate.id);setActiveTab('draft');
     if(['pexels','stock'].includes(candidate.visual_source))await refreshStock(candidate.id);
-    setNotice(candidate.visual_['pexels','stock'].includes(source)
+    setNotice(['pexels','stock'].includes(candidate.visual_source)
      ?t('Copy saved. licensed photos remain under review until the minimum count is approved; no AI filler was created.','문구 저장 완료. 최소 실제 사진 개수 확보 및 승인 전까지 검수 대기하며 부족한 사진을 AI로 대체하지 않습니다.')
      :t('Copy, uploaded images, and final cards are ready in Drafts. No image AI was used.','문구 생성, 이미지 업로드, 카드 렌더링까지 완료했습니다. 이미지 AI는 사용하지 않았습니다.'));
    }else{
@@ -582,7 +582,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
        <button type="button" className="admin-primary" disabled={busy||!!running||dirty||stockReview?.ready!==true||!!draft.images?.length} onClick={()=>void work(renderStock)}>{draft.content_document?.photo_sourcing?.ai_thumbnail_enabled?t('Render approved photos + AI cover','승인 사진과 AI 썸네일 렌더링'):t('Render real photos (no image AI)','실제 사진 렌더링 (이미지 AI 없음)')}</button>
       </div>}
      </div>}
-     {draft.visual_source!['pexels','stock'].includes(String(draft.visual_source))&&draft.generation_source==='manual'&&draft.draft_role==='candidate'&&<div className="marketing-setup">
+     {!['pexels','stock'].includes(String(draft.visual_source))&&draft.generation_source==='manual'&&draft.draft_role==='candidate'&&<div className="marketing-setup">
      <strong>{t('Manual images','직접 이미지')}</strong>
      <p className="admin-help">{t('Upload 1–6 JPEG, PNG or WebP files (max 10 MB each). Photo source adds Roundy typography; completed card is used as-is. Uploaded rendering makes no image-AI request.','JPEG, PNG, WebP 이미지를 1–6장 업로드할 수 있습니다(장당 최대 10MB). 사진 소스는 Roundy 타이포를 합성하고, 완성 카드는 그대로 사용합니다. 업로드 렌더에서는 이미지 AI를 호출하지 않습니다.')}</p>
      <div className="admin-two"><label><span>{t('Upload type','업로드 유형')}</span><select value={uploadAssetType} onChange={e=>setUploadAssetType(e.target.value as 'photo'|'completed_card')}><option value="photo">{t('Photo source','사진 소스')}</option><option value="completed_card">{t('Completed 4:5 card','완성 4:5 카드')}</option></select></label><label><span>{t('Add images','이미지 추가')}</span><input type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={busy||!!running} onChange={e=>{const files=Array.from(e.target.files||[]);e.target.value='';void work(()=>uploadMarketingImages(files));}}/></label></div>

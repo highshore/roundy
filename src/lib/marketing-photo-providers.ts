@@ -165,7 +165,7 @@ async function searchOpenverse(query:string,topic:string):Promise<PhotoCandidate
  return pages.map((page:any)=>{
   const id=titleToId.get(String(page.title||'').replaceAll('_',' '));
   return id?parseCommons(page,topic,query,'openverse',id):null;
- }).filter(Boolean);
+ }).filter((p):p is PhotoCandidate=>p!==null);
 }
 export async function searchLicensedPhotos(provider:PhotoProvider,query:string,topic:string):Promise<SearchResult>{
  if(!providerConfigured(provider))return {provider,query,photos:[],skipped:'API_KEY_NOT_CONFIGURED'};

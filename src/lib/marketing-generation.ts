@@ -3,7 +3,7 @@ import {loadEditorialAssets} from './marketing-render-assets';
 import {photoCreditCaption,configuredPhotoSourcingPolicy,savedPhotoSourcingPolicy} from './marketing-stock-photo-policy';
 import {resolveCarouselPlan,savedCarouselPlan,type CarouselPlan} from './marketing-carousel-template';
 import {reviewMarketingDraft,mergePreflightQuality} from './marketing-preflight-service';
-import {approvedStockCardAssets,listStockSelections,photoSelectionSnapshot,prepareStockSelections,requiredStockSlots,stockReady} from './marketing-stock-photos';
+import {approvedStockCardAssets,listStockSelections,pexelsConfigured,photoSelectionSnapshot,prepareStockSelections,requiredStockSlots,stockReady} from './marketing-stock-photos';
 import {CONTENT_POLICY_VERSION} from './marketing-content-policy';
 import {selectTrendForAutomaticContent,markTrendUsed} from './marketing-trend-radar';
 import {growthLearningWeights} from './marketing-growth';
