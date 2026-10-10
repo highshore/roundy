@@ -455,7 +455,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
       <strong>{t('Pexels photo rights review','Pexels 사진 저작권 검수')}</strong>
       <p className="admin-help">{t('Review Pexels license, original source, photographer, depicted people and trademarks. Existing card typography overlays the approved photos.','Pexels 라이선스, 원본 출처, 사진가, 인물 및 상표를 검수하세요. 기존 카드 디자인에서 승인 사진 위에 텍스트를 오버레이합니다.')}</p>
       <p className="admin-help" role="status">{t('Approved real photos','승인된 실제 사진')} {stockReview?.approved??stockPhotos.filter((p:Row)=>p.review_status==='approved').length}/{stockReview?.minimum??draft.content_document?.photo_sourcing?.min_real_photos??3} — {stockReview?.ready?t('Ready for rendering','렌더링 준비 완료'):t('Awaiting human review or more photos','관리자 검수 또는 추가 사진 대기')}</p>
-      {stockReview?.configured===false&&<p className="admin-error" role="alert">{t('Pexels API is not configured. Already approved photos may be reused; no AI replacement is made.','Pexels API 키가 없어 신규 사진 검색은 불가능합니다. 기존 승인 사진만 재사용할 수 있으며 AI로 대체하지 않습니다.')}</p>
+      {stockReview?.configured===false&&<p className="admin-error" role="alert">{t('Pexels API is not configured. Already approved photos may be reused; no AI replacement is made.','Pexels API 키가 없어 신규 사진 검색은 불가능합니다. 기존 승인 사진만 재사용할 수 있으며 AI로 대체하지 않습니다.')}</p>}
       <div className="marketing-draft-inbox">{stockPhotos.length?stockPhotos.map((photo:Row)=><article className="marketing-draft-card" key={photo.asset_id}>
        <img src={photo.preview_url} alt={t('Pexels photo candidate','Pexels 사진 후보')}/>
        <div className="marketing-draft-copy">
