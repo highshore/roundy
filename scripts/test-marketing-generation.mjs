@@ -7,7 +7,7 @@ let checks=0;const check=(f)=>{f();checks++;};
 const id='4b9066d0-e01b-4cc4-92d1-469f56317a04';
 const eventId='11111111-1111-4111-8111-111111111111';
 const base={request_key:'manual:quality-test-001',revision:1,mode:'both',content_mode:'prelaunch',language:'en',visual_mode:'cards',instruction:''};
-function harness({denied=false,network=false,badSources=false,duplicate=false,photo403=false,answerFirst=false,photoSettings=null,photoFixture='none',templateSettings=null,slotNumber=1}={}){
+function harness({denied=false,network=false,badSources=false,duplicate=false,photo403=false,answerFirst=false,photoSettings=null,photoFixture='none',templateSettings=null,slotNumber=1,unsafeFallback=false}={}){
  const tables={instagram_post_drafts:[{id,status:'needs_approval',revision:1,caption:'Original',cta:'Follow',images:[],carousel_slides:[],content_mode:'prelaunch'}],marketing_generation_jobs:[],marketing_ai_control:[{singleton:true,enabled:true,blocked_reason:null}],marketing_automation_settings:[{singleton:true,carousel_answer_first_enabled:answerFirst,...(photoSettings||{}),...(templateSettings||{})}],marketing_uploaded_images:[],events:[{id:eventId,slug:'fixture',title:'Fixture event',title_ko:'테스트 모임',status:'live',deleted_at:null,marketing_enabled:true,starts_at:'2099-12-01T10:00:00Z',ends_at:'2099-12-01T12:00:00Z',venue:'Fixture public venue',capacity:12,seats_remaining:12,price_ladies:29000,price_gents:49000,event_language:'either',images:[]}]};
  const requests=[],stored=[];
  class Q{
@@ -141,6 +141,9 @@ function harness({denied=false,network=false,badSources=false,duplicate=false,ph
     value.secondary_body=ko?'First question: Where did you enjoy going? Follow-up: What stood out?':'첫 질문: 최근 기억에 남는 곳은 어디예요? 후속 질문: 어떤 점이 좋았어요?';
    }
   }
+  if(unsafeFallback&&data.editorial_type==='korea_life'){
+   c.slides[0].body='요즘 인기 급상승 서울 카페의 예약 시간은 19:30입니다.';
+  }
   if(data.editorial_type==='dating_myth'&&data.myth_candidate==='backup'){
    const ko=data.language==='ko';c.myth={claim:ko?'침묵이 생기면 첫 데이트가 망한 것이다':'Silence means a first date is going badly',myth_key:'silence_means_failure',verdict:'not_well_supported',selection_reason:ko?'첫 후보와 다른 주제이며 대화 맥락 연구로 검토할 수 있습니다.':'A distinct backup belief with relevant conversation evidence.'};
    const card=c.slides.find(s=>s.role==='myth');if(card){card.title=ko?'침묵이 생기면 실패일까?':'Does silence mean failure?';card.body=c.myth.claim;}
@@ -187,6 +190,15 @@ for(const language of ['en','ko'])for(const type of Object.keys(harness().policy
  check(()=>assert.equal(JSON.parse(write.messages[1].content).editorial_type,'korea_life'));
  check(()=>assert.deepEqual(JSON.parse(write.messages[1].content).evidence,[]));
  check(()=>assert.equal(r.draft.quality_report.status,'passed'));
+}
+{const h=harness({badSources:true,unsafeFallback:true});const r=await h.api.runGeneration(id,{
+ ...base,request_key:'manual:unsafe-seoul-trend-fallback',content_mode:'growth_carousel',topic_type:'seoul_trend'
+},null);
+ check(()=>assert.equal(r.job.status,'failed','Unsourced trending claim must not be imported'));
+ check(()=>assert.match(String(r.job.error_message||''),/UNVERIFIED_SEOUL_TREND_FALLBACK_CLAIM/));
+ check(()=>assert.equal(h.requests.filter(x=>x.url.endsWith('/responses')).length,1));
+ check(()=>assert.equal(h.requests.filter(x=>x.url.endsWith('chat/completions')).length,1));
+ check(()=>assert.equal(r.draft.caption,'Original','Unsafe copy must not overwrite saved draft'));
 }
 {const h=harness({badSources:true});const r=await h.api.runGeneration(id,{...base,request_key:'manual:trend-fallback',content_mode:'growth_carousel',topic_type:'trend_research'},null);check(()=>assert.equal(r.job.status,'completed',JSON.stringify(r)));check(()=>assert.equal(r.draft.growth_topic_type,'conversation_prompt'));check(()=>assert.match(r.draft.generation_reason,/safe fallback/));}
 {const h=harness();h.tables.marketing_generation_jobs.push({id:'hist-trend-1',draft_id:'old',request_key:'hist',status:'completed',created_at:new Date().toISOString(),reserved_usd:.05,operation:'research',result_snapshot:{growth_topic_type:'trend_research',content_document:{study:{title:'Attentive Conversation Study',topic_key:'questions_liking'}},saved_at:new Date().toISOString()}});const r=await h.api.runGeneration(id,{...base,request_key:'manual:trend-history',content_mode:'growth_carousel',topic_type:'trend_research'},null);check(()=>assert.equal(r.job.status,'completed',JSON.stringify(r)));check(()=>assert.equal(r.draft.growth_topic_type,'conversation_prompt'));check(()=>assert.match(r.job.result_snapshot.generation_recovery.fallback_reason,/same_study_within_180d|similar_topic_within_60d/));}
