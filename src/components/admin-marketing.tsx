@@ -8,6 +8,7 @@ import { OrderedImages } from './ordered-images';
 import {AdminMarketingGrowth} from './admin-marketing-growth';
 import {AdminMarketingReels} from './admin-marketing-reels';
 import {CONTENT_PROFILES,postType} from '@/lib/marketing-content-policy';
+import {EDITORIAL_SETTINGS_DEFAULTS} from '@/lib/marketing-editorial-settings';
 import {factPackReady,groupTrendsByUsage} from '@/lib/marketing-trend-guide';
 type Row=Record<string,any>;
 type PendingMarketingImage={id:string;file:File;preview:string;asset_type:'photo'|'completed_card';width:number;height:number};
@@ -527,6 +528,49 @@ export function AdminMarketing({locale}:{locale:Locale}){
     </div>
     <label className="check-row"><input type="checkbox" checked={settings.optimization_enabled} onChange={e=>setSettings({...settings,optimization_enabled:e.target.checked})}/>{t('Optimize posting time','게시 시간 최적화')}</label><label>{t('Fallback posting time KST','기본 게시 시간 KST')}<input type="time" value={settings.daily_time_kst.slice(0,5)} onChange={e=>setSettings({...settings,daily_time_kst:e.target.value})}/></label><label className="check-row"><input type="checkbox" checked={settings.auto_reply_enabled} onChange={e=>setSettings({...settings,auto_reply_enabled:e.target.checked})}/>{t('Existing comments/DM auto-replies','기존 댓글 및 DM 자동 응답')}</label><button disabled={busy} className="admin-primary">{t('Save automation','자동화 저장')}</button>
    </form></div>}
+   {settings&&<div className="marketing-settings-card">
+    <div className="admin-section-title"><div>
+     <p className="admin-kicker">{t('Next phase','다음 단계 준비')}</p>
+     <Heading level={2}>{t('Feed & carousel preferences','Feed 및 카드뉴스 설정')}</Heading>
+     <p>{t('Settings only — these values do not yet affect generation, rendering, scheduling or publishing.','설정 저장 전용입니다. 이번 단계에서는 콘텐츠 생성, 렌더링, 예약 또는 발행 방식에 반영되지 않습니다.')}</p>
+    </div></div>
+    <form className="admin-form" onSubmit={e=>{e.preventDefault();void work(async()=>{
+     const editorial=Object.fromEntries(Object.keys(EDITORIAL_SETTINGS_DEFAULTS).map(key=>[key,settings[key]??EDITORIAL_SETTINGS_DEFAULTS[key as keyof typeof EDITORIAL_SETTINGS_DEFAULTS]]));
+     await mutate('/settings',editorial,'PATCH');
+     await load(draft?.id);
+     setNotice(t('Feed and carousel preferences saved.','Feed 및 카드뉴스 설정을 저장했습니다.'));
+    });}}>
+     <div className="admin-two">
+      <label><span>{t('Maximum automatic Feed posts / day','Feed 일일 자동 발행 최대 횟수')}</span>
+       <input type="number" min={1} max={10} step={1} value={settings.feed_daily_max_posts??EDITORIAL_SETTINGS_DEFAULTS.feed_daily_max_posts} onChange={e=>setSettings({...settings,feed_daily_max_posts:Number(e.target.value)})}/></label>
+      <label><span>{t('Carousel mode','카드뉴스 모드')}</span>
+       <select value={settings.carousel_mode??EDITORIAL_SETTINGS_DEFAULTS.carousel_mode} onChange={e=>setSettings({...settings,carousel_mode:e.target.value})}>
+        <option value="fixed">Fixed</option><option value="alternating">Alternating</option>
+       </select></label>
+     </div>
+     <p className="admin-help">{t('The daily limit will apply to automatic Feed publishing only in a future phase; extra manual publications remain allowed.','일일 횟수 제한은 향후 자동 Feed 발행에만 적용할 예정이며, 수동 추가 발행은 계속 허용합니다.')}</p>
+     <div className="admin-two">
+      <label><span>{t('Default carousel slides','기본 카드뉴스 장수')}</span>
+       <select value={settings.carousel_default_slides??EDITORIAL_SETTINGS_DEFAULTS.carousel_default_slides} onChange={e=>setSettings({...settings,carousel_default_slides:Number(e.target.value)})}>
+        <option value={5}>{t('5 slides','5장')}</option><option value={3}>{t('3 slides','3장')}</option>
+       </select></label>
+      <label><span>{t('Minimum real photos in 5 slides','5장 중 실제 사진 최소 개수')}</span>
+       <input type="number" min={0} max={5} step={1} value={settings.carousel_min_real_photos_5??EDITORIAL_SETTINGS_DEFAULTS.carousel_min_real_photos_5} onChange={e=>setSettings({...settings,carousel_min_real_photos_5:Number(e.target.value)})}/></label>
+     </div>
+     <label><span>{t('Minimum real photos in 3 slides','3장 중 실제 사진 최소 개수')}</span>
+      <input type="number" min={0} max={3} step={1} value={settings.carousel_min_real_photos_3??EDITORIAL_SETTINGS_DEFAULTS.carousel_min_real_photos_3} onChange={e=>setSettings({...settings,carousel_min_real_photos_3:Number(e.target.value)})}/></label>
+     <label className="check-row"><input type="checkbox" checked={settings.carousel_ai_thumbnail_enabled??EDITORIAL_SETTINGS_DEFAULTS.carousel_ai_thumbnail_enabled} onChange={e=>setSettings({...settings,carousel_ai_thumbnail_enabled:e.target.checked})}/>{t('AI-generated thumbnail','AI 썸네일 활성화')}</label>
+     <label className="check-row"><input type="checkbox" checked={settings.carousel_answer_first_enabled??EDITORIAL_SETTINGS_DEFAULTS.carousel_answer_first_enabled} onChange={e=>setSettings({...settings,carousel_answer_first_enabled:e.target.checked})}/>{t('Answer-First copywriting','Answer-First 카피라이팅 활성화')}</label>
+     <label className="check-row"><input type="checkbox" checked={settings.story_preview_auto_enabled??EDITORIAL_SETTINGS_DEFAULTS.story_preview_auto_enabled} onChange={e=>setSettings({...settings,story_preview_auto_enabled:e.target.checked})}/>{t('Automatically generate Story previews','Story 미리보기 자동 생성')}</label>
+     <div className="admin-two">
+      <label><span>{t('Carousel title font (px)','카드뉴스 제목 폰트 크기 (px)')}</span>
+       <input type="number" min={24} max={160} step={1} value={settings.carousel_title_font_size_px??EDITORIAL_SETTINGS_DEFAULTS.carousel_title_font_size_px} onChange={e=>setSettings({...settings,carousel_title_font_size_px:Number(e.target.value)})}/></label>
+      <label><span>{t('Carousel body font (px)','카드뉴스 본문 폰트 크기 (px)')}</span>
+       <input type="number" min={16} max={80} step={1} value={settings.carousel_body_font_size_px??EDITORIAL_SETTINGS_DEFAULTS.carousel_body_font_size_px} onChange={e=>setSettings({...settings,carousel_body_font_size_px:Number(e.target.value)})}/></label>
+     </div>
+     <button className="admin-primary" disabled={busy}>{t('Save Feed & carousel preferences','Feed 및 카드뉴스 설정 저장')}</button>
+    </form>
+   </div>}
   </section>}
   {channel==='instagram'&&activeTab==='connection'&&<section className="marketing-tab-panel">
    <div className="marketing-settings-card"><div className="admin-section-title"><div><p className="admin-kicker">Instagram</p><Heading level={2}>{t('Connection and webhook','연결 및 Webhook')}</Heading></div></div><p>{data.connection?.instagram?t('Publisher configured','게시 계정 설정됨'):t('Publisher needs setup','게시 계정 연결 확인 필요')}</p><p>{t('Comment/DM webhook verification','댓글 및 DM Webhook 인증')}: {data.webhook?.verified_at||t('Not verified','미인증')}</p>{!data.webhook?.verified_at&&<><label>Callback URL<input readOnly value={data.webhook?.callback_url||''}/></label><label>Verify token<input readOnly value={data.webhook?.verify_token||''}/></label></>}</div>
