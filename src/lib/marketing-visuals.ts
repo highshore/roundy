@@ -2,6 +2,7 @@ import {createElement as h} from 'react';
 import {ImageResponse} from 'next/og';
 import {readTrendFactPack,selectGuideFacts,factLabel} from './marketing-trend-guide';
 import {ROUNDY_IDENTITY as BRAND, EDITORIAL_PRESET, CAMPAIGN_PRESET, EVENT_CAMPAIGN_PRESET, type PresentationRow as Row} from './marketing-presentation';
+import {savedCarouselPlan,mobileCarouselFit,carouselNarrative,CAROUSEL_CANVAS} from './marketing-carousel-template';
 
 export type EditorialAssets = {
  photo?: string|null;
@@ -228,9 +229,43 @@ function outro(_index:number,_total:number,document:Row){
  );
 }
 
+// Unified new-generation cards; older documents use their original branded templates.
+export function standardCarouselTree(slide:Row,index:number,total:number,document:Row,assets:EditorialAssets={}){
+ const plan=savedCarouselPlan(document);
+ if(!plan||plan.slide_count!==total||index<0||index>=total)throw new Error('CAROUSEL_TEMPLATE_LAYOUT_MISMATCH');
+ const language=document.content_language==='en'?'en':'ko',fit=mobileCarouselFit(slide,plan,index,language);
+ const cover=index===0,cta=index===total-1,src=cta?null:selectedPhoto(assets,index,cover);
+ const dark=!!src||cover||cta,fg=dark?BRAND.paper:BRAND.ink;
+ const typeface=language==='ko'?(assets.fonts?.length?'Noto Sans KR, sans-serif':'sans-serif')
+   :(assets.fonts?.length?'DM Sans, sans-serif':'sans-serif');
+ const lines=(items:string[],size:number,color:string,weight:number,lh:number)=>
+  box({width:'100%',flexDirection:'column',alignItems:'flex-start',gap:2},
+   ...items.map(line=>text(line||' ',size,{whiteSpace:'nowrap',fontWeight:weight,lineHeight:lh,color,letterSpacing:weight>=700?-1:0})));
+ return box({position:'relative',width:CAROUSEL_CANVAS.width,height:CAROUSEL_CANVAS.height,
+  background:dark?BRAND.ink:BRAND.paper,color:fg,overflow:'hidden',fontFamily:typeface},
+  src?photo(src):null,
+  // Opaque photographic scrim prevents bright imagery from reducing text contrast.
+  src?box({position:'absolute',inset:0,background:'rgba(13,18,15,.80)'}):null,
+  box({position:'absolute',left:80,right:80,top:66,alignItems:'center',justifyContent:'space-between'},
+   officialRoundyLogo(dark,48),
+   text(String(index+1).padStart(2,'0')+' / '+String(total).padStart(2,'0'),23,
+    {fontWeight:700,color:dark?'#ffffff':'#454740',letterSpacing:2})),
+  box({position:'absolute',left:80,right:80,top:cover?320:cta?345:280,bottom:cover?145:cta?174:140,
+   flexDirection:'column',justifyContent:'center',alignItems:'flex-start',gap:22},
+   text(carouselNarrative(total)[index]||'ROUNDY',23,{fontWeight:900,color:dark?'#ffffff':BRAND.accent,letterSpacing:2.6}),
+   lines(fit.title.lines,fit.title.fontSize,fg,900,1.14),
+   box({height:5,width:74,background:BRAND.accent,marginTop:10,marginBottom:8}),
+   lines(fit.body.lines,fit.body.fontSize,dark?'#ffffff':'#30352f',500,1.32),
+   fit.highlight.lines.length?lines(fit.highlight.lines,fit.highlight.fontSize,dark?'#ffe0d8':BRAND.accent,700,1.26):null,
+   cta?box({flexDirection:'column',gap:12,marginTop:20},text(BRAND.instagram,30,{fontWeight:700,color:fg}),
+    text(BRAND.website,28,{fontWeight:700,color:fg})):null),
+  !cta&&slide.source_label?box({position:'absolute',left:80,bottom:64,right:80},
+   text(language==='en'?'Sources in caption':'출처는 본문에서 확인',22,{fontWeight:600,color:dark?'#ffffff':'#555b53'})):null
+ );
+}
 export function compactEditorialTree(slide:Row,index:number,total:number,document:Row,assets:EditorialAssets={}){
  const language=document.content_language==='en'?'en':'ko';
- const tree=slide.role==='cover'?cover(slide,index,total,assets,document):slide.role==='cta'?outro(index,total,document):slide.role==='facts'&&document.trend_fact_pack?trendFactSheet(slide,document):content(slide,index,total,document,assets);
+ const tree=savedCarouselPlan(document)?standardCarouselTree(slide,index,total,document,assets):slide.role==='cover'?cover(slide,index,total,assets,document):slide.role==='cta'?outro(index,total,document):slide.role==='facts'&&document.trend_fact_pack?trendFactSheet(slide,document):content(slide,index,total,document,assets);
  return box({
   width:1080,
   height:1350,
@@ -307,6 +342,7 @@ function campaignOutro(slide:Row,index:number,document:Row,assets:EditorialAsset
  );
 }
 export function prelaunchCampaignTree(slide:Row,index:number,total:number,document:Row,assets:EditorialAssets={}){
+ if(savedCarouselPlan(document))return standardCarouselTree(slide,index,total,document,assets);
  const language=document.content_language==='en'?'en':'ko',pattern=String(document.campaign_pattern||'poster');
  let tree;
  if(slide.role==='cta'||index===total-1)tree=campaignOutro(slide,index,document,assets);
@@ -378,6 +414,7 @@ function eventOutro(slide:Row,index:number,document:Row,assets:EditorialAssets){
  );
 }
 export function liveEventCampaignTree(slide:Row,index:number,total:number,document:Row,assets:EditorialAssets={}){
+ if(savedCarouselPlan(document))return standardCarouselTree(slide,index,total,document,assets);
  const language=document.content_language==='en'?'en':'ko',pattern=String(document.event_campaign_pattern||'event_poster');
  let tree;
  if(slide.role==='cta'||index===total-1)tree=eventOutro(slide,index,document,assets);
