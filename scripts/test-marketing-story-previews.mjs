@@ -91,7 +91,7 @@ const context={exports:module.exports,module,process:{env:{NEXT_PUBLIC_SUPABASE_
 vm.runInNewContext(transpiled,context);
 const generator=module.exports;
 const first=await generator.generateTomorrowStoryPreviews();
-assert.equal(first.checked_feeds,1);
+assert.equal(first.checked_feeds,1,JSON.stringify({first,run,draft,today,day}));
 assert.equal(first.created,1,JSON.stringify(first));
 assert.equal(tables.marketing_story_previews.length,1);
 assert.equal(tables.marketing_story_previews[0].status,'generated');
