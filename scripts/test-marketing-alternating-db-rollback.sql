@@ -55,7 +55,7 @@ begin
    select public.reserve_marketing_carousel_slot(d) into seq;
    if seq<>i then raise exception 'PROVISIONAL_SEQUENCE_INVALID % != %',seq,i;end if;
    for j in 0..count_cards-2 loop
-    if j>=case when count_cards=3 then 2 else 3 end then exit; end if;
+    if j >= (case when count_cards=3 then 2 else 3 end) then exit; end if;
     insert into public.marketing_photo_assets(provider,provider_photo_id,source_url,
      image_url,preview_url,photographer,photographer_url,width,height,topic_key,
      license_name,license_url,license_checked_at,review_status,reviewed_by,reviewed_at,
