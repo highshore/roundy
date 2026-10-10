@@ -136,7 +136,7 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
      ok(await db.from('marketing_generation_jobs').update({quality_report:report,result_snapshot:{draft_id:draft.id,content_language:language,growth_topic_type:requestedType,quality_report:report,research_notes:notes,research_sources:sources,images:[],carousel_slides:[],caption:''}}).eq('id',job.id));
      throw new Error(report.issues[0]);
     }
-    effectiveType=fallback;sources=[];fallbackReason='research_unavailable:'+requestedType+'->'+fallback;
+    effectiveType=fallback;sources=[];notes='';fallbackReason='research_unavailable:'+requestedType+'->'+fallback;
     ok(await db.from('marketing_generation_jobs').update({stage:'writing_fallback'}).eq('id',job.id));
    }
   }
