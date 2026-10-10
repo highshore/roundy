@@ -64,7 +64,7 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
   const d=checked(await service.from('instagram_post_drafts').select('*').eq('id',draftId).maybeSingle());
   if(!d)return json({error:'DRAFT_NOT_FOUND'},404);
   const preflight=await reviewMarketingDraft(service,d);
-  return json({preflight,quality_report:mergePreflightQuality(draftQuality(d),preflight),revision:d.revision});
+  return json({draft_id:d.id,preflight,quality_report:mergePreflightQuality(draftQuality(d),preflight),revision:d.revision});
  }
  if(id==='reels')return reelsApi(req,db,path.slice(1));
  if(id==='quality'&&path[1]==='recheck'&&path.length===2&&req.method==='POST'){
