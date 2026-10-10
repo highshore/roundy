@@ -62,7 +62,7 @@ async function drawStory(db:DB,sourceCoverUrl:string,title:string,language:strin
  const description=language==='ko'?'전체 이야기는 내일 Feed에서 확인하세요.':'Find the full story in tomorrow’s Feed.';
  const assets=await loadEditorialAssets();
  const font=language==='ko'?'Noto Sans KR':'DM Sans';
- const t=(value:string,size:number,weight=700,color=ROUNDY_IDENTITY.paper)=>h('div',{
+ const t=(value:string,size:number,weight=700,color:string=ROUNDY_IDENTITY.paper)=>h('div',{
   style:{display:'flex',color,fontFamily:font,fontSize:size,fontWeight:weight,lineHeight:1.2,
    whiteSpace:'pre-wrap',wordBreak:'keep-all'}},value);
  const tree=h('div',{style:{width:1080,height:1920,display:'flex',position:'relative',
