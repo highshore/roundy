@@ -99,7 +99,7 @@ export function compactContentSchema(schema: PresentationRow, language: string) 
 }
 export function compactWritingInstructions(language: string) {
   return [
-    'APPROVED VISUAL PRESET: '+EDITORIAL_PRESET+'. Bold Gothic/sans-serif type, coral #ff6666, a photo-led hook, uncluttered content, and a fixed Roundy introduction outro. No sidebar, UI screenshot, fake logo, or decorative chart.',
+    'APPROVED VISUAL PRESET: '+EDITORIAL_PRESET+'. Warm ivory #fffefa background, charcoal #20211f headlines, coral #ff6666 emphasis, genuine bright photos in a separate rounded photo panel, concise answer-first copy, and a minimal Roundy CTA. No full-bleed dark photo scrim, white typography over photography, decorative page counters, sidebar, fake logo, UI screenshot, or chart.',
     'Roundy is a Seoul-based Rotation Dating service for Korean and international adults. Korean-Korean meetings are also part of the service. In Korean, always call the format 로테이션 소개팅. In English, call it Rotation Dating. Never label the service 1:1 Mingle. Do not describe the whole service as English-only or as a language class/exchange. Do not invent a particular event language.',
     'Write compact, complete sentences on the FIRST writing call. There is no automatic paid compression/rewrite call. Do not fill the available maximum length. One card = one useful point, one short example, and at most one takeaway.',
     'COVER: aim for a short headline (Korean 8-22 characters / English 3-9 words), plus ONE short subtitle that can fit on a single line. Aim for 2-3 striking title lines. No hashtags or source bibliography in the title. Put nuance in the caption rather than repeating the hook.',
