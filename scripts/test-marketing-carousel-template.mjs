@@ -56,7 +56,7 @@ assert.equal(mobileCarouselFit(samples[1],three,1,'ko').body.fontSize,42,
  '36px body baseline must render larger in the standardized template');
 const visuals=read('src/lib/marketing-visuals.ts');
 assert.match(visuals,/standardCarouselTree\(/);
-assert.match(visuals,/rgba\(13,18,15,\.80\)/);
+assert.match(visuals,/backgroundColor:'rgba\\(13,18,15,\\.83\\)'/);
 assert.match(visuals,/left:80,right:80/);
 assert.match(visuals,/fontWeight:900/);
 assert.match(visuals,/savedCarouselPlan\(document\)\?standardCarouselTree/);
