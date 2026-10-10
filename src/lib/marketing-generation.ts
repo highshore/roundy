@@ -2,6 +2,7 @@ import {prepareSavedCtaRecovery,SAVED_CTA_RECOVERY_VERSION} from './marketing-ou
 import {loadEditorialAssets} from './marketing-render-assets';
 import {photoCreditCaption,configuredPhotoSourcingPolicy,savedPhotoSourcingPolicy} from './marketing-stock-photo-policy';
 import {resolveCarouselPlan,savedCarouselPlan,type CarouselPlan} from './marketing-carousel-template';
+import {reviewMarketingDraft,mergePreflightQuality} from './marketing-preflight-service';
 import {approvedStockCardAssets,listStockSelections,pexelsConfigured,photoSelectionSnapshot,prepareStockSelections,requiredStockSlots,stockReady} from './marketing-stock-photos';
 import {CONTENT_POLICY_VERSION} from './marketing-content-policy';
 import {selectTrendForAutomaticContent,markTrendUsed} from './marketing-trend-radar';
@@ -450,8 +451,14 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
   }
   const coverStillPending=draft.content_document?.thumbnail_render_pending===true;
   const reviewDraft=coverStillPending?{...draft,content_document:{...draft.content_document,thumbnail_render_pending:false}}:draft;
-  const quality=contentQuality||qualityForDraft(reviewDraft);
-  if(quality.status!=='passed')throw new Error('품질 검토 필요: '+quality.issues.join(' '));
+  const copyQuality=contentQuality||qualityForDraft(reviewDraft);
+  if(copyQuality.status!=='passed')throw new Error('품질 검토 필요: '+copyQuality.issues.join(' '));
+  // Every newly rendered or regenerated template runs the same seven checks.
+  // Preflight failure does not charge for another AI call or discard completed copy;
+  // it persists a blocked review status, and approval always re-checks live records.
+  const preflight=draft.content_document?.carousel_template
+   ?await reviewMarketingDraft(db,draft):null;
+  const quality=preflight?mergePreflightQuality(copyQuality,preflight,false):copyQuality;
   // A cover selection that still needs a new image must retain the invalidated
   // quality gate. Do not accidentally re-approve a stale cover during review.
   if(!(photoReviewRequired&&coverStillPending))
