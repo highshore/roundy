@@ -49,6 +49,7 @@ class Query{
  order(){return this;}limit(n){this.max=n;return this;}
  update(p){this.patch=p;return this;}
  async single(){const r=await this.exec();return {data:r.data?.[0]||null,error:null};}
+  async maybeSingle(){return this.single();}
  upsert(input,{ignoreDuplicates}={}){this.newRow=input;this.ignoreDuplicates=ignoreDuplicates;return this;}
  then(resolve,reject){return this.exec().then(resolve,reject);}
  async exec(){
