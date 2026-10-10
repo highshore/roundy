@@ -14,6 +14,7 @@ import { generationOverview, kstDate, runGeneration, validateGenerationInput } f
 import {runTrendRadar,trendOverview} from './marketing-trend-radar';
 import {growthOverview} from './marketing-growth';
 import {reelsApi} from './marketing-reels';
+import {marketingStoryApi} from './marketing-stories';
 import {CAMPAIGN_VERSION} from './marketing-campaign';
 import {EVENT_CAMPAIGN_VERSION} from './marketing-event-campaign';
 type Client=Awaited<ReturnType<typeof createClient>>;
@@ -67,6 +68,7 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
   return json({draft_id:d.id,preflight,quality_report:mergePreflightQuality(draftQuality(d),preflight),revision:d.revision});
  }
  if(id==='reels')return reelsApi(req,db,path.slice(1));
+ if(id==='stories')return marketingStoryApi(req,db,path.slice(1));
  if(id==='runs'&&path.length===3&&uuid(path[1])&&path[2]==='attempts'&&req.method==='GET'){
   const run=checked(await service.from('marketing_runs').select('id,channel,status,snapshot,scheduled_for,message').eq('id',path[1]).maybeSingle());
   if(!run||run.channel!=='instagram'||run.snapshot?.media_kind==='reel')return json({error:'FEED_RUN_NOT_FOUND'},404);
