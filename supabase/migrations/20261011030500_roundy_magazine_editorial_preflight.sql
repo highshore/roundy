@@ -55,7 +55,7 @@ begin
   or (
     case when d.content_document->>'design_preset'='roundy_magazine_editorial_v2' then
       d.carousel_slides->(expected_count-1)->>'role' is distinct from 'editorial_closing'
-      or d.carousel_slides->(expected_count-1)->>'closing_type' not in ('summary','insight','brand_outro')
+      or not coalesce((d.carousel_slides->(expected_count-1)->>'closing_type') in ('summary','insight','brand_outro'),false)
       or coalesce(d.cta,'') <> ''
       or not (pf->'checks' @> '[{"id":"editorial_closing","passed":true}]'::jsonb)
       or (pf->'checks' @> '[{"id":"final_cta"}]'::jsonb)
