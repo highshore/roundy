@@ -76,15 +76,17 @@ export function hasObsoletePositioning(text: string) {
 }
 
 // Extend the existing research/role schema rather than replacing its provenance fields.
-export function compactContentSchema(schema: PresentationRow, language: string) {
+export function compactContentSchema(schema: PresentationRow, language: string, magazine = false) {
   const text = (maxLength: number) => ({type:'string', maxLength});
   const ko = language !== 'en';
   const {cta: _legacyCta, ...editorialProperties} = schema.properties;
+  const baseProperties = magazine?editorialProperties:schema.properties;
   return {
     ...schema,
     properties: {
-      ...editorialProperties,
-      design_preset: {type:'string', enum:[MAGAZINE_EDITORIAL_PRESET]},
+      ...baseProperties,
+      design_preset: {type:'string', enum:[magazine?MAGAZINE_EDITORIAL_PRESET:EDITORIAL_PRESET]},
+      ...(!magazine?{cta:{type:'string',enum:[generatedCta(language)],minLength:1,maxLength:MAX_MARKETING_CTA_LENGTH}}:{}),
       caption:text(ko?400:520),
       caption_ko: text(400), caption_en: text(520), tagline: text(64),
       hashtags: {type:'array', maxItems:8, items:text(40)},
@@ -93,15 +95,21 @@ export function compactContentSchema(schema: PresentationRow, language: string) 
         properties: {...schema.properties.slides.items.properties,
           title:text(ko ? 34 : 64), body:text(ko ? 120 : 170),
           secondary_body:text(ko ? 130 : 100), highlight:text(ko ? 34 : 76),
-          eyebrow:text(24), closing_type:{type:'string',enum:['none','summary','insight','brand_outro']},
+          eyebrow:text(24), ...(magazine?{closing_type:{type:'string',enum:['none','summary','insight','brand_outro']}}:{}),
         },
-        required:[...schema.properties.slides.items.required, 'secondary_body', 'closing_type'],
+        required:[...schema.properties.slides.items.required, 'secondary_body', ...(magazine?['closing_type']:[])],
       }},
     },
-    required:[...schema.required.filter((field:string)=>field!=='cta'), 'design_preset', 'caption_ko', 'caption_en', 'tagline', 'hashtags'],
+    required:[...(magazine?schema.required.filter((field:string)=>field!=='cta'):schema.required), 'design_preset', 'caption_ko', 'caption_en', 'tagline', 'hashtags'],
   };
 }
-export function compactWritingInstructions(language: string) {
+export function compactWritingInstructions(language: string, magazine = false) {
+  if(!magazine)return [
+   'EDITORIAL PRESET '+EDITORIAL_PRESET+'. Maintain the existing compact Roundy document contract for historical jobs.',
+   'Write concise authentic copy with primary-language slides and faithful secondary translations. The server will attach brand contact/footer details.',
+   'For the old schema top-level cta is exactly '+JSON.stringify(generatedCta(language))+'; final card role is cta.',
+   'Write caption_ko and caption_en as clean 2-4 paragraph cores without URLs, hashtags, source list or CTA.',
+  ].join('\n');
   return [
     'APPROVED VISUAL PRESET: '+MAGAZINE_EDITORIAL_PRESET+'. A premium, bright Seoul lifestyle MAGAZINE, not an advertisement. Warm ivory #fffefa, charcoal #20211f headlines, coral #ff6666 emphasized words, genuine light photographs in a distinct panel, generous white space and clear magazine hierarchy. NO button, fake link, forced brand pitch, full-bleed dark photograph, scrim, page counter, sticker, sidebar, or sales footer.',
     'Roundy is a Seoul-based Rotation Dating service for Korean and international adults. Korean-Korean meetings are also part of the service. In Korean, always call the format 로테이션 소개팅. In English, call it Rotation Dating. Never label the service 1:1 Mingle. Do not describe the whole service as English-only or as a language class/exchange. Do not invent a particular event language.',
