@@ -347,6 +347,9 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
  }
  // A template's size is frozen at the initial content reservation, including retries.
  input.carousel_plan=plan;
+ // Every newly generated feed editorial story is answer-first; legacy image-only
+ // regenerations retain their saved document and campaign/Story code is unchanged.
+ if(input.mode!=='image'&&input.content_mode==='growth_carousel'&&plan)input.answer_first_enabled=true;
  const existingPhotoPolicy=savedPhotoSourcingPolicy(draft.content_document?.photo_sourcing);
  const managedPhotoSourcing=input.visual_mode==='cards'
   &&['auto_ai','pexels','stock'].includes(originallyRequested)
