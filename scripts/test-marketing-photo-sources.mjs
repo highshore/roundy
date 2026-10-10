@@ -98,7 +98,7 @@ assert.ok(caption.includes(zero.source_url),'Even CC0 sources must show the orig
 assert.ok(caption.includes(attribution.source_url),'CC BY photo source URL in caption');
 assert.ok(caption.includes('Wikimedia Commons / Independent Creator'));
 assert.equal(rights.captionHasRequiredCredits(caption.replace(zero.source_url,''),[zero,attribution]),false,'Missing CC0 credit must block publishing');
-assert.equal(rights.captionHasRequiredCredits(caption.replace('Wikimedia Commons',''),[zero,attribution]),false,'Missing provider must block publishing');
+assert.equal(rights.captionHasRequiredCredits(caption.replaceAll('Wikimedia Commons',''),[zero,attribution]),false,'Missing provider must block publishing');
 assert.match(rights.photoCardSourceLabel(zero),/^Photo: Wikimedia Commons \/ Independent Creator/);
 assert.ok(rights.photoCardSourceLabel({...zero,photographer:'가'.repeat(150)}).length<100,'Long Korean creator must be clipped to fit');
 assert.equal(policy.photoCreditCaption(caption,[zero,attribution]),caption,'Caption credits are idempotent');
