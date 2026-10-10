@@ -38,6 +38,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
  const [eventId,setEventId]=useState(''),[eventCampaignStage,setEventCampaignStage]=useState('auto');
  const [template,setTemplate]=useState<Row>(blank());
  const [stockPhotos,setStockPhotos]=useState<Row[]>([]),[stockReview,setStockReview]=useState<Row|null>(null);
+ const [preflightState,setPreflightState]=useState<Row|null>(null),[preflightSerial,setPreflightSerial]=useState(0);
  const [uploadedImages,setUploadedImages]=useState<Row[]>([]),[uploadAssetType,setUploadAssetType]=useState<'photo'|'completed_card'>('photo');
  const [pendingMarketingImages,setPendingMarketingImages]=useState<PendingMarketingImage[]>([]),[pendingAssetType,setPendingAssetType]=useState<'photo'|'completed_card'>('photo');
  const [resultPreview,setResultPreview]=useState<Row|null>(null);
@@ -47,7 +48,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
  const [trendUsageView,setTrendUsageView]=useState<'unused'|'used'>('unused');
  const [generationVisible,setGenerationVisible]=useState(20),[publishVisible,setPublishVisible]=useState(20);
  const inFlight=useRef(false),mounted=useRef(true),stockPreferredSet=useRef(false);
- function selectDraft(next:Row|null){setDraft(next?structuredClone(next):null);setDirty(false);if(next){setBasis(next.draft_kind==='growth_carousel'?'growth_carousel':next.content_mode);setTopic(next.growth_topic_type||'conversation_prompt');setContentLanguage(next.content_language==='en'?'en':'ko');if(next.event_id)setEventId(String(next.event_id));if(next.event_campaign_stage)setEventCampaignStage(String(next.event_campaign_stage));}}
+ function selectDraft(next:Row|null){setPreflightState(null);setDraft(next?structuredClone(next):null);setDirty(false);if(next){setBasis(next.draft_kind==='growth_carousel'?'growth_carousel':next.content_mode);setTopic(next.growth_topic_type||'conversation_prompt');setContentLanguage(next.content_language==='en'?'en':'ko');if(next.event_id)setEventId(String(next.event_id));if(next.event_campaign_stage)setEventCampaignStage(String(next.event_campaign_stage));}}
  async function load(preferredId?:string){
   const r=await request();if(!r.ok)throw new Error(r.data.error||'Could not load marketing');if(!mounted.current)return;
   setData(r.data);setSettings(r.data.settings);setGeneration(r.data.generation);
@@ -80,6 +81,16 @@ export function AdminMarketing({locale}:{locale:Locale}){
    .catch(()=>{if(!cancelled){setStockPhotos([]);setStockReview(null);}});
   return()=>{cancelled=true;};
  },[draft?.id,draft?.visual_source,draft?.revision]);
+ useEffect(()=>{
+  if(channel!=='instagram'||!draft?.id){setPreflightState(null);return;}
+  let cancelled=false;
+  request('/quality/preflight?draft_id='+encodeURIComponent(draft.id),undefined,'GET')
+   .then(r=>{if(cancelled)return;
+    if(r.ok&&r.data?.draft_id===draft.id)setPreflightState(r.data);
+    else setPreflightState(null);
+   }).catch(()=>{if(!cancelled)setPreflightState(null);});
+  return()=>{cancelled=true;};
+ },[channel,draft?.id,draft?.revision,preflightSerial]);
  // Bounded READ-ONLY polling: never calls a paid endpoint or starts generation.
  useEffect(()=>{
   if(!busy)return;let cancelled=false,attempts=0,failures=0,timer:ReturnType<typeof setTimeout>|undefined;
@@ -114,6 +125,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
    GENERATION_ALREADY_RUNNING:['Another generation is still running. Wait for it to finish or refresh status.','다른 생성 작업이 진행 중입니다. 완료될 때까지 기다리거나 상태를 새로고침하세요.'],
    DRAFT_CHANGED_REFRESH_FIRST:['This draft changed. Refresh status before trying again.','초안이 변경됐습니다. 상태를 새로고침한 뒤 다시 시도하세요.'],
    DRAFT_NOT_EDITABLE:['This draft is no longer editable. Refresh status.','이 초안은 더 이상 수정할 수 없습니다. 상태를 새로고침하세요.'],
+   MARKETING_PREFLIGHT_FAILED:['Publishing blocked: review the seven checks below and run the free recheck after making corrections.','발행 전 자동 검증에 실패했습니다. 아래 7개 항목의 오류를 수정한 뒤 무료 재검사를 실행하세요.'],
    INVALID_SLIDE_COUNT:['An older generation returned an unsupported card count. Current versions normalize sensible carousel lengths automatically.','이전 버전에서 카드 수 형식이 맞지 않아 중지된 작업입니다. 현재 버전은 적절한 카드 수를 자동 정리합니다.'],
    RESEARCH_SOURCES_MISSING:['An older research run did not copy sources into its JSON result. Current versions read sources directly from Web Search.','이전 버전에서 검색 출처를 JSON에 복사하지 못해 중지된 작업입니다. 현재 버전은 Web Search 출처를 직접 읽습니다.'],
    RESEARCH_TOOL_SOURCES_MISSING:['Web Search returned no usable source metadata. No automatic retry was sent.','Web Search가 사용 가능한 출처 메타데이터를 반환하지 않아 중지했습니다. 자동 재시도는 하지 않았습니다.'],
@@ -186,7 +198,15 @@ export function AdminMarketing({locale}:{locale:Locale}){
   return rendered.data.draft||targetDraft;
  }
  async function work(fn:()=>Promise<void>){if(inFlight.current)return;inFlight.current=true;setBusy(true);setError('');setNotice('');try{await fn();}catch(e){setError(friendlyError(e instanceof Error?e.message:'Request failed'));}finally{inFlight.current=false;if(mounted.current)setBusy(false);}}
- async function mutate(path:string,body:Row,method='POST'){const r=await request(path,body,method);if(r.data.draft)selectDraft(r.data.draft);if(!r.ok||r.data.error)throw new Error(r.data.error||'Request failed');return r.data;}
+ async function mutate(path:string,body:Row,method='POST'){
+  const r=await request(path,body,method);
+  if(r.data.draft)selectDraft(r.data.draft);
+  if(r.data.checks&&r.data.draft)setPreflightState({draft_id:r.data.draft.id,
+   revision:r.data.draft.revision,preflight:{status:'rejected',checks:r.data.checks,issues:r.data.issues||[]},
+   quality_report:r.data.quality_report});
+  if(!r.ok||r.data.error)throw new Error(r.data.error||'Request failed');
+  return r.data;
+ }
  async function generate(today=false,renderOnly=false){
   if(renderOnly&&!draft)return;
   if(renderOnly&&dirty&&!window.confirm(t('Discard unsaved edits before rendering?','저장하지 않은 수정을 버리고 이미지를 다시 렌더할까요?')))return;
@@ -295,7 +315,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
  async function refreshStock(draftId:string){
   const r=await request('/photos?draft_id='+encodeURIComponent(draftId),undefined,'GET');
   if(!r.ok||r.data.error)throw new Error(r.data.error||'Could not load Pexels photos');
-  setStockPhotos(r.data.photos||[]);setStockReview(r.data);
+  setStockPhotos(r.data.photos||[]);setStockReview(r.data);setPreflightSerial(v=>v+1);
  }
  async function reviewStock(photo:Row,status:'approved'|'rejected'){
   if(!draft)return;
@@ -375,6 +395,14 @@ export function AdminMarketing({locale}:{locale:Locale}){
  function contentRecordForAttempts(attempts:Row[]){const ids=new Set(attempts.map((attempt:Row)=>String(attempt.id)));return contentRecords.find((record:Row)=>ids.has(String(record.source_generation_job_id||'')))||null;}
  function runForContent(record:Row|null){if(!record)return null;const runId=String(record.marketing_run_id||''),draftId=String(record.id||'');return (runId?channelRuns.find((run:Row)=>String(run.id)===runId):null)||channelRuns.find((run:Row)=>String(run.snapshot?.draft_id||'')===draftId)||null;}
  function publicationInfo(record:Row|null,runOverride:Row|null=null){const run=runOverride||runForContent(record),runStatus=String(run?.status||''),draftStatus=String(record?.status||'');if(runStatus==='sent'||draftStatus==='published'||draftStatus==='sent')return {status:'sent',label:t('Published','게시됨')};if(runStatus==='sending')return {status:'sending',label:t('Publishing','게시 중')};if(['queued','scheduled'].includes(runStatus)||draftStatus==='scheduled')return {status:'scheduled',label:t('Scheduled','예약됨')};if(runStatus==='failed'||draftStatus==='failed')return {status:'failed',label:t('Publish failed','게시 실패')};if(runStatus==='needs_review')return {status:'needs_review',label:t('Publish needs review','게시 확인 필요')};if(draftStatus==='needs_approval')return {status:'needs_review',label:t('Awaiting approval','승인 대기')};return {status:'unpublished',label:t('Not published','미게시')};}
+ const currentPreflight=draft&&preflightState?.draft_id===draft.id&&preflightState?.revision===draft.revision?preflightState:null;
+ const preflightChecks=Array.isArray(currentPreflight?.preflight?.checks)?currentPreflight.preflight.checks as Row[]:[];
+ const preflightReady=currentPreflight?.preflight?.status==='passed'&&currentPreflight?.quality_report?.status==='passed';
+ const localizedCheck:Record<string,string>={
+  slide_count:'Slide count / images',real_photos:'Minimum authentic photos',
+  photo_sources:'Photo sources / license',photo_approval:'Admin photo approval',
+  answer_first:'Answer-First cover',final_cta:'Final CTA',mobile_render:'Mobile readability / margins'
+ };
  if(loading)return <p role="status">{t('Loading marketing workspace…','마케팅 정보를 불러오는 중입니다…')}</p>;
  return <section className="admin-panel marketing-panel">
   <div className="admin-heading"><p className="admin-kicker">ROUNDY ADMIN</p><Heading level={1}>{t('Marketing','마케팅')}</Heading><p>{t('Generate safely. Review once. Publish only after approval.','안전하게 생성하고 검토한 뒤, 승인한 콘텐츠만 게시합니다.')}</p></div>
@@ -446,8 +474,21 @@ export function AdminMarketing({locale}:{locale:Locale}){
         <p className="admin-help">{t('Uses the existing image-only regeneration process; AI image costs may apply. No automatic publication.','기존 이미지 재생성 기능을 사용하며 AI 이미지 생성 비용이 발생할 수 있습니다. 자동 발행하지 않습니다.')}</p>
        </div>}
      </div>}
+    <div className="marketing-setup marketing-preflight-status" role="group" aria-label={t('Seven pre-publication checks','발행 전 자동 검증 7개 항목')}>
+     <strong>{t('Pre-publication checks (7)','발행 전 자동 검증 (7개 항목)')} — {preflightReady?t('All passed; human approval still required','모두 통과, 관리자 최종 승인 필요'):t('Publishing blocked until every check passes','검증 완료 전 발행 차단')}</strong>
+     {!currentPreflight&&<p className="admin-error" role="status">{t('Checking saved copy, selected photos and render margins. Publishing remains disabled.','저장된 문구와 사진 승인, 렌더링 여백을 확인하고 있습니다. 검증 결과가 나오기 전에는 발행할 수 없습니다.')}</p>}
+     {preflightChecks.map((check:Row)=>{
+      const label=locale==='ko'?check.label:localizedCheck[String(check.id)]||check.label;
+      return <div key={check.id} className="marketing-quality-status">
+       <strong>{check.passed?'✓':'✕'} {label}</strong>
+       <p className={check.passed?'admin-help':'admin-error'}>{check.passed
+        ?t('Verified','검증 통과'):String(check.detail||t('Review required','확인 필요'))}</p>
+      </div>;
+     })}
+     <p className="admin-help">{t('Only the seven checks plus the existing editorial quality review can authorize publishing. Photo approval changes invalidate the previous check.','7개 검증과 기존 문구 품질 검사를 모두 통과해야 승인할 수 있습니다. 사진 승인 상태 변경 시 재검사가 필요합니다.')}</p>
+    </div>
     <div className="marketing-quality-status" role="status">
-     <strong>{draft.quality_report?.status==='passed'?t('Automated checks passed — editorial review still required','자동 검사 통과 — 내용 검토 후 승인'):t('Quality review required — publishing is blocked','품질 검토 필요 — 게시가 차단되어 있습니다')}</strong>
+     <strong>{draft.quality_report?.status==='passed'&&preflightReady?t('Copy and preflight checks passed — final human approval required','문구 및 발행 전 검증 통과 — 관리자 최종 승인 필요'):t('Copy or preflight review required — publishing blocked','문구 또는 발행 전 검증 필요 — 게시 차단')}</strong>
      {(draft.quality_report?.issues||[]).map((issue:string)=><p key={issue}>{issue}</p>)}
      {draft.status==='needs_approval'&&<button type="button" className="admin-secondary" disabled={busy||!!running||dirty} onClick={()=>void work(async()=>{const r=await request('/quality/recheck',{draft_id:draft.id,revision:draft.revision});if(!r.ok)throw new Error(r.data.error);selectDraft(r.data.draft);setNotice(t('Quality check finished. No AI request was made.','품질 검사를 마쳤습니다. AI를 호출하지 않았습니다.'));})}>{t('Recheck saved edits — no AI charge','저장한 내용 품질 검사 — AI 비용 없음')}</button>}
     </div>
@@ -481,7 +522,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
     <label><span>{t('Destination','연결 주소')}</span><input value={draft.destination_url||''} disabled={busy||!!running||draft.status!=='needs_approval'} onChange={e=>changeDraft('destination_url',e.target.value)}/></label>
     {draft.research_status==='generated_without_sources'&&<p className="admin-error" role="alert">{t('Web Search completed, but OpenAI did not return source metadata. Fact-check this draft manually before publishing.','Web Search는 완료됐지만 OpenAI가 출처 메타데이터를 반환하지 않았습니다. 게시 전에 내용의 사실관계를 직접 확인하세요.')}</p>}
     {!!draft.research_sources?.length&&<div className="growth-sources">{draft.research_sources.map((s:Row)=><a key={s.url} href={s.url} target="_blank" rel="noreferrer">{s.publisher||s.title}</a>)}</div>}
-    {draft.status==='needs_approval'&&<div className="admin-form-actions"><button type="button" className="admin-secondary" disabled={busy||!!running||!dirty} onClick={()=>void work(async()=>{await mutate('/draft/'+draft.id,{revision:draft.revision,caption:draft.caption,cta:draft.cta,destination_url:draft.destination_url},'PUT');await load(draft.id);})}>{t('Save edits','수정 저장')}</button><button type="button" className="admin-primary" disabled={busy||!!running||dirty||!draft.caption?.trim()||!draft.images?.length||draft.quality_report?.status!=='passed'||draft.quality_revision!==draft.revision} onClick={()=>{if(window.confirm(t('Approve this exact revision and schedule it for Instagram?','현재 버전의 문구와 이미지를 승인하고 Instagram 게시를 예약할까요?')))void work(async()=>{await mutate('/draft/'+draft.id+'/approve',{revision:draft.revision});await load(draft.id);setNotice(t('Approved and scheduled.','승인 후 게시 예약했습니다.'));});}}>{t('Approve & schedule','승인 후 예약')}</button><button type="button" className="admin-secondary" disabled={busy||!!running||dirty||!draft.caption?.trim()||!draft.images?.length||draft.quality_report?.status!=='passed'||draft.quality_revision!==draft.revision} onClick={()=>{if(window.confirm(t('Publish this exact saved revision to @roundy.meet NOW? This bypasses the recommended posting time and cannot be undone here.','현재 저장된 버전을 @roundy.meet에 지금 바로 게시할까요? 추천 게시 시간을 무시하며 여기서 게시를 되돌릴 수 없습니다.')))void work(async()=>{const result=await mutate('/draft/'+draft.id+'/publish-now',{revision:draft.revision});await load(draft.id);setNotice(result.published?t('Published to @roundy.meet.','@roundy.meet에 바로 게시했습니다.'):result.needs_review?t('Publish attempt needs review. Check Instagram before resolving it.','게시 결과 확인이 필요합니다. 처리 전에 Instagram에서 실제 게시 여부를 확인하세요.'):t('Queued for immediate publishing. Refresh status before trying again.','즉시 게시 큐에 넣었습니다. 다시 누르기 전에 상태를 새로고침하세요.'));});}}>{t('Publish now','바로 게시')}</button><button type="button" className="admin-secondary" disabled={busy||!!running} onClick={()=>void work(async()=>{await mutate('/draft/'+draft.id+'/skip',{});await load();})}>{t('Skip','건너뛰기')}</button></div>}
+    {draft.status==='needs_approval'&&<div className="admin-form-actions"><button type="button" className="admin-secondary" disabled={busy||!!running||!dirty} onClick={()=>void work(async()=>{await mutate('/draft/'+draft.id,{revision:draft.revision,caption:draft.caption,cta:draft.cta,destination_url:draft.destination_url},'PUT');await load(draft.id);})}>{t('Save edits','수정 저장')}</button><button type="button" className="admin-primary" disabled={busy||!!running||dirty||!preflightReady||!draft.caption?.trim()||!draft.images?.length||draft.quality_report?.status!=='passed'||draft.quality_revision!==draft.revision} onClick={()=>{if(window.confirm(t('Approve this exact revision and schedule it for Instagram?','현재 버전의 문구와 이미지를 승인하고 Instagram 게시를 예약할까요?')))void work(async()=>{await mutate('/draft/'+draft.id+'/approve',{revision:draft.revision});await load(draft.id);setNotice(t('Approved and scheduled.','승인 후 게시 예약했습니다.'));});}}>{t('Approve & schedule','승인 후 예약')}</button><button type="button" className="admin-secondary" disabled={busy||!!running||dirty||!draft.caption?.trim()||!draft.images?.length||draft.quality_report?.status!=='passed'||draft.quality_revision!==draft.revision} onClick={()=>{if(window.confirm(t('Publish this exact saved revision to @roundy.meet NOW? This bypasses the recommended posting time and cannot be undone here.','현재 저장된 버전을 @roundy.meet에 지금 바로 게시할까요? 추천 게시 시간을 무시하며 여기서 게시를 되돌릴 수 없습니다.')))void work(async()=>{const result=await mutate('/draft/'+draft.id+'/publish-now',{revision:draft.revision});await load(draft.id);setNotice(result.published?t('Published to @roundy.meet.','@roundy.meet에 바로 게시했습니다.'):result.needs_review?t('Publish attempt needs review. Check Instagram before resolving it.','게시 결과 확인이 필요합니다. 처리 전에 Instagram에서 실제 게시 여부를 확인하세요.'):t('Queued for immediate publishing. Refresh status before trying again.','즉시 게시 큐에 넣었습니다. 다시 누르기 전에 상태를 새로고침하세요.'));});}}>{t('Publish now','바로 게시')}</button><button type="button" className="admin-secondary" disabled={busy||!!running} onClick={()=>void work(async()=>{await mutate('/draft/'+draft.id+'/skip',{});await load();})}>{t('Skip','건너뛰기')}</button></div>}
     <p className="admin-help">{t('Generation never publishes. Copy is saved before images, so an image failure does not lose it.','생성만으로는 게시되지 않습니다. 이미지를 만들기 전에 문구부터 저장하므로 이미지 생성이 실패해도 문구는 남습니다.')}</p>
    </div><aside className="marketing-preview"><strong>{t('Saved preview','저장된 미리보기')}</strong>{draft.images?.length?draft.images.map((url:string,i:number)=><img key={url} src={url} alt={'Roundy card '+(i+1)} style={{width:'100%',height:'auto',marginTop:12}}/>):<p>{t('No saved image. Generate cards or a photo.','저장된 이미지가 없습니다. 카드나 사진을 생성하세요.')}</p>}</aside></div>}
   </>}
