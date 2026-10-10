@@ -50,7 +50,7 @@ Failed manual jobs persist their normalized generation settings in `request_payl
 
 A completed Web Search no longer fails the draft solely because source metadata is absent. The server collects sources from search-action sources, open-page/find-in-page URLs, result items, and URL citations. If a completed search still has no source metadata, the draft is saved as `generated_without_sources` and the admin UI requires manual fact-checking before publication. This fallback makes no extra provider call.
 
-Deterministic application-validation failures do not trip the global circuit breaker or consume the paid-job safety counter, but their conservative dollar reservation remains in the daily/monthly budget because a provider request may already have incurred cost. Running, completed, and uncertain jobs still count toward the 5-job limit; all paid attempts remain bounded by the dollar budget.
+Deterministic application-validation failures do not trip the global circuit breaker or consume the paid-job safety counter, but their conservative dollar reservation remains in the daily/monthly budget because a provider request may already have incurred cost. Running, completed, and uncertain jobs still count toward the 10-job daily limit; all paid attempts remain bounded by the dollar budget.
 
 
 ## Generation threads
