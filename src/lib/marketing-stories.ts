@@ -30,6 +30,22 @@ export async function marketingStoryApi(req:NextRequest,client:Client,path:strin
   try{return json(await generateTomorrowStoryPreviews({manual:true}));}
   catch(e){return json({error:e instanceof Error?e.message:'STORY_GENERATION_FAILED'},409);}
  }
+ if(action==='capability'&&path.length===1&&req.method==='POST'){
+  const session=(await client.auth.getSession()).data.session;
+  const access=session?.access_token;
+  const base=process.env.NEXT_PUBLIC_SUPABASE_URL||'';
+  const apikey=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||'';
+  if(!access||!base||!apikey)return json({supported:false,reason:'STORY_CAPABILITY_SESSION_UNAVAILABLE'});
+  try{
+   const response=await fetch(base+'/functions/v1/roundy-story-previews',{
+    method:'POST',
+    headers:{Authorization:'Bearer '+access,apikey,'Content-Type':'application/json'},
+    body:JSON.stringify({action:'capability'}),signal:AbortSignal.timeout(25000),cache:'no-store'
+   });
+   const value=await response.json().catch(()=>({supported:false,reason:'STORY_CAPABILITY_UNVERIFIED'}));
+   return json(response.ok?value:{supported:false,reason:value.error||'STORY_CAPABILITY_UNVERIFIED'});
+  }catch{return json({supported:false,reason:'STORY_CAPABILITY_UNVERIFIED'});}
+ }
  if(!uuid(action))return json({error:'INVALID_STORY_REQUEST'},404);
  const story=ok(await db.from('marketing_story_previews').select('*').eq('id',action).maybeSingle()) as Row|null;
  if(!story)return json({error:'STORY_NOT_FOUND'},404);
