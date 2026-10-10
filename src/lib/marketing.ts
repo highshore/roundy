@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import {draftQuality} from './marketing-editorial';
 import {factPackReady} from './marketing-trend-guide';
-import {importStockSelections,listStockSelections,pexelsConfigured,prepareStockSelections,reviewStockAsset} from './marketing-stock-photos';
+import {importStockSelections,listStockSelections,pexelsConfigured,prepareStockSelections,requiredStockSlots,stockReady,reviewStockAsset} from './marketing-stock-photos';
 import type { createClient } from './supabase/server';
 import { createServiceRoleClient } from './supabase/service';
 import { marketingApi as legacyMarketingApi } from './marketing-legacy';
@@ -82,7 +82,17 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
  if(id==='photos'&&path.length===1&&req.method==='GET'){
   const draftId=String(req.nextUrl.searchParams.get('draft_id')||'');
   if(!uuid(draftId))return json({error:'INVALID_DRAFT_ID'},400);
-  return json({photos:await listStockSelections(service,draftId),provider:'Pexels',attribution_url:'https://www.pexels.com',configured:pexelsConfigured()});
+  const draft=checked(await service.from('instagram_post_drafts').select('id,content_document,carousel_slides').eq('id',draftId).maybeSingle());
+  if(!draft)return json({error:'DRAFT_NOT_FOUND'},404);
+  const photos=await listStockSelections(service,draftId);
+  const policy=draft.content_document?.photo_sourcing||null;
+  const required=requiredStockSlots(draft).length;
+  const minimum=Number(policy?.min_real_photos||required);
+  const approved=photos.filter((photo:Row)=>photo.review_status==='approved'&&!!photo.storage_path).length;
+  return json({photos,ready:stockReady(draft,photos),required,minimum,approved,
+   awaiting_review:!stockReady(draft,photos),
+   missing:Math.max(0,minimum-approved),policy,
+   provider:'Pexels',attribution_url:'https://www.pexels.com',configured:pexelsConfigured()});
  }
  if(id==='photos'&&path.length===3&&uuid(path[1])&&path[2]==='review'&&req.method==='POST'){
   const body=await req.json().catch(()=>({})),status=String(body.status||'');
@@ -99,8 +109,8 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
   if(!draft||draft.draft_role!=='candidate'||draft.status!=='needs_approval'||draft.visual_source!=='pexels')return json({error:'STOCK_DRAFT_NOT_EDITABLE'},409);
   if(body.revision!==draft.revision||draft.images?.length)return json({error:'DRAFT_CHANGED_OR_ALREADY_RENDERED'},409);
   try{
-   const photos=await prepareStockSelections(service,draft);
-   return json({photos,ready:photos.length>=2&&photos.every((photo:Row)=>photo.review_status==='approved')});
+   const photos=await prepareStockSelections(service,draft,{replace:true});
+   return json({photos,ready:stockReady(draft,photos),required:requiredStockSlots(draft).length});
   }catch(error){return json({error:error instanceof Error?error.message:'PEXELS_DISCOVERY_FAILED'},400);}
  }
  if(id==='draft'&&path.length===3&&uuid(path[1])&&path[2]==='render-stock'&&req.method==='POST'){
