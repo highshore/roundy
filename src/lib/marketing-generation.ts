@@ -1,6 +1,7 @@
 import {prepareSavedCtaRecovery,SAVED_CTA_RECOVERY_VERSION} from './marketing-output-recovery';
 import {loadEditorialAssets} from './marketing-render-assets';
 import {photoCreditCaption,configuredPhotoSourcingPolicy,savedPhotoSourcingPolicy} from './marketing-stock-photo-policy';
+import {photoCardSourceLabel} from './marketing-photo-rights';
 import {resolveCarouselPlan,savedCarouselPlan,type CarouselPlan} from './marketing-carousel-template';
 import {reviewMarketingDraft,mergePreflightQuality} from './marketing-preflight-service';
 import {approvedStockCardAssets,listStockSelections,pexelsConfigured,photoSelectionSnapshot,prepareStockSelections,requiredStockSlots,stockReady} from './marketing-stock-photos';
@@ -426,6 +427,7 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
     await progress(db,job,'rendering_approved_photos');
     const assets=await loadEditorialAssets();
     Object.assign(assets,await approvedStockCardAssets(db,draft));
+     assets.cardCredits=Object.fromEntries(selected.map((photo:Row)=>[Number(photo.slot),photoCardSourceLabel(photo)]));
     const policy=savedPhotoSourcingPolicy(draft.content_document?.photo_sourcing);
     if(policy?.ai_thumbnail_enabled){
      const cover=await generateAiThumbnail(db,draft,job);
@@ -435,7 +437,7 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
     }
     const images=await renderCardsWithAssets(db,draft,job,assets);
     await progress(db,job,'saving_images');
-    // Keep photographer attribution visible in the final draft.
+    // Record every provider, creator and ORIGINAL source URL in the final draft caption.
     const captionWithCredit=photoCreditCaption(String(draft.caption||''),selected);
     draft=await savePartial(db,draft,{images,caption:captionWithCredit,generation_source:automatic?'automation':'manual',visual_source:visualSource,last_regeneration_mode:input.mode,last_regeneration_instruction:input.instruction});
    }else{

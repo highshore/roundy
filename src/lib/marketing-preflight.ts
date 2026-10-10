@@ -83,7 +83,7 @@ export function evaluateMarketingPreflight(draft:Record<string,any>,settings:Rec
   const rights=photoRightsIssues(p);
   if(rights.length)sourceIssues.push(slot+'장: 사용 권한 및 출처 검증 실패 ('+rights.join(', ')+').');
  });
- if(!captionHasRequiredCredits(String(draft.caption||''),photos))sourceIssues.push('출처 표시 필수 사진의 저작자, 원본 링크, 라이선스 및 이미지 수정 안내가 캡션에 없습니다.');
+ if(!captionHasRequiredCredits(String(draft.caption||''),photos))sourceIssues.push('모든 외부 사진의 제공처, 저작자, 원본 링크와 필수 라이선스 표기를 Instagram 캡션에 포함하세요.');
  add('photo_sources',sourceIssues,'모든 사진의 출처, 라이선스와 상업적 수정 권한 및 필수 저작자 표시를 검증했습니다.');
 
  const approvalIssues:string[]=[];
