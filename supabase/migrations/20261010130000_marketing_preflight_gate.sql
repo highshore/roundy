@@ -19,7 +19,7 @@ begin
   exception when others then raise exception 'MARKETING_PREFLIGHT_DRAFT_REQUIRED'; end;
   if did is null then raise exception 'MARKETING_PREFLIGHT_DRAFT_REQUIRED'; end if;
  elsif TG_TABLE_NAME='instagram_post_drafts' then
-  if TG_OP<>'UPDATE' or old.status is not distinct from 'needs_approval'
+  if TG_OP<>'UPDATE' or old.status is distinct from 'needs_approval'
       or new.status not in ('approved','scheduled','publishing','published') then return new; end if;
   did:=new.id;
  else
