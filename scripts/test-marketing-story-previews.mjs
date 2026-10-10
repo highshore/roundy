@@ -40,14 +40,15 @@ class Query{
  order(){return this;}limit(n){this.max=n;return this;}
  update(p){this.patch=p;return this;}
  async single(){const r=await this.exec();return {data:r.data?.[0]||null,error:null};}
- async upsert(input,{ignoreDuplicates}={}){const table=tables[this.name];
-  const prior=table.find(x=>x.feed_run_id===input.feed_run_id);
-  if(prior&&ignoreDuplicates)return {data:[],error:null};
-  const row={id:'55555555-5555-4555-8555-555555555555',...input};table.push(row);
-  return {data:[structuredClone(row)],error:null};
- }
+ upsert(input,{ignoreDuplicates}={}){this.newRow=input;this.ignoreDuplicates=ignoreDuplicates;return this;}
  then(resolve,reject){return this.exec().then(resolve,reject);}
  async exec(){
+  if(this.newRow){
+   const table=tables[this.name],prior=table.find(x=>x.feed_run_id===this.newRow.feed_run_id);
+   if(prior&&this.ignoreDuplicates)return {data:[],error:null};
+   const row={id:'55555555-5555-4555-8555-555555555555',...this.newRow};
+   table.push(row);return {data:[structuredClone(row)],error:null};
+  }
   let rows=tables[this.name].filter(x=>this.pred.every(pred=>pred(x))).slice(0,this.max);
   if(this.patch)rows.forEach(r=>Object.assign(r,this.patch));
   return {data:structuredClone(rows),error:null};
