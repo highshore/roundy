@@ -125,6 +125,52 @@ function harness({denied=false,network=false,badSources=false,duplicate=false,ph
   }else{
    if(!data.editorial_type)throw new Error('UNMOCKED_EDITORIAL_REQUEST');
    c=fixture(data.editorial_type,data.language,load('src/lib/marketing-content-policy.ts').CONTENT_PROFILES);
+   // Real AI replies honor the STRICT versioned JSON schema. Retrofit the mock
+   // model too: old fixtures are used for legacy campaigns, but Magazine v2
+   // must never return the old 5-card CTA or sales caption as if schema-valid.
+   const schema=body.response_format.json_schema.schema;
+   if(schema.properties.design_preset?.enum?.[0]==='roundy_magazine_editorial_v2'){
+    const type=data.editorial_type,ko=data.language==='ko',old=c.slides;
+    const source=(role)=>old.find(s=>s.role===role)||old.find(s=>s.role==='insight')||old[1];
+    const prefer=type==='seoul_dating'?['scenario','etiquette','plan']:
+     type==='dating_myth'?['myth','finding','limitation']:
+     type==='book_insight'?['book','insight','practice']:
+     type==='trend_research'?['finding','context','limitation']:
+     type==='seoul_trend'?['trend','why_now','practical']:
+     type==='conversation_prompt'?['opener','followup','listen']:
+     type==='mini_quiz'?['question','options','reveal']:
+     old.slice(1,-1).map(s=>s.role);
+    const magazineRoles=requestedSlides===3?['cover','key_insight','editorial_closing']:
+     ['cover','context','insight','insight','editorial_closing'];
+    c.design_preset='roundy_magazine_editorial_v2';
+    c.cta='';
+    c.slides=magazineRoles.map((role,i)=>{
+     const final=i===requestedSlides-1;
+     const picked=i===0?old[0]:final?old[old.length-2]:
+      source(prefer[Math.min(i-1,prefer.length-1)]);
+     const clone={...picked,role,closing_type:final?'summary':'none',options:picked.options||[],
+      secondary_body:picked.secondary_body||picked.body};
+     if(role==='key_insight'&&type==='seoul_dating'){
+      clone.body=c.seoul.venues.map(v=>v.name).join(' / ');
+      clone.source_ids=['S1','S2','S3'];
+     }
+     if(role==='key_insight'&&type==='dating_myth'){
+      clone.title=ko?'이 통념은 사실일까요?':'What does evidence suggest?';
+      clone.body=c.myth.claim;
+     }
+     if(!final&&i>0&&load('src/lib/marketing-content-policy.ts').CONTENT_PROFILES[type].research){
+      clone.source_ids=type==='seoul_dating'?['S'+Math.min(i,3)]:type==='seoul_trend'?['S1','S2']:['S1'];
+     }
+     if(role==='key_insight'&&type==='conversation_prompt'){
+      clone.body=ko?'첫 질문: 요즘 재미있었던 건 뭐예요? 후속 질문: 어떤 점이 좋았어요?':'First question: What did you enjoy recently? Follow-up: What stood out?';
+      clone.secondary_body=ko?'First question: What did you enjoy recently? Follow-up: What stood out?':'첫 질문: 요즘 재미있었던 건 뭐예요? 후속 질문: 어떤 점이 좋았어요?';
+     }
+     if(role==='editorial_closing'&&picked.role==='cta'){
+      clone.title=ko?'오늘의 핵심 정리':'One lasting takeaway';clone.body=ko?'좋은 대화는 서로의 답에 귀 기울이는 데서 시작합니다.':'Good conversation begins by listening to the reply.';
+     }
+     return clone;
+    });
+   }
   }
   if(answerFirstSchema){
    const language=data.language==='en'?'en':'ko';
@@ -134,9 +180,11 @@ function harness({denied=false,network=false,badSources=false,duplicate=false,ph
    c.thumbnail_candidates=headlines;
    if(data.editorial_type){
     const helper=load('src/lib/marketing-answer-first.ts');
-    const roles=requestedSlides===3?helper.editorialRolesForCount(data.editorial_type,c.slides.map(x=>x.role),3):helper.fiveEditorialRoles(data.editorial_type,c.slides.map(x=>x.role));
-    c.slides=roles.map(role=>c.slides.find(x=>x.role===role));
-    if(c.slides.some(x=>!x))throw new Error('ANSWER_FIRST_TEST_ROLE_MISSING:'+data.editorial_type);
+    if(c.design_preset!=='roundy_magazine_editorial_v2'){
+     const roles=requestedSlides===3?helper.editorialRolesForCount(data.editorial_type,c.slides.map(x=>x.role),3):helper.fiveEditorialRoles(data.editorial_type,c.slides.map(x=>x.role));
+     c.slides=roles.map(role=>c.slides.find(x=>x.role===role));
+     if(c.slides.some(x=>!x))throw new Error('ANSWER_FIRST_TEST_ROLE_MISSING:'+data.editorial_type);
+    }
    }
    c.slides[0].title=headlines[0];
    if(requestedSlides===3&&data.editorial_type==='conversation_prompt'){
