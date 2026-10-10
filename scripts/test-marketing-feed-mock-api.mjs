@@ -10,7 +10,7 @@ function between(start,end){
 // Execute the PRODUCTION publishInstagram implementation with a stubbed Meta API.
 // The test never makes a network request.
 const source=between('async function graph(','async function graphJson(')
- +between('async function ready(','class ReelProcessingPending(');
+ +between('async function ready(','class ReelProcessingPending');
 assert.match(source,/await beforeFirstExternalPost\(\)/);
 const script=ts.transpileModule(source+'\nexports.publishInstagram=publishInstagram;',{
  compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}
