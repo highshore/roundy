@@ -124,7 +124,7 @@ await act(async()=>renderer.root.findByProps({'aria-label':'다음 카드'}).pro
 assert.equal(getCard(),'2 / 3');
 await act(async()=>renderer.root.findByProps({'aria-label':'카드 3'}).props.onClick());
 assert.equal(getCard(),'3 / 3');
-await act(async()=>renderer.root.findByProps({'aria-label':'안전 여백'}).props.onClick());
+await act(async()=>renderer.root.findAll(node=>node.type==='button'&&String(node.props.className||'').startsWith('marketing-preview-toggle'))[0].props.onClick());
 assert.equal(renderer.root.findAllByProps({className:'marketing-phone-safe-guide'}).length,1);
 await act(async()=>renderer.unmount());
 console.log('PASS marketing admin workspace: KST selectors, status aggregation, old approval and publish paths, existing DB settings, photo rights library, mobile preview paging and safety guides.');
