@@ -224,6 +224,30 @@ export function AdminMarketing({locale}:{locale:Locale}){
   if(!r.ok||r.data.error)throw new Error(r.data.error||'Request failed');
   return r.data;
  }
+ async function upgradeLegacyDraftToMagazine(){
+  if(!draft||draft.status!=='needs_approval'||draft.content_document?.design_preset==='roundy_magazine_editorial_v2')return;
+  if(dirty&&!window.confirm(t('Discard unsaved changes before converting this draft?','매거진 전환 전 저장하지 않은 수정사항을 버릴까요?')))return;
+  if(!window.confirm(t('Regenerate the copy and visuals of this UNPUBLISHED draft as Magazine Editorial v2? This uses a new paid AI copy generation, keeps published posts unchanged, and requires fresh licensing/photo approval. Your existing draft copy and images will be replaced only after generation succeeds.','이 미발행 초안을 Magazine Editorial v2로 다시 생성할까요? AI 문구 생성 비용이 발생하며, 기존 게시물은 변경되지 않습니다. 새 사진은 저작권 승인 후 사용합니다. 생성 성공 시 이 초안의 기존 문구와 이미지만 교체됩니다.')))return;
+  await work(async()=>{
+   const mode=String(draft.draft_kind)==='growth_carousel'?'growth_carousel':String(draft.content_mode||'prelaunch');
+   const cover=String(draft.content_document?.slides?.[0]?.title||draft.carousel_slides?.[0]?.title||'');
+   const payload={request_key:'magazine-upgrade:'+crypto.randomUUID(),revision:draft.revision,
+    mode:'both',content_mode:mode,visual_mode:'cards',visual_source:'stock',
+    language:draft.content_language==='en'?'en':'ko',
+    ...(mode==='growth_carousel'?{topic_type:draft.growth_topic_type||'conversation_prompt'}:{}),
+    ...(mode==='live_event'?{event_id:draft.event_id,event_campaign_stage:draft.event_campaign_stage||'launch'}:{}),
+    instruction:cover?'Rebuild the existing story about '+cover+'. Stay grounded in verified sources. Editorial closing, never a feed CTA.':'Rebuild the existing story with verified evidence and an editorial closing. No feed CTA.',
+    confirm_photo:false,render_only:false};
+   const result=await request('/draft/'+draft.id+'/regenerate',payload);
+   if(!result.ok||result.data.error||['failed','uncertain'].includes(result.data.job?.status))throw new Error(result.data.job?.error_message||result.data.error||'MAGAZINE_UPGRADE_FAILED');
+   if(result.data.job?.status==='running'){setNotice(t('The request already exists in Generation history. No duplicate AI call was sent.','동일한 요청이 생성 기록에 있습니다. AI 중복 호출은 발생하지 않았습니다.'));return;}
+   await load(draft.id);
+   if(result.data.draft)selectDraft(result.data.draft);
+   await refreshStock(draft.id);
+   setActiveTab('draft');
+   setNotice(t('Magazine v2 saved to this draft. Review all newly sourced photos and run all seven checks before approval.','이 초안이 Magazine v2로 갱신되었습니다. 신규 사진을 승인하고 발행 전 7개 검증을 다시 실행하세요.'));
+  });
+ }
  async function generate(today=false,renderOnly=false){
   if(renderOnly&&!draft)return;
   if(renderOnly&&dirty&&!window.confirm(t('Discard unsaved edits before rendering?','저장하지 않은 수정을 버리고 이미지를 다시 렌더할까요?')))return;
@@ -546,6 +570,13 @@ export function AdminMarketing({locale}:{locale:Locale}){
         </button>
         <p className="admin-help">{t('Uses the existing image-only regeneration process; AI image costs may apply. No automatic publication.','기존 이미지 재생성 기능을 사용하며 AI 이미지 생성 비용이 발생할 수 있습니다. 자동 발행하지 않습니다.')}</p>
        </div>}
+     </div>}
+    {!isMagazine&&draft.status==='needs_approval'&&Array.isArray(draft.carousel_slides)&&draft.carousel_slides.length>0&&
+     <div className="marketing-setup">
+      <strong>MAGAZINE EDITORIAL V2</strong>
+      <p className="admin-help">{t('Historical published assets stay untouched. Rebuild ONLY this unpublished draft with CTA-free copy and newly reviewed photo panels. Standard image-only render preserves the original template.','기존 게시물은 보존합니다. 이 미발행 초안만 CTA 없는 매거진 문구와 사진 레이아웃으로 재생성할 수 있습니다. 일반 이미지 재렌더는 원래 버전을 유지합니다.')}</p>
+      <button type="button" className="admin-secondary" disabled={busy||!!running||dirty}
+       onClick={()=>void upgradeLegacyDraftToMagazine()}>{t('Rebuild this draft as Magazine v2','이 초안을 Magazine v2로 전환해 재생성')}</button>
      </div>}
     <div className="marketing-setup marketing-preflight-status" role="group" aria-label={t('Seven pre-publication checks','발행 전 자동 검증 7개 항목')}>
      <strong>{t('Pre-publication checks (7)','발행 전 자동 검증 (7개 항목)')} — {preflightReady?t('All passed; human approval still required','모두 통과, 관리자 최종 승인 필요'):t('Publishing blocked until every check passes','검증 완료 전 발행 차단')}</strong>
