@@ -163,12 +163,12 @@ for(const language of ['en','ko'])for(const type of Object.keys(harness().policy
 {const p=harness().policy;check(()=>assert.equal(p.CONTENT_POLICY_VERSION,12));const ko=fixture('prelaunch','ko',p.CONTENT_PROFILES);ko.caption='진정한 인연을 위한 특별한 만남';check(()=>assert.equal(p.evaluateContent(ko,'prelaunch','ko').status,'rejected'));const en=fixture('prelaunch','en',p.CONTENT_PROFILES);en.caption='Discover meaningful human connections in a premium experience.';check(()=>assert.equal(p.evaluateContent(en,'prelaunch','en').status,'rejected'));check(()=>assert.match(p.writingInstructions('conversation_prompt','ko'),/실제 SNS|당장 써볼 수|AI\/마케팅 표현|AI\/marketing|상투적인|generic AI/i));}
 
 {const p=harness().policy;check(()=>assert.equal(p.qualitySeverity('실제 인용된 출처가 없습니다.'),'critical'));check(()=>assert.equal(p.qualitySeverity('카드 제목이 중복되거나 지나치게 유사합니다.'),'quality'));const presentation=harness().api?null:null;}
-for(const [type,language] of [['prelaunch','ko'],['live_event','en'],['conversation_prompt','ko'],['seoul_dating','en'],['trend_research','en']]){
- const h=harness({answerFirst:true}),input={...base,request_key:'manual:answer-first-'+type,language,
+for(const language of ['ko','en'])for(const type of Object.keys(harness().policy.CONTENT_PROFILES)){
+ const h=harness({answerFirst:true}),input={...base,request_key:'manual:answer-first-'+language+'-'+type,language,
   content_mode:type==='prelaunch'||type==='live_event'?type:'growth_carousel',
   ...(type==='prelaunch'?{campaign_pattern:'poster'}:{}),
   ...(type==='live_event'?{event_id:eventId,event_campaign_stage:'launch'}:{}),
-  ...(type==='conversation_prompt'||type==='seoul_dating'||type==='trend_research'?{topic_type:type}:{})};
+  ...(!['prelaunch','live_event'].includes(type)?{topic_type:type}:{})};
  const r=await h.api.runGeneration(id,input,null);
  check(()=>assert.equal(r.job.status,'completed','Answer-First '+type+': '+JSON.stringify(r.job.error_message||r.draft.quality_report)));
  check(()=>assert.equal(r.draft.quality_report.status,'passed','Answer-First '+type));
