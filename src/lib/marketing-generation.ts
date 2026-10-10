@@ -402,7 +402,7 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
    const policy=managedPhotoSourcing?configuredPhotoSourcingPolicy(preference,roles):null;
    const contentDocument=policy?{...copy.content_document,photo_sourcing:policy}:copy.content_document;
    draft=await savePartial(db,draft,{...copy,content_document:contentDocument,
-    ...(contentDocument?.design_preset==='roundy_magazine_editorial_v2'?{render_style:'editorial'}:{}),
+    ...(String((contentDocument as Row)?.design_preset||'')==='roundy_magazine_editorial_v2'?{render_style:'editorial'}:{}),
     generation_source:automatic?'automation':'manual',visual_source:visualSource,last_regeneration_mode:input.mode,last_regeneration_instruction:input.instruction,images:[]});
   }
   let stockPhotos:ReturnType<typeof photoSelectionSnapshot>=[],photoReviewRequired=false;
