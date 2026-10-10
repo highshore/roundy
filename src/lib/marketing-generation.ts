@@ -143,8 +143,11 @@ async function resolveContentLanguage(db:DB,draft:Row,requested?:ContentLanguage
  return nextContentLanguage(db,draft.id);
 }
 async function generateCopy(db:DB,draft:Row,input:GenerationInput,job:Row,_research:boolean){
- if(input.content_mode==='prelaunch')return generateCampaignCopy(db,draft,input,job,upstream);
- if(input.content_mode==='live_event')return generateEventCampaignCopy(db,draft,input,job,upstream);
+ // Existing V1 campaigns remain renderable for saved drafts and dedicated Story/ad creatives.
+ // All NEW planned Feed carousels use the editorial story contract, including
+ // informational prelaunch/event subjects. Never emit CTA slides into new Feed jobs.
+ if(input.content_mode==='prelaunch'&&!input.carousel_plan)return generateCampaignCopy(db,draft,input,job,upstream);
+ if(input.content_mode==='live_event'&&!input.carousel_plan)return generateEventCampaignCopy(db,draft,input,job,upstream);
  return generateEditorialCopy(db,draft,input,job,upstream);
 }
 function qualityForDraft(draft:Row){
@@ -349,7 +352,7 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
  input.carousel_plan=plan;
  // Every newly generated feed editorial story is answer-first; legacy image-only
  // regenerations retain their saved document and campaign/Story code is unchanged.
- if(input.mode!=='image'&&input.content_mode==='growth_carousel'&&plan)input.answer_first_enabled=true;
+ if(input.mode!=='image'&&plan)input.answer_first_enabled=true;
  const existingPhotoPolicy=savedPhotoSourcingPolicy(draft.content_document?.photo_sourcing);
  const managedPhotoSourcing=input.visual_mode==='cards'
   &&['auto_ai','pexels','stock'].includes(originallyRequested)
@@ -398,7 +401,9 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
    const roles=Array.isArray(copy.carousel_slides)?copy.carousel_slides.map((slide:Row)=>String(slide.role||'')):[];
    const policy=managedPhotoSourcing?configuredPhotoSourcingPolicy(preference,roles):null;
    const contentDocument=policy?{...copy.content_document,photo_sourcing:policy}:copy.content_document;
-   draft=await savePartial(db,draft,{...copy,content_document:contentDocument,generation_source:automatic?'automation':'manual',visual_source:visualSource,last_regeneration_mode:input.mode,last_regeneration_instruction:input.instruction,images:[]});
+   draft=await savePartial(db,draft,{...copy,content_document:contentDocument,
+    ...(contentDocument?.design_preset==='roundy_magazine_editorial_v2'?{render_style:'editorial'}:{}),
+    generation_source:automatic?'automation':'manual',visual_source:visualSource,last_regeneration_mode:input.mode,last_regeneration_instruction:input.instruction,images:[]});
   }
   let stockPhotos:ReturnType<typeof photoSelectionSnapshot>=[],photoReviewRequired=false;
   if(autoVisuals){
