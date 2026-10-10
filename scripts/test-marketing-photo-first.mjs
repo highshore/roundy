@@ -65,6 +65,13 @@ assert.match(generation,/visualSource:VisualSource=managedPhotoSourcing\?'pexels
 assert.match(generation,/generateAiThumbnail\(db,draft,job\)/);
 assert.match(generation,/photoReviewRequired=true/);
 assert.match(generation,/photos_pending_review:photoReviewRequired/);
+const stockBranch=generation.split('}else if(stockVisuals){')[1]?.split('const coverStillPending=')[0]||'';
+assert.ok(stockBranch.length>300,'photo-first branch must remain readable');
+assert.doesNotMatch(stockBranch,/generateVisualSet\(/,'insufficient Pexels photos must not trigger full AI image fallback');
+assert.match(stockBranch,/photoReviewRequired=true/);
+const ddl=source('supabase/migrations/20261008160000_pexels_marketing_photo_library.sql');
+for(const column of ['source_url','image_url','license_url','photographer','review_status','reviewed_by','reviewed_at','content_sha256','perceptual_hash'])
+ assert.match(ddl,new RegExp('\\b'+column+'\\b'),column+' exists in retained Pexels photo library');
 const visual=source('src/lib/marketing-visuals.ts');
 assert.match(visual,/assets\.cardPhotos\?\.\[index\]/);
 assert.match(visual,/function selectedPhoto\(/);
