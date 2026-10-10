@@ -252,25 +252,27 @@ function brightHeadline(lines:string[],fontSize:number){
    const common={fontWeight:900,lineHeight:1.22,letterSpacing:-1.5,whiteSpace:'nowrap'} as Row;
    if(i!==lines.length-1)return text(line||' ',fontSize,{...common,color:BRIGHT_EDITORIAL.ink});
    const cut=line.lastIndexOf(' ');
-   const chars=Array.from(line);
-   const offset=cut>0?cut+1:Math.max(0,chars.length-Math.min(4,Math.max(2,Math.ceil(chars.length/3))));
-   const beginning=cut>0?line.slice(0,offset):chars.slice(0,offset).join('');
-   const ending=cut>0?line.slice(offset):chars.slice(offset).join('');
-   if(!beginning||!ending)return text(line,fontSize,{...common,color:BRIGHT_EDITORIAL.coral});
-   return box({width:'100%',alignItems:'baseline',gap:0},
-    text(beginning,fontSize,{...common,color:BRIGHT_EDITORIAL.ink}),
-    text(ending,fontSize,{...common,color:BRIGHT_EDITORIAL.coral}));
+   if(cut<=0)return text(line,fontSize,{...common,color:BRIGHT_EDITORIAL.coral});
+   // An actual gap is needed: trailing spaces collapse between flex children
+   // in Satori, otherwise Hangul words visually run together.
+   return box({width:'100%',alignItems:'baseline',gap:Math.max(8,Math.round(fontSize*.14))},
+    text(line.slice(0,cut),fontSize,{...common,color:BRIGHT_EDITORIAL.ink}),
+    text(line.slice(cut+1),fontSize,{...common,color:BRIGHT_EDITORIAL.coral}));
   }));
 }
-function brightPhotoFrame(src:string|null,index:number,y:number,height:number,language:string){
- const empty=language==='ko'?'한눈에 보는 ROUNDY 인사이트':'A ROUNDY INSIGHT';
+function brightPhotoFrame(src:string|null,index:number,y:number,height:number,language:string,note?:string){
+ const fallback=String(note|| (language==='ko'?'대화에서 중요한 한 가지':'ONE THING TO REMEMBER')).trim();
+ // A missing approved photo becomes an intentional editorial note, NEVER
+ // fake stock photography or an unreviewed third-party image.
  return box({position:'absolute',left:80,top:y,width:920,height,overflow:'hidden',
   borderRadius:30,background:BRIGHT_EDITORIAL.softBlush,border:'1px solid '+BRIGHT_EDITORIAL.border},
   src?photo(src,{objectPosition:index%2===1?'center 44%':'center 54%'}):
    box({width:'100%',height:'100%',background:BRIGHT_EDITORIAL.blush,
-    flexDirection:'column',alignItems:'center',justifyContent:'center',gap:18},
-    box({width:80,height:5,background:BRIGHT_EDITORIAL.coral,borderRadius:5}),
-    text(empty,36,{fontWeight:700,color:BRIGHT_EDITORIAL.ink})));
+    flexDirection:'column',alignItems:'center',justifyContent:'center',gap:20,padding:'38px 80px'},
+    box({width:68,height:5,background:BRIGHT_EDITORIAL.coral,borderRadius:5}),
+    text('ROUNDY NOTE',23,{fontWeight:800,color:BRIGHT_EDITORIAL.coral,letterSpacing:2}),
+    text(fallback,Math.max(29,Math.min(44,Math.floor(780/Math.max(1,textUnits(fallback))))),
+     {fontWeight:750,color:BRIGHT_EDITORIAL.ink,lineHeight:1.34,textAlign:'center',wordBreak:'keep-all'})));
 }
 function brightPhotoCredit(value:string,index:number){
  // photoCardSourceLabel already bounds this credit and preserves full URLs in captions.
@@ -313,7 +315,7 @@ function brightInformation(slide:Row,index:number,document:Row,assets:EditorialA
  const highlightTop=bodyTop+fit.body.height+17;
  const hasHighlight=fit.highlight.lines.length>0;
  const textBottom=highlightTop+(hasHighlight?fit.highlight.height+26:0);
- const frameTop=Math.max(813,textBottom+32);
+ const frameTop=Math.max(720,textBottom+32);
  if(frameTop>960)throw new Error('CAROUSEL_CONTENT_PHOTO_SPACE_EXCEEDED');
  const credit=src?String(assets.cardCredits?.[index]||''):'';
  return box({position:'relative',width:1080,height:1350,background:BRIGHT_EDITORIAL.paper,
@@ -322,11 +324,11 @@ function brightInformation(slide:Row,index:number,document:Row,assets:EditorialA
   box({position:'absolute',left:80,right:80,top:251},brightHeadline(fit.title.lines,fit.title.fontSize)),
   box({position:'absolute',left:80,right:80,top:bodyTop},
    fittedRows(fit.body.lines,fit.body.fontSize,BRIGHT_EDITORIAL.body,500,1.26)),
-  hasHighlight?box({position:'absolute',left:80,top:highlightTop,padding:'12px 22px',
+  hasHighlight&&!!src?box({position:'absolute',left:80,top:highlightTop,padding:'12px 22px',
    background:BRIGHT_EDITORIAL.blush,borderRadius:17,
    border:'1px solid '+BRIGHT_EDITORIAL.border},
    fittedRows(fit.highlight.lines,fit.highlight.fontSize,BRIGHT_EDITORIAL.coral,750,1.18)):null,
-  brightPhotoFrame(src,index,frameTop,1196-frameTop,language),
+  brightPhotoFrame(src,index,frameTop,1196-frameTop,language,String(slide.highlight||slide.title||'')),
   brightPhotoCredit(credit,index),
   !src&&slide.source_label?box({position:'absolute',left:80,top:1231},
    text(language==='ko'?'자료 출처는 캡션에 표기':'Research sources in caption',19,
