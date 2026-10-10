@@ -1,4 +1,5 @@
 import {buildMarketingResearchTask,RESEARCH_TASK_VERSION,type SeoulDatingFormat,type TrendResearchHistory,type DatingMythHistory} from './marketing-research-task';
+import {applyAnswerFirstDocument} from './marketing-answer-first';
 import {selectVerifiedMarketingBook,verifiedBookEvidence} from './marketing-book-catalog';
 import {captionCtaIssues,isCompactDocument,bilingualCaptionIssues,CAMPAIGN_PRESET,EVENT_CAMPAIGN_PRESET} from './marketing-presentation';
 import {campaignDraftQuality} from './marketing-campaign';
@@ -88,7 +89,7 @@ function parseDocument(result:Row){
 }
 
 export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,call:Call){
- const requestedType=postType(input),language=input.language==='en'?'en':'ko';
+ const requestedType=postType(input),language=input.language==='en'?'en':'ko',answerFirst=input.answer_first_enabled===true;
  const seoulFormat:SeoulDatingFormat=requestedType==='seoul_dating'?seoulDatingFormat(String(draft.draft_date||'')+':'+String(draft.id||'')):'places';
  const trendItems=requestedType==='trend_research'?await loadTrendHistory(db):[],trendHistory=trendHistoryPrompt(trendItems);
  const mythItems=requestedType==='dating_myth'?await loadDatingMythHistory(db):[],mythHistory=datingMythHistoryPrompt(mythItems);
@@ -142,13 +143,13 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
 
  const write=async(type:PostType,repair?:{document:Row;issues:string[]},candidateVariant:''|'backup'='')=>{
   const writingVariant=type==='seoul_dating'?seoulFormat:type==='dating_myth'?candidateVariant:type==='seoul_trend'&&trendPack?trendPack.layout:'';
-  const instructions=writingInstructions(type,language,writingVariant)+(repair?'\nREPAIR PASS: Fix ONLY the listed quality issues. Preserve all supported facts, source IDs, uncertainty, card roles, and the approved topic. Do not add new claims. Return the complete corrected document in the same strict schema.':'');
+  const instructions=writingInstructions(type,language,writingVariant,answerFirst)+(repair?'\nREPAIR PASS: Fix ONLY the listed quality issues. Preserve all supported facts, source IDs, uncertainty, card roles, and the approved topic. Do not add new claims. Return the complete corrected document in the same strict schema.':'');
   const payload={editorial_type:type,language,direction:input.instruction||'',evidence:sources,event:facts,...(type==='seoul_dating'?{seoul_format:seoulFormat}:{}),...(type==='seoul_trend'&&trendContext?{trend_context:{id:trendContext.id,trend_key:trendContext.trend_key,display_name:trendContext.display_name,category:trendContext.category,status:trendContext.status,observed_at:trendContext.observed_at,summary:trendContext.summary,content_angle:trendContext.content_angle,source_ids:sources.map(x=>x.id)},...(trendPack?{fact_pack:trendPackForModel(trendPack),fact_pack_layout:trendPack.layout,fact_pack_origin:trendPack.origin,no_additional_web_search:true}: {})}:{}),...(type==='trend_research'?{current_year:new Date().getUTCFullYear(),recent_history:trendHistory}:{}),...(type==='dating_myth'?{myth_candidate:candidateVariant==='backup'?'backup':'primary',recent_history:mythHistory}:{}),...(repair?{original_document:repair.document,quality_issues:repair.issues}:{})};
-  if(Buffer.byteLength(instructions+JSON.stringify(payload)+JSON.stringify(contentSchema(type,language,writingVariant)),'utf8')>30000)throw new Error('PROMPT_SIZE_LIMIT');
+  if(Buffer.byteLength(instructions+JSON.stringify(payload)+JSON.stringify(contentSchema(type,language,writingVariant,answerFirst)),'utf8')>30000)throw new Error('PROMPT_SIZE_LIMIT');
   const control=ok(await db.from('marketing_ai_control').select('enabled,blocked_reason').eq('singleton',true).single());
   if(!control.enabled||control.blocked_reason)throw new Error('AI_PAUSED');
   ok(await db.from('marketing_generation_jobs').update({stage:repair?'repairing_copy':candidateVariant==='backup'?'writing_alternate_myth':'writing'}).eq('id',job.id));
-  const result=await call('chat/completions',{model:MODEL,reasoning_effort:'none',max_completion_tokens:4096,response_format:{type:'json_schema',json_schema:{name:'roundy_editorial_v2',strict:true,schema:contentSchema(type,language,writingVariant)}},messages:[{role:'system',content:instructions},{role:'user',content:JSON.stringify(payload)}]},55000);
+  const result=await call('chat/completions',{model:MODEL,reasoning_effort:'none',max_completion_tokens:4096,response_format:{type:'json_schema',json_schema:{name:'roundy_editorial_v2',strict:true,schema:contentSchema(type,language,writingVariant,answerFirst)}},messages:[{role:'system',content:instructions},{role:'user',content:JSON.stringify(payload)}]},55000);
   await record(result);return {...parseDocument(result),result};
  };
 
@@ -183,13 +184,13 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
  ok(await db.from('marketing_generation_jobs').update({result_snapshot:{draft_id:draft.id,content_language:language,growth_topic_type:input.content_mode==='growth_carousel'?effectiveType:null,raw_content:written.raw.slice(0,24000),research_sources:sources,images:[],carousel_slides:[],caption:'',quality_report:{version:3,status:'unchecked',issues:[]},generation_recovery:{fallback_reason:fallbackReason||null,repair_used:false}}}).eq('id',job.id));
 
  written.document=lockTrendGrounding(lockSeoulGrounding(lockVerifiedBook(written.document)));
- let prepared=prepareContent(written.document,effectiveType,language,sources);
+ let prepared=prepareContent(applyAnswerFirstDocument(written.document,answerFirst),effectiveType,language,sources);
  if(requestedType==='seoul_dating'&&effectiveType==='seoul_dating'&&prepared.report.status!=='passed'){
   const seoulIssues=classifyQualityIssues(prepared.report.issues);
   if(isSeoulVenueFailure(seoulIssues.critical)){
    effectiveType='conversation_prompt';sources=[];fallbackReason='insufficient_verified_places:seoul_dating->conversation_prompt';
    ok(await db.from('marketing_generation_jobs').update({stage:'writing_fallback'}).eq('id',job.id));
-   written=await write(effectiveType);prepared=prepareContent(written.document,effectiveType,language,sources);
+   written=await write(effectiveType);prepared=prepareContent(applyAnswerFirstDocument(written.document,answerFirst),effectiveType,language,sources);
   }
  }
  if(requestedType==='trend_research'&&effectiveType==='trend_research'){
@@ -197,19 +198,19 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
   if(repeat||isTrendGroundingFailure(trendIssues.critical)){
    effectiveType='conversation_prompt';sources=[];fallbackReason=(repeat||'research_grounding_failed')+':trend_research->conversation_prompt';
    ok(await db.from('marketing_generation_jobs').update({stage:'writing_fallback'}).eq('id',job.id));
-   written=await write(effectiveType);prepared=prepareContent(written.document,effectiveType,language,sources);
+   written=await write(effectiveType);prepared=prepareContent(applyAnswerFirstDocument(written.document,answerFirst),effectiveType,language,sources);
   }
  }
  if(requestedType==='dating_myth'&&effectiveType==='dating_myth'){
   let repeat=datingMythRepeatReason((prepared.document as Row)?.myth,mythItems),mythIssues=classifyQualityIssues(prepared.report.issues);
   if(repeat||isDatingMythGroundingFailure(mythIssues.critical)){
    mythAlternateUsed=true;
-   written=await write(effectiveType,undefined,'backup');prepared=prepareContent(written.document,effectiveType,language,sources);
+   written=await write(effectiveType,undefined,'backup');prepared=prepareContent(applyAnswerFirstDocument(written.document,answerFirst),effectiveType,language,sources);
    repeat=datingMythRepeatReason((prepared.document as Row)?.myth,mythItems);mythIssues=classifyQualityIssues(prepared.report.issues);
    if(repeat||isDatingMythGroundingFailure(mythIssues.critical)){
     effectiveType='conversation_prompt';sources=[];fallbackReason=(repeat||'myth_grounding_failed')+':dating_myth->conversation_prompt';
     ok(await db.from('marketing_generation_jobs').update({stage:'writing_fallback'}).eq('id',job.id));
-    written=await write(effectiveType);prepared=prepareContent(written.document,effectiveType,language,sources);
+    written=await write(effectiveType);prepared=prepareContent(applyAnswerFirstDocument(written.document,answerFirst),effectiveType,language,sources);
    }
   }
  }
@@ -225,7 +226,7 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
    repairUsed=true;
    written=await write(effectiveType,{document:prepared.document,issues:repairIssues});
    written.document=lockTrendGrounding(lockSeoulGrounding(lockVerifiedBook(written.document)));
-   prepared=prepareContent(written.document,effectiveType,language,sources);
+   prepared=prepareContent(applyAnswerFirstDocument(written.document,answerFirst),effectiveType,language,sources);
   }
  }
  const document=prepared.document;
