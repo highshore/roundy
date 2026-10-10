@@ -99,3 +99,27 @@ export function mobileCarouselFit(slide:Record<string,any>,plan:CarouselPlan,ind
  if(total>(cover?840:cta?720:790))throw new Error('CAROUSEL_TEXT_OVERFLOW_TOTAL');
  return {title,body,highlight,total,margin:CAROUSEL_CANVAS.safe,contentWidth:safeWidth};
 }
+
+// Magazine V2 typography budgets correspond to photograph-first and copy-first grids.
+// Unlike old cards, final content is an editorial closing, not a CTA.
+export function magazineCarouselFit(slide:Record<string,any>,plan:CarouselPlan,index:number,language:string){
+ if(plan.slide_count!==3&&plan.slide_count!==5)throw new Error('MAGAZINE_SLIDE_COUNT_INVALID');
+ const cover=index===0,closing=index===plan.slide_count-1;
+ const width=CAROUSEL_CANVAS.width-2*CAROUSEL_CANVAS.safe;
+ const title=fitCarouselCopy(String(slide?.title||''),{
+  width,availableHeight:cover?385:closing?320:235,
+  preferred:cover?Math.max(78,plan.title_font_size_px+8):closing?76:Math.min(74,plan.title_font_size_px),
+  minimum:cover?54:closing?48:43,maxLines:cover?4:3,label:'MAGAZINE_TITLE'});
+ const body=fitCarouselCopy(String(language==='en'?(slide?.body_en||slide?.body||''):(slide?.body_ko||slide?.body||'')),{
+  width,availableHeight:cover?115:closing?240:165,
+  preferred:Math.max(36,Math.min(44,plan.body_font_size_px+6)),
+  minimum:29,maxLines:cover?2:closing?4:3,label:'MAGAZINE_BODY'});
+ const highlight=fitCarouselCopy(String(slide?.highlight||''),{
+  width,availableHeight:65,preferred:31,minimum:25,maxLines:1,label:'MAGAZINE_HIGHLIGHT'});
+ // The common 80px inset is fixed. The geometry never truncates text to fit photography.
+ if(cover&&title.height+body.height>495)throw new Error('MAGAZINE_COVER_TEXT_OVERFLOW');
+ if(!cover&&!closing&&title.height+body.height+highlight.height>435)throw new Error('MAGAZINE_INSIGHT_TEXT_OVERFLOW');
+ if(closing&&title.height+body.height>575)throw new Error('MAGAZINE_CLOSING_TEXT_OVERFLOW');
+ return {title,body,highlight,margin:CAROUSEL_CANVAS.safe,contentWidth:width,
+  total:title.height+body.height+highlight.height};
+}
