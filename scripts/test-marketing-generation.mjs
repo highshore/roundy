@@ -7,8 +7,8 @@ let checks=0;const check=(f)=>{f();checks++;};
 const id='4b9066d0-e01b-4cc4-92d1-469f56317a04';
 const eventId='11111111-1111-4111-8111-111111111111';
 const base={request_key:'manual:quality-test-001',revision:1,mode:'both',content_mode:'prelaunch',language:'en',visual_mode:'cards',instruction:''};
-function harness({denied=false,network=false,badSources=false,duplicate=false,photo403=false,answerFirst=false,photoSettings=null,photoFixture='none'}={}){
- const tables={instagram_post_drafts:[{id,status:'needs_approval',revision:1,caption:'Original',cta:'Follow',images:[],carousel_slides:[],content_mode:'prelaunch'}],marketing_generation_jobs:[],marketing_ai_control:[{singleton:true,enabled:true,blocked_reason:null}],marketing_automation_settings:[{singleton:true,carousel_answer_first_enabled:answerFirst,...(photoSettings||{})}],marketing_uploaded_images:[],events:[{id:eventId,slug:'fixture',title:'Fixture event',title_ko:'테스트 모임',status:'live',deleted_at:null,marketing_enabled:true,starts_at:'2099-12-01T10:00:00Z',ends_at:'2099-12-01T12:00:00Z',venue:'Fixture public venue',capacity:12,seats_remaining:12,price_ladies:29000,price_gents:49000,event_language:'either',images:[]}]};
+function harness({denied=false,network=false,badSources=false,duplicate=false,photo403=false,answerFirst=false,photoSettings=null,photoFixture='none',templateSettings=null,slotNumber=1}={}){
+ const tables={instagram_post_drafts:[{id,status:'needs_approval',revision:1,caption:'Original',cta:'Follow',images:[],carousel_slides:[],content_mode:'prelaunch'}],marketing_generation_jobs:[],marketing_ai_control:[{singleton:true,enabled:true,blocked_reason:null}],marketing_automation_settings:[{singleton:true,carousel_answer_first_enabled:answerFirst,...(photoSettings||{}),...(templateSettings||{})}],marketing_uploaded_images:[],events:[{id:eventId,slug:'fixture',title:'Fixture event',title_ko:'테스트 모임',status:'live',deleted_at:null,marketing_enabled:true,starts_at:'2099-12-01T10:00:00Z',ends_at:'2099-12-01T12:00:00Z',venue:'Fixture public venue',capacity:12,seats_remaining:12,price_ladies:29000,price_gents:49000,event_language:'either',images:[]}]};
  const requests=[],stored=[];
  class Q{
   constructor(t){this.rows=tables[t]||[];this.pred=[];this.patch=null;this.n=Infinity;}
@@ -16,6 +16,7 @@ function harness({denied=false,network=false,badSources=false,duplicate=false,ph
   exec(single=false){const rows=this.rows.filter(r=>this.pred.every(p=>p(r))).slice(0,this.n);if(this.patch)rows.forEach(r=>Object.assign(r,this.patch));return Promise.resolve({data:structuredClone(single?rows[0]||null:rows),error:null});}
  }
  const db={from:t=>new Q(t),rpc:async(name,p)=>{
+  if(name==='reserve_marketing_carousel_slot')return {data:slotNumber,error:null};
   if(name==='event_public_roster')return {data:{women:[],men:[],women_count:0,men_count:0,total:0},error:null};
   if(name==='set_marketing_quality'){const d=tables.instagram_post_drafts[0];if(d.revision!==p.p_revision)return {error:{message:'DRAFT_CHANGED_REFRESH_FIRST'}};Object.assign(d,{quality_report:p.p_report,quality_revision:d.revision});return {data:structuredClone(d),error:null};}
   if(denied)return {error:{message:'GENERATION_BUDGET_REACHED'}};
@@ -73,6 +74,7 @@ function harness({denied=false,network=false,badSources=false,duplicate=false,ph
   // Campaigns have their own model schemas; an editorial fixture is not a
   // valid campaign response. Mock the schema/roles actually sent to the model.
   const answerFirstSchema=Boolean(body.response_format?.json_schema?.schema?.properties?.thumbnail_candidates);
+  const requestedSlides=Number(body.response_format?.json_schema?.schema?.properties?.slides?.minItems||0);
   if(data.campaign_pattern||data.event_campaign_stage){
    const schema=body.response_format.json_schema.schema.properties;
    const pattern=data.campaign_pattern||data.event_campaign_pattern;
@@ -90,7 +92,8 @@ function harness({denied=false,network=false,badSources=false,duplicate=false,ph
    }[pattern];
    if(!oldRoles)throw new Error('UNMOCKED_CAMPAIGN_PATTERN: '+pattern);
    const helper=load('src/lib/marketing-answer-first.ts');
-   const roles=answerFirstSchema?(data.campaign_pattern?helper.fiveCampaignRoles(pattern,oldRoles):helper.fiveEventRoles(pattern,oldRoles)):oldRoles;
+   const roles=requestedSlides===3?(data.campaign_pattern?helper.campaignRolesForCount(pattern,oldRoles,3):helper.eventRolesForCount(pattern,oldRoles,3)):
+    answerFirstSchema?(data.campaign_pattern?helper.fiveCampaignRoles(pattern,oldRoles):helper.fiveEventRoles(pattern,oldRoles)):oldRoles;
    const ko=data.language==='ko';
    const enTitles=['Beyond the screen','One conversation at a time','Meet in Seoul','Focus on the person','Make room for a real story'];
    const koTitles=['화면 밖에서 시작하기','한 사람과 한 번의 대화','서울에서 직접 만나요','서로의 이야기에 집중하기','다음 이야기를 위한 여유'];
@@ -127,11 +130,16 @@ function harness({denied=false,network=false,badSources=false,duplicate=false,ph
    c.thumbnail_candidates=headlines;
    if(data.editorial_type){
     const helper=load('src/lib/marketing-answer-first.ts');
-    const roles=helper.fiveEditorialRoles(data.editorial_type,c.slides.map(x=>x.role));
+    const roles=requestedSlides===3?helper.editorialRolesForCount(data.editorial_type,c.slides.map(x=>x.role),3):helper.fiveEditorialRoles(data.editorial_type,c.slides.map(x=>x.role));
     c.slides=roles.map(role=>c.slides.find(x=>x.role===role));
     if(c.slides.some(x=>!x))throw new Error('ANSWER_FIRST_TEST_ROLE_MISSING:'+data.editorial_type);
    }
    c.slides[0].title=headlines[0];
+   if(requestedSlides===3&&data.editorial_type==='conversation_prompt'){
+    const value=c.slides[1],ko=language==='ko';
+    value.body=ko?'첫 질문: 최근 기억에 남는 곳은 어디예요? 후속 질문: 어떤 점이 좋았어요?':'First question: Where did you enjoy going? Follow-up: What stood out?';
+    value.secondary_body=ko?'First question: Where did you enjoy going? Follow-up: What stood out?':'첫 질문: 최근 기억에 남는 곳은 어디예요? 후속 질문: 어떤 점이 좋았어요?';
+   }
   }
   if(data.editorial_type==='dating_myth'&&data.myth_candidate==='backup'){
    const ko=data.language==='ko';c.myth={claim:ko?'침묵이 생기면 첫 데이트가 망한 것이다':'Silence means a first date is going badly',myth_key:'silence_means_failure',verdict:'not_well_supported',selection_reason:ko?'첫 후보와 다른 주제이며 대화 맥락 연구로 검토할 수 있습니다.':'A distinct backup belief with relevant conversation evidence.'};
@@ -236,6 +244,51 @@ for(const language of ['ko','en'])for(const type of Object.keys(harness().policy
   check(()=>assert.deepEqual(r.job.result_snapshot.stock_photo_selections.map(p=>p.slot),[0,1]));
   check(()=>assert.equal(h.requests.some(x=>x.url.endsWith('images/generations')),false));
  }
+}
+for(const language of ['ko','en'])for(const ordinal of [1,2,3,4]){
+ const settings={carousel_mode:'alternating',carousel_default_slides:5,
+  carousel_title_font_size_px:72,carousel_body_font_size_px:36};
+ const h=harness({templateSettings:settings,answerFirst:true,slotNumber:ordinal});
+ const input={...base,request_key:'manual:carousel-template-'+language+'-'+ordinal,language,visual_source:'auto_ai'};
+ const result=await h.api.runGeneration(id,input,null);
+ const expected=ordinal%2?3:5;
+ check(()=>assert.equal(result.job.status,'completed',JSON.stringify({error:result.error,job:result.job.error_message,quality:result.draft.quality_report})));
+ check(()=>assert.equal(result.draft.carousel_slides.length,expected));
+ check(()=>assert.equal(result.draft.images.length,expected));
+ check(()=>assert.equal(result.draft.content_document.carousel_template.slide_count,expected));
+ check(()=>assert.equal(result.draft.content_document.carousel_template.reservation_number,ordinal));
+ check(()=>assert.equal(result.draft.content_document.thumbnail_candidates.length,3));
+ const writing=h.requests.find(x=>x.url.endsWith('chat/completions')).body;
+ check(()=>assert.equal(writing.response_format.json_schema.schema.properties.slides.minItems,expected));
+ check(()=>assert.match(writing.messages[0].content,/ANSWER-FIRST \(REQUIRED\)/));
+}
+for(const language of ['ko','en']){
+ const settings={carousel_mode:'fixed',carousel_default_slides:3,carousel_title_font_size_px:72,carousel_body_font_size_px:36};
+ const h=harness({templateSettings:settings,answerFirst:true});
+ const r=await h.api.runGeneration(id,{...base,request_key:'manual:carousel-fixed-'+language,language},null);
+ check(()=>assert.equal(r.job.status,'completed',JSON.stringify(r.job)));
+ check(()=>assert.equal(r.draft.carousel_slides.length,5,'Fixed must produce five even if an older setting contains three'));
+ check(()=>assert.equal(r.draft.content_document.carousel_template.reservation_number,null));
+}
+// Exercise the compact three-slide schema across real editorial research/topic contracts.
+for(const language of ['ko','en'])for(const type of Object.keys(harness().policy.CONTENT_PROFILES)){
+ const tSettings={carousel_mode:'alternating',carousel_default_slides:5,carousel_title_font_size_px:72,carousel_body_font_size_px:36};
+ const h=harness({answerFirst:true,templateSettings:tSettings,slotNumber:1});
+ const input={...base,request_key:'manual:compact-three-'+language+'-'+type,language,
+  content_mode:type==='prelaunch'||type==='live_event'?type:'growth_carousel',
+  ...(type==='prelaunch'?{campaign_pattern:'poster'}:{}),
+  ...(type==='live_event'?{event_id:eventId,event_campaign_stage:'launch'}:{}),
+  ...(!['prelaunch','live_event'].includes(type)?{topic_type:type}:{})};
+ const r=await h.api.runGeneration(id,input,null);
+ check(()=>assert.equal(r.job.status,'completed',JSON.stringify({type,language,error:r.error,job:r.job,quality:r.draft.quality_report})));
+ check(()=>assert.equal(r.draft.carousel_slides.length,3,JSON.stringify({
+  type,language,actual:r.draft.carousel_slides.length,
+  stored_plan:r.draft.content_document?.carousel_template,
+  writing_schema_lengths:h.requests.filter(x=>x.url.endsWith('chat/completions')).map(x=>x.body.response_format.json_schema.schema.properties.slides.minItems),
+  job_payload:h.tables.marketing_generation_jobs.at(-1)?.request_payload,
+  draft_role:r.draft.draft_kind
+ })));
+ check(()=>assert.equal(r.draft.content_document.carousel_template.slide_count,3));
 }
 const adminMarketingSource=fs.readFileSync(new URL('../src/components/admin-marketing.tsx',import.meta.url),'utf8');
 check(()=>assert.ok(adminMarketingSource.includes("...(basis==='growth_carousel'?{topic_type:topic}:{})")));

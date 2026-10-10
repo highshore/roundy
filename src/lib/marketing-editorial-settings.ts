@@ -1,4 +1,4 @@
-// Configuration only. Generation, rendering and publishing intentionally do not consume these values yet.
+// The carousel-count, font and Answer-First/real-photo controls are consumed by new generation and rendering. Publishing remains unchanged.
 export type MarketingEditorialSettings = {
   feed_daily_max_posts: number;
   carousel_mode: 'fixed' | 'alternating';

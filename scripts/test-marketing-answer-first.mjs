@@ -6,7 +6,14 @@ import ts from 'typescript';
 const read=path=>fs.readFileSync(new URL('../'+path,import.meta.url),'utf8');
 const js=ts.transpileModule(read('src/lib/marketing-answer-first.ts'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
 const module={exports:{}};
-vm.runInNewContext(js,{module,exports:module.exports});
+const layoutCode=ts.transpileModule(read('src/lib/marketing-carousel-template.ts'),{
+ compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}
+}).outputText;
+const layoutModule={exports:{}};
+vm.runInNewContext(layoutCode,{module:layoutModule,exports:layoutModule.exports});
+vm.runInNewContext(js,{module,exports:module.exports,
+ require:name=>{if(name==='./marketing-carousel-template')return layoutModule.exports;throw new Error('Unexpected module '+name);}
+});
 const {
  fiveEditorialRoles,fiveCampaignRoles,fiveEventRoles,withAnswerFirstSchema,
  answerFirstIssues,applyAnswerFirstDocument,selectAnswerFirstHeadline

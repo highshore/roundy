@@ -1,6 +1,7 @@
 import {prepareSavedCtaRecovery,SAVED_CTA_RECOVERY_VERSION} from './marketing-output-recovery';
 import {loadEditorialAssets} from './marketing-render-assets';
 import {photoCreditCaption,configuredPhotoSourcingPolicy,savedPhotoSourcingPolicy} from './marketing-stock-photo-policy';
+import {resolveCarouselPlan,savedCarouselPlan,type CarouselPlan} from './marketing-carousel-template';
 import {approvedStockCardAssets,listStockSelections,pexelsConfigured,photoSelectionSnapshot,prepareStockSelections,requiredStockSlots,stockReady} from './marketing-stock-photos';
 import {CONTENT_POLICY_VERSION} from './marketing-content-policy';
 import {selectTrendForAutomaticContent,markTrendUsed} from './marketing-trend-radar';
@@ -22,7 +23,7 @@ type Row=Record<string,any>;
 type DB=ReturnType<typeof createServiceRoleClient>;
 type ContentLanguage='ko'|'en';
 type VisualSource='auto_ai'|'uploaded'|'none'|'pexels';
-export type GenerationInput={answer_first_enabled?:boolean;request_key:string;revision:number;mode:'text'|'image'|'both';content_mode:'prelaunch'|'live_event'|'growth_carousel';visual_mode:'cards'|'photo';visual_source?:VisualSource;topic_type?:string;instruction?:string;language?:ContentLanguage;confirm_photo?:boolean;render_only?:boolean;campaign_pattern?:'auto'|'poster'|'problem_solution'|'how_it_works'|'benefit_stack'|'countdown';campaign_tone?:'modern_premium'|'soft_romantic'|'bold_teaser';launch_date?:string;event_id?:string;event_campaign_stage?:'auto'|'launch'|'experience'|'venue'|'participants'|'momentum'|'imminent'|'last_call';event_campaign_pattern?:'auto'|'event_poster'|'experience'|'social_proof'|'offer'|'last_call'};
+export type GenerationInput={carousel_plan?:CarouselPlan|null;answer_first_enabled?:boolean;request_key:string;revision:number;mode:'text'|'image'|'both';content_mode:'prelaunch'|'live_event'|'growth_carousel';visual_mode:'cards'|'photo';visual_source?:VisualSource;topic_type?:string;instruction?:string;language?:ContentLanguage;confirm_photo?:boolean;render_only?:boolean;campaign_pattern?:'auto'|'poster'|'problem_solution'|'how_it_works'|'benefit_stack'|'countdown';campaign_tone?:'modern_premium'|'soft_romantic'|'bold_teaser';launch_date?:string;event_id?:string;event_campaign_stage?:'auto'|'launch'|'experience'|'venue'|'participants'|'momentum'|'imminent'|'last_call';event_campaign_pattern?:'auto'|'event_poster'|'experience'|'social_proof'|'offer'|'last_call'};
 const topics=['mbti','dating_archetype','book_insight','trend_research','meme_remix','dating_myth','conversation_prompt','seoul_dating','korea_life','mini_quiz'];
 const allowedTopics=[...topics,'seoul_trend'];
 const researchTopics=new Set(['book_insight','trend_research','dating_myth','seoul_dating','seoul_trend']);
@@ -331,9 +332,19 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
   if(q.status!=='passed')throw new Error('품질 검토 필요: '+q.issues.join(' '));
  }
  const preference=checked(await db.from('marketing_automation_settings')
-  .select('carousel_answer_first_enabled,carousel_min_real_photos_5,carousel_min_real_photos_3,carousel_ai_thumbnail_enabled')
+  .select('carousel_mode,carousel_default_slides,carousel_title_font_size_px,carousel_body_font_size_px,carousel_answer_first_enabled,carousel_min_real_photos_5,carousel_min_real_photos_3,carousel_ai_thumbnail_enabled')
   .eq('singleton',true).maybeSingle()).data as Row|null;
  input.answer_first_enabled=input.mode!=='image'&&(preference?.carousel_answer_first_enabled===true||draft.content_document?.answer_first===true||input.answer_first_enabled===true);
+ const existingPlan=savedCarouselPlan(draft.content_document);
+ let plan:CarouselPlan|null=existingPlan;
+ if(!plan&&input.visual_mode==='cards'&&input.mode!=='image'){
+  const mode=String(preference?.carousel_mode||'');
+  const ordinal=mode==='alternating'
+   ?checked(await db.rpc('reserve_marketing_carousel_slot',{p_draft:draft.id})).data as number:null;
+  plan=resolveCarouselPlan(preference,ordinal);
+ }
+ // A template's size is frozen at the initial content reservation, including retries.
+ input.carousel_plan=plan;
  const existingPhotoPolicy=savedPhotoSourcingPolicy(draft.content_document?.photo_sourcing);
  const managedPhotoSourcing=input.visual_mode==='cards'
   &&['auto_ai','pexels'].includes(originallyRequested)
@@ -351,18 +362,18 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
  const stockVisuals=wantsVisuals&&visualSource==='pexels';
  const uploadedVisuals=(input.render_only||input.mode==='image')&&visualSource==='uploaded';
  const eventNeedsAiFallback=input.content_mode==='live_event'&&autoVisuals&&eventRealPhotos.length<3;
- const coverCost=managedPhotoSourcing&&(input.mode==='image'?existingPhotoPolicy?.ai_thumbnail_enabled===true:preference?.carousel_ai_thumbnail_enabled===true);
+ const coverCost=managedPhotoSourcing&&(input.mode==='image'?existingPhotoPolicy?.ai_thumbnail_enabled===true:preference?.carousel_ai_thumbnail_enabled===true&&plan?.slide_count!==3);
  const operation=stockVisuals?(input.mode==='image'||input.render_only?(coverCost?'photo':'render'):coverCost?'copy_photo':research?'research':'copy'):autoVisuals
   ?(input.content_mode==='live_event'&&!eventNeedsAiFallback
     ?(input.mode==='image'||input.render_only?'render':research?'research':'copy')
     :(input.mode==='image'||input.render_only||recoveryPatch?'photo':'copy_photo'))
   :uploadedVisuals?'render':research?'research':'copy';
- const fingerprint=createHash('sha256').update(JSON.stringify({id:draftId,revision:input.revision,mode:input.mode,content:input.content_mode,language:input.language,visual:input.visual_mode,visual_source:visualSource,topic:input.topic_type||'',instruction:input.instruction,campaign_pattern:input.campaign_pattern||null,campaign_tone:input.campaign_tone||null,launch_date:input.launch_date||null,event_id:input.event_id||draft.event_id||null,event_campaign_stage:input.event_campaign_stage||null,event_campaign_pattern:input.event_campaign_pattern||null,render:!!input.render_only,answer_first_enabled:input.answer_first_enabled===true,photo_first:managedPhotoSourcing,saved_recovery_of:thread?.recoverySourceJobId||null})).digest('hex');
+ const fingerprint=createHash('sha256').update(JSON.stringify({id:draftId,revision:input.revision,mode:input.mode,content:input.content_mode,language:input.language,visual:input.visual_mode,visual_source:visualSource,topic:input.topic_type||'',instruction:input.instruction,campaign_pattern:input.campaign_pattern||null,campaign_tone:input.campaign_tone||null,launch_date:input.launch_date||null,event_id:input.event_id||draft.event_id||null,event_campaign_stage:input.event_campaign_stage||null,event_campaign_pattern:input.event_campaign_pattern||null,render:!!input.render_only,carousel_slot:plan?.reservation_number||null,carousel_count:plan?.slide_count||null,answer_first_enabled:input.answer_first_enabled===true,photo_first:managedPhotoSourcing,saved_recovery_of:thread?.recoverySourceJobId||null})).digest('hex');
  const reservation=checked(await db.rpc('reserve_marketing_generation',{p_key:input.request_key,p_fingerprint:fingerprint,p_draft:draftId,p_revision:input.revision,p_operation:operation,p_actor:actor,p_automatic:automatic})).data as Row,job=reservation.job as Row;
  if(!reservation.accepted)return {draft,job,deduplicated:true};
  let contentQuality:Row|null=null;
  try{
-  const requestPayload={answer_first_enabled:input.answer_first_enabled===true,photo_first:managedPhotoSourcing,mode:input.mode,content_mode:input.content_mode,language:input.language,visual_mode:input.visual_mode,visual_source:visualSource,topic_type:input.topic_type||null,trend_id:draft.trend_id||null,instruction:input.instruction||'',campaign_pattern:input.campaign_pattern||null,campaign_tone:input.campaign_tone||null,launch_date:input.launch_date||null,event_id:input.event_id||draft.event_id||null,event_campaign_stage:input.event_campaign_stage||null,event_campaign_pattern:input.event_campaign_pattern||null,confirm_photo:input.confirm_photo===true,render_only:input.render_only===true,...(recoverySource?{saved_recovery_of:recoverySource.id}: {})};
+  const requestPayload={carousel_plan:plan,answer_first_enabled:input.answer_first_enabled===true,photo_first:managedPhotoSourcing,mode:input.mode,content_mode:input.content_mode,language:input.language,visual_mode:input.visual_mode,visual_source:visualSource,topic_type:input.topic_type||null,trend_id:draft.trend_id||null,instruction:input.instruction||'',campaign_pattern:input.campaign_pattern||null,campaign_tone:input.campaign_tone||null,launch_date:input.launch_date||null,event_id:input.event_id||draft.event_id||null,event_campaign_stage:input.event_campaign_stage||null,event_campaign_pattern:input.event_campaign_pattern||null,confirm_photo:input.confirm_photo===true,render_only:input.render_only===true,...(recoverySource?{saved_recovery_of:recoverySource.id}: {})};
   const threadId=thread?.threadId||job.id,attemptNumber=thread?.attemptNumber||1,workflowId=await resolveContentWorkflowId(db,draft,job,thread);
   checked(await db.from('marketing_generation_jobs').update({
    request_payload:requestPayload,
