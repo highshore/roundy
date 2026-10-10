@@ -3,7 +3,7 @@ import {loadEditorialAssets} from './marketing-render-assets';
 import {photoCreditCaption,configuredPhotoSourcingPolicy,savedPhotoSourcingPolicy} from './marketing-stock-photo-policy';
 import {resolveCarouselPlan,savedCarouselPlan,type CarouselPlan} from './marketing-carousel-template';
 import {reviewMarketingDraft,mergePreflightQuality} from './marketing-preflight-service';
-import {approvedStockCardAssets,listStockSelections,pexelsConfigured,photoSelectionSnapshot,prepareStockSelections,requiredStockSlots,stockReady} from './marketing-stock-photos';
+import {approvedStockCardAssets,listStockSelections,photoSelectionSnapshot,prepareStockSelections,requiredStockSlots,stockReady} from './marketing-stock-photos';
 import {CONTENT_POLICY_VERSION} from './marketing-content-policy';
 import {selectTrendForAutomaticContent,markTrendUsed} from './marketing-trend-radar';
 import {growthLearningWeights} from './marketing-growth';
@@ -23,7 +23,7 @@ import { createServiceRoleClient } from './supabase/service';
 type Row=Record<string,any>;
 type DB=ReturnType<typeof createServiceRoleClient>;
 type ContentLanguage='ko'|'en';
-type VisualSource='auto_ai'|'uploaded'|'none'|'pexels';
+type VisualSource='auto_ai'|'uploaded'|'none'|'pexels'|'stock';
 export type GenerationInput={carousel_plan?:CarouselPlan|null;answer_first_enabled?:boolean;request_key:string;revision:number;mode:'text'|'image'|'both';content_mode:'prelaunch'|'live_event'|'growth_carousel';visual_mode:'cards'|'photo';visual_source?:VisualSource;topic_type?:string;instruction?:string;language?:ContentLanguage;confirm_photo?:boolean;render_only?:boolean;campaign_pattern?:'auto'|'poster'|'problem_solution'|'how_it_works'|'benefit_stack'|'countdown';campaign_tone?:'modern_premium'|'soft_romantic'|'bold_teaser';launch_date?:string;event_id?:string;event_campaign_stage?:'auto'|'launch'|'experience'|'venue'|'participants'|'momentum'|'imminent'|'last_call';event_campaign_pattern?:'auto'|'event_poster'|'experience'|'social_proof'|'offer'|'last_call'};
 const topics=['mbti','dating_archetype','book_insight','trend_research','meme_remix','dating_myth','conversation_prompt','seoul_dating','korea_life','mini_quiz'];
 const allowedTopics=[...topics,'seoul_trend'];
@@ -42,7 +42,7 @@ export function validateGenerationInput(value:unknown):GenerationInput{
  const topicType=v.content_mode==='growth_carousel'?v.topic_type:undefined;
  if(topicType!=null&&!allowedTopics.includes(topicType))throw new Error('INVALID_GROWTH_TOPIC');
  if(v.language!==undefined&&!['ko','en'].includes(v.language))throw new Error('INVALID_CONTENT_LANGUAGE');
- if(v.visual_source!==undefined&&!['auto_ai','uploaded','none','pexels'].includes(v.visual_source))throw new Error('INVALID_VISUAL_SOURCE');
+ if(v.visual_source!==undefined&&!['auto_ai','uploaded','none','pexels','stock'].includes(v.visual_source))throw new Error('INVALID_VISUAL_SOURCE');
  if(v.campaign_pattern!==undefined&&!['auto',...CAMPAIGN_PATTERNS].includes(v.campaign_pattern as any))throw new Error('INVALID_CAMPAIGN_PATTERN');
  if(v.campaign_tone!==undefined&&!(CAMPAIGN_TONES as readonly string[]).includes(v.campaign_tone))throw new Error('INVALID_CAMPAIGN_TONE');
  if(v.launch_date!==undefined&&(!/^\d{4}-\d{2}-\d{2}$/.test(v.launch_date)||!Number.isFinite(Date.parse(v.launch_date+'T00:00:00+09:00'))))throw new Error('INVALID_LAUNCH_DATE');
@@ -55,7 +55,7 @@ export function validateGenerationInput(value:unknown):GenerationInput{
  if(v.visual_mode==='photo'&&(v.content_mode==='growth_carousel'||v.mode==='text'||v.render_only))throw new Error('PHOTO_OPTION_NOT_APPLICABLE');
  if(v.visual_mode==='photo'&&v.confirm_photo!==true)throw new Error('CONFIRM_PAID_PHOTO_FIRST');
  if(v.render_only&&v.mode!=='image')throw new Error('INVALID_RENDER_OPTIONS');
- if(v.visual_source==='pexels'&&v.mode==='text')throw new Error('PEXELS_VISUALS_REQUIRE_IMAGE_MODE');
+ if(['pexels','stock'].includes(String(v.visual_source))&&v.mode==='text')throw new Error('STOCK_VISUALS_REQUIRE_IMAGE_MODE');
  const visualSource:VisualSource=v.visual_source||(v.mode==='text'?'none':'auto_ai');
  if(v.mode==='image'&&visualSource==='none')throw new Error('IMAGE_SOURCE_REQUIRED');
  return {...v,visual_source:visualSource,topic_type:topicType,instruction:v.instruction?.trim()||'',...(v.content_mode==='prelaunch'?{campaign_pattern:v.campaign_pattern||'auto',campaign_tone:v.campaign_tone||'modern_premium'}:{}),...(v.content_mode==='live_event'?{event_campaign_stage:v.event_campaign_stage||'auto',event_campaign_pattern:v.event_campaign_pattern||'auto'}:{})};
@@ -310,8 +310,8 @@ async function resolveContentWorkflowId(db:DB,draft:Row,job:Row,thread?:Generati
 }
 export async function runGeneration(draftId:string,value:unknown,actor:string|null,automatic=false,thread?:GenerationThreadContext){
  const input=validateGenerationInput(value),db=createServiceRoleClient();
- const originallyRequested:VisualSource=automatic?(pexelsConfigured()?'pexels':'auto_ai'):input.visual_source!;
- if(automatic&&input.visual_source&&!['auto_ai','pexels'].includes(input.visual_source))throw new Error('AUTOMATION_VISUAL_SOURCE_INVALID');
+ const originallyRequested:VisualSource=automatic?'stock':input.visual_source!;
+ if(automatic&&input.visual_source&&!['auto_ai','pexels','stock'].includes(input.visual_source))throw new Error('AUTOMATION_VISUAL_SOURCE_INVALID');
  let draft=await readDraft(db,draftId);
  let recoveryPatch:Row|null=null,recoverySource:Row|null=null;
  if(thread?.recoverySourceJobId){
@@ -348,19 +348,19 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
  input.carousel_plan=plan;
  const existingPhotoPolicy=savedPhotoSourcingPolicy(draft.content_document?.photo_sourcing);
  const managedPhotoSourcing=input.visual_mode==='cards'
-  &&['auto_ai','pexels'].includes(originallyRequested)
+  &&['auto_ai','pexels','stock'].includes(originallyRequested)
   &&(input.mode==='image'?!!existingPhotoPolicy:typeof preference?.carousel_min_real_photos_5==='number'&&typeof preference?.carousel_min_real_photos_3==='number');
  // Both legacy 'auto_ai' and 'pexels' selections now use real photos first.
  // The optional AI image, if enabled, belongs ONLY to the cover and is generated
  // after all photo slots have cleared human review.
- const visualSource:VisualSource=managedPhotoSourcing?'pexels':originallyRequested;
+ const visualSource:VisualSource=managedPhotoSourcing?'stock':originallyRequested;
  input.language=input.mode==='image'?(draft.content_language==='en'?'en':draft.content_language==='ko'?'ko':await nextContentLanguage(db,draft.id)):await resolveContentLanguage(db,draft,input.language);
  const growth=input.content_mode==='growth_carousel',research=growth&&researchTopics.has(input.topic_type||'')&&!input.render_only&&input.mode!=='image';
  const eventFacts=input.content_mode==='live_event'?await loadEventCampaignFacts(db,String(input.event_id||draft.event_id||'')):null;
  const eventRealPhotos=eventFacts?.images||[];
  const wantsVisuals=recoveryPatch||input.render_only||input.mode==='image'||input.mode==='both'||automatic;
  const autoVisuals=wantsVisuals&&visualSource==='auto_ai';
- const stockVisuals=wantsVisuals&&visualSource==='pexels';
+ const stockVisuals=wantsVisuals&&['pexels','stock'].includes(visualSource);
  const uploadedVisuals=(input.render_only||input.mode==='image')&&visualSource==='uploaded';
  const eventNeedsAiFallback=input.content_mode==='live_event'&&autoVisuals&&eventRealPhotos.length<3;
  const coverCost=managedPhotoSourcing&&(input.mode==='image'?existingPhotoPolicy?.ai_thumbnail_enabled===true:preference?.carousel_ai_thumbnail_enabled===true&&plan?.slide_count!==3);
@@ -436,8 +436,8 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
     const images=await renderCardsWithAssets(db,draft,job,assets);
     await progress(db,job,'saving_images');
     // Keep photographer attribution visible in the final draft.
-    const captionWithCredit=photoCreditCaption(String(draft.caption||''),selected.map((photo:Row)=>String(photo.photographer||'')));
-    draft=await savePartial(db,draft,{images,caption:captionWithCredit,generation_source:automatic?'automation':'manual',visual_source:'pexels',last_regeneration_mode:input.mode,last_regeneration_instruction:input.instruction});
+    const captionWithCredit=photoCreditCaption(String(draft.caption||''),selected);
+    draft=await savePartial(db,draft,{images,caption:captionWithCredit,generation_source:automatic?'automation':'manual',visual_source:visualSource,last_regeneration_mode:input.mode,last_regeneration_instruction:input.instruction});
    }else{
     // Missing, insufficient, unlicensed or unapproved Pexels photos are a review
     // state, NOT a failed job and NEVER an excuse to produce replacement AI photos.

@@ -1,6 +1,7 @@
 import {answerFirstIssues} from './marketing-answer-first';
 import {mobileCarouselFit,savedCarouselPlan,resolveCarouselPlan} from './marketing-carousel-template';
 import {requiredPhotoSlotsForRoles,savedPhotoSourcingPolicy} from './marketing-stock-photo-policy';
+import {photoRightsIssues,captionHasRequiredCredits} from './marketing-photo-rights';
 
 export type PreflightId='slide_count'|'real_photos'|'photo_sources'|'photo_approval'|'answer_first'|'final_cta'|'mobile_render';
 export type PreflightCheck={id:PreflightId;label:string;passed:boolean;detail:string;issues:string[]};
@@ -19,15 +20,6 @@ const validRoundyDestination=(value:unknown)=>{
  const hostname=new URL(str(value)).hostname.toLowerCase();
  return hostname==='roundy.team'||hostname==='www.roundy.team';
 };
-const validPexels=(p:PhotoRow)=>str(p.provider)==='pexels'
- &&goodHttps(p.source_url,'www.pexels.com')
- &&new URL(str(p.source_url)).pathname.startsWith('/photo/')
- &&goodHttps(p.image_url,'images.pexels.com')
- &&str(p.license_name)==='Pexels License'
- &&str(p.license_url)==='https://www.pexels.com/license/'
- &&goodHttps(p.photographer_url,'www.pexels.com')
- &&str(p.photographer).length>0
- &&!!p.license_checked_at;
 export function photoReviewManifest(photos:PhotoRow[]):Record<string,unknown>[]{
  return photos.map(photo=>({
   slot:Number(photo.slot),asset_id:str(photo.asset_id),
@@ -81,16 +73,18 @@ export function evaluateMarketingPreflight(draft:Record<string,any>,settings:Rec
  if(photos.length<minimum)realIssues.push('실제 사진이 '+photos.length+'장입니다. 최소 '+minimum+'장을 확보하세요.');
  if(requiredSlots.length&&photos.some(p=>!requiredSlots.includes(Number(p.slot))))realIssues.push('지정되지 않은 카드 위치에 실제 사진이 배치되어 있습니다.');
  if(photoPolicy?.ai_thumbnail_enabled&&photos.some(p=>Number(p.slot)===0))realIssues.push('AI 썸네일 설정 시 첫 장에는 실제 사진을 중복 배치할 수 없습니다.');
- if(draft.visual_source!=='pexels')realIssues.push('실제 사진 원본 및 승인 기록이 연결되지 않았습니다. 검수된 Pexels 자산을 사용하세요.');
+ if(!['pexels','stock'].includes(String(draft.visual_source)))realIssues.push('실제 사진 원본 및 승인 기록이 연결되지 않았습니다. 승인된 사진 자산을 사용하세요.');
  add('real_photos',realIssues,'실제 사진 '+photos.length+'장으로 최소 '+minimum+'장을 충족했습니다.');
 
  const sourceIssues:string[]=[];
  if(!photos.length)sourceIssues.push('출처가 확인된 실제 사진이 없습니다.');
  photos.forEach(p=>{
   const slot=Number(p.slot)+1;
-  if(!validPexels(p))sourceIssues.push(slot+'장: Pexels 원본 URL, 사진가, 라이선스 또는 확인 일시가 누락되거나 유효하지 않습니다.');
+  const rights=photoRightsIssues(p);
+  if(rights.length)sourceIssues.push(slot+'장: 사용 권한 및 출처 검증 실패 ('+rights.join(', ')+').');
  });
- add('photo_sources',sourceIssues,'모든 실제 사진에 원본 URL, 사진가 및 Pexels 라이선스가 확인되었습니다.');
+ if(!captionHasRequiredCredits(String(draft.caption||''),photos))sourceIssues.push('출처 표시 필수 사진의 저작자, 원본 링크, 라이선스 및 이미지 수정 안내가 캡션에 없습니다.');
+ add('photo_sources',sourceIssues,'모든 사진의 출처, 라이선스와 상업적 수정 권한 및 필수 저작자 표시를 검증했습니다.');
 
  const approvalIssues:string[]=[];
  if(!photos.length)approvalIssues.push('관리자 승인을 받은 사진이 없습니다.');

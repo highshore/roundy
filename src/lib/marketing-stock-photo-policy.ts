@@ -1,4 +1,4 @@
-// Pure invariants shared by the Pexels selector and publisher-facing review.
+// Pure invariants shared by all licensed-photo providers and publisher-facing review.
 
 export type PhotoSourcingPolicy={
  version:1;
@@ -57,11 +57,25 @@ export function allSelectedPhotosApproved(roles:string[],photos:ReviewedPhoto[],
  return photos.length===slots.length
   &&photos.every((photo,index)=>photo.slot===slots[index]&&photo.review_status==='approved'&&!!photo.storage_path);
 }
-export function photoCreditCaption(caption:string,photographers:string[],limit=2000){
- const base=caption.replace(/\n\nPhotos: [^\n]+ \/ Pexels$/,'');
- const authors=[...new Set(photographers.map(name=>String(name||'').trim().slice(0,64)).filter(Boolean))];
- if(!authors.length)throw new Error('STOCK_PHOTOGRAPHER_REQUIRED');
- const result=base+'\n\nPhotos: '+authors.join(', ')+' / Pexels';
+// Append required credits to the actual publishing caption, preserving legacy string[] support.
+export function photoCreditCaption(caption:string,photos:Array<string|Record<string,any>>,limit=2000){
+ const base=caption.replace(/\n\nPhotos: [\s\S]*$/,'');
+ const items=[...new Set(photos.map(photo=>{
+  if(typeof photo==='string')return photo.trim().slice(0,64);
+  const by=String(photo.photographer||'').trim().slice(0,100);
+  if(!by)return '';
+  if(photo.attribution_required===true){
+   const source=String(photo.source_url||'').trim(),license=String(photo.license_url||'').trim();
+   const name=String(photo.license_name||'').trim();
+   if(!source||!license||!name)throw new Error('STOCK_ATTRIBUTION_EVIDENCE_REQUIRED');
+   return by+' / '+name+' / '+license+' / '+source+' (cropped and text overlaid)';
+  }
+  const provider=String(photo.provider||'pexels').trim().toLowerCase();
+  return by+' / '+(provider==='pexels'?'Pexels':provider==='unsplash'?'Unsplash':provider==='pixabay'?'Pixabay':provider==='wikimedia'?'Wikimedia Commons':'Openverse');
+ }).filter(Boolean))];
+ if(!items.length)throw new Error('STOCK_PHOTOGRAPHER_REQUIRED');
+ const legacy=photos.every(p=>typeof p==='string');
+ const result=base+'\n\nPhotos: '+(legacy?items.join(', ')+' / Pexels':items.join(' | '));
  if(result.length>limit)throw new Error('STOCK_CAPTION_CREDIT_LIMIT');
  return result;
 }
