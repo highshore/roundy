@@ -94,6 +94,14 @@ for(const name of ['pexels','unsplash','pixabay']){
 }
 const caption=policy.photoCreditCaption('Roundy story', [zero,attribution]);
 assert.ok(rights.captionHasRequiredCredits(caption,[zero,attribution]));
+assert.ok(caption.includes(zero.source_url),'Even CC0 sources must show the original URL');
+assert.ok(caption.includes(attribution.source_url),'CC BY photo source URL in caption');
+assert.ok(caption.includes('Wikimedia Commons / Independent Creator'));
+assert.equal(rights.captionHasRequiredCredits(caption.replace(zero.source_url,''),[zero,attribution]),false,'Missing CC0 credit must block publishing');
+assert.equal(rights.captionHasRequiredCredits(caption.replace('Wikimedia Commons',''),[zero,attribution]),false,'Missing provider must block publishing');
+assert.match(rights.photoCardSourceLabel(zero),/^Photo: Wikimedia Commons \/ Independent Creator/);
+assert.ok(rights.photoCardSourceLabel({...zero,photographer:'가'.repeat(150)}).length<100,'Long Korean creator must be clipped to fit');
+assert.equal(policy.photoCreditCaption(caption,[zero,attribution]),caption,'Caption credits are idempotent');
 assert.equal(rights.captionHasRequiredCredits('Roundy story',[attribution]),false);
 assert.equal(rights.captionHasRequiredCredits(caption.replace('(cropped and text overlaid)',''),[attribution]),false);
 assert.equal(policy.photoCreditCaption('Hello',['Alice','Bob']),'Hello\n\nPhotos: Alice, Bob / Pexels');

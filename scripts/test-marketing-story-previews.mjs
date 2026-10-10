@@ -18,7 +18,7 @@ const run={id:'33333333-3333-4333-8333-333333333333',
 const draft={id:run.snapshot.draft_id,status:'scheduled',marketing_run_id:run.id,
  approved_at:new Date().toISOString(),approved_by:'admin',quality_revision:3,revision:3,
  quality_report:{status:'passed',preflight:{status:'passed'}},
- content_language:'ko',content_document:{slides:[{title:'성수 첫 데이트, 서울숲 산책부터 시작하기'}]},
+ content_language:'ko',visual_source:'stock',content_document:{photo_sourcing:{ai_thumbnail_enabled:false},slides:[{title:'성수 첫 데이트, 서울숲 산책부터 시작하기'}]},
  images:[cover],carousel_slides:[{title:'성수 첫 데이트'}]};
 const original=await sharp({create:{width:1080,height:1350,channels:3,background:'#888888'}})
  .jpeg({quality:82}).toBuffer();
@@ -30,7 +30,16 @@ class FakeImageResponse{
  async arrayBuffer(){return Uint8Array.from(fakeStory).buffer;}
 }
 const tables={marketing_automation_settings:[{singleton:true,story_preview_auto_enabled:true}],
- marketing_runs:[run],instagram_post_drafts:[draft],marketing_story_previews:[]};
+ marketing_runs:[run],instagram_post_drafts:[draft],marketing_story_previews:[],
+  marketing_draft_photos:[{draft_id:draft.id,slot:0,marketing_photo_assets:{
+   provider:'pexels',source_url:'https://www.pexels.com/photo/story-cover/',
+   image_url:'https://images.pexels.com/photos/100/photo.jpg',
+   photographer:'Demo Photographer',photographer_url:'https://www.pexels.com/@demo/',
+   license_name:'Pexels License',license_url:'https://www.pexels.com/license/',
+   license_evidence_url:'https://www.pexels.com/photo/story-cover/',
+   license_checked_at:'2026-10-10T10:00:00Z',
+   commercial_use_allowed:true,modifications_allowed:true,attribution_required:false
+  }}]};
 class Query{
  constructor(name){this.name=name;this.pred=[];this.patch=null;this.orderField=null;this.max=Infinity;}
  select(){return this;}eq(k,v){this.pred.push(x=>x[k]===v);return this;}
@@ -70,6 +79,7 @@ const refs={
  './supabase/service':{createServiceRoleClient:()=>db},
  './marketing-render-assets':{loadEditorialAssets:async()=>({fonts:[]})},
  './marketing-carousel-template':null,
+  './marketing-photo-rights':{photoCardSourceLabel:p=>'Photo: Pexels / '+p.photographer},
  './marketing-presentation':{ROUNDY_IDENTITY:{accent:'#ff6666',ink:'#20211f',paper:'#fffefa'}}
 };
 const cmp={exports:{}};
@@ -111,6 +121,13 @@ function visit(node){if(!node||typeof node!=='object')return;
  else if(node.children)node.children.forEach(visit);}
 visit(tree);
 assert.equal(imageNodes.length,1);
+const visibleText=[];
+function collect(node){if(!node||typeof node!=='object')return;
+ if(typeof node==='string'){visibleText.push(node);return;}
+ if(Array.isArray(node))node.forEach(collect);
+ else if(node.children)node.children.forEach(collect);}
+collect(tree);
+assert.ok(visibleText.join(' ').includes('Photo: Pexels / Demo Photographer'),'Story must credit stock cover visibly');
 const cropped=imageNodes[0].props.src;
 assert.match(cropped,/^data:image\/jpeg;base64,/);
 const cropMeta=await sharp(Buffer.from(cropped.split(',')[1],'base64')).metadata();

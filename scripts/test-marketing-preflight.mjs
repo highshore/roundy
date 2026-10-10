@@ -18,6 +18,7 @@ function load(name){
 }
 const {evaluateMarketingPreflight,mergePreflightQuality,photoReviewManifest}=load('marketing-preflight');
 const {resolveCarouselPlan}=load('marketing-carousel-template');
+const {photoCreditCaption}=load('marketing-stock-photo-policy');
 const validSettings={carousel_mode:'fixed',carousel_default_slides:5,carousel_min_real_photos_5:3,
  carousel_min_real_photos_3:2,carousel_answer_first_enabled:true,
  carousel_title_font_size_px:72,carousel_body_font_size_px:36};
@@ -48,7 +49,7 @@ function fixture(count=5){
  const titles=['성수 첫 데이트 산책 코스','서울숲을 중심으로 한 산책','서울에서 함께 걷는 첫 만남'];
  return {id:'11111111-1111-4111-8111-111111111111',revision:7,
   visual_source:'pexels',content_language:'ko',draft_kind:'growth_carousel',images:slides.map((_,i)=>'https://static.roundy.team/'+i+'.jpg'),
-  caption:'성수에서 시작하는 데이트 코스\n라운디가 전하는 장소 팁\n\n@roundy.meet | roundy.team',
+  caption:photoCreditCaption('성수에서 시작하는 데이트 코스\n라운디가 전하는 장소 팁\n\n@roundy.meet | roundy.team',(count===3?[0,1]:[0,1,2]).map(goodPhoto)),
   cta:'Roundy 둘러보기',destination_url:'https://roundy.team',
   carousel_slides:slides,content_document:{schema_version:2,post_type:'seoul_dating',answer_first:true,
    thumbnail_render_pending:false,thumbnail_candidates:titles,thumbnail_selected_index:0,
@@ -70,6 +71,7 @@ const fail=(draft,assets,checkId)=>{const p=evaluate(draft,assets);assert.equal(
 fail({...d,images:d.images.slice(0,3)},photos,'slide_count');
 fail(d,photos.slice(0,2),'real_photos');
 fail(d,photos.map((p,i)=>i===1?{...p,license_url:'https://another.example'}:p),'photo_sources');
+fail({...d,caption:d.caption.replace(photos[0].source_url,'')},photos,'photo_sources');
 fail(d,photos.map((p,i)=>i===2?{...p,review_status:'pending',reviewed_at:null}:p),'photo_approval');
 fail({...d,content_document:{...d.content_document,answer_first:false}},photos,'answer_first');
 fail({...d,carousel_slides:d.carousel_slides.map((p,i)=>i===4?{...p,role:'other'}:p)},photos,'final_cta');

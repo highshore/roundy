@@ -32,7 +32,11 @@ function harness({denied=false,network=false,badSources=false,duplicate=false,ph
    const slotsFor=d=>policy.requiredPhotoSlotsForRoles((d.carousel_slides||[]).map(s=>s.role),policy.savedPhotoSourcingPolicy(d.content_document?.photo_sourcing));
    const rowsFor=d=>photoFixture==='none'?[]:slotsFor(d).map(slot=>({slot,asset_id:'photo-'+slot,provider:'pexels',
     provider_photo_id:String(slot+1),source_url:'https://www.pexels.com/photo/test-'+slot+'/',
-    license_url:'https://www.pexels.com/license/',photographer:'Fixture Photographer',
+    image_url:'https://images.pexels.com/photos/'+(slot+1)+'/photo.jpeg',
+    preview_url:'https://images.pexels.com/photos/'+(slot+1)+'/photo.jpeg',
+    photographer_url:'https://www.pexels.com/@fixture/',license_evidence_url:'https://www.pexels.com/photo/test-'+slot+'/',
+    license_name:'Pexels License',license_url:'https://www.pexels.com/license/',photographer:'Fixture Photographer',
+    license_checked_at:'2026-10-10T10:00:00Z',commercial_use_allowed:true,modifications_allowed:true,attribution_required:false,
     review_status:photoFixture==='ready'?'approved':'pending',storage_path:photoFixture==='ready'?'stock/'+slot+'.jpg':null}));
    return {
     pexelsConfigured:()=>false,requiredStockSlots:slotsFor,
