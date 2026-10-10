@@ -369,7 +369,7 @@ export function evaluateContent(value:unknown,type:PostType,language:string,sour
    const scholarly=!!url&&(host==='doi.org'||host.endsWith('.edu')||host.includes('.edu.')||host.endsWith('.ac.kr')||host.includes('.ac.')||/pubmed|pmc\.ncbi|ncbi\.nlm\.nih|journals?\.|springer|sciencedirect|sagepub|tandfonline|wiley|frontiersin|nature\.com|pnas\.org|apa\.org|psycnet|osf\.io|psyarxiv|ssrn|cambridge\.org|oup\.com|academic\.oup/.test(host));
    if(!scholarly)add('연애 통념은 원 논문, DOI, 저널, 대학 또는 연구기관 출처가 최소 하나 필요합니다.');
    const mythSlide=plan?.slide_count===3?slides[1]:slides.find((slide:Row)=>slide.role==='myth'),mythCardText=(str(mythSlide?.title)+' '+str(mythSlide?.body)).trim();
-   if(str(myth.claim)&&mythCardText&&similarity(str(myth.claim),mythCardText)<.34)add('통념 카드에 선택한 연애 통념 주장을 명확히 표시해야 합니다.');
+   if(str(myth.claim)&&mythCardText&&(plan?.slide_count===3?!norm(mythCardText).includes(norm(myth.claim)):similarity(str(myth.claim),mythCardText)<.34))add('통념 카드에 선택한 연애 통념 주장을 명확히 표시해야 합니다.');
    const allCopy=[c.caption,c.caption_ko,c.caption_en,...slides.flatMap((slide:Row)=>[slide?.title,slide?.body,slide?.secondary_body,slide?.highlight])].map(str).join(' ');
    if(/과학적으로\s*틀렸다|연구가\s*증명했다|무조건\s*사실|완전히\s*거짓|scientifically\s+false|science\s+proves|definitely\s+true|completely\s+false/i.test(allCopy))add('연애 통념을 과학적 사실/거짓으로 단정하는 표현은 사용할 수 없습니다.');
   }
