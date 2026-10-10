@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { createClient } from './supabase/server';
 import { createServiceRoleClient } from './supabase/service';
+import { parseEditorialSettingsPatch } from './marketing-editorial-settings';
 
 type Client=Awaited<ReturnType<typeof createClient>>;
 type ContentMode='prelaunch'|'live_event';
@@ -424,6 +425,21 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
    webhook:{callback_url:callbackUrl,verify_token:setup?.verify_token??'',verified_at:setup?.verified_at??null,last_received_at:setup?.last_received_at??null},
    connection:connection??{instagram:false,koreapas:false,unavailable:true}
   });
+ }
+ // A standalone read endpoint and partial write route keep old automation forms/clients intact.
+ if(id==='settings'&&path.length===1&&req.method==='GET'){
+  const {data,error}=await db.from('marketing_automation_settings').select('*').eq('singleton',true).single();
+  if(error)throw error;
+  return json({settings:data});
+ }
+ if(id==='settings'&&path.length===1&&req.method==='PATCH'){
+  const body=await req.json().catch(()=>null);
+  const parsed=parseEditorialSettingsPatch(body);
+  if(!parsed.ok)return json({error:parsed.error},400);
+  const {data,error}=await db.from('marketing_automation_settings')
+   .update(parsed.patch).eq('singleton',true).select('*').single();
+  if(error)throw error;
+  return json({settings:data});
  }
  if(id==='settings'&&req.method==='PUT'){
   const body=await req.json().catch(()=>null);
