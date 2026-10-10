@@ -1,5 +1,6 @@
 import 'server-only';
-import {fiveCampaignRoles,withAnswerFirstSchema,answerFirstPrompt,answerFirstIssues,applyAnswerFirstDocument} from './marketing-answer-first';
+import {fiveCampaignRoles,campaignRolesForCount,withAnswerFirstSchema,answerFirstPrompt,answerFirstIssues,applyAnswerFirstDocument} from './marketing-answer-first';
+import {savedCarouselPlan,mobileCarouselFit,type CarouselPlan} from './marketing-carousel-template';
 import {createHash} from 'node:crypto';
 import {
  CAMPAIGN_PRESET,
@@ -95,8 +96,8 @@ function choosePattern(requested:unknown,history:CampaignRow[],launchDate:string
  for(const p of candidates){cursor+=WEIGHTS[p];if(roll<cursor)return p;}
  return candidates[0]||'poster';
 }
-function campaignSchema(pattern:CampaignPattern,tone:CampaignTone,language:string,answerFirst=false){
- const roles=answerFirst?fiveCampaignRoles(pattern,ROLE_MAP[pattern]):ROLE_MAP[pattern],primaryTitle=language==='en'?45:24,primaryBody=language==='en'?80:42,secondaryBody=language==='en'?42:80;
+function campaignSchema(pattern:CampaignPattern,tone:CampaignTone,language:string,answerFirst=false,plan:CarouselPlan|null=null){
+ const roles=plan?campaignRolesForCount(pattern,ROLE_MAP[pattern],plan.slide_count):answerFirst?fiveCampaignRoles(pattern,ROLE_MAP[pattern]):ROLE_MAP[pattern],primaryTitle=language==='en'?45:24,primaryBody=language==='en'?80:42,secondaryBody=language==='en'?42:80;
  const str=(maxLength:number,minLength=0)=>({type:'string',minLength,maxLength});
  const slide={
   type:'object',
@@ -131,7 +132,7 @@ function campaignSchema(pattern:CampaignPattern,tone:CampaignTone,language:strin
   required:['schema_version','campaign_version','design_preset','post_type','campaign_pattern','campaign_tone','campaign_goal','caption_ko','caption_en','slides'],
  },language,answerFirst);
 }
-function campaignInstructions(pattern:CampaignPattern,tone:CampaignTone,language:string,launchDate:string|null,answerFirst=false){
+function campaignInstructions(pattern:CampaignPattern,tone:CampaignTone,language:string,launchDate:string|null,answerFirst=false,plan:CarouselPlan|null=null){
  const limits=language==='en'?'headline <= 45 characters; subcopy <= 80 characters':'headline <= 24 characters; subcopy <= 42 characters';
  const patternGuide:Record<CampaignPattern,string>={
   poster:'POSTER: hook = one arresting brand statement; benefit = one supporting product truth; CTA = a clean launch/follow invitation. Treat every card like a campaign poster, not a page of information.',
@@ -149,7 +150,7 @@ function campaignInstructions(pattern:CampaignPattern,tone:CampaignTone,language
   'Create a PRE-LAUNCH ADVERTISING CAMPAIGN for Roundy, a Seoul-based offline-first Rotation Dating service.',
   'This is NOT editorial content, NOT a magazine carousel, NOT an article, and NOT educational long-form content.',
   'Goal: stop the scroll, explain one idea quickly, create curiosity, and make Roundy feel like a real consumer brand launch.',
-  'Use ONLY the selected campaign pattern: '+pattern+'. Exact card roles in order: '+(answerFirst?fiveCampaignRoles(pattern,ROLE_MAP[pattern]):ROLE_MAP[pattern]).join(' -> ')+'.',
+  'Use ONLY the selected campaign pattern: '+pattern+'. Exact card roles in order: '+(plan?campaignRolesForCount(pattern,ROLE_MAP[pattern],plan.slide_count):answerFirst?fiveCampaignRoles(pattern,ROLE_MAP[pattern]):ROLE_MAP[pattern]).join(' -> ')+'.',
   patternGuide[pattern],
   'Campaign tone: '+tone+'. '+toneGuide[tone],
   'ONE message per card. '+limits+'. body is optional short subcopy, never a paragraph. Do not fill the maximum just because it exists.',
@@ -166,15 +167,15 @@ function campaignInstructions(pattern:CampaignPattern,tone:CampaignTone,language
    ?'A verified launch date was supplied by the server: '+launchDate+'. The countdown card title will be normalized server-side. Do not invent another date.'
    :'No launch date is supplied. Do not use D-day numbers, dates, "tomorrow", "today", or any specific opening date.',
   language==='en'?'Primary card title/body are English. secondary_body is a short faithful Korean rendering of body only.':'Primary card title/body are Korean. secondary_body is a short faithful English rendering of body only.',
- ].join('\n')+(answerFirst?'\n'+answerFirstPrompt(language):'');
+ ].join('\n')+(answerFirst?'\n'+answerFirstPrompt(language,plan?.slide_count||5):'')+(plan?.slide_count===3?'\nThree-card copy MUST be Result, one specific useful product fact/detail, and a restrained CTA. Preserve all factual conditions.':'');
 }
 function parseDocument(result:CampaignRow){
  const choice=result.choices?.[0],raw=choice?.message?.content;
  if(choice?.finish_reason!=='stop'||choice.message?.refusal||typeof raw!=='string')throw new Error('CAMPAIGN_RESPONSE_INCOMPLETE');
  try{return {document:JSON.parse(raw) as CampaignRow,raw};}catch{throw new Error('AI_RETURNED_INVALID_JSON');}
 }
-function normalizeCampaignDocument(raw:CampaignRow,language:string,pattern:CampaignPattern,tone:CampaignTone,launchDate:string|null,draftDate:string,answerFirst=false){
- const ko=language!=='en',roles=answerFirst?fiveCampaignRoles(pattern,ROLE_MAP[pattern]):ROLE_MAP[pattern],inputSlides=Array.isArray(raw.slides)?raw.slides:[];
+function normalizeCampaignDocument(raw:CampaignRow,language:string,pattern:CampaignPattern,tone:CampaignTone,launchDate:string|null,draftDate:string,answerFirst=false,plan:CarouselPlan|null=null){
+ const ko=language!=='en',roles=plan?campaignRolesForCount(pattern,ROLE_MAP[pattern],plan.slide_count):answerFirst?fiveCampaignRoles(pattern,ROLE_MAP[pattern]):ROLE_MAP[pattern],inputSlides=Array.isArray(raw.slides)?raw.slides:[];
  const slides=roles.map((role,index)=>{
   const source=inputSlides[index]||{},main=clean(source.body),secondary=clean(source.secondary_body);
   const normalized:CampaignRow={
@@ -223,9 +224,10 @@ function buildCampaignCaption(document:CampaignRow){
 }
 export function evaluateCampaignDocument(document:CampaignRow,language:string,recentHooks:string[]=[],launchDate:string|null=null){
  const issues:string[]=[],add=(value:string)=>{if(!issues.includes(value))issues.push(value);};
- const pattern=document?.campaign_pattern as CampaignPattern,tone=document?.campaign_tone as CampaignTone,roles=(CAMPAIGN_PATTERNS as readonly string[]).includes(pattern)?(document.answer_first===true?fiveCampaignRoles(pattern,ROLE_MAP[pattern]):ROLE_MAP[pattern]):[];
+ const pattern=document?.campaign_pattern as CampaignPattern,tone=document?.campaign_tone as CampaignTone,plan=savedCarouselPlan(document),roles=(CAMPAIGN_PATTERNS as readonly string[]).includes(pattern)?(plan?campaignRolesForCount(pattern,ROLE_MAP[pattern],plan.slide_count):document.answer_first===true?fiveCampaignRoles(pattern,ROLE_MAP[pattern]):ROLE_MAP[pattern]):[];
  const slides=Array.isArray(document?.slides)?document.slides:[];
  for(const issue of answerFirstIssues(document,language))add(issue);
+ if(plan)slides.forEach((slide:CampaignRow,index:number)=>{try{mobileCarouselFit(slide,plan,index,language);}catch(e){add(e instanceof Error?e.message:'CAROUSEL_TEXT_OVERFLOW');}});
  if(document?.design_preset!==CAMPAIGN_PRESET||document?.campaign_version!==CAMPAIGN_VERSION||document?.post_type!=='prelaunch'||document?.schema_version!==2)add('오픈 전 캠페인 버전 또는 렌더 프리셋이 맞지 않습니다.');
  if(!(CAMPAIGN_PATTERNS as readonly string[]).includes(pattern))add('허용되지 않은 오픈 전 캠페인 패턴입니다.');
  if(!(CAMPAIGN_TONES as readonly string[]).includes(tone))add('허용되지 않은 캠페인 톤입니다.');
@@ -258,8 +260,8 @@ export function evaluateCampaignDocument(document:CampaignRow,language:string,re
  const caption=buildCampaignCaption(document);if(caption.length>900)add('오픈 전 홍보 캡션은 최종 900자 이하로 작성해야 합니다.');
  return {version:2,status:issues.length?'rejected':'passed',issues,review_required:true};
 }
-function prepareCampaign(document:CampaignRow,language:string,pattern:CampaignPattern,tone:CampaignTone,launchDate:string|null,draftDate:string,recentHooks:string[],answerFirst=false){
- const normalized=applyAnswerFirstDocument(normalizeCampaignDocument(document,language,pattern,tone,launchDate,draftDate,answerFirst),answerFirst);
+function prepareCampaign(document:CampaignRow,language:string,pattern:CampaignPattern,tone:CampaignTone,launchDate:string|null,draftDate:string,recentHooks:string[],answerFirst=false,plan:CarouselPlan|null=null){
+ const normalized=applyAnswerFirstDocument(normalizeCampaignDocument(document,language,pattern,tone,launchDate,draftDate,answerFirst,plan),answerFirst,plan);
  const report=evaluateCampaignDocument(normalized,language,recentHooks,launchDate);
  return {document:normalized,report,slides:normalized.slides,caption:buildCampaignCaption(normalized),cta:normalized.cta,sources:[]};
 }
@@ -275,14 +277,14 @@ export function campaignDraftQuality(draft:CampaignRow){
  return report;
 }
 export async function generateCampaignCopy(db:any,draft:CampaignRow,input:CampaignRow,job:CampaignRow,call:Call){
- const language=input.language==='en'?'en':'ko',answerFirst=input.answer_first_enabled===true,history=await recentCampaignHistory(db),launchDate=validDate(input.launch_date||draft.launch_date);
+ const language=input.language==='en'?'en':'ko',answerFirst=input.answer_first_enabled===true,plan=(input.carousel_plan||null) as CarouselPlan|null,history=await recentCampaignHistory(db),launchDate=validDate(input.launch_date||draft.launch_date);
  const requested=input.campaign_pattern||draft.campaign_pattern||'auto',tone=((CAMPAIGN_TONES as readonly string[]).includes(String(input.campaign_tone||draft.campaign_tone))?String(input.campaign_tone||draft.campaign_tone):'modern_premium') as CampaignTone;
  const pattern=choosePattern(requested,history,launchDate,String(draft.id)+':'+String(draft.draft_date)+':'+String(input.instruction||'')),recentHooks=history.slice(0,10).map(x=>x.hook).filter(Boolean);
- const schema=campaignSchema(pattern,tone,language,answerFirst),goal=GOAL_MAP[pattern],countdown=pattern==='countdown'&&launchDate?countdownLabel(launchDate,String(draft.draft_date||''),language):null;
+ const schema=campaignSchema(pattern,tone,language,answerFirst,plan),goal=GOAL_MAP[pattern],countdown=pattern==='countdown'&&launchDate?countdownLabel(launchDate,String(draft.draft_date||''),language):null;
  let inputTokens=0,outputTokens=0;
  const record=async(result:CampaignRow)=>{inputTokens+=Number(result.usage?.input_tokens||result.usage?.prompt_tokens||0);outputTokens+=Number(result.usage?.output_tokens||result.usage?.completion_tokens||0);ok(await db.from('marketing_generation_jobs').update({input_tokens:inputTokens,output_tokens:outputTokens}).eq('id',job.id));};
  const write=async(repair?:{document:CampaignRow;issues:string[]})=>{
-  const instructions=campaignInstructions(pattern,tone,language,launchDate,answerFirst)+(repair?'\nREPAIR PASS: Fix ONLY the listed issues. Keep the same campaign pattern, tone and product truths. Return the full corrected JSON.':'');
+  const instructions=campaignInstructions(pattern,tone,language,launchDate,answerFirst,plan)+(repair?'\nREPAIR PASS: Fix ONLY the listed issues. Keep the same campaign pattern, tone and product truths. Return the full corrected JSON.':'');
   const payload={
    campaign_pattern:pattern,
    campaign_tone:tone,
@@ -300,7 +302,7 @@ export async function generateCampaignCopy(db:any,draft:CampaignRow,input:Campai
   const result=await call('chat/completions',{model:MODEL,reasoning_effort:'none',max_completion_tokens:2800,response_format:{type:'json_schema',json_schema:{name:'roundy_prelaunch_campaign_v1',strict:true,schema}},messages:[{role:'system',content:instructions},{role:'user',content:JSON.stringify(payload)}]},55000);
   await record(result);return {...parseDocument(result),result};
  };
- let written=await write(),prepared=prepareCampaign(written.document,language,pattern,tone,launchDate,String(draft.draft_date||''),recentHooks,answerFirst),repairUsed=false;
+ let written=await write(),prepared=prepareCampaign(written.document,language,pattern,tone,launchDate,String(draft.draft_date||''),recentHooks,answerFirst,plan),repairUsed=false;
  if(prepared.report.status!=='passed'){
   repairUsed=true;written=await write({document:prepared.document,issues:prepared.report.issues});prepared=prepareCampaign(written.document,language,pattern,tone,launchDate,String(draft.draft_date||''),recentHooks,answerFirst);
  }
