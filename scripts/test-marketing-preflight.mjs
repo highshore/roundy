@@ -25,7 +25,7 @@ const makeSlides=n=>Array.from({length:n},(_,i)=>({
  role:i===0?'cover':i===n-1?'cta':'detail',
  title:i===0?'성수 첫 데이트 산책 코스':i===n-1?'라운디에서 직접 만나보기':'서울에서 대화할 장소 추천',
  body:i===0?'서울숲을 중심으로 동선을 계획해보세요.':i===n-1?'서울의 로테이션 소개팅, 라운디에서 만나요.':'실제 방문 가능한 장소와 운영 정보를 확인하세요.',
- highlight:'',source_ids:[],body_ko:'자연스러운 만남을 위한 실용적인 정보입니다.',
+ highlight:'',source_ids:[],body_ko:i===0?'서울숲을 중심으로 동선을 계획해보세요.':i===n-1?'서울의 로테이션 소개팅, 라운디에서 만나요.':'실제 방문 가능한 장소와 운영 정보를 확인하세요.',
  body_en:'Useful context for an in-person conversation.'
 }));
 const goodPhoto=(slot)=>({slot,asset_id:'00000000-0000-4000-8000-'+String(slot+1).padStart(12,'0'),
@@ -71,7 +71,7 @@ fail(d,photos.map((p,i)=>i===1?{...p,license_url:'https://another.example'}:p),'
 fail(d,photos.map((p,i)=>i===2?{...p,review_status:'pending',reviewed_at:null}:p),'photo_approval');
 fail({...d,content_document:{...d.content_document,answer_first:false}},photos,'answer_first');
 fail({...d,carousel_slides:d.carousel_slides.map((p,i)=>i===4?{...p,role:'other'}:p)},photos,'final_cta');
-fail({...d,carousel_slides:d.carousel_slides.map((p,i)=>i===1?{...p,body:'길고 반복되는 문구 '.repeat(250)}:p)},photos,'mobile_render');
+fail({...d,carousel_slides:d.carousel_slides.map((p,i)=>i===1?{...p,body:'길고 반복되는 문구 '.repeat(250),body_ko:'길고 반복되는 문구 '.repeat(250)}:p)},photos,'mobile_render');
 fail({...d,content_document:{...d.content_document,thumbnail_render_pending:true}},photos,'answer_first');
 assert.notDeepEqual(photoReviewManifest(photos),photoReviewManifest(photos.map((p,i)=>i===0?{...p,review_status:'pending'}:p)));
 const rejected=fail({...d,visual_source:'uploaded'},photos,'real_photos');
