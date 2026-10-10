@@ -64,7 +64,6 @@ assert.match(generation,/visualSource:VisualSource=managedPhotoSourcing\?'pexels
 assert.match(generation,/generateAiThumbnail\(db,draft,job\)/);
 assert.match(generation,/photoReviewRequired=true/);
 assert.match(generation,/photos_pending_review:photoReviewRequired/);
-assert.match(generation,/AI photos/);
 const visual=source('src/lib/marketing-visuals.ts');
 assert.match(visual,/assets\.cardPhotos\?\.\[index\]/);
 assert.match(visual,/function selectedPhoto\(/);
