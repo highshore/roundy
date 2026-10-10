@@ -120,6 +120,31 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
    return {...row,signed_url:signed.data?.signedUrl||null};
   }));
  }
+ // The existing reviewed Pexels library is shared across drafts. Read-only browse;
+ // approval/rejection reuses the protected /photos/:id/review route below.
+ if(id==='photos'&&path.length===2&&path[1]==='assets'&&req.method==='GET'){
+  const all=checked(await service.from('marketing_photo_assets')
+   .select('id,provider,provider_photo_id,source_url,image_url,preview_url,photographer,photographer_url,license_name,license_url,license_checked_at,review_status,review_note,reviewed_by,reviewed_at,storage_path,topic_key,created_at')
+   .order('created_at',{ascending:false}).limit(200)) as Row[];
+  const ids=all.map(asset=>asset.id);
+  const usage=ids.length
+   ?checked(await service.from('marketing_draft_photos')
+     .select('asset_id,draft_id,slot').in('asset_id',ids).limit(2000)) as Row[]:[];
+  const byAsset=new Map<string,Row[]>();
+  for(const linked of usage){
+   const key=String(linked.asset_id),previous=byAsset.get(key)||[];
+   byAsset.set(key,[...previous,linked]);
+  }
+  return json({assets:all.map(asset=>({
+   ...asset,used_by_count:(byAsset.get(asset.id)||[]).length,
+   used_by_drafts:(byAsset.get(asset.id)||[]).slice(0,20)
+  })),counts:{
+   all:all.length,
+   approved:all.filter(x=>x.review_status==='approved').length,
+   pending:all.filter(x=>x.review_status==='pending').length,
+   rejected:all.filter(x=>x.review_status==='rejected').length
+  },limit:200,photo_policy:'Pexels License; original source and manual approval required'});
+ }
  // All photo actions are routed through the existing authenticated admin API.
  if(id==='photos'&&path.length===1&&req.method==='GET'){
   const draftId=String(req.nextUrl.searchParams.get('draft_id')||'');
