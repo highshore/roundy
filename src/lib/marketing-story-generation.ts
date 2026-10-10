@@ -53,7 +53,10 @@ async function drawStory(db:DB,sourceCoverUrl:string,title:string,language:strin
  const original=Buffer.from(await downloaded.data.arrayBuffer());
  if(original.length>6*1024*1024)throw new Error('STORY_COVER_TOO_LARGE');
  // Deliberately reveal just PART of the original 4:5 cover.
- const crop=await sharp(original).rotate().resize(1080,1350,{fit:'cover'})
+ // Materialize the normalized cover before cropping: Sharp's deferred pipeline
+ // otherwise reorders consecutive resize operations and can reject the crop.
+ const normalized=await sharp(original).rotate().resize(1080,1350,{fit:'cover'}).toBuffer();
+ const crop=await sharp(normalized)
   .extract({left:0,top:210,width:1080,height:850})
   .resize(924,724,{fit:'cover'}).jpeg({quality:82}).toBuffer();
  const fit=fitCarouselCopy(title,{width:895,availableHeight:312,
