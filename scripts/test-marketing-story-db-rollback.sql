@@ -124,7 +124,7 @@ begin
    where id=story_id;
    update public.marketing_story_publish_attempts set
     state='needs_review',finished_at=now(),error_code='MOCK_PROVIDER_TIMEOUT'
-   where story_id=story_id;
+   where marketing_story_publish_attempts.story_id=story_id;
    if jsonb_array_length(public.claim_marketing_story_previews())<>0
    then raise exception 'UNCONFIRMED_STORY_WAS_AUTO_RETRIED';end if;
   end if;
