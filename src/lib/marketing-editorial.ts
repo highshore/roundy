@@ -14,7 +14,7 @@ import {readTrendFactPack,trendFactPackIssues,trendPackForModel,type TrendFactPa
 type Call=(endpoint:string,body:Row,timeout:number)=>Promise<Row>;
 const ok=(r:any)=>{if(r.error)throw r.error;return r.data;};
 const MODEL='gpt-6-luna';
-const FALLBACK_TYPE:Partial<Record<PostType,PostType>>={trend_research:'conversation_prompt',dating_myth:'conversation_prompt',seoul_dating:'conversation_prompt'};
+const FALLBACK_TYPE:Partial<Record<PostType,PostType>>={trend_research:'conversation_prompt',dating_myth:'conversation_prompt',seoul_dating:'conversation_prompt',seoul_trend:'korea_life'};
 function seoulDatingFormat(seed:string):SeoulDatingFormat{const value=createHash('sha256').update(seed).digest()[0]%10;return value<7?'places':'course';}
 function isSeoulVenueFailure(issues:string[]){return issues.some(issue=>/서울 데이트 장소|서울 데이팅|실제 장소|가격\/영업시간|장소 추천 카드|검증 가능한 장소/.test(issue));}
 type TrendHistoryItem={title:string;topic_key:string;created_at:string};
@@ -136,7 +136,7 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
      ok(await db.from('marketing_generation_jobs').update({quality_report:report,result_snapshot:{draft_id:draft.id,content_language:language,growth_topic_type:requestedType,quality_report:report,research_notes:notes,research_sources:sources,images:[],carousel_slides:[],caption:''}}).eq('id',job.id));
      throw new Error(report.issues[0]);
     }
-    effectiveType=fallback;sources=[];fallbackReason='research_unavailable:'+requestedType+'->'+fallback;
+    effectiveType=fallback;sources=[];notes='';fallbackReason='research_unavailable:'+requestedType+'->'+fallback;
     ok(await db.from('marketing_generation_jobs').update({stage:'writing_fallback'}).eq('id',job.id));
    }
   }
@@ -144,8 +144,12 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
 
  const write=async(type:PostType,repair?:{document:Row;issues:string[]},candidateVariant:''|'backup'='')=>{
   const writingVariant=type==='seoul_dating'?seoulFormat:type==='dating_myth'?candidateVariant:type==='seoul_trend'&&trendPack?trendPack.layout:'';
-  const instructions=writingInstructions(type,language,writingVariant,answerFirst,plan)+(repair?'\nREPAIR PASS: Fix ONLY the listed quality issues. Preserve all supported facts, source IDs, uncertainty, card roles, and the approved topic. Do not add new claims. Return the complete corrected document in the same strict schema.':'');
-  const payload={editorial_type:type,language,direction:input.instruction||'',evidence:sources,event:facts,...(type==='seoul_dating'?{seoul_format:seoulFormat}:{}),...(type==='seoul_trend'&&trendContext?{trend_context:{id:trendContext.id,trend_key:trendContext.trend_key,display_name:trendContext.display_name,category:trendContext.category,status:trendContext.status,observed_at:trendContext.observed_at,summary:trendContext.summary,content_angle:trendContext.content_angle,source_ids:sources.map(x=>x.id)},...(trendPack?{fact_pack:trendPackForModel(trendPack),fact_pack_layout:trendPack.layout,fact_pack_origin:trendPack.origin,no_additional_web_search:true}: {})}:{}),...(type==='trend_research'?{current_year:new Date().getUTCFullYear(),recent_history:trendHistory}:{}),...(type==='dating_myth'?{myth_candidate:candidateVariant==='backup'?'backup':'primary',recent_history:mythHistory}:{}),...(repair?{original_document:repair.document,quality_issues:repair.issues}:{})};
+  const sourceFreeSeoulFallback=requestedType==='seoul_trend'&&type==='korea_life'&&Boolean(fallbackReason);
+  const fallbackGuidance=sourceFreeSeoulFallback
+   ?'\nSOURCE-FREE FALLBACK: Research did not produce usable citations. Write a timeless Seoul everyday-life scenario, not a current trend or verified event guide. Avoid unverified venue names, fresh popularity claims, ranking claims, event dates, opening hours, prices, research statistics and made-up citations. Give a concrete fictional conversation tip and remain faithful to the non-research Korea-life content schema.'
+   :'';
+  const instructions=writingInstructions(type,language,writingVariant,answerFirst,plan)+fallbackGuidance+(repair?'\nREPAIR PASS: Fix ONLY the listed quality issues. Preserve all supported facts, source IDs, uncertainty, card roles, and the approved topic. Do not add new claims. Return the complete corrected document in the same strict schema.':'');
+  const payload={editorial_type:type,language,direction:sourceFreeSeoulFallback?'':input.instruction||'',evidence:sources,event:facts,...(type==='seoul_dating'?{seoul_format:seoulFormat}:{}),...(type==='seoul_trend'&&trendContext?{trend_context:{id:trendContext.id,trend_key:trendContext.trend_key,display_name:trendContext.display_name,category:trendContext.category,status:trendContext.status,observed_at:trendContext.observed_at,summary:trendContext.summary,content_angle:trendContext.content_angle,source_ids:sources.map(x=>x.id)},...(trendPack?{fact_pack:trendPackForModel(trendPack),fact_pack_layout:trendPack.layout,fact_pack_origin:trendPack.origin,no_additional_web_search:true}: {})}:{}),...(type==='trend_research'?{current_year:new Date().getUTCFullYear(),recent_history:trendHistory}:{}),...(type==='dating_myth'?{myth_candidate:candidateVariant==='backup'?'backup':'primary',recent_history:mythHistory}:{}),...(repair?{original_document:repair.document,quality_issues:repair.issues}:{})};
   if(Buffer.byteLength(instructions+JSON.stringify(payload)+JSON.stringify(contentSchema(type,language,writingVariant,answerFirst,plan)),'utf8')>30000)throw new Error('PROMPT_SIZE_LIMIT');
   const control=ok(await db.from('marketing_ai_control').select('enabled,blocked_reason').eq('singleton',true).single());
   if(!control.enabled||control.blocked_reason)throw new Error('AI_PAUSED');
@@ -209,6 +213,20 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
 
  written.document=lockTrendGrounding(lockSeoulGrounding(lockVerifiedBook(lockMythGrounding(written.document))));
  let prepared=prepareContent(applyAnswerFirstDocument(written.document,answerFirst,plan),effectiveType,language,sources);
+ if(requestedType==='seoul_trend'&&effectiveType==='korea_life'&&fallbackReason){
+  // No cited source means no recent trend, event date, current ranking or price
+  // may be stated as a fact. Fail closed instead of paying for another repair.
+  const fallbackDocument=prepared.document as Row;
+  const visible=[fallbackDocument.caption,fallbackDocument.caption_ko,fallbackDocument.caption_en,
+   ...(Array.isArray(fallbackDocument.slides)?fallbackDocument.slides.slice(0,-1).flatMap(
+    (slide:Row)=>[slide.title,slide.body,slide.highlight,slide.secondary_body]):[])
+  ].filter(Boolean).join(' ');
+  const temporalClaim=/(?:요즘|최근|지금).{0,6}(?:인기|화제|유행|핫|뜨는|급상승)|핫플|바이럴|(?:currently|now|just)\s+(?:trending|viral|popular)|\b(?:latest trend|most popular|just opened|sold out)\b/i;
+  const specificClaim=/(?:20[2-9]\d)[-.\/]\d{1,2}|\b\d{1,2}:\d{2}\b|\d[\d,]*\s*(?:원|KRW)|(?:연구|조사)\s*(?:결과|에 따르면)/i;
+  if(temporalClaim.test(visible)||specificClaim.test(visible))
+   throw new Error('UNVERIFIED_SEOUL_TREND_FALLBACK_CLAIM: 인용 근거 없이 최근 인기, 일정, 가격이나 조사 결과를 주장할 수 없습니다.');
+ }
+
  if(requestedType==='seoul_dating'&&effectiveType==='seoul_dating'&&prepared.report.status!=='passed'){
   const seoulIssues=classifyQualityIssues(prepared.report.issues);
   if(isSeoulVenueFailure(seoulIssues.critical)){
