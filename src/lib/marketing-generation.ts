@@ -337,7 +337,7 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
  input.answer_first_enabled=input.mode!=='image'&&(preference?.carousel_answer_first_enabled===true||draft.content_document?.answer_first===true||input.answer_first_enabled===true);
  const existingPlan=savedCarouselPlan(draft.content_document);
  let plan:CarouselPlan|null=existingPlan;
- if(!plan&&input.visual_mode==='cards'&&input.mode!=='image'&&input.mode!=='photo'){
+ if(!plan&&input.visual_mode==='cards'&&input.mode!=='image'){
   const mode=String(preference?.carousel_mode||'');
   const ordinal=mode==='alternating'
    ?checked(await db.rpc('reserve_marketing_carousel_slot',{p_draft:draft.id})).data as number:null;
