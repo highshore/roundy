@@ -243,7 +243,7 @@ for(const language of ['ko','en'])for(const type of Object.keys(harness().policy
   const h=harness({answerFirst:true,photoSettings:baseConfig,photoFixture:status});
   const r=await h.api.runGeneration(id,{...base,request_key:'manual:photo-first-'+status,visual_source:'auto_ai'},null);
   check(()=>assert.equal(r.job.status,'completed',JSON.stringify(r.job)));
-  check(()=>assert.equal(r.draft.visual_source,'pexels','auto AI routes through actual Pexels assets'));
+  check(()=>assert.equal(r.draft.visual_source,'stock','auto AI routes through reviewed licensed photo assets'));
   check(()=>assert.equal(r.draft.content_document.photo_sourcing.min_real_photos,3));
   check(()=>assert.equal(r.draft.content_document.photo_sourcing.ai_thumbnail_enabled,false));
   check(()=>assert.equal(r.draft.images.length,status==='ready'?5:0));

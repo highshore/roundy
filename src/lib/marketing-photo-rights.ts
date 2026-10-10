@@ -1,7 +1,7 @@
 // Shared by discovery, preflight, approval, and publisher; no client credentials.
 export type PhotoProvider='pexels'|'unsplash'|'pixabay'|'wikimedia'|'openverse';
 export type LicensedPhoto=Record<string,unknown>;
-export const PHOTO_PROVIDERS:PhotoProvider[]=['pexels','unsplash','pixabay','wikimedia','openverse'];
+export const PHOTO_PROVIDERS:PhotoProvider[]=['wikimedia','openverse','pexels','unsplash','pixabay']; // CC0/public domain discovery first.
 export const LICENSE_URLS={
  pexels:'https://www.pexels.com/license/',
  unsplash:'https://unsplash.com/license',

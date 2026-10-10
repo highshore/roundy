@@ -11,7 +11,7 @@ type Row=Record<string,any>;
 type SourcePhoto=Row & {slot:number;asset_id:string;review_status:string;storage_path:string|null;content_sha256:string;photographer:string;provider_photo_id:string;image_url:string};
 const PHOTO_COOLDOWN_DAYS=90;
 const MAX_IMAGE_BYTES=9*1024*1024;
-const MAX_PROVIDER_ATTEMPTS=8;
+const MAX_PROVIDER_ATTEMPTS=10;
 const ATTEMPTS_PER_PROVIDER=2;
 
 const SEARCHES:Record<string,string[]>={
@@ -63,12 +63,20 @@ async function usedRecently(db:DB,excludeDraftId:string){
   return new Set(rows.map((row:Row)=>row.asset_id));
 }
 // Search terms combine the content pillar with each unfilled card's own subject.
+const partsForPhotoQuery=(draft:Row,slot:number)=>JSON.stringify(draft.carousel_slides?.[slot]||{});
 export function photoSearchQuery(draft:Row,topic:string,slot:number,attempt:number){
  const slide=Array.isArray(draft.carousel_slides)?draft.carousel_slides[slot]||{}:{};
  const base=(SEARCHES[topic]||SEARCHES.conversation_prompt)[attempt%2];
+ const korean=partsForPhotoQuery(draft,slot);
+ const terms=Object.entries({
+  '서울숲':'Seoul Forest','한강':'Han River Seoul','성수':'Seongsu Seoul',
+  '카페':'cafe','커피':'coffee','음식':'food','데이트':'dating',
+  '산책':'walking park','전시':'art exhibition','공원':'park',
+  '야경':'night view','맛집':'restaurant','책':'books','여행':'travel'
+ }).filter(([word])=>korean.includes(word)).slice(0,3).map(([,english])=>english).join(' ');
  const parts=[slide.title_en,slide.body_en,slide.title,slide.body].filter((x):x is string=>typeof x==='string');
  const english=parts.join(' ').match(/[A-Za-z]{4,}/g)?.filter(x=>!/^(roundy|follow|slide|content|meeting|your|this|that|with|from)$/i.test(x)).slice(0,3).join(' ')||'';
- return (base+(english?' '+english:'')).slice(0,100);
+ return (base+(english?' '+english:'')+(terms?' '+terms:'')).slice(0,100);
 }
 async function logProviderAttempt(db:DB,draftId:string,provider:PhotoProvider,query:string,status:string,code:string,count:number){
  const result=await db.from('marketing_photo_source_attempts').insert({

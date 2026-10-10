@@ -83,6 +83,7 @@ function commonsSource(title:unknown){
 }
 function parseCommons(page:any,topic:string,query:string,provider:'wikimedia'|'openverse',overrideId?:string):PhotoCandidate|null{
  const meta=page?.imageinfo?.[0],ext=meta?.extmetadata||{};
+ if(!['image/jpeg','image/png','image/webp'].includes(String(meta?.mime||'')))return null;
  const source=commonsSource(page?.title);
  const image=secureUrl(meta?.thumburl||meta?.url,['upload.wikimedia.org']);
  const preview=secureUrl(meta?.thumburl||meta?.url,['upload.wikimedia.org']);
