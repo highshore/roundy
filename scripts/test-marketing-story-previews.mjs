@@ -122,8 +122,8 @@ function visit(node){if(!node||typeof node!=='object')return;
 visit(tree);
 assert.equal(imageNodes.length,1);
 const visibleText=[];
-function collect(node){if(!node||typeof node!=='object')return;
- if(typeof node==='string'){visibleText.push(node);return;}
+function collect(node){if(typeof node==='string'){visibleText.push(node);return;}
+ if(!node||typeof node!=='object')return;
  if(Array.isArray(node))node.forEach(collect);
  else if(node.children)node.children.forEach(collect);}
 collect(tree);
