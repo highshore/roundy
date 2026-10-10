@@ -117,8 +117,12 @@ export function evaluateMarketingPreflight(draft:Record<string,any>,settings:Rec
  if(!str(last?.title)||!str(last?.body))ctaIssues.push('마지막 카드에 제목과 자연스러운 행동 안내가 필요합니다.');
  if(!str(draft.cta))ctaIssues.push('저장된 CTA 문구가 비어 있습니다.');
  if(!validRoundyDestination(draft.destination_url))ctaIssues.push('CTA 연결 주소는 Roundy 공식 HTTPS 도메인(roundy.team)이어야 합니다. 외부 사이트 연결을 제거하세요.');
- const ctaDisplay=[last?.title,last?.body,last?.body_ko,last?.body_en,last?.secondary_body]
-  .map(str).join(' ');
+ // Judge the language actually rendered on the user's card. A safe-looking
+ // secondary translation must never mask an unrelated visible CTA.
+ const renderedCtaBody=draft.content_language==='en'
+  ?last?.body_en||last?.body
+  :last?.body_ko||last?.body;
+ const ctaDisplay=[last?.title,renderedCtaBody].map(str).join(' ');
  if(!/(?:roundy|라운디|@roundy\.meet|로테이션|rotation|프로필|팔로우|follow|다음\s*만남|모임|meetup|데이트|dating|첫\s*대화|conversation|대화|직접\s*만나|저장|save|공유|share|게시물|feed|참여|프로그램|참가|이야기|소식|explore|learn\s*more|자세히)/i.test(ctaDisplay))
   ctaIssues.push('마지막 CTA 카드가 Roundy의 모임, 대화 또는 콘텐츠 안내와 관련되어 있지 않습니다. 문구를 수정하세요.');
  if(!str(draft.caption).includes('roundy.team')||!str(draft.caption).includes('@roundy.meet'))
