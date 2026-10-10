@@ -186,13 +186,6 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
     verified_at:new Date().toISOString().slice(0,10),venues},slides};
   }
   const slides=Array.isArray(document.slides)?document.slides.map((slide:Row)=>{
-    if(slide.role!=='plan')return slide;
-    return {...slide,title:slide.title,body:joined,source_ids:ids};
-   }):document.slides;
-   return {...document,seoul:{...document.seoul,format:seoulFormat,
-    verified_at:new Date().toISOString().slice(0,10),venues},slides};
-  }
-  const slides=Array.isArray(document.slides)?document.slides.map((slide:Row)=>{
    const index=roles.indexOf(slide.role);if(index<0||!venues[index])return slide;
    const venue=venues[index],name=String(venue.name||'').trim(),combined=(String(slide.title||'')+' '+String(slide.body||'')).normalize('NFKC');
    return {...slide,title:name&&!combined.includes(name)?name:slide.title,source_ids:Array.isArray(venue.source_ids)?venue.source_ids:slide.source_ids};
