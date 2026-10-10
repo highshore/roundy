@@ -82,6 +82,7 @@ declare
  alt_seq bigint;
  expected integer;
  i integer;
+ found_slot boolean:=false;
 begin
  perform pg_advisory_xact_lock(70361005);
  perform pg_advisory_xact_lock(20261010155000);
@@ -93,6 +94,8 @@ begin
  if not found then raise exception 'FEED_DRAFT_NOT_APPROVABLE'; end if;
  select * into s from public.marketing_automation_settings where singleton=true;
  if not found then raise exception 'FEED_SETTINGS_MISSING'; end if;
+ if coalesce(d.content_document->'carousel_template'->>'mode','')<>s.carousel_mode
+ then raise exception 'CAROUSEL_MODE_CHANGED_REGENERATION_REQUIRED: 현재 마케팅 설정에 맞는 카드뉴스를 다시 생성하세요.'; end if;
  n_daily:=greatest(1,least(10,coalesce(s.feed_daily_max_posts,1)));
  select coalesce(max(sequence_number),0)+1 into seq from public.marketing_feed_schedule_slots;
  alt_seq:=null;
@@ -110,7 +113,7 @@ begin
   raise exception 'CAROUSEL_FINAL_ORDER_REQUIRES_REGENERATION: 예약 순서의 %장 카드와 현재 콘텐츠가 일치하지 않습니다.',expected;
  end if;
  preferred_time:=coalesce(d.recommended_time_kst,s.daily_time_kst,'20:00'::time);
- candidate:=greatest(current_date_kst,coalesce((d.scheduled_for at time zone 'Asia/Seoul')::date,current_date_kst));
+ candidate:=case when p_immediate then current_date_kst else greatest(current_date_kst,coalesce((d.scheduled_for at time zone 'Asia/Seoul')::date,current_date_kst)) end;
  for i in 0..365 loop
   candidate_at:=(candidate+preferred_time) at time zone 'Asia/Seoul';
   if p_immediate and candidate=current_date_kst then candidate_at:=now(); end if;
@@ -125,10 +128,10 @@ begin
     and (r.scheduled_for at time zone 'Asia/Seoul')::date=candidate
     and r.status not in ('skipped')
     and not exists(select 1 from public.marketing_feed_schedule_slots slot where slot.run_id=r.id);
-  if n_reserved+n_prior<n_daily then exit;end if;
+  if n_reserved+n_prior<n_daily then found_slot:=true;exit;end if;
   candidate:=candidate+1;
  end loop;
- if i>365 then raise exception 'FEED_SCHEDULE_HORIZON_EXCEEDED'; end if;
+ if not found_slot then raise exception 'FEED_SCHEDULE_HORIZON_EXCEEDED'; end if;
  booked.draft_id:=d.id;
  booked.sequence_number:=seq;
  booked.alternating_sequence:=alt_seq;
