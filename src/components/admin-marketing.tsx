@@ -37,7 +37,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
  const [basis,setBasis]=useState('prelaunch'),[manualVisualSource,setManualVisualSource]=useState<'auto_ai'|'uploaded'|'none'|'pexels'>('auto_ai'),[topic,setTopic]=useState('conversation_prompt'),[contentLanguage,setContentLanguage]=useState<'ko'|'en'>('ko'),[direction,setDirection]=useState(''),[dirty,setDirty]=useState(false);
  const [eventId,setEventId]=useState(''),[eventCampaignStage,setEventCampaignStage]=useState('auto');
  const [template,setTemplate]=useState<Row>(blank());
- const [stockPhotos,setStockPhotos]=useState<Row[]>([]);
+ const [stockPhotos,setStockPhotos]=useState<Row[]>([]),[stockReview,setStockReview]=useState<Row|null>(null);
  const [uploadedImages,setUploadedImages]=useState<Row[]>([]),[uploadAssetType,setUploadAssetType]=useState<'photo'|'completed_card'>('photo');
  const [pendingMarketingImages,setPendingMarketingImages]=useState<PendingMarketingImage[]>([]),[pendingAssetType,setPendingAssetType]=useState<'photo'|'completed_card'>('photo');
  const [resultPreview,setResultPreview]=useState<Row|null>(null);
@@ -73,11 +73,11 @@ export function AdminMarketing({locale}:{locale:Locale}){
   return()=>{cancelled=true;};
  },[draft?.id,draft?.generation_source,draft?.draft_role]);
  useEffect(()=>{
-  if(!draft?.id||draft.visual_source!=='pexels'){setStockPhotos([]);return;}
+  if(!draft?.id||draft.visual_source!=='pexels'){setStockPhotos([]);setStockReview(null);return;}
   let cancelled=false;
   request('/photos?draft_id='+encodeURIComponent(draft.id),undefined,'GET')
-   .then(r=>{if(!cancelled&&r.ok)setStockPhotos(r.data.photos||[]);})
-   .catch(()=>{if(!cancelled)setStockPhotos([]);});
+   .then(r=>{if(!cancelled&&r.ok){setStockPhotos(r.data.photos||[]);setStockReview(r.data);}})
+   .catch(()=>{if(!cancelled){setStockPhotos([]);setStockReview(null);}});
   return()=>{cancelled=true;};
  },[draft?.id,draft?.visual_source,draft?.revision]);
  // Bounded READ-ONLY polling: never calls a paid endpoint or starts generation.
@@ -195,12 +195,20 @@ export function AdminMarketing({locale}:{locale:Locale}){
   if(!today&&!renderOnly&&basis==='live_event'&&!eventId){setError(t('Choose the live event to promote.','홍보할 정식 이벤트를 선택하세요.'));return;}
   const research=basis==='growth_carousel'&&['book_insight','trend_research','dating_myth','seoul_trend'].includes(topic),requestedMode=renderOnly?'image':(['auto_ai','pexels'].includes(source)?'both':'text');
   const selectedEvent=(data.live_events||[]).find((item:Row)=>String(item.id)===eventId),eventHasEnoughPhotos=basis==='live_event'&&Array.isArray(selectedEvent?.images)&&selectedEvent.images.length>=3;
-  const cost=source==='pexels'?(renderOnly?'$0':research?'$0.05':'$0.02'):renderOnly?(source==='uploaded'?'$0':eventHasEnoughPhotos?'$0':'$0.15'):source==='auto_ai'?(eventHasEnoughPhotos?'$0.02':'$0.20'):research?'$0.05':'$0.02';
-  const message=source==='pexels'
-    ?t('Generate copy and find 2–3 Pexels photos? New photos require rights review. Reserve '+cost+'.','문구 생성과 Pexels 사진 2~3장을 검색할까요? 신규 사진은 저작권 검수 후 사용할 수 있습니다. 예약액 '+cost+'.')
+  const managed=Number.isInteger(settings?.carousel_min_real_photos_5)&&Number.isInteger(settings?.carousel_min_real_photos_3)&&['auto_ai','pexels'].includes(source);
+  const useAiCover=renderOnly?draft?.content_document?.photo_sourcing?.ai_thumbnail_enabled===true:managed&&settings?.carousel_ai_thumbnail_enabled===true;
+  const cost=managed?(useAiCover?(renderOnly?'$0.15':'$0.20'):renderOnly?'$0':research?'$0.05':'$0.02')
+    :source==='pexels'?(renderOnly?'$0':research?'$0.05':'$0.02')
+    :renderOnly?(source==='uploaded'?'$0':eventHasEnoughPhotos?'$0':'$0.15')
+    :source==='auto_ai'?(eventHasEnoughPhotos?'$0.02':'$0.20'):research?'$0.05':'$0.02';
+  const message=managed
+   ?t('Source real Pexels photos (5 slides ≥'+Number(settings?.carousel_min_real_photos_5??3)+', 3 slides ≥'+Number(settings?.carousel_min_real_photos_3??2)+') for this carousel? New photos require approval. Missing photos leave the draft on hold, without AI substitutions. '+(useAiCover?'An AI cover can be generated once photos are approved. ':'')+'Reserved budget '+cost+'.',
+      '카드뉴스 실제 Pexels 사진 확보(5장 최소 '+Number(settings?.carousel_min_real_photos_5??3)+'장, 3장 최소 '+Number(settings?.carousel_min_real_photos_3??2)+'장)를 시작할까요? 신규 사진은 검수 대상이며 부족할 때 AI로 대체하지 않습니다. '+(useAiCover?'사진 승인 후 AI 표지 1장 생성 가능. ':'')+'예약액 '+cost+'.')
+   :source==='pexels'
+    ?t('Generate copy and find Pexels photos for human review? Reserve '+cost+'.','문구와 Pexels 사진을 검수용으로 준비할까요? 예약액 '+cost+'.')
     :source==='auto_ai'
-   ?t('Generate copy with three fresh AI editorial images? This reserves '+cost+'.','문구와 새 AI 에디토리얼 이미지 3장을 생성할까요? 앱 예산 '+cost+'를 예약합니다.')
-   :source==='uploaded'
+    ?t('Generate AI images with the legacy visual mode? This reserves '+cost+'.','기존 AI 이미지 모드로 만들까요? 예약액 '+cost+'.')
+    :source==='uploaded'
     ?t('Generate copy for manual image upload? Only copy/research cost is reserved; image AI will not run.','직접 업로드용 문구를 생성할까요? 문구/검색 비용만 예약되며 이미지 AI는 호출하지 않습니다.')
     :t('Generate copy only? Images can be added later.','문구만 생성할까요? 이미지는 나중에 추가할 수 있습니다.');
   if(!window.confirm(message))return;
@@ -211,7 +219,8 @@ export function AdminMarketing({locale}:{locale:Locale}){
    if(!r.ok||r.data.error)throw new Error(r.data.error||'Generation failed');
    if(r.data.job?.status==='running'){setNotice(t('This request already exists. Check Generation history; it was not billed again.','이미 접수된 요청입니다. 생성 기록을 확인하세요. 추가 호출하지 않았습니다.'));return;}
    if(['failed','uncertain'].includes(r.data.job?.status))throw new Error(r.data.job?.error_message||'Previous attempt stopped; no retry was sent.');
-   if(!today&&!renderOnly&&(source==='uploaded'||source==='pexels')){
+   const actuallyPexels=r.data.draft?.visual_source==='pexels';
+   if(!today&&!renderOnly&&(source==='uploaded'||source==='pexels'||actuallyPexels)){
     const jobId=String(r.data.job?.id||'');if(!jobId)throw new Error('RESULT_SNAPSHOT_UNAVAILABLE');
     const imported=await request('/generation/jobs/'+jobId+'/import',{confirm_import:true});
     if(!imported.ok||imported.data.error||!imported.data.draft)throw new Error(imported.data.error||'Import failed');
@@ -221,9 +230,9 @@ export function AdminMarketing({locale}:{locale:Locale}){
      finally{clearPendingMarketingImages();}
     }
     await load(candidate.id);setActiveTab('draft');
-    if(source==='pexels')await refreshStock(candidate.id);
-    setNotice(source==='pexels'
-     ?t('Copy and Pexels photos saved. Review new photos before rendering.','문구와 Pexels 사진 후보가 저장됐습니다. 신규 사진을 검수한 뒤 렌더링하세요.')
+    if(candidate.visual_source==='pexels')await refreshStock(candidate.id);
+    setNotice(candidate.visual_source==='pexels'
+     ?t('Copy saved. Pexels photos remain under review until the minimum count is approved; no AI filler was created.','문구 저장 완료. 최소 실제 사진 개수 확보 및 승인 전까지 검수 대기하며 부족한 사진을 AI로 대체하지 않습니다.')
      :t('Copy, uploaded images, and final cards are ready in Drafts. No image AI was used.','문구 생성, 이미지 업로드, 카드 렌더링까지 완료했습니다. 이미지 AI는 사용하지 않았습니다.'));
    }else{
     await load(renderOnly?draft?.id:undefined);
@@ -286,7 +295,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
  async function refreshStock(draftId:string){
   const r=await request('/photos?draft_id='+encodeURIComponent(draftId),undefined,'GET');
   if(!r.ok||r.data.error)throw new Error(r.data.error||'Could not load Pexels photos');
-  setStockPhotos(r.data.photos||[]);
+  setStockPhotos(r.data.photos||[]);setStockReview(r.data);
  }
  async function reviewStock(photo:Row,status:'approved'|'rejected'){
   if(!draft)return;
