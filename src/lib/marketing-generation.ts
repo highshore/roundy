@@ -381,8 +381,8 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
    const copy=await generateCopy(db,draft,input,job,research);contentQuality=copy.quality_report;await progress(db,job,'saving_copy');
    const roles=Array.isArray(copy.carousel_slides)?copy.carousel_slides.map((slide:Row)=>String(slide.role||'')):[];
    const policy=managedPhotoSourcing?configuredPhotoSourcingPolicy(preference,roles):null;
-   if(policy)copy.content_document={...copy.content_document,photo_sourcing:policy};
-   draft=await savePartial(db,draft,{...copy,generation_source:automatic?'automation':'manual',visual_source:visualSource,last_regeneration_mode:input.mode,last_regeneration_instruction:input.instruction,images:[]});
+   const contentDocument=policy?{...copy.content_document,photo_sourcing:policy}:copy.content_document;
+   draft=await savePartial(db,draft,{...copy,content_document:contentDocument,generation_source:automatic?'automation':'manual',visual_source:visualSource,last_regeneration_mode:input.mode,last_regeneration_instruction:input.instruction,images:[]});
   }
   let stockPhotos:ReturnType<typeof photoSelectionSnapshot>=[],photoReviewRequired=false;
   if(autoVisuals){
