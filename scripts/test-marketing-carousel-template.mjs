@@ -32,6 +32,14 @@ for(const sample of [
  assert.ok(fitted.fontSize>=34);
  assert.equal(fitted.lines.join('').replace(/\s+/g,''),sample.replace(/\s+/g,''),'no text truncation');
 }
+const emoji='👩🏽‍💻';
+const complexToken='한국어'+emoji.repeat(24)+'데이트';
+const wrapped=wrapCarouselCopy(complexToken,7);
+assert.equal(wrapped.join(''),complexToken,'no grapheme truncation');
+for(const line of wrapped){
+ assert.ok(!line.startsWith('\u200D')&&!line.endsWith('\u200D'),'must not wrap within a joined emoji');
+ assert.ok(!line.startsWith('🏽')&&!line.endsWith('👩'),'must not separate skin-tone modifier');
+}
 assert.throws(()=>fitCarouselCopy('x'.repeat(1800),{
  width:920,availableHeight:180,preferred:70,minimum:50,maxLines:3,label:'TITLE'
 }),/CAROUSEL_TEXT_OVERFLOW_TITLE/);
@@ -48,7 +56,7 @@ assert.equal(mobileCarouselFit(samples[1],three,1,'ko').body.fontSize,42,
  '36px body baseline must render larger in the standardized template');
 const visuals=read('src/lib/marketing-visuals.ts');
 assert.match(visuals,/standardCarouselTree\(/);
-assert.match(visuals,/rgba\(13,18,15,\.80\)/);
+assert.ok(visuals.includes("backgroundColor:'rgba(13,18,15,.83)'"),'Satori scrim must be explicitly sized and visible');
 assert.match(visuals,/left:80,right:80/);
 assert.match(visuals,/fontWeight:900/);
 assert.match(visuals,/savedCarouselPlan\(document\)\?standardCarouselTree/);

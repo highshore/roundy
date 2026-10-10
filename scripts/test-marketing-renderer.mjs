@@ -3,7 +3,12 @@ const nodeRequire=createRequire(import.meta.url),ts=nodeRequire('typescript'),sh
 function load(file){if(cache[file])return cache[file];const context={exports:{},URL,Buffer,console,require:n=>n==='server-only'?{}:n==='./supabase/service'?{createServiceRoleClient:()=>({})}:n.startsWith('./')&&fs.existsSync('src/lib/'+n.slice(2)+'.ts')?load('src/lib/'+n.slice(2)+'.ts'):nodeRequire(n)};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText,context);return cache[file]=context.exports;}
 const p=load('src/lib/marketing-content-policy.ts'),e=load('src/lib/marketing-editorial.ts');fs.mkdirSync('quality-artifacts',{recursive:true});
 const hashes=new Set();
-for(const language of ['en','ko']){const doc=fixture('book_insight',language,p.CONTENT_PROFILES),sources=[{id:'S1',url:'https://publisher.example/listening',title:'Listening Across Difference by Alex Lee',evidence:'Listening Across Difference by Alex Lee explains attentive listening.'}],prepared=p.prepareContent(doc,'book_insight',language,sources);for(let i=0;i<prepared.slides.length;i++){const png=Buffer.from(await e.editorialCard(prepared.slides[i],i,prepared.slides.length,{...prepared.document,content_language:language}).arrayBuffer());const info=await sharp(png).metadata();assert.equal(info.width,1080);assert.equal(info.height,1350);hashes.add(createHash('sha256').update(png).digest('hex'));await sharp(png).jpeg({quality:85}).toFile('quality-artifacts/'+language+'-'+i+'.jpg');}}
+for(const language of ['en','ko']){const doc=fixture('book_insight',language,p.CONTENT_PROFILES),sources=[{id:'S1',url:'https://publisher.example/listening',title:'Listening Across Difference by Alex Lee',evidence:'Listening Across Difference by Alex Lee explains attentive listening.'}],prepared=p.prepareContent(doc,'book_insight',language,sources);for(let i=0;i<prepared.slides.length;i++){const png=Buffer.from(await e.editorialCard(prepared.slides[i],i,prepared.slides.length,{...prepared.document,content_language:language}).arrayBuffer());const info=await sharp(png).metadata();assert.equal(info.width,1080);assert.equal(info.height,1350);if(i===0){
+ const contrastPixel=await sharp(png).extract({left:540,top:190,width:1,height:1}).removeAlpha().raw().toBuffer();
+ assert.ok(Math.max(...contrastPixel)<160,
+  'LEGACY_COVER_WHITE_TEXT_ON_BRIGHT_BACKGROUND: '+language+' RGB='+Array.from(contrastPixel).join(','));
+}
+hashes.add(createHash('sha256').update(png).digest('hex'));await sharp(png).jpeg({quality:85}).toFile('quality-artifacts/'+language+'-'+i+'.jpg');}}
 assert.equal(hashes.size,12);
 const layout=load('src/lib/marketing-carousel-template.ts');
 const standard=load('src/lib/marketing-visuals.ts');
@@ -28,6 +33,22 @@ for(const language of ['en','ko'])for(const count of [3,5]){
   const meta=await sharp(jpg).metadata();
   assert.equal(meta.width,1080);assert.equal(meta.height,1350);
   assert.ok(jpg.length>1000);
+  if(i===0||i===1){
+   // White photography must not create invisible white-on-white headlines.
+   // Pixel-level QA complements geometry-only render smoke tests.
+   const photoPixel=await sharp(jpg)
+    .extract({left:540,top:175,width:1,height:1}).removeAlpha().raw().toBuffer();
+   assert.ok(Math.max(...photoPixel)<160,
+    'BRIGHT_PHOTO_SCRIM_MISSING: '+count+' '+language+' card '+(i+1)+' RGB='+Array.from(photoPixel).join(','));
+   const {data:sample,info:sampleInfo}=await sharp(jpg)
+    .extract({left:80,top:300,width:920,height:750})
+    .removeAlpha().raw().toBuffer({resolveWithObject:true});
+   let visibleInk=0;
+   for(let p=0;p<sample.length;p+=sampleInfo.channels)
+    if(sample[p]>200&&sample[p+1]>200&&sample[p+2]>200)visibleInk++;
+   assert.ok(visibleInk>300&&visibleInk<200000,
+    'TEXT_MISSING_OR_PHOTO_TOO_BRIGHT: '+count+' '+language+' '+i+' bright='+visibleInk);
+  }
   await sharp(jpg).jpeg({quality:85}).toFile('quality-artifacts/standard-'+count+'-'+language+'-'+i+'.jpg');
   standardCards++;
  }

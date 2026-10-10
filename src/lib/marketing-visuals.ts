@@ -100,8 +100,10 @@ function cover(slide:Row,_index:number,_total:number,assets:EditorialAssets,docu
  const language=document.content_language==='en'?'en':'ko',src=selectedPhoto(assets,0,true),title=String(slide.title||''),body=selectedBody(slide,language);
  const subtitleSize=Math.max(21,Math.min(34,Math.floor(900/Math.max(1,textUnits(body)))));
  return box({position:'relative',width:1080,height:1350,background:BRAND.ink,color:BRAND.paper,overflow:'hidden'},
-  photo(src),
-  box({position:'absolute',inset:0,background:'linear-gradient(180deg,rgba(20,20,18,.45) 0%,rgba(20,20,18,.12) 38%,rgba(20,20,18,.72) 100%)'}),
+  // No bright fallback rectangle behind white text when a photo is unavailable.
+  src?photo(src):null,
+  src?box({position:'absolute',top:0,left:0,width:1080,height:1350,
+   backgroundColor:'rgba(16,18,16,.70)'}):null,
   box({position:'absolute',top:66,left:0,right:0,justifyContent:'center'},officialRoundyLogo(true,62)),
   box({position:'absolute',left:72,right:72,bottom:112,flexDirection:'column',gap:24},
    accentedHeadline(title,language==='ko'?112:100,900,BRAND.paper),
@@ -245,7 +247,10 @@ export function standardCarouselTree(slide:Row,index:number,total:number,documen
   background:dark?BRAND.ink:BRAND.paper,color:fg,overflow:'hidden',fontFamily:typeface},
   src?photo(src):null,
   // Opaque photographic scrim prevents bright imagery from reducing text contrast.
-  src?box({position:'absolute',inset:0,background:'rgba(13,18,15,.80)'}):null,
+  // Satori/ImageResponse does not reliably paint shorthand inset:0 overlays.
+  // Explicit dimensions and edges ensure bright photographs retain text contrast.
+  src?box({position:'absolute',top:0,left:0,width:CAROUSEL_CANVAS.width,
+   height:CAROUSEL_CANVAS.height,backgroundColor:'rgba(13,18,15,.83)'}):null,
   box({position:'absolute',left:80,right:80,top:66,alignItems:'center',justifyContent:'space-between'},
    officialRoundyLogo(dark,48),
    text(String(index+1).padStart(2,'0')+' / '+String(total).padStart(2,'0'),23,

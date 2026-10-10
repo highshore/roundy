@@ -26,7 +26,14 @@ export function withCarouselPlan<T extends Record<string,any>>(document:T,plan:C
 export function carouselNarrative(count:number):string[]{
  return count===3?['RESULT','VALUE / DETAIL','ROUNDY']:['RESULT','CONTEXT','DETAIL','VALUE','ROUNDY'];
 }
-const textUnits=(value:string)=>Array.from(value).reduce((total,char)=>{
+// Render whole grapheme clusters, not detached emoji modifiers or ZWJ fragments.
+const graphemeSegmenter=typeof Intl.Segmenter==='function'
+ ?new Intl.Segmenter(undefined,{granularity:'grapheme'}):null;
+const graphemes=(value:string)=>graphemeSegmenter
+ ?Array.from(graphemeSegmenter.segment(value),part=>part.segment)
+ :Array.from(value);
+const textUnits=(value:string)=>graphemes(value).reduce((total,char)=>{
+ if(/\p{Extended_Pictographic}/u.test(char))return total+1.4;
  if(/[\u1100-\u11ff\u3000-\u9fff\uac00-\ud7af]/u.test(char))return total+1;
  if(char===' ')return total+.32;
  if(/[A-ZMW@]/.test(char))return total+.72;
@@ -46,7 +53,7 @@ export function wrapCarouselCopy(value:string,widthUnits:number):string[]{
     const possible=line?line+' '+word:word;
     if(textUnits(possible)<=widthUnits){line=possible;break;}
     if(line){lines.push(line);line='';continue;}
-    const chars=Array.from(word);let count=1;
+    const chars=graphemes(word);let count=1;
     while(count<chars.length&&textUnits(chars.slice(0,count+1).join(''))<=widthUnits)count++;
     lines.push(chars.slice(0,count).join(''));
     word=chars.slice(count).join('');

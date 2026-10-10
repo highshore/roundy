@@ -105,6 +105,8 @@ export function answerFirstIssues(doc:CopyRow,language:string):string[]{
     add('썸네일은 추상적인 질문이 아닌 결과 또는 구체적인 제안으로 시작해야 합니다.');
    if(/충격|소름|역대급|100\s*%|무조건|반드시|비밀\s*공개|절대\s*실패|you won.t believe|guaranteed|must[- ]see|shocking|#1\b|best ever/i.test(title))
     add('썸네일에서 클릭베이트 또는 검증되지 않은 보장 표현을 사용할 수 없습니다.');
+   if(/^(?:이것만\s*기억|이것만\s*알면|자세히\s*알아보|지금\s*확인|함께\s*알아보|여기서\s*확인|궁금하다면)|(?:지금\s*확인하세요|궁금하지\s*않나요|계속\s*읽어보세요|click\s*here|learn\s*more|read\s*on|find\s*out)\s*[.!?]?$/i.test(clean(title)))
+    add('썸네일에 구체적인 결론 또는 실용적인 추천을 적어주세요. 확인 유도 문구만으로는 Answer-First를 충족하지 못합니다.');
   }
   const selected=Number(doc.thumbnail_selected_index??0);
   if(!Number.isInteger(selected)||selected<0||selected>=choices.length||clean(slides[0]?.title)!==clean(choices[selected]))
