@@ -229,7 +229,7 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
   let repeat=datingMythRepeatReason((prepared.document as Row)?.myth,mythItems),mythIssues=classifyQualityIssues(prepared.report.issues);
   if(repeat||isDatingMythGroundingFailure(mythIssues.critical)){
    mythAlternateUsed=true;
-   written=await write(effectiveType,undefined,'backup');prepared=prepareContent(applyAnswerFirstDocument(written.document,answerFirst,plan),effectiveType,language,sources);
+   written=await write(effectiveType,undefined,'backup');written.document=lockMythGrounding(written.document);prepared=prepareContent(applyAnswerFirstDocument(written.document,answerFirst,plan),effectiveType,language,sources);
    repeat=datingMythRepeatReason((prepared.document as Row)?.myth,mythItems);mythIssues=classifyQualityIssues(prepared.report.issues);
    if(repeat||isDatingMythGroundingFailure(mythIssues.critical)){
     effectiveType='conversation_prompt';sources=[];fallbackReason=(repeat||'myth_grounding_failed')+':dating_myth->conversation_prompt';
