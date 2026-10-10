@@ -55,5 +55,5 @@ assert.match(legacy, /req\.method==='PATCH'/);
 const component = read('src/components/admin-marketing.tsx');
 assert.match(component, /EDITORIAL_SETTINGS_DEFAULTS/);
 assert.match(component, /mutate\('\/settings',editorial,'PATCH'\)/);
-assert.match(component, /Settings only.*not yet affect generation/i);
+assert.match(component, /New copy and image template settings apply to newly generated cards/i);
 console.log('PASS marketing editorial settings: defaults, strict partial writes, legacy isolation, GET/PATCH contract and additive migration');
