@@ -25,7 +25,7 @@ export function savedPhotoSourcingPolicy(value:unknown):PhotoSourcingPolicy|null
  if(!value||typeof value!=='object')return null;
  const p=value as Partial<PhotoSourcingPolicy>;
  if(p.version!==1||(p.slide_count!==3&&p.slide_count!==5)||!Number.isInteger(p.min_real_photos)
-   ||p.min_real_photos!<2||p.min_real_photos!>p.slide_count
+   ||Number(p.min_real_photos)<2||Number(p.min_real_photos)>p.slide_count
    ||typeof p.ai_thumbnail_enabled!=='boolean'||typeof p.requested_ai_thumbnail!=='boolean')return null;
  return p as PhotoSourcingPolicy;
 }
