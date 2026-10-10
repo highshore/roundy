@@ -17,7 +17,7 @@ export function configuredPhotoSourcingPolicy(settings:Record<string,unknown>|nu
  if(typeof requested!=='number'||!Number.isInteger(requested)||requested<0||requested>count)return null;
  // The legacy reviewed-photo publication safety guard requires at least two images.
  const minimum=Math.max(2,requested);
- const others=roles.filter((role,index)=>index>0&&role!=='cta'&&row.role!=='editorial_closing').length;
+ const others=roles.filter((role,index)=>index>0&&role!=='cta'&&role!=='editorial_closing').length;
  const wantsAi=settings?.carousel_ai_thumbnail_enabled===true;
  const useAi=wantsAi&&count===5&&others>=minimum;
  return {version:1,slide_count:count,min_real_photos:minimum,ai_thumbnail_enabled:useAi,requested_ai_thumbnail:wantsAi};
