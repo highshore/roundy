@@ -1,4 +1,5 @@
 import {savedCtaRecoverySource} from './marketing-output-recovery';
+import {selectAnswerFirstHeadline} from './marketing-answer-first';
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
@@ -362,6 +363,26 @@ if(id==='uploads'&&path.length===1&&req.method==='GET'){
   if(req.method!=='GET'){
    const active=checked(await service.from('marketing_generation_jobs').select('id').eq('draft_id',path[1]).eq('status','running').gt('created_at',new Date(Date.now()-300000).toISOString()).limit(1));
    if(active.length)return json({error:'GENERATION_ALREADY_RUNNING'},409);
+  }
+  if(path.length===3&&path[2]==='thumbnail'&&req.method==='PATCH'){
+   const body=await req.json().catch(()=>null);
+   if(!body||!Number.isInteger(body.revision)||!Number.isInteger(body.index))
+    return json({error:'INVALID_THUMBNAIL_CHOICE'},400);
+   const old=checked(await service.from('instagram_post_drafts').select('*').eq('id',path[1]).maybeSingle());
+   if(!old||old.status!=='needs_approval'||old.draft_role!=='candidate'||!old.imported_at)
+    return json({error:'THUMBNAIL_DRAFT_NOT_EDITABLE'},409);
+   if(old.revision!==body.revision)return json({error:'DRAFT_CHANGED_REFRESH_FIRST'},409);
+   let document:Row;
+   try{document=selectAnswerFirstHeadline(old.content_document,body.index,Array.isArray(old.images)&&old.images.length>0);}
+   catch(error){return json({error:error instanceof Error?error.message:'INVALID_THUMBNAIL_CHOICE'},400);}
+   if(document===old.content_document)return json({draft:old,unchanged:true});
+   const slides=(old.carousel_slides||[]).map((slide:Row,index:number)=>index===0?{...slide,title:document.slides[0].title}:slide);
+   const draft=checked(await service.from('instagram_post_drafts')
+    .update({content_document:document,carousel_slides:slides,revision:old.revision+1})
+    .eq('id',old.id).eq('revision',old.revision).eq('status','needs_approval')
+    .eq('draft_role','candidate').select('*').maybeSingle());
+   if(!draft)return json({error:'DRAFT_CHANGED_REFRESH_FIRST'},409);
+   return json({draft,rerender_required:document.thumbnail_render_pending===true});
   }
   if(path.length===2&&req.method==='PUT'){
    const v=await req.json();
