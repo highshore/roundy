@@ -574,7 +574,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
     <div className="admin-section-title"><div>
      <p className="admin-kicker">{t('Next phase','다음 단계 준비')}</p>
      <Heading level={2}>{t('Feed & carousel preferences','Feed 및 카드뉴스 설정')}</Heading>
-     <p>{t('Settings only — these values do not yet affect generation, rendering, scheduling or publishing.','설정 저장 전용입니다. 이번 단계에서는 콘텐츠 생성, 렌더링, 예약 또는 발행 방식에 반영되지 않습니다.')}</p>
+     <p>{t('New copy and image template settings apply to newly generated cards. Instagram publishing schedules and existing posts remain unchanged.','신규 카드뉴스에 생성 및 템플릿 설정이 적용됩니다. 기존 게시물과 Instagram 발행 스케줄러는 변경하지 않습니다.')}</p>
     </div></div>
     <form className="admin-form" onSubmit={e=>{e.preventDefault();void work(async()=>{
      const editorial=Object.fromEntries(Object.keys(EDITORIAL_SETTINGS_DEFAULTS).map(key=>[key,settings[key]??EDITORIAL_SETTINGS_DEFAULTS[key as keyof typeof EDITORIAL_SETTINGS_DEFAULTS]]));
@@ -593,7 +593,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
      <p className="admin-help">{t('The daily limit will apply to automatic Feed publishing only in a future phase; extra manual publications remain allowed.','일일 횟수 제한은 향후 자동 Feed 발행에만 적용할 예정이며, 수동 추가 발행은 계속 허용합니다.')}</p>
      <div className="admin-two">
       <label><span>{t('Default carousel slides','기본 카드뉴스 장수')}</span>
-       <select value={settings.carousel_default_slides??EDITORIAL_SETTINGS_DEFAULTS.carousel_default_slides} onChange={e=>setSettings({...settings,carousel_default_slides:Number(e.target.value)})}>
+       <select value={5} disabled aria-label={t('Fixed five-card baseline','5장 기본 구성')}>
         <option value={5}>{t('5 slides','5장')}</option><option value={3}>{t('3 slides','3장')}</option>
        </select></label>
       <label><span>{t('Minimum real photos in 5 slides','5장 중 실제 사진 최소 개수')}</span>
