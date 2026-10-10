@@ -1,5 +1,6 @@
 import 'server-only';
-import {fiveEventRoles,withAnswerFirstSchema,answerFirstPrompt,answerFirstIssues,applyAnswerFirstDocument} from './marketing-answer-first';
+import {fiveEventRoles,eventRolesForCount,withAnswerFirstSchema,answerFirstPrompt,answerFirstIssues,applyAnswerFirstDocument} from './marketing-answer-first';
+import {savedCarouselPlan,mobileCarouselFit,type CarouselPlan} from './marketing-carousel-template';
 import {createHash} from 'node:crypto';
 import {EVENT_CAMPAIGN_PRESET,ROUNDY_IDENTITY,captionAction,captionCoreIssues,curateHashtags,normalizeCaptionCore} from './marketing-presentation';
 import {eventStatus} from './event-status';
@@ -238,8 +239,8 @@ function ctaCopy(stage:EventCampaignStage,language:string){
  if(stage==='momentum')return ko?'남은 자리 확인하기':'Check remaining spots';
  return ko?'자리 확인하기':'Check spots';
 }
-function schema(pattern:EventCampaignPattern,stage:EventCampaignStage,language:string,answerFirst=false){
- const roles=answerFirst?fiveEventRoles(pattern,PATTERN_ROLES[pattern]):PATTERN_ROLES[pattern],titleMax=language==='en'?48:26,bodyMax=language==='en'?90:48;
+function schema(pattern:EventCampaignPattern,stage:EventCampaignStage,language:string,answerFirst=false,plan:CarouselPlan|null=null){
+ const roles=plan?eventRolesForCount(pattern,PATTERN_ROLES[pattern],plan.slide_count):answerFirst?fiveEventRoles(pattern,PATTERN_ROLES[pattern]):PATTERN_ROLES[pattern],titleMax=language==='en'?48:26,bodyMax=language==='en'?90:48;
  const str=(maxLength:number,minLength=0)=>({type:'string',minLength,maxLength});
  return withAnswerFirstSchema({
   type:'object',additionalProperties:false,
@@ -260,11 +261,11 @@ function schema(pattern:EventCampaignPattern,stage:EventCampaignStage,language:s
   required:['schema_version','campaign_version','design_preset','post_type','event_campaign_stage','event_campaign_pattern','caption_ko','caption_en','slides']
  },language,answerFirst);
 }
-function instructions(stage:EventCampaignStage,pattern:EventCampaignPattern,language:string,answerFirst=false){
+function instructions(stage:EventCampaignStage,pattern:EventCampaignPattern,language:string,answerFirst=false,plan:CarouselPlan|null=null){
  return [
   'Create a conversion-focused Instagram campaign for ONE real Roundy event using only the supplied server facts.',
   'This is an EVENT CAMPAIGN, not editorial magazine content and not a generic brand teaser.',
-  'Stage: '+stage+'. Pattern: '+pattern+'. Exact card roles: '+(answerFirst?fiveEventRoles(pattern,PATTERN_ROLES[pattern]):PATTERN_ROLES[pattern]).join(' -> ')+'.',
+  'Stage: '+stage+'. Pattern: '+pattern+'. Exact card roles: '+(plan?eventRolesForCount(pattern,PATTERN_ROLES[pattern],plan.slide_count):answerFirst?fiveEventRoles(pattern,PATTERN_ROLES[pattern]):PATTERN_ROLES[pattern]).join(' -> ')+'.',
   'One message per card. Keep copy short, direct and visual-first. No paragraphs on cards.',
   'Never invent dates, venue details, prices, discounts, seats, attendee demographics, popularity, reviews, testimonials, scarcity, sell-out speed, safety guarantees, or participant identities.',
   'Dynamic roles named facts, participants, offer, and status are overwritten by the server. For those roles write neutral placeholders only and never add additional facts.',
@@ -276,7 +277,7 @@ function instructions(stage:EventCampaignStage,pattern:EventCampaignPattern,lang
   'Event photography should prefer the supplied real event/venue images. visual_direction is only a fallback brief when AI photography is needed. It must request a clean text-free photograph with no logos, signs, or watermarks.',
   language==='en'?'Primary card title/body are English; secondary_body is faithful Korean.':'Primary card title/body are Korean; secondary_body is faithful English.',
   'Do not use the Korean middle dot character.',
- ].join('\n')+(answerFirst?'\n'+answerFirstPrompt(language):'');
+ ].join('\n')+(answerFirst?'\n'+answerFirstPrompt(language,plan?.slide_count||5):'')+(plan?.slide_count===3?'\nThree-card compact format: result cover, ONE essential verified event detail card, final CTA. Preserve server facts and limitations.':'');
 }
 function parse(result:EventCampaignRow){
  const raw=result.choices?.[0]?.message?.content;
@@ -288,20 +289,21 @@ function buildCaption(doc:EventCampaignRow,stage:EventCampaignStage,facts:EventC
  const en=[clean(doc.caption_en),ctaCopy(stage,'en')+' → '+facts.event_url].filter(Boolean).join('\n\n');
  return [ko,en,ROUNDY_IDENTITY.instagram+' | '+ROUNDY_IDENTITY.website,curateHashtags('live_event',[],doc).join(' ')].filter(Boolean).join('\n\n');
 }
-function normalize(raw:EventCampaignRow,language:string,stage:EventCampaignStage,pattern:EventCampaignPattern,facts:EventCampaignRow,answerFirst=false){
- const ko=language!=='en',roles=answerFirst?fiveEventRoles(pattern,PATTERN_ROLES[pattern]):PATTERN_ROLES[pattern],slides=roles.map((role,index)=>{
+function normalize(raw:EventCampaignRow,language:string,stage:EventCampaignStage,pattern:EventCampaignPattern,facts:EventCampaignRow,answerFirst=false,plan:CarouselPlan|null=null){
+ const ko=language!=='en',roles=plan?eventRolesForCount(pattern,PATTERN_ROLES[pattern],plan.slide_count):answerFirst?fiveEventRoles(pattern,PATTERN_ROLES[pattern]):PATTERN_ROLES[pattern],slides=roles.map((role,index)=>{
   const source=raw.slides?.[index]||{},server=serverFactCopy(role,facts,stage,language),main=server?.body??clean(source.body),secondary=server?serverFactCopy(role,facts,stage,language==='en'?'ko':'en')?.body||'':clean(source.secondary_body);
   const title=server?.title??clean(source.title),step=pattern==='experience'&&role==='step'?roles.slice(0,index+1).filter(x=>x==='step').length:0;
   return {role,eyebrow:clean(source.eyebrow),title,body:main,secondary_body:secondary,body_ko:ko?main:secondary,body_en:ko?secondary:main,visual_direction:clean(source.visual_direction),step_number:step,source_ids:[],variant:role==='hook'?'hook':role==='cta'?'roundy':role,...(role==='cta'?{instagram:ROUNDY_IDENTITY.instagram,website:ROUNDY_IDENTITY.website}:{})};
  });
  const caption_ko=normalizeCaptionCore(raw.caption_ko,'ko'),caption_en=normalizeCaptionCore(raw.caption_en,'en');
  const doc={...raw,schema_version:2,campaign_version:EVENT_CAMPAIGN_VERSION,design_preset:EVENT_CAMPAIGN_PRESET,post_type:'live_event',event_campaign_stage:stage,event_campaign_pattern:pattern,event_id:facts.id,event_facts:facts,content_language:language,caption_ko,caption_en,caption:ko?caption_ko:caption_en,cta:ctaCopy(stage,language),slides,hashtags:curateHashtags('live_event',[],raw)};
- return applyAnswerFirstDocument(doc,answerFirst);
+ return applyAnswerFirstDocument(doc,answerFirst,plan);
 }
 export function evaluateEventCampaign(document:EventCampaignRow,language:string){
  const issues:string[]=[],add=(x:string)=>{if(!issues.includes(x))issues.push(x);};
- const stage=document?.event_campaign_stage as EventCampaignStage,pattern=document?.event_campaign_pattern as EventCampaignPattern,roles=document?.answer_first===true?fiveEventRoles(pattern,PATTERN_ROLES[pattern]||[]):PATTERN_ROLES[pattern]||[],slides=Array.isArray(document?.slides)?document.slides:[];
+ const stage=document?.event_campaign_stage as EventCampaignStage,pattern=document?.event_campaign_pattern as EventCampaignPattern,plan=savedCarouselPlan(document),roles=plan?eventRolesForCount(pattern,PATTERN_ROLES[pattern]||[],plan.slide_count):document?.answer_first===true?fiveEventRoles(pattern,PATTERN_ROLES[pattern]||[]):PATTERN_ROLES[pattern]||[],slides=Array.isArray(document?.slides)?document.slides:[];
  for(const issue of answerFirstIssues(document,language))add(issue);
+ if(plan)slides.forEach((slide:EventCampaignRow,index:number)=>{try{mobileCarouselFit(slide,plan,index,language);}catch(e){add(e instanceof Error?e.message:'CAROUSEL_TEXT_OVERFLOW');}});
  if(document?.design_preset!==EVENT_CAMPAIGN_PRESET||document?.campaign_version!==EVENT_CAMPAIGN_VERSION||document?.post_type!=='live_event'||document?.schema_version!==2)add('이벤트 캠페인 버전 또는 렌더 프리셋이 맞지 않습니다.');
  if(!(EVENT_CAMPAIGN_STAGES as readonly string[]).includes(stage)||!(EVENT_CAMPAIGN_PATTERNS as readonly string[]).includes(pattern))add('이벤트 캠페인 단계 또는 패턴이 올바르지 않습니다.');
  if(slides.length!==roles.length)add('이벤트 캠페인 카드 수가 패턴과 맞지 않습니다.');
@@ -331,7 +333,7 @@ export function eventCampaignDraftQuality(draft:EventCampaignRow){
  return report;
 }
 export async function generateEventCampaignCopy(db:any,draft:EventCampaignRow,input:EventCampaignRow,job:EventCampaignRow,call:Call){
- const language=input.language==='en'?'en':'ko',answerFirst=input.answer_first_enabled===true,eventId=String(input.event_id||draft.event_id||'');
+ const language=input.language==='en'?'en':'ko',answerFirst=input.answer_first_enabled===true,plan=(input.carousel_plan||null) as CarouselPlan|null,eventId=String(input.event_id||draft.event_id||'');
  const facts=await loadEventCampaignFacts(db,eventId);
  let stage=String(input.event_campaign_stage||'auto') as EventCampaignStage|'auto';
  if(stage==='auto'){
@@ -347,18 +349,18 @@ export async function generateEventCampaignCopy(db:any,draft:EventCampaignRow,in
  }
  if(!(EVENT_CAMPAIGN_STAGES as readonly string[]).includes(stage))throw new Error('INVALID_EVENT_CAMPAIGN_STAGE');
  const resolvedStage=stage as EventCampaignStage;
- const pattern=STAGE_PATTERN[resolvedStage],eventSchema=schema(pattern,resolvedStage,language,answerFirst);
+ const pattern=STAGE_PATTERN[resolvedStage],eventSchema=schema(pattern,resolvedStage,language,answerFirst,plan);
  let inputTokens=0,outputTokens=0;
  const record=async(result:EventCampaignRow)=>{inputTokens+=Number(result.usage?.input_tokens||result.usage?.prompt_tokens||0);outputTokens+=Number(result.usage?.output_tokens||result.usage?.completion_tokens||0);ok(await db.from('marketing_generation_jobs').update({input_tokens:inputTokens,output_tokens:outputTokens}).eq('id',job.id));};
  const write=async(repair?:{document:EventCampaignRow;issues:string[]})=>{
   const payload={language,event_campaign_stage:resolvedStage,event_campaign_pattern:pattern,event_facts:facts,direction:clean(input.instruction).slice(0,500),...(repair?{original_document:repair.document,quality_issues:repair.issues}:{})};
-  const system=instructions(resolvedStage,pattern,language,answerFirst)+(repair?'\nREPAIR PASS: Fix ONLY the listed quality issues. Do not alter server facts or invent new claims. Return complete corrected JSON.':'');
+  const system=instructions(resolvedStage,pattern,language,answerFirst,plan)+(repair?'\nREPAIR PASS: Fix ONLY the listed quality issues. Do not alter server facts or invent new claims. Return complete corrected JSON.':'');
   if(Buffer.byteLength(system+JSON.stringify(payload)+JSON.stringify(eventSchema),'utf8')>30000)throw new Error('PROMPT_SIZE_LIMIT');
   ok(await db.from('marketing_generation_jobs').update({stage:repair?'repairing_copy':'writing'}).eq('id',job.id));
   const result=await call('chat/completions',{model:MODEL,reasoning_effort:'none',max_completion_tokens:3000,response_format:{type:'json_schema',json_schema:{name:'roundy_live_event_campaign_v1',strict:true,schema:eventSchema}},messages:[{role:'system',content:system},{role:'user',content:JSON.stringify(payload)}]},55000);
   await record(result);return parse(result);
  };
- let written=await write(),document=normalize(written.document,language,resolvedStage,pattern,facts,answerFirst),report=evaluateEventCampaign(document,language),repairUsed=false;
+ let written=await write(),document=normalize(written.document,language,resolvedStage,pattern,facts,answerFirst,plan),report=evaluateEventCampaign(document,language),repairUsed=false;
  if(report.status!=='passed'){repairUsed=true;written=await write({document,issues:report.issues});document=normalize(written.document,language,resolvedStage,pattern,facts,answerFirst);report=evaluateEventCampaign(document,language);}
  const recovery={requested_type:'live_event',effective_type:'live_event',fallback_reason:null,repair_used:repairUsed,event_campaign_stage:resolvedStage,event_campaign_pattern:pattern};
  const caption=buildCaption(document,resolvedStage,facts),quality={...report,recovery};
