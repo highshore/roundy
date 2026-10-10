@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import {createRequire} from 'node:module';
+const require=createRequire(import.meta.url);
 import ts from 'typescript';
 
 const read=p=>fs.readFileSync(new URL('../'+p,import.meta.url),'utf8');
