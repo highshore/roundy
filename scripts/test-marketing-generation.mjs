@@ -157,6 +157,11 @@ function harness({denied=false,network=false,badSources=false,duplicate=false,ph
      const other=translation.find(s=>s.role===picked.role)||translation[1];
      const clone={...picked,role,closing_type:final?'summary':'none',options:picked.options||[],
       secondary_body:other.body};
+     if((type==='prelaunch'||type==='live_event')&&final){
+      clone.title=ko?'한 가지 남겨 둘 관점':'The perspective to keep';
+      clone.body=ko?'한 번의 대화에는 서로의 속도를 존중하는 시간이 필요합니다.':'Each conversation deserves time and attention to the person in front of us.';
+      clone.secondary_body=ko?'Each conversation deserves time and attention to the person in front of us.':'한 번의 대화에는 서로의 속도를 존중하는 시간이 필요합니다.';
+     }
      if((type==='prelaunch'||type==='live_event')&&i>1&&!final){
       clone.title=ko?(i===2?'경험의 속도를 바꿔 보기':'작은 대화의 단서'):i===2?'A slower way to meet':'A detail worth noticing';
       clone.body=ko?(i===2?'주변의 소음을 줄이면 누군가의 이야기에 머물기 쉬워집니다.':'상대가 건넨 짧은 말에서 다음 이야깃거리를 찾을 수 있습니다.')
