@@ -437,9 +437,14 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
   if(draft.content_document?.thumbnail_render_pending===true&&Array.isArray(draft.images)&&draft.images.length>0){
    draft=await savePartial(db,draft,{content_document:{...draft.content_document,thumbnail_render_pending:false}});
   }
-  const quality=contentQuality||qualityForDraft(draft);
+  const coverStillPending=draft.content_document?.thumbnail_render_pending===true;
+  const reviewDraft=coverStillPending?{...draft,content_document:{...draft.content_document,thumbnail_render_pending:false}}:draft;
+  const quality=contentQuality||qualityForDraft(reviewDraft);
   if(quality.status!=='passed')throw new Error('품질 검토 필요: '+quality.issues.join(' '));
-  draft=checked(await db.rpc('set_marketing_quality',{p_draft:draft.id,p_revision:draft.revision,p_report:quality})).data as Row;
+  // A cover selection that still needs a new image must retain the invalidated
+  // quality gate. Do not accidentally re-approve a stale cover during review.
+  if(!(photoReviewRequired&&coverStillPending))
+   draft=checked(await db.rpc('set_marketing_quality',{p_draft:draft.id,p_revision:draft.revision,p_report:quality})).data as Row;
   const resultSnapshot={
    ...(recoverySource?{recovery:{version:SAVED_CTA_RECOVERY_VERSION,source_job_id:recoverySource.id,original_cta:recoverySource.result_snapshot.content_document.cta,additional_paid_calls:1}}:{}),
    content_document:draft.content_document,quality_report:quality,quality_revision:draft.revision,
