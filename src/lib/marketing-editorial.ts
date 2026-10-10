@@ -185,11 +185,7 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
    return {...document,seoul:{...document.seoul,format:seoulFormat,
     verified_at:new Date().toISOString().slice(0,10),venues},slides};
   }
-  if(plan?.slide_count===3){
-   const names=venues.map((venue:Row)=>String(venue.name||'').trim()).filter(Boolean);
-   const ids=[...new Set(venues.flatMap((venue:Row)=>Array.isArray(venue.source_ids)?venue.source_ids:[]))].slice(0,3);
-   const joined=names.join(seoulFormat==='course'?' → ':' / ');
-   const slides=Array.isArray(document.slides)?document.slides.map((slide:Row)=>{
+  const slides=Array.isArray(document.slides)?document.slides.map((slide:Row)=>{
     if(slide.role!=='plan')return slide;
     return {...slide,title:slide.title,body:joined,source_ids:ids};
    }):document.slides;
@@ -204,7 +200,7 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
   return {...document,seoul:{...document.seoul,format:seoulFormat,verified_at:new Date().toISOString().slice(0,10),venues},slides};
  };
  const lockMythGrounding=(document:Row)=>{
-  if(effectiveType!=='dating_myth'||(!plan&&false))return document;
+  if(effectiveType!=='dating_myth'||(!plan&&document.slides.length!==3))return document;
   const claim=String(document?.myth?.claim||'').trim();
   if(!claim)return document;
   const slides=Array.isArray(document.slides)?document.slides.map((slide:Row)=>{
