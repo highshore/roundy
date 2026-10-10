@@ -46,7 +46,7 @@ export function AdminMarketingSettings({locale,settings,onChange,onSave,busy}:{
     <legend><ImageIcon size={18}/>{t('Real photo policy','실제 사진 기준')}</legend>
     <div className="marketing-settings-fields">
      <label>{label(t('Minimum photos · 5 cards','5장 중 실제 사진 최소 수'),
-      t('Current Pexels renderer supports 2–3 reviewed photo slots.','현재 렌더러에서 검수 사진 슬롯 2~3개를 지원합니다.'))}
+      t('Existing Roundy renderer supports 2–3 approved real photos.','기존 Roundy 렌더러는 승인된 실제 사진을 2~3장 사용합니다.'))}
       <input type="number" min={2} max={3} step={1} value={min5}
        onChange={e=>set('carousel_min_real_photos_5',Number(e.target.value))}/></label>
      <label>{label(t('Minimum photos · 3 cards','3장 중 실제 사진 최소 수'),

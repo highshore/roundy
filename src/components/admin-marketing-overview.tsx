@@ -57,7 +57,7 @@ export function AdminMarketingOverview({locale,drafts,runs,settings,onNavigate}:
    {[
     {icon:<Layers3 size={20}/>,label:t('Drafts awaiting review','승인 대기 초안'),count:metrics.drafts_awaiting_review,tip:t('Generate, edit and approve','생성, 수정, 승인'),tab:'draft' as Tab},
     {icon:<CalendarDays size={20}/>,label:t('Feed posts in queue','Feed 발행 대기'),count:metrics.feeds_queued,tip:t('KST posting sequence','KST 예약 순서'),tab:'queue' as Tab},
-    {icon:<Images size={20}/>,label:t('Approved photos','승인된 사진 자산'),count:photos===null?'—':metrics.approved_photos,tip:t('Reviewed Pexels library','검수 완료 Pexels'),tab:'assets' as Tab},
+    {icon:<Images size={20}/>,label:t('Approved photos','승인된 사진 자산'),count:photos===null?'—':metrics.approved_photos,tip:t('Reviewed multi-provider photo library','검수 완료 사진 자산'),tab:'assets' as Tab},
     {icon:<ShieldAlert size={20}/>,label:t('Needs attention','조치 필요'),count:busy?'—':metrics.unresolved_failures,
      tip:t('Feed & Story failures','Feed 및 Story 오류'),tab:'queue' as Tab}
    ].map(item=><button key={item.label} type="button" className="marketing-kpi-card"

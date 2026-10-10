@@ -48,20 +48,20 @@ assert.equal(allSelectedPhotosApproved(roles5,approved(requiredPhotoSlotsForRole
 
 // Existing source table owns licensing evidence. No new asset DB schema or renderer changes.
 const stock=source('src/lib/marketing-stock-photos.ts');
-assert.match(stock,/license_url:PEXELS_LICENSE_URL/);
-assert.match(stock,/source_url:source/);
+assert.match(source('src/lib/marketing-photo-providers.ts'),/license_url:LICENSE_URLS.pexels/);
+assert.match(source('src/lib/marketing-photo-providers.ts'),/source_url:source/);
 assert.match(stock,/review_status:'approved'/);
-assert.match(stock,/license_checked_at:new Date/);
+assert.match(source('src/lib/marketing-photo-providers.ts'),/license_checked_at:new Date/);
 assert.match(stock,/content_sha256:digest/);
 assert.match(stock,/perceptual_hash:hash/);
 assert.match(stock,/PHOTO_COOLDOWN_DAYS=90/);
 assert.match(stock,/usedRecently\(db,draft\.id\)/);
 assert.match(stock,/if\(!rows\.length\)return/,'zero-photo pending results must remain importable for admin sourcing');
-assert.match(stock,/if\(picked\.length<slots\.length&&pexelsConfigured\(\)\)/);
+assert.match(stock,/for\(const provider of PHOTO_PROVIDERS\)/);
 assert.match(stock,/return \{photo:cardPhotos\[0\]\|\|null,photos:\[\],cardPhotos,reusePhotos:false\}/);
 const generation=source('src/lib/marketing-generation.ts');
 assert.match(generation,/configuredPhotoSourcingPolicy/);
-assert.match(generation,/visualSource:VisualSource=managedPhotoSourcing\?'pexels':originallyRequested/);
+assert.match(generation,/visualSource:VisualSource=managedPhotoSourcing\?'stock':originallyRequested/);
 assert.match(generation,/generateAiThumbnail\(db,draft,job\)/);
 assert.match(generation,/photoReviewRequired=true/);
 assert.match(generation,/photos_pending_review:photoReviewRequired/);
@@ -75,4 +75,4 @@ for(const column of ['source_url','image_url','license_url','photographer','revi
 const visual=source('src/lib/marketing-visuals.ts');
 assert.match(visual,/assets\.cardPhotos\?\.\[index\]/);
 assert.match(visual,/function selectedPhoto\(/);
-console.log('PASS Pexels-first photo sourcing: 5/3 min counts, single optional AI cover, source metadata, 90-day reuse, human review, fail-closed settings and existing renderer.');
+console.log('PASS multi-provider photo sourcing: 5/3 min counts, single optional AI cover, source metadata, 90-day reuse, human review, fail-closed settings and existing renderer.');

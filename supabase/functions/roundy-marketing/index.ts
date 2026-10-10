@@ -164,16 +164,38 @@ function validate(t:Template){
 async function validateReviewedStockDraft(t:Template){
  if(t.channel!=='instagram'||t.media_kind==='reel'||!t.draft_id)return;
  const {data:draft,error:draftError}=await service.from('instagram_post_drafts')
-  .select('id,visual_source,images').eq('id',t.draft_id).single();
+  .select('id,visual_source,images,approved_at,approved_by,caption').eq('id',t.draft_id).single();
  if(draftError||!draft)throw new Error('MARKETING_DRAFT_NOT_FOUND');
- if(draft.visual_source!=='pexels')return;
+ if(!['pexels','stock'].includes(draft.visual_source))return;
+ if(!draft.approved_at||!draft.approved_by)throw new Error('STOCK_DRAFT_APPROVAL_REQUIRED');
  const {data:rows,error}=await service.from('marketing_draft_photos')
-  .select('asset_id,marketing_photo_assets(review_status,storage_path)').eq('draft_id',t.draft_id);
- if(error||!rows||rows.length<2||rows.length>3||
-  rows.some((row:Record<string,any>)=>{
-   const photo=Array.isArray(row.marketing_photo_assets)?row.marketing_photo_assets[0]:row.marketing_photo_assets;
-   return !photo||photo.review_status!=='approved'||!photo.storage_path;
-  }))throw new Error('STOCK_PHOTO_REVIEW_REQUIRED');
+  .select('asset_id,marketing_photo_assets(provider,review_status,storage_path,reviewed_at,reviewed_by,license_checked_at,license_name,license_url,license_evidence_url,source_url,commercial_use_allowed,modifications_allowed,attribution_required,photographer)')
+  .eq('draft_id',t.draft_id);
+ if(error||!rows||rows.length<2||rows.length>3)throw new Error('STOCK_PHOTO_REVIEW_REQUIRED');
+ for(const row of rows as Record<string,any>[]){
+  const p=Array.isArray(row.marketing_photo_assets)?row.marketing_photo_assets[0]:row.marketing_photo_assets;
+  if(!p||p.review_status!=='approved'||!p.storage_path||!p.reviewed_by||!p.reviewed_at||
+   !p.license_checked_at||!p.source_url||!p.license_evidence_url||
+   p.commercial_use_allowed!==true||p.modifications_allowed!==true)
+   throw new Error('STOCK_PHOTO_RIGHTS_OR_APPROVAL_REQUIRED');
+  const licensing:Record<string,Array<string>>={
+   pexels:['Pexels License','https://www.pexels.com/license/'],
+   unsplash:['Unsplash License','https://unsplash.com/license'],
+   pixabay:['Pixabay Content License','https://pixabay.com/service/license-summary/']
+  };
+  const free=['wikimedia','openverse'].includes(p.provider)&&(
+   (p.license_name==='CC0 1.0'&&p.license_url==='https://creativecommons.org/publicdomain/zero/1.0/')||
+   (p.license_name==='Public Domain Mark 1.0'&&p.license_url==='https://creativecommons.org/publicdomain/mark/1.0/')||
+   (p.license_name==='CC BY 4.0'&&p.license_url==='https://creativecommons.org/licenses/by/4.0/'));
+  if(!free&&(!licensing[p.provider]||p.license_name!==licensing[p.provider][0]||
+   p.license_url!==licensing[p.provider][1]))throw new Error('STOCK_LICENSE_UNSUPPORTED');
+  if(p.attribution_required===true&&(
+   !String(t.caption||'').includes(String(p.photographer))||
+   !String(t.caption||'').includes(String(p.source_url))||
+   !String(t.caption||'').includes(String(p.license_url))||
+   !String(t.caption||'').includes('(cropped and text overlaid)')))
+    throw new Error('STOCK_REQUIRED_ATTRIBUTION_MISSING');
+ }
  if(JSON.stringify(draft.images)!==JSON.stringify(t.images))throw new Error('STOCK_RENDER_CHANGED_AFTER_APPROVAL');
 }
 

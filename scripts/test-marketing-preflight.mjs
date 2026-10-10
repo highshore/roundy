@@ -33,6 +33,8 @@ const goodPhoto=(slot)=>({slot,asset_id:'00000000-0000-4000-8000-'+String(slot+1
  source_url:'https://www.pexels.com/photo/sample-'+slot+'/',
  image_url:'https://images.pexels.com/photos/'+(100+slot)+'/photo.jpeg',
  license_name:'Pexels License',license_url:'https://www.pexels.com/license/',
+  license_evidence_url:'https://www.pexels.com/photo/sample-'+slot+'/',
+  commercial_use_allowed:true,modifications_allowed:true,attribution_required:false,
  photographer:'Test Photographer',photographer_url:'https://www.pexels.com/@photographer/',
  license_checked_at:'2026-10-10T10:00:00Z',review_status:'approved',
  reviewed_at:'2026-10-10T10:02:00Z',
