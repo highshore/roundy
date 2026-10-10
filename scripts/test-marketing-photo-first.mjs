@@ -56,6 +56,7 @@ assert.match(stock,/content_sha256:digest/);
 assert.match(stock,/perceptual_hash:hash/);
 assert.match(stock,/PHOTO_COOLDOWN_DAYS=90/);
 assert.match(stock,/usedRecently\(db,draft\.id\)/);
+assert.match(stock,/if\(!rows\.length\)return/,'zero-photo pending results must remain importable for admin sourcing');
 assert.match(stock,/if\(picked\.length<slots\.length&&pexelsConfigured\(\)\)/);
 assert.match(stock,/return \{photo:cardPhotos\[0\]\|\|null,photos:\[\],cardPhotos,reusePhotos:false\}/);
 const generation=source('src/lib/marketing-generation.ts');
