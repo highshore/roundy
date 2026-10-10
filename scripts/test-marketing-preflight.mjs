@@ -72,7 +72,7 @@ fail(d,photos.map((p,i)=>i===2?{...p,review_status:'pending',reviewed_at:null}:p
 fail({...d,content_document:{...d.content_document,answer_first:false}},photos,'answer_first');
 fail({...d,carousel_slides:d.carousel_slides.map((p,i)=>i===4?{...p,role:'other'}:p)},photos,'final_cta');
 fail({...d,destination_url:'https://roundy.team.evil.example/collect'},photos,'final_cta');
-fail({...d,carousel_slides:d.carousel_slides.map((p,i)=>i===4?{...p,title:'비트코인 거래소 가입',body:'가상화폐 코인 무료 구매하러 가세요.'}:p)},photos,'final_cta');
+fail({...d,carousel_slides:d.carousel_slides.map((p,i)=>i===4?{...p,title:'비트코인 거래소 가입',body:'가상화폐 코인 무료 구매하러 가세요.',body_ko:'가상화폐 코인 무료 구매하러 가세요.'}:p)},photos,'final_cta');
 fail({...d,carousel_slides:d.carousel_slides.map((p,i)=>i===1?{...p,body:'길고 반복되는 문구 '.repeat(250),body_ko:'길고 반복되는 문구 '.repeat(250)}:p)},photos,'mobile_render');
 fail({...d,content_document:{...d.content_document,thumbnail_render_pending:true}},photos,'answer_first');
 assert.notDeepEqual(photoReviewManifest(photos),photoReviewManifest(photos.map((p,i)=>i===0?{...p,review_status:'pending'}:p)));
