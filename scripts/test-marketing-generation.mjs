@@ -270,6 +270,20 @@ for(const language of ['ko','en']){
  check(()=>assert.equal(r.draft.carousel_slides.length,5,'Fixed must produce five even if an older setting contains three'));
  check(()=>assert.equal(r.draft.content_document.carousel_template.reservation_number,null));
 }
+// Exercise the compact three-slide schema across real editorial research/topic contracts.
+for(const language of ['ko','en'])for(const type of Object.keys(harness().policy.CONTENT_PROFILES)){
+ const tSettings={carousel_mode:'alternating',carousel_default_slides:5,carousel_title_font_size_px:72,carousel_body_font_size_px:36};
+ const h=harness({answerFirst:true,templateSettings:tSettings,slotNumber:1});
+ const input={...base,request_key:'manual:compact-three-'+language+'-'+type,language,
+  content_mode:type==='prelaunch'||type==='live_event'?type:'growth_carousel',
+  ...(type==='prelaunch'?{campaign_pattern:'poster'}:{}),
+  ...(type==='live_event'?{event_id:eventId,event_campaign_stage:'launch'}:{}),
+  ...(!['prelaunch','live_event'].includes(type)?{topic_type:type}:{})};
+ const r=await h.api.runGeneration(id,input,null);
+ check(()=>assert.equal(r.job.status,'completed',JSON.stringify({type,language,error:r.error,job:r.job,quality:r.draft.quality_report})));
+ check(()=>assert.equal(r.draft.carousel_slides.length,3,'compact '+type));
+ check(()=>assert.equal(r.draft.content_document.carousel_template.slide_count,3));
+}
 const adminMarketingSource=fs.readFileSync(new URL('../src/components/admin-marketing.tsx',import.meta.url),'utf8');
 check(()=>assert.ok(adminMarketingSource.includes("...(basis==='growth_carousel'?{topic_type:topic}:{})")));
 check(()=>assert.ok(adminMarketingSource.includes("request.content_mode==='growth_carousel'")));
