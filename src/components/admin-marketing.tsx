@@ -32,6 +32,7 @@ const blank=()=>({channel:'koreapas',name:'',title:'',caption:'',cta:'자세히 
 export function AdminMarketing({locale}:{locale:Locale}){
  const t=(en:string,ko:string)=>tr(locale,en,ko);
  const [data,setData]=useState<Row>({drafts:[],runs:[],templates:[]});
+ const [feedAttempts,setFeedAttempts]=useState<Record<string,Row>>({});
  const [draft,setDraft]=useState<Row|null>(null),[settings,setSettings]=useState<Row|null>(null),[generation,setGeneration]=useState<Row|null>(null);
  const [channel,setChannel]=useState<'instagram'|'koreapas'>('instagram'),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[error,setError]=useState(''),[notice,setNotice]=useState('');
  const [basis,setBasis]=useState('prelaunch'),[manualVisualSource,setManualVisualSource]=useState<'auto_ai'|'uploaded'|'none'|'pexels'>('auto_ai'),[topic,setTopic]=useState('conversation_prompt'),[contentLanguage,setContentLanguage]=useState<'ko'|'en'>('ko'),[direction,setDirection]=useState(''),[dirty,setDirty]=useState(false);
@@ -100,6 +101,10 @@ export function AdminMarketing({locale}:{locale:Locale}){
  function friendlyError(message:string){
   const map:Record<string,[string,string]>={
    DUPLICATE_GENERATION_BLOCKED:['A matching generation is already running, completed, or has an unknown outcome. Refresh status before trying again.','같은 생성 작업이 이미 진행 중이거나 완료됐거나 결과 확인이 필요한 상태입니다. 상태를 새로고침한 뒤 확인하세요.'],
+   CAROUSEL_FINAL_ORDER_REQUIRES_REGENERATION:['The final Feed position requires a different 3/5-card count. Prepare the required length before approval.','최종 Feed 발행 순서에 필요한 카드 장수가 현재 콘텐츠와 다릅니다. 올바른 3장/5장 형식으로 다시 제작한 뒤 승인하세요.'],
+   FEED_RETRY_REQUIRES_CONFIRMED_NO_POST:['Verify Instagram did not publish the post and record your findings before retrying.','재시도 전에 Instagram 미게시 여부를 확인하고 검수 근거를 기록하세요.'],
+   CONFIRM_NOT_PUBLISHED_AND_REVIEW_NOTE_REQUIRED:['Verify the post is absent from Instagram and enter at least 12 characters explaining how you checked.','Instagram에서 미게시 상태를 확인하고 확인 방법을 12자 이상 기록하세요.'],
+   FEED_RUN_NOT_RETRYABLE:['This run is not eligible for a retry. Check its status and attempt history.','이 게시물은 재시도 대상이 아닙니다. 상태 및 시도 이력을 확인하세요.'],
    GENERATION_COOLDOWN_30_SECONDS:['Please wait 30 seconds before starting another generation.','연속 생성 방지를 위해 30초 후 다시 시도하세요.'],
    GENERATION_BUDGET_REACHED:['Today’s marketing AI safety budget has been reached.','오늘 마케팅 AI 안전 한도에 도달했습니다.'],
    GENERATION_CALL_LIMIT:['Today’s generation call limit has been reached.','오늘 생성 횟수 안전 한도에 도달했습니다.'],
@@ -522,7 +527,9 @@ export function AdminMarketing({locale}:{locale:Locale}){
     <label><span>{t('Destination','연결 주소')}</span><input value={draft.destination_url||''} disabled={busy||!!running||draft.status!=='needs_approval'} onChange={e=>changeDraft('destination_url',e.target.value)}/></label>
     {draft.research_status==='generated_without_sources'&&<p className="admin-error" role="alert">{t('Web Search completed, but OpenAI did not return source metadata. Fact-check this draft manually before publishing.','Web Search는 완료됐지만 OpenAI가 출처 메타데이터를 반환하지 않았습니다. 게시 전에 내용의 사실관계를 직접 확인하세요.')}</p>}
     {!!draft.research_sources?.length&&<div className="growth-sources">{draft.research_sources.map((s:Row)=><a key={s.url} href={s.url} target="_blank" rel="noreferrer">{s.publisher||s.title}</a>)}</div>}
-    {draft.status==='needs_approval'&&<div className="admin-form-actions"><button type="button" className="admin-secondary" disabled={busy||!!running||!dirty} onClick={()=>void work(async()=>{await mutate('/draft/'+draft.id,{revision:draft.revision,caption:draft.caption,cta:draft.cta,destination_url:draft.destination_url},'PUT');await load(draft.id);})}>{t('Save edits','수정 저장')}</button><button type="button" className="admin-primary" disabled={busy||!!running||dirty||!preflightReady||!draft.caption?.trim()||!draft.images?.length||draft.quality_report?.status!=='passed'||draft.quality_revision!==draft.revision} onClick={()=>{if(window.confirm(t('Approve this exact revision and schedule it for Instagram?','현재 버전의 문구와 이미지를 승인하고 Instagram 게시를 예약할까요?')))void work(async()=>{await mutate('/draft/'+draft.id+'/approve',{revision:draft.revision});await load(draft.id);setNotice(t('Approved and scheduled.','승인 후 게시 예약했습니다.'));});}}>{t('Approve & schedule','승인 후 예약')}</button><button type="button" className="admin-secondary" disabled={busy||!!running||dirty||!draft.caption?.trim()||!draft.images?.length||draft.quality_report?.status!=='passed'||draft.quality_revision!==draft.revision} onClick={()=>{if(window.confirm(t('Publish this exact saved revision to @roundy.meet NOW? This bypasses the recommended posting time and cannot be undone here.','현재 저장된 버전을 @roundy.meet에 지금 바로 게시할까요? 추천 게시 시간을 무시하며 여기서 게시를 되돌릴 수 없습니다.')))void work(async()=>{const result=await mutate('/draft/'+draft.id+'/publish-now',{revision:draft.revision});await load(draft.id);setNotice(result.published?t('Published to @roundy.meet.','@roundy.meet에 바로 게시했습니다.'):result.needs_review?t('Publish attempt needs review. Check Instagram before resolving it.','게시 결과 확인이 필요합니다. 처리 전에 Instagram에서 실제 게시 여부를 확인하세요.'):t('Queued for immediate publishing. Refresh status before trying again.','즉시 게시 큐에 넣었습니다. 다시 누르기 전에 상태를 새로고침하세요.'));});}}>{t('Publish now','바로 게시')}</button><button type="button" className="admin-secondary" disabled={busy||!!running} onClick={()=>void work(async()=>{await mutate('/draft/'+draft.id+'/skip',{});await load();})}>{t('Skip','건너뛰기')}</button></div>}
+    {draft.status==='needs_approval'&&<div className="admin-form-actions"><button type="button" className="admin-secondary" disabled={busy||!!running||!dirty} onClick={()=>void work(async()=>{await mutate('/draft/'+draft.id,{revision:draft.revision,caption:draft.caption,cta:draft.cta,destination_url:draft.destination_url},'PUT');await load(draft.id);})}>{t('Save edits','수정 저장')}</button><button type="button" className="admin-primary" disabled={busy||!!running||dirty||!preflightReady||!draft.caption?.trim()||!draft.images?.length||draft.quality_report?.status!=='passed'||draft.quality_revision!==draft.revision} onClick={()=>{if(window.confirm(t('Approve this exact revision and schedule it for Instagram?','현재 버전의 문구와 이미지를 승인하고 Instagram 게시를 예약할까요?')))void work(async()=>{const result=await mutate('/draft/'+draft.id+'/approve',{revision:draft.revision});await load(draft.id);
+  const when=result.run?.scheduled_for?new Date(result.run.scheduled_for).toLocaleString(locale,{timeZone:'Asia/Seoul'}):'';
+  setNotice(t('Approved and reserved for ','승인 완료, 발행 예약: ')+when+' KST');});}}>{t('Approve & schedule','승인 후 예약')}</button><button type="button" className="admin-secondary" disabled={busy||!!running||dirty||!preflightReady||!draft.caption?.trim()||!draft.images?.length||draft.quality_report?.status!=='passed'||draft.quality_revision!==draft.revision} onClick={()=>{if(window.confirm(t('Publish this exact saved revision to @roundy.meet NOW? This bypasses the recommended posting time and cannot be undone here.','현재 저장된 버전을 @roundy.meet에 지금 바로 게시할까요? 추천 게시 시간을 무시하며 여기서 게시를 되돌릴 수 없습니다.')))void work(async()=>{const result=await mutate('/draft/'+draft.id+'/publish-now',{revision:draft.revision});await load(draft.id);setNotice(result.published?t('Published to @roundy.meet.','@roundy.meet에 바로 게시했습니다.'):result.needs_review?t('Publish attempt needs review. Check Instagram before resolving it.','게시 결과 확인이 필요합니다. 처리 전에 Instagram에서 실제 게시 여부를 확인하세요.'):result.deferred?t('Daily Feed limit reached. Reserved for '+String(result.feed_date_kst)+' KST.','Feed 일일 한도를 초과해 '+String(result.feed_date_kst)+' KST로 예약했습니다.'):t('Queued for immediate publishing. Refresh status before trying again.','즉시 게시 큐에 넣었습니다. 다시 누르기 전에 상태를 새로고침하세요.'));});}}>{t('Publish now','바로 게시')}</button><button type="button" className="admin-secondary" disabled={busy||!!running} onClick={()=>void work(async()=>{await mutate('/draft/'+draft.id+'/skip',{});await load();})}>{t('Skip','건너뛰기')}</button></div>}
     <p className="admin-help">{t('Generation never publishes. Copy is saved before images, so an image failure does not lose it.','생성만으로는 게시되지 않습니다. 이미지를 만들기 전에 문구부터 저장하므로 이미지 생성이 실패해도 문구는 남습니다.')}</p>
    </div><aside className="marketing-preview"><strong>{t('Saved preview','저장된 미리보기')}</strong>{draft.images?.length?draft.images.map((url:string,i:number)=><img key={url} src={url} alt={'Roundy card '+(i+1)} style={{width:'100%',height:'auto',marginTop:12}}/>):<p>{t('No saved image. Generate cards or a photo.','저장된 이미지가 없습니다. 카드나 사진을 생성하세요.')}</p>}</aside></div>}
   </>}
@@ -631,7 +638,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
         <option value="fixed">Fixed</option><option value="alternating">Alternating</option>
        </select></label>
      </div>
-     <p className="admin-help">{t('The daily limit will apply to automatic Feed publishing only in a future phase; extra manual publications remain allowed.','일일 횟수 제한은 향후 자동 Feed 발행에만 적용할 예정이며, 수동 추가 발행은 계속 허용합니다.')}</p>
+     <p className="admin-help">{t('Active KST daily limit for scheduled AND Publish-now Feed posts. Extra approved posts remain queued for the next eligible KST day. Reels are separate.','예약 및 바로 게시 Feed 모두 KST 일일 한도를 적용합니다. 초과 콘텐츠는 삭제 없이 다음 발행 가능 날짜에 보관합니다. 릴스는 별도입니다.')}</p>
      <div className="admin-two">
       <label><span>{t('Default carousel slides','기본 카드뉴스 장수')}</span>
        <select value={5} disabled aria-label={t('Fixed five-card baseline','5장 기본 구성')}>
@@ -665,7 +672,50 @@ export function AdminMarketing({locale}:{locale:Locale}){
     const imageUrl=Array.isArray(r.snapshot?.images)?r.snapshot.images[0]:null,record=contentRecordForRun(r),language=(record?.content_language||r.snapshot?.content_language)==='en'?'EN':(record?.content_language||r.snapshot?.content_language)==='ko'?'KO':channel;
     return <details className={'marketing-log-row publishing '+r.status} key={r.id}>
      <summary>{imageUrl?<img className="marketing-log-thumb" src={imageUrl} alt=""/>:<span className="marketing-log-thumb placeholder"/>}<div className="marketing-log-main"><span className={'marketing-status-dot '+r.status}/><div><strong>{contentTitle(record||r)}</strong><small>{contentLabel(record||r)} · {language} · {new Date(r.created_at||r.scheduled_for).toLocaleString(locale,{timeZone:'Asia/Seoul'})}</small></div></div><div className="marketing-log-end"><span className={'marketing-status-pill '+r.status}>{statusText(r.status)}</span></div></summary>
-     <div className="marketing-log-detail"><p>{r.message||t('No additional message.','추가 메시지가 없습니다.')}</p><dl><div><dt>{t('Run ID','게시 ID')}</dt><dd>{r.id}</dd></div>{r.external_id&&<div><dt>Instagram ID</dt><dd>{r.external_id}</dd></div>}</dl>{r.external_url&&<a className="admin-secondary" href={r.external_url} target="_blank" rel="noreferrer">{t('Open published post','게시물 보기')}</a>}{r.status==='needs_review'&&<div className="admin-form-actions">{[true,false].map(published=><button key={String(published)} type="button" className="admin-secondary" disabled={busy} onClick={()=>{if(window.confirm(t('Confirm you checked the external channel.','외부 채널에서 실제 게시 여부를 확인했나요?')))void work(async()=>{await mutate('/resolve',{run_id:r.id,published});await load(draft?.id);});}}>{published?t('Confirmed published','게시됨 확인'):t('Confirmed not published','게시 안 됨 확인')}</button>)}</div>}</div>
+      <div className="marketing-log-detail">
+       <p>{r.message||t('No additional message.','추가 메시지가 없습니다.')}</p>
+       <dl>
+        <div><dt>{t('Run ID','게시 ID')}</dt><dd>{r.id}</dd></div>
+        {r.scheduled_for&&<div><dt>{t('Reserved KST time','KST 발행 예정')}</dt><dd>{new Date(r.scheduled_for).toLocaleString(locale,{timeZone:'Asia/Seoul'})} KST</dd></div>}
+        {r.snapshot?.feed_sequence&&<div><dt>{t('Feed order','Feed 발행 순번')}</dt><dd>#{r.snapshot.feed_sequence}</dd></div>}
+        {r.external_id&&<div><dt>Instagram ID</dt><dd>{r.external_id}</dd></div>}
+       </dl>
+       {r.external_url&&<a className="admin-secondary" href={r.external_url} target="_blank" rel="noreferrer">{t('Open published post','게시물 보기')}</a>}
+       {channel==='instagram'&&r.snapshot?.draft_id&&r.snapshot?.media_kind!=='reel'&&<>
+        <button type="button" className="admin-secondary" disabled={busy}
+         onClick={()=>void work(async()=>{
+          const response=await request('/runs/'+r.id+'/attempts',undefined,'GET');
+          if(!response.ok)throw new Error(response.data.error||'Attempt history unavailable');
+          setFeedAttempts(prev=>({...prev,[r.id]:response.data}));
+         })}>{t('View publication attempt history','발행 시도 이력 보기')}</button>
+        {feedAttempts[r.id]&&<div className="marketing-quality-status">
+         <strong>{t('Saved Feed attempts','Feed 시도 기록')}</strong>
+         {!feedAttempts[r.id].attempts?.length&&<p>{t('No external attempts yet.','외부 발행 시도 기록이 없습니다.')}</p>}
+         {(feedAttempts[r.id].attempts||[]).map((a:Row)=><p key={a.id}>
+          #{a.attempt_no} — {statusText(a.state)} —
+          {' '+new Date(a.started_at).toLocaleString(locale,{timeZone:'Asia/Seoul'})} KST
+          {a.error_message?' — '+a.error_message:''}
+          {a.external_requested_at?t(' — Meta API attempted',' — Meta API 호출 시도 있음'):''}
+         </p>)}
+         {(feedAttempts[r.id].reviews||[]).map((review:Row)=><p key={'review-'+review.attempt_no}>
+          {t('Admin verified not published, attempt #','관리자 미게시 확인, 시도 #')}{review.attempt_no} — {review.review_note}
+         </p>)}
+        </div>}
+        {['needs_review','failed'].includes(r.status)&&<button type="button" className="admin-secondary" disabled={busy}
+         onClick={()=>{
+          if(!window.confirm(t('Have you personally checked Instagram and confirmed NO post was published? Never retry an uncertain result before verifying.','Instagram에서 실제로 게시물이 발행되지 않았음을 직접 확인했습니까? 결과가 불확실하면 확인 전 재시도하면 안 됩니다.')))return;
+          const note=window.prompt(t('Record how you verified NO post on Instagram (12 characters or more).','Instagram 미게시를 어떻게 확인했는지 12자 이상 기록하세요.'))||'';
+          if(!note.trim())return;
+          void work(async()=>{
+           const result=await mutate('/runs/'+r.id+'/retry',{confirm_no_post:true,note:note.trim()});
+           setFeedAttempts(prev=>{const next={...prev};delete next[r.id];return next;});
+           await load(draft?.id);
+           setNotice(t('Verified no post. Retry scheduled for ','미게시 확인 완료. 재시도 예약: ')+String(result.feed_date_kst)+' KST');
+          });
+         }}>{t('Verify no post & schedule a retry','미게시 확인 후 재시도 예약')}</button>}
+       </>}
+       {r.status==='needs_review'&&<div className="admin-form-actions">{[true,false].map(published=><button key={String(published)} type="button" className="admin-secondary" disabled={busy} onClick={()=>{if(window.confirm(t('Confirm you checked the external channel.','외부 채널에서 실제 게시 여부를 확인했나요?')))void work(async()=>{await mutate('/resolve',{run_id:r.id,published});await load(draft?.id);});}}>{published?t('Confirmed published','게시됨 확인'):t('Confirmed not published','게시 안 됨 확인')}</button>)}</div>}
+      </div>
     </details>;
    }):<p className="admin-empty">{t('No publishing history yet.','아직 게시 기록이 없습니다.')}</p>}</div>
    {channelRuns.length>publishVisible&&<button type="button" className="marketing-load-more" onClick={()=>setPublishVisible(v=>v+20)}>{t('Load 20 more','20개 더 보기')}</button>}

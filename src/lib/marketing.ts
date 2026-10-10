@@ -67,6 +67,30 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
   return json({draft_id:d.id,preflight,quality_report:mergePreflightQuality(draftQuality(d),preflight),revision:d.revision});
  }
  if(id==='reels')return reelsApi(req,db,path.slice(1));
+ if(id==='runs'&&path.length===3&&uuid(path[1])&&path[2]==='attempts'&&req.method==='GET'){
+  const run=checked(await service.from('marketing_runs').select('id,channel,status,snapshot,scheduled_for,message').eq('id',path[1]).maybeSingle());
+  if(!run||run.channel!=='instagram'||run.snapshot?.media_kind==='reel')return json({error:'FEED_RUN_NOT_FOUND'},404);
+  const [attempts,reviews]=await Promise.all([
+   service.from('marketing_feed_publish_attempts').select('id,attempt_no,state,started_at,external_requested_at,finished_at,error_message,external_id')
+    .eq('run_id',run.id).order('attempt_no',{ascending:true}),
+   service.from('marketing_feed_retry_reviews').select('attempt_no,reviewed_at,review_note,confirmed_not_published')
+    .eq('run_id',run.id).order('attempt_no',{ascending:true})
+  ]);
+  return json({run_id:run.id,attempts:checked(attempts),reviews:checked(reviews)});
+ }
+ if(id==='runs'&&path.length===3&&uuid(path[1])&&path[2]==='retry'&&req.method==='POST'){
+  const body=await req.json().catch(()=>null);
+  if(body?.confirm_no_post!==true||typeof body.note!=='string'||body.note.trim().length<12||body.note.length>500)
+   return json({error:'CONFIRM_NOT_PUBLISHED_AND_REVIEW_NOTE_REQUIRED'},400);
+  const user=(await db.auth.getUser()).data.user;if(!user)return json({error:'Sign in required'},401);
+  try{
+   const result=checked(await service.rpc('retry_marketing_feed_after_review',{
+    p_run:path[1],p_actor:user.id,p_confirm_no_post:true,p_note:body.note.trim()
+   }));
+   return json(result);
+  }catch(error){return json({error:error instanceof Error?error.message:'FEED_RETRY_NOT_ALLOWED'},409);}
+ }
+
  if(id==='quality'&&path[1]==='recheck'&&path.length===2&&req.method==='POST'){
   const body=await req.json();if(!uuid(body.draft_id||'')||!Number.isInteger(body.revision))return json({error:'INVALID_REVIEW_REQUEST'},400);
   const d=checked(await service.from('instagram_post_drafts').select('*').eq('id',body.draft_id).single());
@@ -426,6 +450,10 @@ if(id==='uploads'&&path.length===1&&req.method==='GET'){
    if(review.report.status!=='passed')return json({error:'MARKETING_PREFLIGHT_FAILED',draft:review.draft,
     quality_report:review.report,checks:review.preflight.checks,issues:review.report.issues},409);
    const queued=checked(await service.rpc('publish_marketing_draft_now',{p_id:path[1],p_revision:body.revision,p_actor:user.id}));
+   if(queued.deferred===true)return json({
+    ...queued,published:false,pending:true,deferred:true,
+    warning:'FEED_DAILY_LIMIT_KST: Today\'s Feed capacity is full. The approved post is reserved for '+String(queued.feed_date_kst)+' KST.'
+   },202);
    let workerWarning='';
    try{await invokeMarketingWorker(db,{action:'process_queue'});}catch(error){workerWarning=error instanceof Error?error.message:'The publish worker response could not be confirmed.';}
    const run=checked(await service.from('marketing_runs').select('*').eq('id',queued.run.id).single());
