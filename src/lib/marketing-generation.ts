@@ -1,7 +1,7 @@
 import {prepareSavedCtaRecovery,SAVED_CTA_RECOVERY_VERSION} from './marketing-output-recovery';
 import {loadEditorialAssets} from './marketing-render-assets';
-import {photoCreditCaption} from './marketing-stock-photo-policy';
-import {approvedStockCardAssets,listStockSelections,pexelsConfigured,photoSelectionSnapshot,prepareStockSelections,stockReady} from './marketing-stock-photos';
+import {photoCreditCaption,configuredPhotoSourcingPolicy,savedPhotoSourcingPolicy} from './marketing-stock-photo-policy';
+import {approvedStockCardAssets,listStockSelections,pexelsConfigured,photoSelectionSnapshot,prepareStockSelections,requiredStockSlots,stockReady} from './marketing-stock-photos';
 import {CONTENT_POLICY_VERSION} from './marketing-content-policy';
 import {selectTrendForAutomaticContent,markTrendUsed} from './marketing-trend-radar';
 import {growthLearningWeights} from './marketing-growth';
@@ -274,6 +274,28 @@ async function generateVisualSet(db:DB,draft:Row,input:GenerationInput,job:Row){
  await progress(db,job,'saving_visual_set');
  return encoded.slice(0,3).map(value=>'data:image/jpeg;base64,'+value);
 }
+// A single optional AI cover; the three (or two) actual-photo slots are independently
+// licensed/approved Pexels assets. Never call this to compensate for missing photos.
+async function generateAiThumbnail(db:DB,draft:Row,job:Row):Promise<string>{
+ await progress(db,job,'generating_thumbnail_only');
+ const prompt=[
+  'Generate ONE original, photorealistic TEXT-FREE Instagram cover photograph, not a carousel or collage.',
+  'Portrait 4:5. Contemporary Seoul editorial atmosphere with readable negative space for typography.',
+  'It is an illustration only, never depict a named real venue, real participant, actual event photo or verified documentary evidence.',
+  'Natural everyday adults and lighting; no writing, text, signs, logos, watermarks, screenshots, advertising layouts or branded products.',
+  'The server overlays the exact cover title; do not generate typography.',
+  'Cover context:',visualContext(draft).split('\n').slice(0,5).join('\n')
+ ].join('\n');
+ const result=await upstream('images/generations',{
+  model:IMAGE_MODEL,prompt,n:1,size:'1024x1280',quality:'low',
+  output_format:'jpeg',output_compression:85,background:'opaque'
+ },150000);
+ const encoded=Array.isArray(result.data)?result.data[0]?.b64_json:null;
+ if(typeof encoded!=='string'||encoded.length<100||encoded.length>8*1024*1024)
+  throw new Error('INVALID_GENERATED_AI_THUMBNAIL');
+ await progress(db,job,'thumbnail_ready');
+ return 'data:image/jpeg;base64,'+encoded;
+}
 type GenerationThreadContext={threadId:string;attemptNumber:number;retryOfJobId:string;recoverySourceJobId?:string;workflowId?:string};
 async function resolveContentWorkflowId(db:DB,draft:Row,job:Row,thread?:GenerationThreadContext){
  if(thread?.workflowId)return thread.workflowId;
@@ -286,9 +308,8 @@ async function resolveContentWorkflowId(db:DB,draft:Row,job:Row,thread?:Generati
 }
 export async function runGeneration(draftId:string,value:unknown,actor:string|null,automatic=false,thread?:GenerationThreadContext){
  const input=validateGenerationInput(value),db=createServiceRoleClient();
- const visualSource:VisualSource=automatic?(pexelsConfigured()?'pexels':'auto_ai'):input.visual_source!;
+ const originallyRequested:VisualSource=automatic?(pexelsConfigured()?'pexels':'auto_ai'):input.visual_source!;
  if(automatic&&input.visual_source&&!['auto_ai','pexels'].includes(input.visual_source))throw new Error('AUTOMATION_VISUAL_SOURCE_INVALID');
- if(visualSource==='pexels'&&!pexelsConfigured())throw new Error('PEXELS_API_KEY_MISSING');
  let draft=await readDraft(db,draftId);
  let recoveryPatch:Row|null=null,recoverySource:Row|null=null;
  if(thread?.recoverySourceJobId){
@@ -309,8 +330,18 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
   const q=qualityForDraft(checkedDraft);
   if(q.status!=='passed')throw new Error('품질 검토 필요: '+q.issues.join(' '));
  }
- const preference=checked(await db.from('marketing_automation_settings').select('carousel_answer_first_enabled').eq('singleton',true).maybeSingle()).data as Row|null;
+ const preference=checked(await db.from('marketing_automation_settings')
+  .select('carousel_answer_first_enabled,carousel_min_real_photos_5,carousel_min_real_photos_3,carousel_ai_thumbnail_enabled')
+  .eq('singleton',true).maybeSingle()).data as Row|null;
  input.answer_first_enabled=input.mode!=='image'&&(preference?.carousel_answer_first_enabled===true||draft.content_document?.answer_first===true||input.answer_first_enabled===true);
+ const existingPhotoPolicy=savedPhotoSourcingPolicy(draft.content_document?.photo_sourcing);
+ const managedPhotoSourcing=input.visual_mode==='cards'
+  &&['auto_ai','pexels'].includes(originallyRequested)
+  &&(input.mode==='image'?!!existingPhotoPolicy:typeof preference?.carousel_min_real_photos_5==='number'&&typeof preference?.carousel_min_real_photos_3==='number');
+ // Both legacy 'auto_ai' and 'pexels' selections now use real photos first.
+ // The optional AI image, if enabled, belongs ONLY to the cover and is generated
+ // after all photo slots have cleared human review.
+ const visualSource:VisualSource=managedPhotoSourcing?'pexels':originallyRequested;
  input.language=input.mode==='image'?(draft.content_language==='en'?'en':draft.content_language==='ko'?'ko':await nextContentLanguage(db,draft.id)):await resolveContentLanguage(db,draft,input.language);
  const growth=input.content_mode==='growth_carousel',research=growth&&researchTopics.has(input.topic_type||'')&&!input.render_only&&input.mode!=='image';
  const eventFacts=input.content_mode==='live_event'?await loadEventCampaignFacts(db,String(input.event_id||draft.event_id||'')):null;
@@ -320,17 +351,18 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
  const stockVisuals=wantsVisuals&&visualSource==='pexels';
  const uploadedVisuals=(input.render_only||input.mode==='image')&&visualSource==='uploaded';
  const eventNeedsAiFallback=input.content_mode==='live_event'&&autoVisuals&&eventRealPhotos.length<3;
- const operation=stockVisuals?(input.mode==='image'||input.render_only?'render':research?'research':'copy'):autoVisuals
+ const coverCost=managedPhotoSourcing&&(input.mode==='image'?existingPhotoPolicy?.ai_thumbnail_enabled===true:preference?.carousel_ai_thumbnail_enabled===true);
+ const operation=stockVisuals?(input.mode==='image'||input.render_only?(coverCost?'photo':'render'):coverCost?'copy_photo':research?'research':'copy'):autoVisuals
   ?(input.content_mode==='live_event'&&!eventNeedsAiFallback
     ?(input.mode==='image'||input.render_only?'render':research?'research':'copy')
     :(input.mode==='image'||input.render_only||recoveryPatch?'photo':'copy_photo'))
   :uploadedVisuals?'render':research?'research':'copy';
- const fingerprint=createHash('sha256').update(JSON.stringify({id:draftId,revision:input.revision,mode:input.mode,content:input.content_mode,language:input.language,visual:input.visual_mode,visual_source:visualSource,topic:input.topic_type||'',instruction:input.instruction,campaign_pattern:input.campaign_pattern||null,campaign_tone:input.campaign_tone||null,launch_date:input.launch_date||null,event_id:input.event_id||draft.event_id||null,event_campaign_stage:input.event_campaign_stage||null,event_campaign_pattern:input.event_campaign_pattern||null,render:!!input.render_only,answer_first_enabled:input.answer_first_enabled===true,saved_recovery_of:thread?.recoverySourceJobId||null})).digest('hex');
+ const fingerprint=createHash('sha256').update(JSON.stringify({id:draftId,revision:input.revision,mode:input.mode,content:input.content_mode,language:input.language,visual:input.visual_mode,visual_source:visualSource,topic:input.topic_type||'',instruction:input.instruction,campaign_pattern:input.campaign_pattern||null,campaign_tone:input.campaign_tone||null,launch_date:input.launch_date||null,event_id:input.event_id||draft.event_id||null,event_campaign_stage:input.event_campaign_stage||null,event_campaign_pattern:input.event_campaign_pattern||null,render:!!input.render_only,answer_first_enabled:input.answer_first_enabled===true,photo_first:managedPhotoSourcing,saved_recovery_of:thread?.recoverySourceJobId||null})).digest('hex');
  const reservation=checked(await db.rpc('reserve_marketing_generation',{p_key:input.request_key,p_fingerprint:fingerprint,p_draft:draftId,p_revision:input.revision,p_operation:operation,p_actor:actor,p_automatic:automatic})).data as Row,job=reservation.job as Row;
  if(!reservation.accepted)return {draft,job,deduplicated:true};
  let contentQuality:Row|null=null;
  try{
-  const requestPayload={answer_first_enabled:input.answer_first_enabled===true,mode:input.mode,content_mode:input.content_mode,language:input.language,visual_mode:input.visual_mode,visual_source:visualSource,topic_type:input.topic_type||null,trend_id:draft.trend_id||null,instruction:input.instruction||'',campaign_pattern:input.campaign_pattern||null,campaign_tone:input.campaign_tone||null,launch_date:input.launch_date||null,event_id:input.event_id||draft.event_id||null,event_campaign_stage:input.event_campaign_stage||null,event_campaign_pattern:input.event_campaign_pattern||null,confirm_photo:input.confirm_photo===true,render_only:input.render_only===true,...(recoverySource?{saved_recovery_of:recoverySource.id}: {})};
+  const requestPayload={answer_first_enabled:input.answer_first_enabled===true,photo_first:managedPhotoSourcing,mode:input.mode,content_mode:input.content_mode,language:input.language,visual_mode:input.visual_mode,visual_source:visualSource,topic_type:input.topic_type||null,trend_id:draft.trend_id||null,instruction:input.instruction||'',campaign_pattern:input.campaign_pattern||null,campaign_tone:input.campaign_tone||null,launch_date:input.launch_date||null,event_id:input.event_id||draft.event_id||null,event_campaign_stage:input.event_campaign_stage||null,event_campaign_pattern:input.event_campaign_pattern||null,confirm_photo:input.confirm_photo===true,render_only:input.render_only===true,...(recoverySource?{saved_recovery_of:recoverySource.id}: {})};
   const threadId=thread?.threadId||job.id,attemptNumber=thread?.attemptNumber||1,workflowId=await resolveContentWorkflowId(db,draft,job,thread);
   checked(await db.from('marketing_generation_jobs').update({
    request_payload:requestPayload,
@@ -347,6 +379,9 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
    draft=await savePartial(db,draft,{...recoveryPatch,last_regeneration_mode:input.mode,last_regeneration_instruction:input.instruction});
   }else if(operation!=='photo'&&operation!=='render'){
    const copy=await generateCopy(db,draft,input,job,research);contentQuality=copy.quality_report;await progress(db,job,'saving_copy');
+   const roles=Array.isArray(copy.carousel_slides)?copy.carousel_slides.map((slide:Row)=>String(slide.role||'')):[];
+   const policy=managedPhotoSourcing?configuredPhotoSourcingPolicy(preference,roles):null;
+   if(policy)copy.content_document={...copy.content_document,photo_sourcing:policy};
    draft=await savePartial(db,draft,{...copy,generation_source:automatic?'automation':'manual',visual_source:visualSource,last_regeneration_mode:input.mode,last_regeneration_instruction:input.instruction,images:[]});
   }
   let stockPhotos:ReturnType<typeof photoSelectionSnapshot>=[],photoReviewRequired=false;
@@ -375,20 +410,26 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
      ?await listStockSelections(db,draft.id)
      :await prepareStockSelections(db,draft);
    stockPhotos=photoSelectionSnapshot(selected);
-   if(selected.length<2)throw new GenerationError('STOCK_PHOTO_POOL_INSUFFICIENT','No suitable Pexels photographs were found. Review the source/API settings and try a manual retry.');
    if(stockReady(draft,selected)){
     await progress(db,job,'rendering_approved_photos');
     const assets=await loadEditorialAssets();
     Object.assign(assets,await approvedStockCardAssets(db,draft));
+    const policy=savedPhotoSourcingPolicy(draft.content_document?.photo_sourcing);
+    if(policy?.ai_thumbnail_enabled){
+     const cover=await generateAiThumbnail(db,draft,job);
+     assets.photo=cover;
+     assets.cardPhotos={...(assets.cardPhotos||{}),0:cover};
+     assets.reusePhotos=false;
+    }
     const images=await renderCardsWithAssets(db,draft,job,assets);
     await progress(db,job,'saving_images');
     // Keep photographer attribution visible in the final draft.
     const captionWithCredit=photoCreditCaption(String(draft.caption||''),selected.map((photo:Row)=>String(photo.photographer||'')));
     draft=await savePartial(db,draft,{images,caption:captionWithCredit,generation_source:automatic?'automation':'manual',visual_source:'pexels',last_regeneration_mode:input.mode,last_regeneration_instruction:input.instruction});
-   }else if(input.mode==='image'||input.render_only){
-    throw new GenerationError('STOCK_PHOTOS_NOT_APPROVED','Approve all selected photos before rendering.');
    }else{
-    // Incomplete photo review leaves the copy available but never publishable.
+    // Missing, insufficient, unlicensed or unapproved Pexels photos are a review
+    // state, NOT a failed job and NEVER an excuse to produce replacement AI photos.
+    // This includes image-only retries and a missing Pexels API key.
     photoReviewRequired=true;
    }
   }
@@ -410,7 +451,11 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
    render_style:draft.render_style||null,campaign_pattern:draft.campaign_pattern||draft.content_document?.campaign_pattern||null,campaign_tone:draft.campaign_tone||draft.content_document?.campaign_tone||null,campaign_version:draft.campaign_version||draft.content_document?.campaign_version||null,launch_date:draft.launch_date||draft.content_document?.launch_date||null,
    event_campaign_stage:draft.event_campaign_stage||draft.content_document?.event_campaign_stage||null,event_campaign_pattern:draft.event_campaign_pattern||draft.content_document?.event_campaign_pattern||null,event_campaign_version:draft.event_campaign_version||draft.content_document?.campaign_version||null,event_facts_snapshot:draft.event_facts_snapshot||draft.content_document?.event_facts||null,
    generation_recovery:(quality as Row).recovery||draft.content_document?.generation_recovery||null,
-   stock_photo_selections:stockPhotos,photos_pending_review:photoReviewRequired
+   stock_photo_selections:stockPhotos,photos_pending_review:photoReviewRequired,
+   real_photos_required:savedPhotoSourcingPolicy(draft.content_document?.photo_sourcing)?.min_real_photos||null,
+   real_photos_selected:stockPhotos.length,
+   real_photos_approved:stockPhotos.filter(photo=>photo.review_status==='approved').length,
+   photo_review_reason:photoReviewRequired?(stockPhotos.length===0?'NO_APPROVED_OR_DISCOVERED_PHOTOS':'INSUFFICIENT_OR_UNREVIEWED_PHOTOS'):null
   };
   checked(await db.from('marketing_generation_jobs').update({status:'completed',stage:photoReviewRequired?'photo_review_required':'complete',quality_report:quality,result_snapshot:resultSnapshot,result_revision:draft.revision,updated_at:new Date().toISOString()}).eq('id',job.id).eq('status','running'));
   return {draft,job:{...job,status:'completed',stage:photoReviewRequired?'photo_review_required':'complete',result_snapshot:resultSnapshot,result_revision:draft.revision},deduplicated:false};
@@ -429,7 +474,7 @@ export async function generationOverview(){
  checked(jobs);checked(usage);checked(dispatch);const rows=usage.data||[],dayStart=Date.parse(date+'T00:00:00+09:00'),todayRows=rows.filter(r=>Date.parse(r.created_at)>=dayStart);
  const temporaryActive=Boolean(control.temporary_daily_budget_usd&&control.temporary_daily_budget_expires_at&&Date.parse(control.temporary_daily_budget_expires_at)>Date.now());
  const dailyBudget=temporaryActive?Number(control.temporary_daily_budget_usd):Number(control.daily_budget_usd);
- return {control,jobs:jobs.data,dispatch:dispatch.data,usage:{daily_reserved_usd:todayRows.reduce((sum,r)=>sum+Number(r.reserved_usd),0),daily_budget_usd:dailyBudget,daily_budget_override_expires_at:temporaryActive?control.temporary_daily_budget_expires_at:null,monthly_reserved_usd:rows.reduce((sum,r)=>sum+Number(r.reserved_usd),0),monthly_budget_usd:Number(control.monthly_budget_usd),daily_attempts:todayRows.filter(r=>Number(r.reserved_usd)>0).length,daily_calls:todayRows.filter(r=>Number(r.reserved_usd)>0&&['running','completed','uncertain'].includes(r.status)).length,daily_call_limit:5,monthly_call_limit:90,photo_daily_limit:5,photo_monthly_limit:90},provider:{configured:!!process.env.OPENAI_API_KEY?.trim(),pexels_configured:pexelsConfigured(),stock_photos_per_carousel:'2-3',stock_review_required:true,stock_cooldown_days:90,copy_model:COPY_MODEL,image_model:IMAGE_MODEL,automatic_photos:true,manual_uploaded_images:true,fresh_visuals_per_generation:3,static_photo_reuse:false,external_retries:0,copy_repair_limit:1,research_search_limit:3,verified_book_catalog:true,research_fallback:true,content_policy_version:CONTENT_POLICY_VERSION,prelaunch_campaign_version:CAMPAIGN_VERSION,prelaunch_campaign_patterns:CAMPAIGN_PATTERNS,research_reservation_usd:0.05}};
+ return {control,jobs:jobs.data,dispatch:dispatch.data,usage:{daily_reserved_usd:todayRows.reduce((sum,r)=>sum+Number(r.reserved_usd),0),daily_budget_usd:dailyBudget,daily_budget_override_expires_at:temporaryActive?control.temporary_daily_budget_expires_at:null,monthly_reserved_usd:rows.reduce((sum,r)=>sum+Number(r.reserved_usd),0),monthly_budget_usd:Number(control.monthly_budget_usd),daily_attempts:todayRows.filter(r=>Number(r.reserved_usd)>0).length,daily_calls:todayRows.filter(r=>Number(r.reserved_usd)>0&&['running','completed','uncertain'].includes(r.status)).length,daily_call_limit:5,monthly_call_limit:90,photo_daily_limit:5,photo_monthly_limit:90},provider:{configured:!!process.env.OPENAI_API_KEY?.trim(),pexels_configured:pexelsConfigured(),stock_photos_per_carousel:'2-3 (configured by carousel size)',stock_review_required:true,stock_cooldown_days:90,copy_model:COPY_MODEL,image_model:IMAGE_MODEL,automatic_photos:true,manual_uploaded_images:true,fresh_visuals_per_generation:3,static_photo_reuse:false,external_retries:0,copy_repair_limit:1,research_search_limit:3,verified_book_catalog:true,research_fallback:true,content_policy_version:CONTENT_POLICY_VERSION,prelaunch_campaign_version:CAMPAIGN_VERSION,prelaunch_campaign_patterns:CAMPAIGN_PATTERNS,research_reservation_usd:0.05}};
 }
 export async function todayDraft(selectedTrend:Row|null=null,growthSlot:GrowthSlot|null=null){
  const db=createServiceRoleClient(),today=kstDate();
