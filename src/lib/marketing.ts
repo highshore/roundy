@@ -6,7 +6,8 @@ import sharp from 'sharp';
 import {draftQuality} from './marketing-editorial';
 import {reviewMarketingDraft,mergePreflightQuality} from './marketing-preflight-service';
 import {factPackReady} from './marketing-trend-guide';
-import {importStockSelections,listStockSelections,pexelsConfigured,prepareStockSelections,requiredStockSlots,stockReady,reviewStockAsset} from './marketing-stock-photos';
+import {importStockSelections,listStockSelections,prepareStockSelections,requiredStockSlots,stockReady,reviewStockAsset} from './marketing-stock-photos';
+import {supportedPhotoSources,providerConfigured} from './marketing-photo-providers';
 import type { createClient } from './supabase/server';
 import { createServiceRoleClient } from './supabase/service';
 import { marketingApi as legacyMarketingApi } from './marketing-legacy';
@@ -120,11 +121,11 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
    return {...row,signed_url:signed.data?.signedUrl||null};
   }));
  }
- // The existing reviewed Pexels library is shared across drafts. Read-only browse;
+ // The existing reviewed licensed-photo library is shared across drafts. Read-only browse;
  // approval/rejection reuses the protected /photos/:id/review route below.
  if(id==='photos'&&path.length===2&&path[1]==='assets'&&req.method==='GET'){
   const all=checked(await service.from('marketing_photo_assets')
-   .select('id,provider,provider_photo_id,source_url,image_url,preview_url,photographer,photographer_url,license_name,license_url,license_checked_at,review_status,review_note,reviewed_by,reviewed_at,storage_path,topic_key,created_at')
+   .select('id,provider,provider_photo_id,source_url,image_url,preview_url,photographer,photographer_url,license_name,license_url,license_evidence_url,license_checked_at,commercial_use_allowed,modifications_allowed,attribution_required,search_query,review_status,review_note,reviewed_by,reviewed_at,storage_path,topic_key,created_at')
    .order('created_at',{ascending:false}).limit(200)) as Row[];
   const ids=all.map(asset=>asset.id);
   const usage=ids.length
@@ -143,7 +144,16 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
    approved:all.filter(x=>x.review_status==='approved').length,
    pending:all.filter(x=>x.review_status==='pending').length,
    rejected:all.filter(x=>x.review_status==='rejected').length
-  },limit:200,photo_policy:'Pexels License; original source and manual approval required'});
+  },limit:200,photo_policy:'Verified original source, commercial rights, modifications and human approval required'});
+ }
+ if(id==='photos'&&path.length===2&&path[1]==='attempts'&&req.method==='GET'){
+   const draftId=String(req.nextUrl.searchParams.get('draft_id')||'');
+   if(draftId&&!uuid(draftId))return json({error:'INVALID_DRAFT_ID'},400);
+   let query=service.from('marketing_photo_source_attempts')
+    .select('id,draft_id,provider,search_query,status,error_code,result_count,created_at')
+    .order('created_at',{ascending:false}).limit(80);
+   if(draftId)query=query.eq('draft_id',draftId);
+   return json({attempts:checked(await query),limit:80});
  }
  // All photo actions are routed through the existing authenticated admin API.
  if(id==='photos'&&path.length===1&&req.method==='GET'){
@@ -159,7 +169,7 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
   return json({photos,ready:stockReady(draft,photos),required,minimum,approved,
    awaiting_review:!stockReady(draft,photos),
    missing:Math.max(0,minimum-approved),policy,
-   provider:'Pexels',attribution_url:'https://www.pexels.com',configured:pexelsConfigured()});
+   provider:'Licensed stock',providers:supportedPhotoSources.map(provider=>({name:provider,configured:providerConfigured(provider)})),configured:true});
  }
  if(id==='photos'&&path.length===3&&uuid(path[1])&&path[2]==='review'&&req.method==='POST'){
   const body=await req.json().catch(()=>({})),status=String(body.status||'');
@@ -173,22 +183,22 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
  if(id==='draft'&&path.length===3&&uuid(path[1])&&path[2]==='refresh-stock'&&req.method==='POST'){
   const body=await req.json().catch(()=>({}));
   const draft=checked(await service.from('instagram_post_drafts').select('*').eq('id',path[1]).maybeSingle());
-  if(!draft||draft.draft_role!=='candidate'||draft.status!=='needs_approval'||draft.visual_source!=='pexels')return json({error:'STOCK_DRAFT_NOT_EDITABLE'},409);
+  if(!draft||draft.draft_role!=='candidate'||draft.status!=='needs_approval'||!['pexels','stock'].includes(String(draft.visual_source)))return json({error:'STOCK_DRAFT_NOT_EDITABLE'},409);
   if(body.revision!==draft.revision||draft.images?.length)return json({error:'DRAFT_CHANGED_OR_ALREADY_RENDERED'},409);
   try{
    const photos=await prepareStockSelections(service,draft,{replace:true});
    return json({photos,ready:stockReady(draft,photos),required:requiredStockSlots(draft).length});
-  }catch(error){return json({error:error instanceof Error?error.message:'PEXELS_DISCOVERY_FAILED'},400);}
+  }catch(error){return json({error:error instanceof Error?error.message:'STOCK_DISCOVERY_FAILED'},400);}
  }
  if(id==='draft'&&path.length===3&&uuid(path[1])&&path[2]==='render-stock'&&req.method==='POST'){
   const body=await req.json().catch(()=>({}));
   const draft=checked(await service.from('instagram_post_drafts').select('*').eq('id',path[1]).maybeSingle());
-  if(!draft||draft.draft_role!=='candidate'||draft.status!=='needs_approval'||draft.visual_source!=='pexels')return json({error:'STOCK_DRAFT_NOT_EDITABLE'},409);
+  if(!draft||draft.draft_role!=='candidate'||draft.status!=='needs_approval'||!['pexels','stock'].includes(String(draft.visual_source)))return json({error:'STOCK_DRAFT_NOT_EDITABLE'},409);
   if(body.revision!==draft.revision)return json({error:'DRAFT_CHANGED_REFRESH_FIRST'},409);
   const user=(await db.auth.getUser()).data.user;if(!user)return json({error:'Sign in required'},401);
   const result=await runGeneration(draft.id,{
    request_key:'stock-render:'+randomUUID(),revision:draft.revision,mode:'image',
-   render_only:true,visual_mode:'cards',visual_source:'pexels',
+   render_only:true,visual_mode:'cards',visual_source:draft.visual_source,
    content_mode:draft.draft_kind==='growth_carousel'?'growth_carousel':draft.content_mode,
    topic_type:draft.growth_topic_type||undefined,language:draft.content_language==='en'?'en':'ko',
    ...(draft.content_mode==='live_event'?{event_id:draft.event_id}:{}),
@@ -350,9 +360,9 @@ if(id==='uploads'&&path.length===1&&req.method==='GET'){
    let imported=checked(await service.rpc('create_marketing_candidate_from_generation',{p_job_id:path[2]}));
    if(imported.status!=='needs_approval')return json({error:'RESULT_ALREADY_USED'},409);
    const source=checked(await service.from('marketing_generation_jobs').select('draft_id,result_snapshot').eq('id',path[2]).single()),snapshot=source?.result_snapshot||{},trendId=snapshot.trend_id,campaignMeta=campaignMetaFromSnapshot(snapshot),eventMeta=eventCampaignMetaFromSnapshot(snapshot);
-   const importedPatch={...(trendId?{trend_id:trendId}:{}),...(campaignMeta||{}),...(eventMeta||{}),...(snapshot.visual_source==='pexels'?{visual_source:'pexels'}:{}),updated_at:new Date().toISOString()};
-   if(trendId||campaignMeta||eventMeta||snapshot.visual_source==='pexels')imported=checked(await service.from('instagram_post_drafts').update(importedPatch).eq('id',imported.id).select('*').single());
-   if(snapshot.visual_source==='pexels')await importStockSelections(service,imported.id,snapshot.stock_photo_selections);
+   const importedPatch={...(trendId?{trend_id:trendId}:{}),...(campaignMeta||{}),...(eventMeta||{}),...(['pexels','stock'].includes(String(snapshot.visual_source))?{visual_source:snapshot.visual_source}:{}),updated_at:new Date().toISOString()};
+   if(trendId||campaignMeta||eventMeta||['pexels','stock'].includes(String(snapshot.visual_source)))imported=checked(await service.from('instagram_post_drafts').update(importedPatch).eq('id',imported.id).select('*').single());
+   if(['pexels','stock'].includes(String(snapshot.visual_source)))await importStockSelections(service,imported.id,snapshot.stock_photo_selections);
    return json({draft:imported});
   }catch(error){
    const message=error instanceof Error?error.message:String((error as {message?:unknown})?.message||'Import failed');
