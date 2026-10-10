@@ -216,8 +216,9 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
  if(requestedType==='seoul_trend'&&effectiveType==='korea_life'&&fallbackReason){
   // No cited source means no recent trend, event date, current ranking or price
   // may be stated as a fact. Fail closed instead of paying for another repair.
-  const visible=[prepared.document?.caption,prepared.document?.caption_ko,prepared.document?.caption_en,
-   ...(Array.isArray(prepared.document?.slides)?prepared.document.slides.slice(0,-1).flatMap(
+  const fallbackDocument=prepared.document as Row;
+  const visible=[fallbackDocument.caption,fallbackDocument.caption_ko,fallbackDocument.caption_en,
+   ...(Array.isArray(fallbackDocument.slides)?fallbackDocument.slides.slice(0,-1).flatMap(
     (slide:Row)=>[slide.title,slide.body,slide.highlight,slide.secondary_body]):[])
   ].filter(Boolean).join(' ');
   const temporalClaim=/(?:요즘|최근|지금).{0,6}(?:인기|화제|유행|핫|뜨는|급상승)|핫플|바이럴|(?:currently|now|just)\s+(?:trending|viral|popular)|\b(?:latest trend|most popular|just opened|sold out)\b/i;
