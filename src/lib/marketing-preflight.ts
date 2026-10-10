@@ -121,6 +121,9 @@ export function evaluateMarketingPreflight(draft:Record<string,any>,settings:Rec
  if(plan&&plan.slide_count!==slides.length)mobileIssues.push('렌더링 템플릿 장수와 실제 카드 수가 다릅니다.');
  if(plan){
   slides.forEach((slide:Record<string,any>,i:number)=>{
+   const shownBody=draft.content_language==='en'?slide.body_en:slide.body_ko;
+   if(str(slide.body)&&str(shownBody)&&str(slide.body)!==str(shownBody))
+    mobileIssues.push((i+1)+'장: 원본 카드 본문과 실제 렌더링 본문이 다릅니다. 다시 생성하세요.');
    try{
     const fit=mobileCarouselFit(slide,plan,i,draft.content_language==='en'?'en':'ko');
     if(fit.margin<80||fit.contentWidth>920)mobileIssues.push((i+1)+'장: 안전 여백이 80px 미만입니다.');
