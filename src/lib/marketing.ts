@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import {draftQuality} from './marketing-editorial';
+import {reviewMarketingDraft,mergePreflightQuality} from './marketing-preflight-service';
 import {factPackReady} from './marketing-trend-guide';
 import {importStockSelections,listStockSelections,pexelsConfigured,prepareStockSelections,requiredStockSlots,stockReady,reviewStockAsset} from './marketing-stock-photos';
 import type { createClient } from './supabase/server';
@@ -50,13 +51,28 @@ async function invokeMarketingWorker(db:Client,body:Record<string,unknown>,timeo
 // No generation route, including malformed suffixes, can reach legacy AI code.
 export async function marketingApi(req:NextRequest,db:Client,path:string[]){
  const id=path[0],service=createServiceRoleClient();
+ async function recheckForPublishing(draft:Row){
+  const preflight=await reviewMarketingDraft(service,draft),report=mergePreflightQuality(draftQuality(draft),preflight);
+  const stored=checked(await service.rpc('set_marketing_quality',{
+   p_draft:draft.id,p_revision:draft.revision,p_report:report
+  }));
+  return {preflight,report,draft:stored};
+ }
+ if(id==='quality'&&path[1]==='preflight'&&path.length===2&&req.method==='GET'){
+  const draftId=String(req.nextUrl.searchParams.get('draft_id')||'');
+  if(!uuid(draftId))return json({error:'INVALID_DRAFT_ID'},400);
+  const d=checked(await service.from('instagram_post_drafts').select('*').eq('id',draftId).maybeSingle());
+  if(!d)return json({error:'DRAFT_NOT_FOUND'},404);
+  const preflight=await reviewMarketingDraft(service,d);
+  return json({draft_id:d.id,preflight,quality_report:mergePreflightQuality(draftQuality(d),preflight),revision:d.revision});
+ }
  if(id==='reels')return reelsApi(req,db,path.slice(1));
  if(id==='quality'&&path[1]==='recheck'&&path.length===2&&req.method==='POST'){
   const body=await req.json();if(!uuid(body.draft_id||'')||!Number.isInteger(body.revision))return json({error:'INVALID_REVIEW_REQUEST'},400);
   const d=checked(await service.from('instagram_post_drafts').select('*').eq('id',body.draft_id).single());
   if(d.revision!==body.revision)return json({error:'DRAFT_CHANGED_REFRESH_FIRST'},409);
-  const report=draftQuality(d),draft=checked(await service.rpc('set_marketing_quality',{p_draft:d.id,p_revision:d.revision,p_report:report}));
-  return json({draft,quality_report:report});
+  const {report,preflight,draft}=await recheckForPublishing(d);
+  return json({draft,quality_report:report,preflight});
  }
  if(id==='generation'&&path[1]==='jobs'&&path.length===4&&uuid(path[2])&&path[3]==='reject'&&req.method==='POST'){
   const body=await req.json();if(body.confirm_reject!==true)return json({error:'REJECT_CONFIRMATION_REQUIRED'},400);
@@ -404,6 +420,11 @@ if(id==='uploads'&&path.length===1&&req.method==='GET'){
   if(path.length===3&&path[2]==='publish-now'&&req.method==='POST'){
    const body=await req.json();if(!Number.isInteger(body.revision))return json({error:'Refresh and review the current draft before publishing.'},400);
    const user=(await db.auth.getUser()).data.user;if(!user)return json({error:'Sign in required'},401);
+   const current=checked(await service.from('instagram_post_drafts').select('*').eq('id',path[1]).maybeSingle());
+   if(!current||current.status!=='needs_approval'||current.revision!==body.revision)return json({error:'DRAFT_CHANGED_REFRESH_FIRST'},409);
+   const review=await recheckForPublishing(current);
+   if(review.report.status!=='passed')return json({error:'MARKETING_PREFLIGHT_FAILED',draft:review.draft,
+    quality_report:review.report,checks:review.preflight.checks,issues:review.report.issues},409);
    const queued=checked(await service.rpc('publish_marketing_draft_now',{p_id:path[1],p_revision:body.revision,p_actor:user.id}));
    let workerWarning='';
    try{await invokeMarketingWorker(db,{action:'process_queue'});}catch(error){workerWarning=error instanceof Error?error.message:'The publish worker response could not be confirmed.';}
@@ -417,6 +438,11 @@ if(id==='uploads'&&path.length===1&&req.method==='GET'){
   if(path.length===3&&path[2]==='approve'&&req.method==='POST'){
    const body=await req.json();if(!Number.isInteger(body.revision))return json({error:'Refresh and review the current draft before approving.'},400);
    const user=(await db.auth.getUser()).data.user;if(!user)return json({error:'Sign in required'},401);
+   const current=checked(await service.from('instagram_post_drafts').select('*').eq('id',path[1]).maybeSingle());
+   if(!current||current.status!=='needs_approval'||current.revision!==body.revision)return json({error:'DRAFT_CHANGED_REFRESH_FIRST'},409);
+   const review=await recheckForPublishing(current);
+   if(review.report.status!=='passed')return json({error:'MARKETING_PREFLIGHT_FAILED',draft:review.draft,
+    quality_report:review.report,checks:review.preflight.checks,issues:review.report.issues},409);
    return json(checked(await service.rpc('approve_marketing_draft',{p_id:path[1],p_revision:body.revision,p_actor:user.id})));
   }
  }
