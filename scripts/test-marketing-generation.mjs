@@ -281,7 +281,13 @@ for(const language of ['ko','en'])for(const type of Object.keys(harness().policy
   ...(!['prelaunch','live_event'].includes(type)?{topic_type:type}:{})};
  const r=await h.api.runGeneration(id,input,null);
  check(()=>assert.equal(r.job.status,'completed',JSON.stringify({type,language,error:r.error,job:r.job,quality:r.draft.quality_report})));
- check(()=>assert.equal(r.draft.carousel_slides.length,3,'compact '+type));
+ check(()=>assert.equal(r.draft.carousel_slides.length,3,JSON.stringify({
+  type,language,actual:r.draft.carousel_slides.length,
+  stored_plan:r.draft.content_document?.carousel_template,
+  writing_schema_lengths:h.requests.filter(x=>x.url.endsWith('chat/completions')).map(x=>x.body.response_format.json_schema.schema.properties.slides.minItems),
+  job_payload:h.tables.marketing_generation_jobs.at(-1)?.request_payload,
+  draft_role:r.draft.draft_kind
+ })));
  check(()=>assert.equal(r.draft.content_document.carousel_template.slide_count,3));
 }
 const adminMarketingSource=fs.readFileSync(new URL('../src/components/admin-marketing.tsx',import.meta.url),'utf8');
