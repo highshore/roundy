@@ -1,5 +1,6 @@
 import {buildMarketingResearchTask,RESEARCH_TASK_VERSION,type SeoulDatingFormat,type TrendResearchHistory,type DatingMythHistory} from './marketing-research-task';
 import {applyAnswerFirstDocument} from './marketing-answer-first';
+import {type CarouselPlan} from './marketing-carousel-template';
 import {selectVerifiedMarketingBook,verifiedBookEvidence} from './marketing-book-catalog';
 import {captionCtaIssues,isCompactDocument,bilingualCaptionIssues,CAMPAIGN_PRESET,EVENT_CAMPAIGN_PRESET} from './marketing-presentation';
 import {campaignDraftQuality} from './marketing-campaign';
@@ -89,7 +90,7 @@ function parseDocument(result:Row){
 }
 
 export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,call:Call){
- const requestedType=postType(input),language=input.language==='en'?'en':'ko',answerFirst=input.answer_first_enabled===true;
+ const requestedType=postType(input),language=input.language==='en'?'en':'ko',answerFirst=input.answer_first_enabled===true,plan=(input.carousel_plan||null) as CarouselPlan|null;
  const seoulFormat:SeoulDatingFormat=requestedType==='seoul_dating'?seoulDatingFormat(String(draft.draft_date||'')+':'+String(draft.id||'')):'places';
  const trendItems=requestedType==='trend_research'?await loadTrendHistory(db):[],trendHistory=trendHistoryPrompt(trendItems);
  const mythItems=requestedType==='dating_myth'?await loadDatingMythHistory(db):[],mythHistory=datingMythHistoryPrompt(mythItems);
@@ -143,9 +144,9 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
 
  const write=async(type:PostType,repair?:{document:Row;issues:string[]},candidateVariant:''|'backup'='')=>{
   const writingVariant=type==='seoul_dating'?seoulFormat:type==='dating_myth'?candidateVariant:type==='seoul_trend'&&trendPack?trendPack.layout:'';
-  const instructions=writingInstructions(type,language,writingVariant,answerFirst)+(repair?'\nREPAIR PASS: Fix ONLY the listed quality issues. Preserve all supported facts, source IDs, uncertainty, card roles, and the approved topic. Do not add new claims. Return the complete corrected document in the same strict schema.':'');
+  const instructions=writingInstructions(type,language,writingVariant,answerFirst,plan)+(repair?'\nREPAIR PASS: Fix ONLY the listed quality issues. Preserve all supported facts, source IDs, uncertainty, card roles, and the approved topic. Do not add new claims. Return the complete corrected document in the same strict schema.':'');
   const payload={editorial_type:type,language,direction:input.instruction||'',evidence:sources,event:facts,...(type==='seoul_dating'?{seoul_format:seoulFormat}:{}),...(type==='seoul_trend'&&trendContext?{trend_context:{id:trendContext.id,trend_key:trendContext.trend_key,display_name:trendContext.display_name,category:trendContext.category,status:trendContext.status,observed_at:trendContext.observed_at,summary:trendContext.summary,content_angle:trendContext.content_angle,source_ids:sources.map(x=>x.id)},...(trendPack?{fact_pack:trendPackForModel(trendPack),fact_pack_layout:trendPack.layout,fact_pack_origin:trendPack.origin,no_additional_web_search:true}: {})}:{}),...(type==='trend_research'?{current_year:new Date().getUTCFullYear(),recent_history:trendHistory}:{}),...(type==='dating_myth'?{myth_candidate:candidateVariant==='backup'?'backup':'primary',recent_history:mythHistory}:{}),...(repair?{original_document:repair.document,quality_issues:repair.issues}:{})};
-  if(Buffer.byteLength(instructions+JSON.stringify(payload)+JSON.stringify(contentSchema(type,language,writingVariant,answerFirst)),'utf8')>30000)throw new Error('PROMPT_SIZE_LIMIT');
+  if(Buffer.byteLength(instructions+JSON.stringify(payload)+JSON.stringify(contentSchema(type,language,writingVariant,answerFirst,plan)),'utf8')>30000)throw new Error('PROMPT_SIZE_LIMIT');
   const control=ok(await db.from('marketing_ai_control').select('enabled,blocked_reason').eq('singleton',true).single());
   if(!control.enabled||control.blocked_reason)throw new Error('AI_PAUSED');
   ok(await db.from('marketing_generation_jobs').update({stage:repair?'repairing_copy':candidateVariant==='backup'?'writing_alternate_myth':'writing'}).eq('id',job.id));
@@ -163,6 +164,17 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
  const lockSeoulGrounding=(document:Row)=>{
   if(effectiveType!=='seoul_dating'||!document?.seoul||!Array.isArray(document.seoul.venues))return document;
   const roles=['scenario','etiquette','plan'],venues=document.seoul.venues.slice(0,3);
+  if(plan?.slide_count===3){
+   const names=venues.map((venue:Row)=>String(venue.name||'').trim()).filter(Boolean);
+   const ids=[...new Set(venues.flatMap((venue:Row)=>Array.isArray(venue.source_ids)?venue.source_ids:[]))].slice(0,3);
+   const joined=names.join(seoulFormat==='course'?' → ':' / ');
+   const slides=Array.isArray(document.slides)?document.slides.map((slide:Row)=>{
+    if(slide.role!=='plan')return slide;
+    return {...slide,title:slide.title,body:joined,source_ids:ids};
+   }):document.slides;
+   return {...document,seoul:{...document.seoul,format:seoulFormat,
+    verified_at:new Date().toISOString().slice(0,10),venues},slides};
+  }
   const slides=Array.isArray(document.slides)?document.slides.map((slide:Row)=>{
    const index=roles.indexOf(slide.role);if(index<0||!venues[index])return slide;
    const venue=venues[index],name=String(venue.name||'').trim(),combined=(String(slide.title||'')+' '+String(slide.body||'')).normalize('NFKC');
@@ -184,7 +196,7 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
  ok(await db.from('marketing_generation_jobs').update({result_snapshot:{draft_id:draft.id,content_language:language,growth_topic_type:input.content_mode==='growth_carousel'?effectiveType:null,raw_content:written.raw.slice(0,24000),research_sources:sources,images:[],carousel_slides:[],caption:'',quality_report:{version:3,status:'unchecked',issues:[]},generation_recovery:{fallback_reason:fallbackReason||null,repair_used:false}}}).eq('id',job.id));
 
  written.document=lockTrendGrounding(lockSeoulGrounding(lockVerifiedBook(written.document)));
- let prepared=prepareContent(applyAnswerFirstDocument(written.document,answerFirst),effectiveType,language,sources);
+ let prepared=prepareContent(applyAnswerFirstDocument(written.document,answerFirst,plan),effectiveType,language,sources);
  if(requestedType==='seoul_dating'&&effectiveType==='seoul_dating'&&prepared.report.status!=='passed'){
   const seoulIssues=classifyQualityIssues(prepared.report.issues);
   if(isSeoulVenueFailure(seoulIssues.critical)){
