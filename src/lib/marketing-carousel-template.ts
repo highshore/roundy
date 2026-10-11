@@ -122,48 +122,50 @@ function magazineBodyCandidate(
  const bodyText=magazineDisplayUnits(String(language==='en'?(slide?.body_en||slide?.body||''):(slide?.body_ko||slide?.body||'')).trim());
  const takeawayText=magazineDisplayUnits(String(slide?.highlight||'').trim());
  const isPhoto=layout==='photo',isSplit=layout==='split';
- const titleX=isPhoto?644:80,titleY=isPhoto?255:240,titleWidth=isPhoto?356:920;
+ const titleY=240,titleWidth=920;
  const title=fitCarouselCopy(titleText,{
-  width:titleWidth,availableHeight:isPhoto?325:isSplit?250:245,
-  preferred:isPhoto?Math.min(55,plan.title_font_size_px):Math.min(69,plan.title_font_size_px),
-  minimum:isPhoto?43:49,maxLines:isPhoto?6:4,label:'MAGAZINE_BODY_TITLE'});
- const columnY=titleY+title.height+(isSplit?30:18);
- const textX=isPhoto?644:isSplit?(index%2===1?500:80):80;
- const copyWidth=isPhoto?356:isSplit?500:920;
+  width:titleWidth,availableHeight:245,
+  preferred:Math.min(isPhoto?70:69,plan.title_font_size_px),
+  minimum:49,maxLines:4,label:'MAGAZINE_BODY_TITLE'});
+ const titleRect=magazineRect(80,titleY,titleWidth,title.height);
+ // Photo Editorial dedicates a broad, separate image band to the photograph.
+ // A panorama can fill the band without sacrificing its subject to cropping.
+ const photoTop=titleY+title.height+22;
+ const photoRect:MagazineRect=isPhoto
+  ?magazineRect(80,photoTop,920,465)
+  :isSplit
+   ?magazineRect(index%2===1?80:622,0,378,540)
+   :magazineRect(680,0,320,500);
+ const highlightBaseY=isPhoto?photoTop+photoRect.height+22:titleY+title.height+27;
+ const textX=isSplit?(index%2===1?500:80):80;
+ const copyWidth=isPhoto?920:isSplit?500:560;
+ const highlightX=80,highlightWidth=920;
  const highlight=fitCarouselCopy(takeawayText,{
-  width:copyWidth,availableHeight:isPhoto?164:isSplit?160:130,
-  preferred:isPhoto?32:35,minimum:29,maxLines:isPhoto?4:3,label:'MAGAZINE_BODY_TAKEAWAY'});
+  width:highlightWidth,availableHeight:130,
+  preferred:35,minimum:29,maxLines:3,label:'MAGAZINE_BODY_TAKEAWAY'});
  const hasTakeaway=highlight.lines.length>0;
- const labelY=hasTakeaway?columnY:null;
- const highlightY=columnY+(hasTakeaway?29:0);
- const bodyY=hasTakeaway?highlightY+highlight.height+18:columnY;
- // The information variant yields part of the content band to a photograph.
- // All others use a distinct side-by-side photo/text composition.
- const maxCopyY=isPhoto||isSplit?1185:972;
+ const takeawayLabelY=hasTakeaway?highlightBaseY:null;
+ const highlightY=highlightBaseY+(hasTakeaway?29:0);
+ const bodyY=hasTakeaway?highlightY+highlight.height+18:highlightBaseY;
+ const maxCopyY=1185;
  const body=fitCarouselCopy(bodyText,{
   width:copyWidth,availableHeight:maxCopyY-bodyY,
-  preferred:isPhoto?32:isSplit?33:35,minimum:isPhoto?29:30,
-  maxLines:isPhoto?19:isSplit?17:13,label:'MAGAZINE_BODY_DETAILS'});
+  preferred:isPhoto?34:isSplit?33:35,minimum:isPhoto?30:30,
+  maxLines:isPhoto?10:isSplit?17:16,label:'MAGAZINE_BODY_DETAILS'});
  if(bodyY+body.height>maxCopyY+.001)throw new Error('MAGAZINE_BODY_COPY_COLLISION');
- let photoRect:MagazineRect;
- if(isPhoto)photoRect=magazineRect(80,238,522,947);
- else if(isSplit)photoRect=magazineRect(index%2===1?80:622,columnY,378,1185-columnY);
- else{
-  const photoY=Math.max(836,bodyY+body.height+24);
-  if(photoY>995)throw new Error('MAGAZINE_INFORMATION_PHOTO_COLLISION');
-  photoRect=magazineRect(80,photoY,920,1185-photoY);
- }
+ if(isSplit)photoRect.y=Math.max(bodyY,475);
+ else if(!isPhoto)photoRect.y=Math.max(bodyY,550);
+ photoRect.height=Math.min(photoRect.height,1185-photoRect.y);
  if(photoRect.height<190)throw new Error('MAGAZINE_PHOTO_FRAME_TOO_SMALL');
- const titleRect=magazineRect(titleX,titleY,titleWidth,title.height);
  const bodyRect=magazineRect(textX,bodyY,copyWidth,body.height);
- const highlightRect=magazineRect(textX,highlightY,copyWidth,highlight.height);
- // Explicitly check every text/photo rectangle rather than hiding collisions
- // with clipping, ellipses, image overlays or smaller fonts.
+ const highlightRect=magazineRect(highlightX,highlightY,highlightWidth,highlight.height);
+ // All editorial rectangles are distinct. Overflow is an error, not ellipsis
+ // or a hidden layer. Other templates are considered before rejecting.
  const intersects=(a:MagazineRect,b:MagazineRect)=>a.width>0&&a.height>0&&b.width>0&&b.height>0&&
   a.x<b.x+b.width&&b.x<a.x+a.width&&a.y<b.y+b.height&&b.y<a.y+a.height;
  if([titleRect,bodyRect,highlightRect].some(rect=>intersects(rect,photoRect)))
   throw new Error('MAGAZINE_BODY_PHOTO_TEXT_COLLISION');
- return {layout,title,body,highlight,titleRect,bodyRect,highlightRect,photoRect,takeawayLabelY:labelY};
+ return {layout,title,body,highlight,titleRect,bodyRect,highlightRect,photoRect,takeawayLabelY};
 }
 function magazineBodyFit(slide:Record<string,any>,plan:CarouselPlan,index:number,language:string):MagazineBodyFit{
  const body=String(language==='en'?(slide?.body_en||slide?.body||''):(slide?.body_ko||slide?.body||''));
