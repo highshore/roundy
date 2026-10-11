@@ -55,6 +55,7 @@ export function AdminMarketingRegeneration({sourceId,locale,onCreated,onClose}:{
  },[sourceId]);
  const source=useMemo(()=>versions.find(x=>x.id===viewId)||versions.find(x=>x.id===sourceId)||versions.at(-1)||null,[versions,viewId,sourceId]);
  const photos=hasPhotos(source||{});
+ const missingCount=(source?.images||[]).filter((url:unknown)=>!url).length;
  const slides=(source?.carousel_slides||[]) as Row[];
  const targetIndices=scope==='slides'?indices:scope==='caption'?[]:scope==='cover_title'?[0]:scope==='body'?slides.slice(1).map((_,i)=>i+1):slides.map((_,i)=>i);
  const aiCover=Boolean(source?.content_document?.photo_sourcing?.ai_thumbnail_enabled&&targetIndices.includes(0)&&
@@ -153,7 +154,7 @@ export function AdminMarketingRegeneration({sourceId,locale,onCreated,onClose}:{
       '변경된 카드가 사진 검수 또는 재렌더링을 기다리고 있습니다.')}</strong>
     <p>{t('Approve newly sourced photos in the main Draft editor, then finish rendering only the changed slides. Untouched slides and old approvals stay intact.',
      '새로 검색한 사진은 메인 초안 편집기에서 저작권 검수 후 승인하세요. 승인 후 변경한 카드만 렌더링하며, 변경하지 않은 카드와 기존 사진 승인은 보존됩니다.')}</p>
-    <button type="button" className="admin-secondary" disabled={working} onClick={()=>void finishRendering()}>
+    <button type="button" className="admin-secondary" disabled={working||!source.regeneration_parent_id} onClick={()=>void finishRendering()}>
      <Images size={14}/>{t('Render changed cards after approval ($0 AI)','사진 승인 후 변경 카드만 렌더링 (AI $0)')}</button>
    </div>}
    <div className="marketing-version-slides">
