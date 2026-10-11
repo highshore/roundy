@@ -2,7 +2,8 @@ import {buildMarketingResearchTask,RESEARCH_TASK_VERSION,type SeoulDatingFormat,
 import {applyAnswerFirstDocument} from './marketing-answer-first';
 import {type CarouselPlan} from './marketing-carousel-template';
 import {selectVerifiedMarketingBook,verifiedBookEvidence} from './marketing-book-catalog';
-import {captionCtaIssues,isCompactDocument,isMagazineDocument,bilingualCaptionIssues,CAMPAIGN_PRESET,EVENT_CAMPAIGN_PRESET} from './marketing-presentation';
+import {captionCtaIssues,isCompactDocument,isMagazineDocument,isImmersiveMagazineDocument,bilingualCaptionIssues,CAMPAIGN_PRESET,EVENT_CAMPAIGN_PRESET} from './marketing-presentation';
+import {EDITORIAL_ENGAGEMENT_POLICY} from './marketing-editorial-quality';
 import {campaignDraftQuality} from './marketing-campaign';
 import {eventCampaignDraftQuality} from './marketing-event-campaign';
 import {renderCompactEditorial,type EditorialAssets} from './marketing-visuals';
@@ -158,6 +159,15 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
   await record(result);return {...parseDocument(result),result};
  };
 
+ // New immersive editorial only: old drafts retain their original review contract.
+ // A copy failing this gate is repaired once, before any paid photo generation begins.
+ const prepareWithEngagementGate=(value:Row,type:PostType)=>{
+  const applied=applyAnswerFirstDocument(value,answerFirst,plan);
+  const gated=isImmersiveMagazineDocument(applied)&&['conversation_prompt','korea_life'].includes(type)
+   ?{...applied,editorial_engagement_policy:EDITORIAL_ENGAGEMENT_POLICY}:applied;
+  return prepareContent(gated,type,language,sources);
+ };
+
  const lockVerifiedBook=(document:Row)=>{
   if(effectiveType!=='book_insight'||!selectedBook)return document;
   return {...document,
@@ -219,7 +229,7 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
  ok(await db.from('marketing_generation_jobs').update({result_snapshot:{draft_id:draft.id,content_language:language,growth_topic_type:input.content_mode==='growth_carousel'?effectiveType:null,raw_content:written.raw.slice(0,24000),research_sources:sources,images:[],carousel_slides:[],caption:'',quality_report:{version:3,status:'unchecked',issues:[]},generation_recovery:{fallback_reason:fallbackReason||null,repair_used:false}}}).eq('id',job.id));
 
  written.document=lockTrendGrounding(lockSeoulGrounding(lockVerifiedBook(lockMythGrounding(written.document))));
- let prepared=prepareContent(applyAnswerFirstDocument(written.document,answerFirst,plan),effectiveType,language,sources);
+ let prepared=prepareWithEngagementGate(written.document,effectiveType);
  if(requestedType==='seoul_trend'&&effectiveType==='korea_life'&&fallbackReason){
   // No cited source means no recent trend, event date, current ranking or price
   // may be stated as a fact. Fail closed instead of paying for another repair.
@@ -239,7 +249,7 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
   if(isSeoulVenueFailure(seoulIssues.critical)){
    effectiveType='conversation_prompt';sources=[];fallbackReason='insufficient_verified_places:seoul_dating->conversation_prompt';
    ok(await db.from('marketing_generation_jobs').update({stage:'writing_fallback'}).eq('id',job.id));
-   written=await write(effectiveType);prepared=prepareContent(applyAnswerFirstDocument(written.document,answerFirst,plan),effectiveType,language,sources);
+   written=await write(effectiveType);prepared=prepareWithEngagementGate(written.document,effectiveType);
   }
  }
  if(requestedType==='trend_research'&&effectiveType==='trend_research'){
@@ -247,19 +257,19 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
   if(repeat||isTrendGroundingFailure(trendIssues.critical)){
    effectiveType='conversation_prompt';sources=[];fallbackReason=(repeat||'research_grounding_failed')+':trend_research->conversation_prompt';
    ok(await db.from('marketing_generation_jobs').update({stage:'writing_fallback'}).eq('id',job.id));
-   written=await write(effectiveType);prepared=prepareContent(applyAnswerFirstDocument(written.document,answerFirst,plan),effectiveType,language,sources);
+   written=await write(effectiveType);prepared=prepareWithEngagementGate(written.document,effectiveType);
   }
  }
  if(requestedType==='dating_myth'&&effectiveType==='dating_myth'){
   let repeat=datingMythRepeatReason((prepared.document as Row)?.myth,mythItems),mythIssues=classifyQualityIssues(prepared.report.issues);
   if(repeat||isDatingMythGroundingFailure(mythIssues.critical)){
    mythAlternateUsed=true;
-   written=await write(effectiveType,undefined,'backup');written.document=lockMythGrounding(written.document);prepared=prepareContent(applyAnswerFirstDocument(written.document,answerFirst,plan),effectiveType,language,sources);
+   written=await write(effectiveType,undefined,'backup');written.document=lockMythGrounding(written.document);prepared=prepareWithEngagementGate(written.document,effectiveType);
    repeat=datingMythRepeatReason((prepared.document as Row)?.myth,mythItems);mythIssues=classifyQualityIssues(prepared.report.issues);
    if(repeat||isDatingMythGroundingFailure(mythIssues.critical)){
     effectiveType='conversation_prompt';sources=[];fallbackReason=(repeat||'myth_grounding_failed')+':dating_myth->conversation_prompt';
     ok(await db.from('marketing_generation_jobs').update({stage:'writing_fallback'}).eq('id',job.id));
-    written=await write(effectiveType);prepared=prepareContent(applyAnswerFirstDocument(written.document,answerFirst,plan),effectiveType,language,sources);
+    written=await write(effectiveType);prepared=prepareWithEngagementGate(written.document,effectiveType);
    }
   }
  }
@@ -275,8 +285,19 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
    repairUsed=true;
    written=await write(effectiveType,{document:prepared.document,issues:repairIssues});
    written.document=lockTrendGrounding(lockSeoulGrounding(lockVerifiedBook(lockMythGrounding(written.document))));
-   prepared=prepareContent(applyAnswerFirstDocument(written.document,answerFirst,plan),effectiveType,language,sources);
+   prepared=prepareWithEngagementGate(written.document,effectiveType);
   }
+ }
+ // Stop before charging for images when a second copy fails the new editorial gate.
+ if(prepared.report.status==='rejected'&&prepared.report.issues.some((issue:string)=>issue.startsWith('에디토리얼 편집 검수:'))){
+  const rejected={...prepared.report,severity:'quality',classification:classifyQualityIssues(prepared.report.issues)};
+  ok(await db.from('marketing_generation_jobs').update({
+   quality_report:rejected,
+   result_snapshot:{draft_id:draft.id,content_language:language,growth_topic_type:effectiveType,
+    raw_content:written.raw.slice(0,24000),research_sources:sources,images:[],carousel_slides:[],
+    caption:'',quality_report:rejected,generation_recovery:{fallback_reason:fallbackReason||null,repair_used:repairUsed}}
+  }).eq('id',job.id));
+  throw new Error('EDITORIAL_ENGAGEMENT_GATE_REJECTED: '+prepared.report.issues.filter((issue:string)=>issue.startsWith('에디토리얼 편집 검수:')).join(' '));
  }
  const document=prepared.document;
 
