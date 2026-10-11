@@ -364,6 +364,11 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
  // Both legacy 'auto_ai' and 'pexels' selections now use real photos first.
  // The optional AI image, if enabled, belongs ONLY to the cover and is generated
  // after all photo slots have cleared human review.
+ // Validate the requested slot BEFORE reserving an AI budget or calling a provider.
+ if(input.mode!=='image'&&input.ai_image_slot!==undefined&&input.ai_image_slot!==null&&
+   (!managedPhotoSourcing||plan?.slide_count!==5||
+    Number(preference?.carousel_min_real_photos_5??3)>3))
+  throw new Error('AI_IMAGE_SLOT_NOT_AVAILABLE');
  const visualSource:VisualSource=managedPhotoSourcing?'stock':originallyRequested;
  input.language=input.mode==='image'?(draft.content_language==='en'?'en':draft.content_language==='ko'?'ko':await nextContentLanguage(db,draft.id)):await resolveContentLanguage(db,draft,input.language);
  const growth=input.content_mode==='growth_carousel',research=growth&&researchTopics.has(input.topic_type||'')&&!input.render_only&&input.mode!=='image';
