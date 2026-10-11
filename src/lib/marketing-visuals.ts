@@ -1,8 +1,8 @@
 import {createElement as h} from 'react';
 import {ImageResponse} from 'next/og';
 import {readTrendFactPack,selectGuideFacts,factLabel} from './marketing-trend-guide';
-import {ROUNDY_IDENTITY as BRAND, EDITORIAL_PRESET, MAGAZINE_EDITORIAL_PRESET, isMagazineDocument, CAMPAIGN_PRESET, EVENT_CAMPAIGN_PRESET, type PresentationRow as Row} from './marketing-presentation';
-import {savedCarouselPlan,mobileCarouselFit,magazineCarouselFit,carouselNarrative,CAROUSEL_CANVAS} from './marketing-carousel-template';
+import {ROUNDY_IDENTITY as BRAND, EDITORIAL_PRESET, MAGAZINE_EDITORIAL_PRESET, isMagazineDocument, isImmersiveMagazineDocument, editorialBrandBridge, CAMPAIGN_PRESET, EVENT_CAMPAIGN_PRESET, type PresentationRow as Row} from './marketing-presentation';
+import {savedCarouselPlan,mobileCarouselFit,magazineCarouselFit,wrapCarouselCopy,carouselNarrative,CAROUSEL_CANVAS} from './marketing-carousel-template';
 
 export type EditorialAssets = {
  photo?: string|null;
@@ -366,6 +366,35 @@ function brightOutro(slide:Row,document:Row,fit:ReturnType<typeof mobileCarousel
  * Every photo is a separate, unaltered image frame (never a dark text scrim).
  * This renderer is opt-in by immutable design_preset; legacy cards keep their pixels.
  */
+// New cover only: the approved photo occupies every pixel, with a restrained
+// lower gradient instead of a dark overlay over the entire card. Historical
+// Magazine V2 output continues to use the untouched magazineCover below.
+function immersiveMagazineCover(slide:Row,document:Row,assets:EditorialAssets,fit:ReturnType<typeof magazineCarouselFit>){
+ const src=selectedPhoto(assets,0,true);
+ if(!src)throw new Error('IMMERSIVE_COVER_APPROVED_PHOTO_REQUIRED');
+ const bodyY=1192-fit.body.height;
+ const titleY=bodyY-24-fit.title.height;
+ const eyebrowY=titleY-68;
+ if(eyebrowY<480)throw new Error('IMMERSIVE_COVER_TEXT_OVERFLOW');
+ const eyebrow=String(slide.eyebrow||'ROUNDY / SEOUL').slice(0,28);
+ return box({width:1080,height:1350,position:'relative',overflow:'hidden',background:'#20211f'},
+  box({position:'absolute',top:0,left:0,width:1080,height:1350,overflow:'hidden'},photo(src)),
+  box({position:'absolute',inset:0,
+   background:'linear-gradient(180deg,rgba(14,19,18,.12) 0%,rgba(14,19,18,.05) 24%,rgba(14,19,18,.38) 51%,rgba(14,19,18,.91) 100%)'}),
+  box({position:'absolute',left:80,top:67},officialRoundyLogo(true,52)),
+  box({position:'absolute',left:80,right:80,top:eyebrowY,height:38,alignItems:'center',gap:13},
+   box({width:11,height:11,borderRadius:11,background:BRIGHT_EDITORIAL.coral}),
+   text(eyebrow,22,{fontWeight:850,color:'#fffefa',letterSpacing:1.2})),
+  box({position:'absolute',left:80,right:80,top:titleY,flexDirection:'column',alignItems:'flex-start',gap:0},
+   ...fit.title.lines.map((line:string,index:number)=>
+    text(line,fit.title.fontSize,{fontWeight:900,lineHeight:1.16,letterSpacing:-1.8,
+     color:index===fit.title.lines.length-1?BRIGHT_EDITORIAL.coral:'#ffffff',whiteSpace:'nowrap'}))),
+  box({position:'absolute',left:80,right:80,top:bodyY},
+   fittedRows(fit.body.lines,fit.body.fontSize,'#fffefa',500,1.27)),
+  assets.cardCredits?.[0]?box({position:'absolute',left:80,right:80,bottom:59},
+   text(String(assets.cardCredits[0]),17,{color:'#e7e8e2',fontWeight:400,whiteSpace:'nowrap'})):null
+ );
+}
 function magazineCover(slide:Row,document:Row,assets:EditorialAssets,fit:ReturnType<typeof magazineCarouselFit>){
  const language=document.content_language==='en'?'en':'ko',photoSrc=selectedPhoto(assets,0,true);
  const subtitleY=247+fit.title.height+21;
@@ -402,6 +431,33 @@ function magazineInformation(slide:Row,index:number,document:Row,assets:Editoria
   !photographFirst?brightPhotoFrame(photoSrc,index,frameY,frameHeight,language,String(slide.highlight||'')):null,
   brightPhotoCredit(photoSrc?String(assets.cardCredits?.[index]||''):'',index));
 }
+// The last page remains useful editorial content; one restrained, deterministic
+// Roundy invitation below it makes the account memorable without a fake CTA UI.
+function immersiveMagazineClosing(slide:Row,document:Row,fit:ReturnType<typeof magazineCarouselFit>){
+ const language=document.content_language==='en'?'en':'ko';
+ const bodyY=281+fit.title.height+29;
+ if(bodyY+fit.body.height>925)throw new Error('IMMERSIVE_CLOSING_TEXT_OVERFLOW');
+ const brand=editorialBrandBridge(document,language);
+ const brandLines=wrapCarouselCopy(brand,language==='ko'?31:38);
+ if(brandLines.length>3)throw new Error('IMMERSIVE_BRAND_BRIDGE_OVERFLOW');
+ return box({position:'relative',width:1080,height:1350,
+  background:BRIGHT_EDITORIAL.paper,color:BRIGHT_EDITORIAL.ink,overflow:'hidden'},
+  brightHeader(),
+  brightEyebrow(language==='ko'?'EDITORIAL / 한 가지 남길 말':'EDITORIAL / THE TAKEAWAY',189),
+  box({position:'absolute',left:80,right:80,top:281},brightHeadline(fit.title.lines,fit.title.fontSize)),
+  box({position:'absolute',left:80,right:80,top:bodyY},
+   fittedRows(fit.body.lines,fit.body.fontSize,BRIGHT_EDITORIAL.body,500,1.3)),
+  box({position:'absolute',left:80,top:981,width:920,height:265,
+   borderRadius:24,background:'#fff1ed',border:'1px solid #f2ddd8',
+   flexDirection:'column',gap:17,padding:'30px 35px'},
+   box({alignItems:'center',gap:10},
+    box({width:11,height:11,borderRadius:11,background:BRIGHT_EDITORIAL.coral}),
+    text('ROUNDY / SEOUL',21,{fontWeight:850,color:'#ad5d54',letterSpacing:1.1})),
+   fittedRows(brandLines,29,BRIGHT_EDITORIAL.ink,750,1.27)),
+  box({position:'absolute',right:81,bottom:46},
+   text(BRAND.instagram,19,{color:BRIGHT_EDITORIAL.muted,letterSpacing:.2}))
+ );
+}
 function magazineClosing(slide:Row,document:Row,fit:ReturnType<typeof magazineCarouselFit>){
  const language=document.content_language==='en'?'en':'ko',type=String(slide.closing_type||'summary');
  if(!['summary','insight','brand_outro'].includes(type))throw new Error('MAGAZINE_CLOSING_TYPE_INVALID');
@@ -431,8 +487,9 @@ export function magazineCarouselTree(slide:Row,index:number,total:number,documen
  const fit=magazineCarouselFit(slide,plan,index,language);
  const fontFamily=language==='ko'?(assets.fonts?.length?'Noto Sans KR, sans-serif':'sans-serif'):
   (assets.fonts?.length?'DM Sans, sans-serif':'sans-serif');
- const card=index===0?magazineCover(slide,document,assets,fit):
-  index===total-1?magazineClosing(slide,document,fit):
+ const immersive=isImmersiveMagazineDocument(document);
+ const card=index===0?(immersive?immersiveMagazineCover(slide,document,assets,fit):magazineCover(slide,document,assets,fit)):
+  index===total-1?(immersive?immersiveMagazineClosing(slide,document,fit):magazineClosing(slide,document,fit)):
   magazineInformation(slide,index,document,assets,fit);
  return box({width:1080,height:1350,fontFamily,background:BRIGHT_EDITORIAL.paper},card);
 }
