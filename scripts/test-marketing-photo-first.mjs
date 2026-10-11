@@ -68,7 +68,7 @@ assert.match(stock,/return \{photo:cardPhotos\[0\]\|\|null,photos:\[\],cardPhoto
 const generation=source('src/lib/marketing-generation.ts');
 assert.match(generation,/configuredPhotoSourcingPolicy/);
 assert.match(generation,/visualSource:VisualSource=managedPhotoSourcing\?'stock':originallyRequested/);
-assert.match(generation,/generateAiThumbnail\(db,draft,job\)/);
+assert.match(generation,/generateAiCard\(db,draft,job,aiSlot\)/);
 assert.match(generation,/photoReviewRequired=true/);
 assert.match(generation,/photos_pending_review:photoReviewRequired/);
 const stockBranch=generation.split('}else if(stockVisuals){')[1]?.split('const coverStillPending=')[0]||'';
@@ -81,4 +81,4 @@ for(const column of ['source_url','image_url','license_url','photographer','revi
 const visual=source('src/lib/marketing-visuals.ts');
 assert.match(visual,/assets\.cardPhotos\?\.\[index\]/);
 assert.match(visual,/function selectedPhoto\(/);
-console.log('PASS multi-provider photo sourcing: 5/3 min counts, single optional AI cover, source metadata, 90-day reuse, human review, fail-closed settings and existing renderer.');
+console.log('PASS multi-provider photo sourcing: 5/3 min counts, one selected AI visual, source metadata, 90-day reuse, human review, fail-closed settings and existing renderer.');
