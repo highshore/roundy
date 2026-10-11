@@ -163,6 +163,10 @@ async function regenerateAiCover(db:DB,draft:Row,request:RegenerationRequest){
 }
 async function renderVersionCards(db:DB,draft:Row,indices:number[]){
  const slides=sourceSlides(draft),photos=await listStockSelections(db,draft.id);
+ const aiBodySlot=draft.content_document?.photo_sourcing?.ai_image_slot;
+ if(Number.isInteger(aiBodySlot)&&aiBodySlot>0&&indices.includes(aiBodySlot)
+   &&!photos.some(p=>Number(p.slot)===aiBodySlot))
+  throw new Error('NON_ARCHIVED_AI_CARD_UNEDITABLE: An AI body card needs explicit image replacement, not a silent stock substitution.');
  if(!['pexels','stock'].includes(draft.visual_source))throw new Error('RENDER_SOURCE_UNAVAILABLE: 원본 실사 승인 자료가 없어 안전하게 재렌더링할 수 없습니다.');
  if(!stockReady(draft,photos))return {draft,ready:false};
  const assets=await loadEditorialAssets();
