@@ -1,8 +1,8 @@
-import {answerFirstIssues} from './marketing-answer-first';
+import {answerFirstIssues,magazineRolesForCount} from './marketing-answer-first';
 import {mobileCarouselFit,magazineCarouselFit,savedCarouselPlan,resolveCarouselPlan} from './marketing-carousel-template';
 import {requiredPhotoSlotsForRoles,savedPhotoSourcingPolicy} from './marketing-stock-photo-policy';
 import {photoRightsIssues,captionHasRequiredCredits} from './marketing-photo-rights';
-import {isMagazineDocument,EDITORIAL_AD_CTA} from './marketing-presentation';
+import {isMagazineDocument,isLegacyMagazineDocument,isSupportedMagazineDocument,EDITORIAL_AD_CTA} from './marketing-presentation';
 
 export type PreflightId='slide_count'|'real_photos'|'photo_sources'|'photo_approval'|'answer_first'|'final_cta'|'editorial_closing'|'mobile_render';
 export type PreflightCheck={id:PreflightId;label:string;passed:boolean;detail:string;issues:string[]};
@@ -110,7 +110,8 @@ export function evaluateMarketingPreflight(draft:Record<string,any>,settings:Rec
 
  const ctaIssues:string[]=[],last=slides.at(-1);
  if(magazine){
-  const expected=intended===3?['cover','key_insight','editorial_closing']:['cover','context','insight','insight','editorial_closing'];
+  if(!isSupportedMagazineDocument(doc))ctaIssues.push('지원하지 않는 Magazine Editorial 스키마 버전입니다.');
+  const expected=magazineRolesForCount(intended===3?3:5,isLegacyMagazineDocument(doc));
   if(slides.some((slide:Record<string,any>,index:number)=>str(slide.role)!==expected[index]))
    ctaIssues.push('Magazine Editorial 슬라이드 역할과 순서를 확인하세요.');
   if(last?.role!=='editorial_closing'||!['summary','insight','brand_outro'].includes(str(last?.closing_type)))
