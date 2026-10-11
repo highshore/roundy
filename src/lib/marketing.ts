@@ -9,6 +9,7 @@ import {reviewMarketingDraft,mergePreflightQuality} from './marketing-preflight-
 import {factPackReady} from './marketing-trend-guide';
 import {importStockSelections,listStockSelections,prepareStockSelections,requiredStockSlots,stockReady,reviewStockAsset} from './marketing-stock-photos';
 import {supportedPhotoSources,providerConfigured} from './marketing-photo-providers';
+import {fullReviewPhotoUrl} from './marketing-photo-rights';
 import type { createClient } from './supabase/server';
 import { createServiceRoleClient } from './supabase/service';
 import { marketingApi as legacyMarketingApi } from './marketing-legacy';
@@ -185,7 +186,10 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
   const signed:Row[]=signedResult?.error?[]:(signedResult?.data||[]);
   const previews=new Map(signed.map((item,index)=>[stored[index]?.id,String(item.signedUrl||'')]));
   const previewAssets:Row[]=all.map((asset:Row):Row=>({...asset,
-   preview_url:previews.get(asset.id)||asset.preview_url||asset.image_url}));
+   preview_url:previews.get(asset.id)||asset.preview_url||asset.image_url,
+   // Full original image for review; preserve the archived cropped thumbnail
+   // separately for comparing the approved card render.
+   review_preview_url:fullReviewPhotoUrl(asset)||asset.preview_url||asset.image_url}));
   const ids=previewAssets.map(asset=>asset.id);
   const usage=ids.length
    ?checked(await service.from('marketing_draft_photos')
