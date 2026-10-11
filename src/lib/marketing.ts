@@ -1,3 +1,4 @@
+import {versionHistory,regenerateVersion,restoreVersion} from './marketing-regeneration';
 import {savedCtaRecoverySource} from './marketing-output-recovery';
 import {selectAnswerFirstHeadline} from './marketing-answer-first';
 import { NextRequest, NextResponse } from 'next/server';
