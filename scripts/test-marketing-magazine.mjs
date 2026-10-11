@@ -100,7 +100,7 @@ const editorialPlan=layout.resolveCarouselPlan(settings);
 const officialSources={
  forest:'https://english.seoul.go.kr/%EA%B3%B5%EC%9B%90/?pidx=11',
  garden:'https://english.seoul.go.kr/experience-the-beauty-of-traditional-korean-gardens-at-namsan-as-korean-forest-garden-opens-june-27/',
- parks:'https://english.seoul.go.kr/wp-content/uploads/2026/03/2026_guidebook_EN.pdf'
+ parks:'https://english.seoul.go.kr/world-cup-park/'
 };
 const richSamples=[
  {index:1,expectedLayout:'photo',slug:'photo-context',
@@ -114,7 +114,7 @@ const richSamples=[
  {index:3,expectedLayout:'split',slug:'split-insight',
   title:'서울숲 vs 월드컵공원',highlight:'도심 숲과 매립지 재생 공원의 차이',
   body:'서울숲과 월드컵공원은 같은 서울의 녹지이지만 경험이 다릅니다. 서울숲은 문화예술공원과 생태숲 등 여러 주제 공간을 가까이에서 옮겨 다니기 좋습니다. 반면 월드컵공원은 난지도 쓰레기 매립지를 생태공원으로 바꾼 장소로, 하늘공원과 노을공원 등 5개 공원으로 구성됩니다.',
-  source_label:'서울특별시 2026 방문 가이드',source_ids:['S1'],reference:officialSources.parks}
+  source_label:'서울특별시 월드컵공원 안내',source_ids:['S1'],reference:officialSources.parks}
 ];
 const fixturePhotoPaths=['public/images/yeouido.webp',
  'public/images/roundy-mingle-hero-photo.webp','public/images/discovery-hero-poster.webp'];
