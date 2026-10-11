@@ -58,11 +58,14 @@ export function topicHistoryFromRows(drafts:unknown[],jobs:unknown[],excludeDraf
   const doc=snapshot.content_document||{},slides=Array.isArray(snapshot.carousel_slides)?snapshot.carousel_slides:Array.isArray(doc.slides)?doc.slides:[];
   add(row,doc,slides);
  }
- const unique=new Set<string>();
- return items.sort((a,b)=>b.created_at.localeCompare(a.created_at)).filter(item=>{
-  const fingerprint=item.angle_key||normalized(item.headline);
-  if(unique.has(fingerprint))return false;unique.add(fingerprint);return true;
- }).slice(0,120);
+ const selected:TopicHistoryItem[]=[];
+ for(const item of items.sort((a,b)=>b.created_at.localeCompare(a.created_at))){
+  if(selected.some(prev=>(Boolean(item.angle_key)&&item.angle_key===prev.angle_key)||
+   similarity(item.headline,prev.headline)>=.90))continue;
+  selected.push(item);
+  if(selected.length>=120)break;
+ }
+ return selected;
 }
 export function assessTopicCandidates(raw:unknown,history:TopicHistoryItem[],language:string,now=new Date()):TopicSelection{
  if(!raw||typeof raw!=='object'||!Array.isArray((raw as Row).candidates)||((raw as Row).candidates as unknown[]).length!==TOPIC_CANDIDATE_COUNT)
