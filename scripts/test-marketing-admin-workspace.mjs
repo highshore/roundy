@@ -100,6 +100,20 @@ assert.match(css,/\.marketing-workspace \.marketing-draft-card\.marketing-slide-
 assert.match(css,/\.marketing-photo-slot\{\s*display:grid;grid-template-columns:112px minmax\(0,1fr\)/);
 assert.match(css,/\.marketing-approved-picker-backdrop/);
 assert.match(css,/\.marketing-approved-picker-grid/);
+// Regression for iPhone Safari: approved images must not collapse into horizontal
+// slivers, and the photographer/selection actions must be OUTSIDE the image frame.
+assert.match(src,/className="marketing-approved-picker-image"/);
+assert.match(src,/onClick=\{\(\)=>setApprovedPreviewAsset\(asset\)\}/);
+assert.match(src,/className="marketing-approved-picker-detail"/);
+assert.match(src,/className="marketing-approved-picker-copy"/);
+assert.match(src,/className="marketing-approved-picker-close"/);
+assert.match(css,/grid-auto-rows:max-content/);
+assert.match(css,/align-content:start;align-items:start;justify-items:stretch/);
+assert.match(css,/height:230px;min-height:230px/);
+assert.match(css,/height:185px;min-height:185px/);
+assert.match(css,/object-fit:contain;object-position:center/);
+assert.match(css,/\.marketing-approved-picker-copy\{\s*display:flex;flex-direction:column/);
+assert.match(css,/\.marketing-approved-picker-detail-media/);
 assert.match(css,/\.marketing-workspace \.marketing-setup \.marketing-photo-render-actions\{\s*display:grid/);
 assert.match(css,/@media\(max-width:540px\)\{[\s\S]*?\.marketing-workspace \.marketing-setup \.marketing-photo-render-actions\{\s*grid-template-columns:minmax\(0,1fr\)/);
 const previewSource=read('src/components/marketing-mobile-preview.tsx');
