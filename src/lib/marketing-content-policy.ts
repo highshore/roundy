@@ -1,10 +1,10 @@
 import {readTrendFactPack,trendFactPackIssues,trendGuideRoles} from './marketing-trend-guide';
 import {fiveEditorialRoles,editorialRolesForCount,magazineRolesForCount,magazineAnswerFirstPrompt,withAnswerFirstSchema,answerFirstPrompt,answerFirstIssues} from './marketing-answer-first';
 import {savedCarouselPlan,mobileCarouselFit,magazineCarouselFit,type CarouselPlan} from './marketing-carousel-template';
-import {captionCtaIssues,EDITORIAL_AD_CTA, compactContentSchema, compactWritingInstructions, normalizeCompactDocument, compactQualityIssues, buildBilingualCaption, isCompactDocument, isMagazineDocument, hasObsoletePositioning} from './marketing-presentation';
+import {captionCtaIssues,EDITORIAL_AD_CTA, compactContentSchema, compactWritingInstructions, normalizeCompactDocument, compactQualityIssues, buildBilingualCaption, isCompactDocument, isMagazineDocument, isImmersiveMagazineDocument, hasObsoletePositioning} from './marketing-presentation';
 // Shared deterministic content contracts. This module never calls a paid API.
 export type Row = Record<string, any>;
-export const CONTENT_POLICY_VERSION = 13;
+export const CONTENT_POLICY_VERSION = 14;
 export const CONTENT_PROFILES = {
  prelaunch:{roles:['cover','concept','cta'],research:false,label:'오픈 전 홍보',brief:'A concrete social friction, the in-person Rotation Dating format, then launch-update CTA. No invented dates, bookings, testimonials, seats or discounts.'},
  live_event:{roles:['cover','event','cta'],research:false,label:'이벤트 모집',brief:'Invite around the actual supplied event. The event card uses only server-supplied date/location/prices. No fabricated participants, scarcity or discounts.'},
@@ -201,13 +201,19 @@ export function writingInstructions(type:PostType,language:string,variant='',ans
  return ['Write an original Instagram carousel that sounds like a real person or editor, not a generic AI advertisement. Follow the supplied strict schema.',
   'Editorial type: '+type+'. '+(magazine&&type==='prelaunch'?'Explain how face-to-face social formats work in Seoul with clear, useful editorial context; never invent an opening date or invite follows, registrations or clicks.':magazine&&type==='live_event'?'Explain ONE verified upcoming Seoul event as service journalism; date, location, program and pricing only from supplied server facts. No tickets, buy, RSVP, Book Now, link or other sales action.':CONTENT_PROFILES[type].brief),
   'VOICE: '+toneGuide(type,language),
+  ...(magazine?[
+   'EDITORIAL TEST: Imagine a friend forwarding this because it names a familiar moment or gives them a line they could actually say. Replace abstract advice with specific observable situations. Do not claim universal outcomes. Every informational card should show WHAT someone does, says, notices or checks. It should teach more than "communication matters".',
+   'HOOK TEST: The cover must make somebody stop scrolling without inventing facts. Compare: weak "질문은 목적에서 시작된다" / strong "좋은 모임은 첫 질문이 다르다"; weak "성공적인 관계의 핵심" / strong "처음 만나면 무슨 얘기부터 할까?". Adapt to the REAL evidence, not these example topics. Put one factual concrete payoff immediately in the following cards.',
+   'HUMAN VOICE: Do not sound like a textbook or corporate thought leadership. Avoid vague nouns (목적, 구조, 방향, 관계 형성, 가치, 본질), overpolished conclusions ("중요합니다", "도움이 됩니다", "생각해볼 수 있습니다", "의미 있는", "더 나은"), and motivational sign-offs. Use short vivid sentences and one original quoted line of natural dialogue when relevant. The quoted line is YOUR EXAMPLE, NEVER a purported quotation from a book, participant or source.',
+   'FINAL CARD: Make the final summary useful on its own; if the reader saved only one sentence it should be this one. No overt sales actions in generated copy. The renderer adds a context-sensitive Roundy brand connection underneath so avoid repeating the handle in the generated card.'
+  ]:[]),
   'Roles in EXACT order: '+(plan?magazineRolesForCount(plan.slide_count):answerFirst?fiveEditorialRoles(type,type==='seoul_trend'?trendGuideRoles(variant):CONTENT_PROFILES[type].roles):type==='seoul_trend'?trendGuideRoles(variant):CONTENT_PROFILES[type].roles).join(', ')+'. Each slide must move the idea forward with a different title AND different body. Never pad or restate the same idea.',
   'Prefer concrete scenes, actions, questions and observable details over abstract emotional nouns. One main idea per sentence. Vary sentence length. Contractions and fragments are fine when natural.',
   'Do NOT use these generic AI/marketing phrases or close paraphrases: '+banned+'. Also avoid formulaic openings such as "혹시 ~ 하신가요?", "오늘은 ~ 알아볼게요", "함께 알아봅시다", "In today\'s fast-paced world", "Whether you\'re...", or "Here\'s the thing".',
   'Avoid stacked adjectives, motivational slogans, empty superlatives, excessive em dashes, and repeated "not X, but Y" constructions. Do not add emoji unless it carries actual information.',
-  'COVER: short specific tension/question or useful promise. Aim for Korean 8-22 characters or English 3-9 words. Short subhead, no dense paragraph. No fake urgency or algorithm promises.',
-  'Body cards: one concrete point, Korean 25-65 characters / English 6-16 words. Make every phrase concise enough for large, mobile-first lettering. One optional highlight, not a repeated paragraph. options only for contrast/options/checklist. CAPTION: do not narrate the carousel card-by-card. Start with a short hook, then 1-3 compact context paragraphs. caption_ko and caption_en must not contain CTA language, handles, URLs, hashtags, source labels or the Roundy footer; the server appends one content-type action and the fixed brand footer after validation.',
-  magazine?'Magazine feed cards must NEVER contain CTA buttons, calls to click, join, learn more or forced brand pitches. On final editorial_closing choose summary or insight unless a short brand_outro genuinely suits the article. Every other slide has closing_type none. No sales CTA in caption.':'For growth content, the MODEL must mention Roundy only on the final CTA card, never inside caption_ko/caption_en. The server adds the Roundy caption footer after validation. Earlier slides must stand alone as useful editorial content.',
+  'COVER: short, concrete, useful or playful scroll-stopper. Aim for Korean 8-22 characters / English 3-9 words, without invented urgency or promises. The immersive magazine renderer displays this in large type over a full-bleed photograph with a lower readability gradient. Keep the subtitle brief.',
+  'Body cards: exactly one concrete idea per card, with a recognisable scene, spoken example or practical detail. Korean ideally 25-65 characters; English 6-16 words. Optional highlight must add information rather than repeat the body. CAPTION: one strong hook and 1-3 short contextual paragraphs, not a slide-by-slide recap. Keep handles, links, hashtags and brand promotion OUT of the generated caption cores. The server adds verified credits and a rotating truthful Roundy connection to new magazine content.',
+  magazine?'Magazine Feed cards have NO buttons, fake click affordances or direct signup/sales instructions. Final editorial_closing contains a concrete reader takeaway, followed by one separate renderer-owned, subtle Roundy invitation. No brand pitch inside the AI-generated body or caption core. Other slides always have closing_type none.':'For growth content, the MODEL must mention Roundy only on the final CTA card, never inside caption_ko/caption_en. The server adds the Roundy caption footer after validation. Earlier slides must stand alone as useful editorial content.',
   'Roundy is a Rotation Dating service in Seoul for Korean and international adults, including Korean-Korean meetings, NOT a language class or language exchange. In Korean, call the service 로테이션 소개팅; in English, call it Rotation Dating. Do not label it 1:1 Mingle. Convey thoughtful, respectful conversation subtly; never claim screened/qualified/elite people, selection by income/employer/appearance/nationality, or fake reviews.',
   language==='en'?'Primary title/body/highlight are English; secondary_body is Korean.':'Primary title/body/highlight are Korean; secondary_body is English. Original book titles/authors may remain English on the book card.',
   (['trend_research','dating_myth'].includes(type)?'Fill study.title, publication_year, sample_context, limitation and source_id from the cited evidence. Preserve the original study title and year, never guess missing metadata.':''),
@@ -280,6 +286,13 @@ export function evaluateContent(value:unknown,type:PostType,language:string,sour
  for(let i=0;i<slides.length;i++)for(let j=i+1;j<slides.length;j++){
   if(similarity(str(slides[i]?.title),str(slides[j]?.title))>=.8)add('카드 제목이 중복되거나 지나치게 유사합니다.');
   if(similarity(str(slides[i]?.body),str(slides[j]?.body))>=.78)add('카드 본문이 중복되거나 지나치게 유사합니다.');
+ }
+ if(isImmersiveMagazineDocument(c)&&['conversation_prompt','mbti','dating_archetype','meme_remix','korea_life','mini_quiz','prelaunch'].includes(type)){
+  // New editorial only: a concrete scene or actual spoken example must appear
+  // somewhere beyond the hook. Older published magazine documents are immutable.
+  const middle=slides.slice(1,-1).map((item:Row)=>[str(item.title),str(item.body),str(item.highlight)].join(' ')).join(' ');
+  const concrete=/[“”"「」『』?？!！]|\\d|(?:물어|말해|답해|꺼내|들어|앉아|만나|보여|골라|정해|확인해|산책|카페|주말|토요일|일요일|약속)|(?:ask|say|reply|meet|listen|try|choose|invite|weekend|coffee|walk|plan|pick|example)/i;
+  if(!concrete.test(middle))add('장면이나 실제로 사용할 수 있는 말 한마디가 부족합니다. 추상적인 설명 대신 구체적인 대화 예시를 넣으세요.');
  }
  if(isCompactDocument(c)){
   const captionParts=[str(c.caption_ko),str(c.caption_en)].flatMap(text=>text.split(/\n\s*\n|\n+/).map(x=>x.trim()).filter(x=>x.length>=6));
