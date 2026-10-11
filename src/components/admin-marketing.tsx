@@ -447,7 +447,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
   });
  }
   const running=(generation?.jobs||[]).find((j:Row)=>j.status==='running'&&Date.now()-Date.parse(j.created_at)<300000),blocked=Boolean(generation?.control?.blocked_reason||generation?.control?.enabled===false);
- function stage(s:string){const labels:Record<string,string>={reserved:t('Reserved; duplicate checks passed','예산 예약 및 중복 검사 완료'),writing:t('Writing copy','문구 작성 중'),writing_fallback:t('Writing safe fallback','안전한 대체 콘텐츠 작성 중'),repairing_copy:t('Repairing copy once','문구 1회 수정 중'),researching:t('Researching sources','출처 조사 중'),saving_copy:t('Saving copy','문구 저장 중'),generating_visual_set:t('Generating 3 fresh visuals','새 이미지 3장 생성 중'),saving_visual_set:t('Saving fresh visuals','새 이미지 세트 저장 중'),saving_images:t('Saving images','이미지 저장 중'),complete:t('Complete','완료'),stopped:t('Stopped','중지')};return labels[s]||s.replace('rendering_','카드 생성 ').replace('_of_',' / ');}
+ function stage(s:string){const labels:Record<string,string>={reserved:t('Reserved; duplicate checks passed','예산 예약 및 중복 검사 완료'),planning_topics:t('Checking five topic ideas','주제 후보 5개 검토 중'),topic_selected:t('Strong topic selected','주제 선정 완료'),topics_discarded:t('Weak topics discarded','저품질 주제 폐기'),writing:t('Writing copy','문구 작성 중'),writing_fallback:t('Writing safe fallback','안전한 대체 콘텐츠 작성 중'),repairing_copy:t('Repairing copy once','문구 1회 수정 중'),researching:t('Researching sources','출처 조사 중'),saving_copy:t('Saving copy','문구 저장 중'),generating_visual_set:t('Generating 3 fresh visuals','새 이미지 3장 생성 중'),saving_visual_set:t('Saving fresh visuals','새 이미지 세트 저장 중'),saving_images:t('Saving images','이미지 저장 중'),complete:t('Complete','완료'),stopped:t('Stopped','중지')};return labels[s]||s.replace('rendering_','카드 생성 ').replace('_of_',' / ');}
  function changeDraft(key:string,value:string){setDraft(d=>d?{...d,[key]:value}:d);setDirty(true);}
  const allGenerationJobs=((generation?.jobs||[]) as Row[]);
  const threadMap=new Map<string,Row[]>();
@@ -816,6 +816,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
     const canRetry=thread.status==='failed'&&!latest.automatic&&!!latest.request_payload,publication=publicationInfo(record);
     const language=(record?.content_language||root.request_payload?.language)==='en'?'EN':(record?.content_language||root.request_payload?.language)==='ko'?'KO':'';
     const titledAttempt=[...attempts].reverse().find((attempt:Row)=>attempt.result_snapshot)||latest;
+    const topicPlan=[...attempts].reverse().map((attempt:Row)=>attempt.request_payload?.topic_selection||attempt.result_snapshot?.topic_selection||attempt.result_snapshot?.content_document?.editorial_topic_selection).find(Boolean) as Row|undefined;
     return <details className={'marketing-log-row generation-thread '+thread.status} key={thread.id}>
      <summary><div className="marketing-log-main"><span className={'marketing-status-dot '+thread.status}/><div><strong>{contentTitle(record||titledAttempt)}</strong><small>{contentLabel(record||root)}{language?' · '+language:''} · {new Date(root.created_at).toLocaleString(locale,{timeZone:'Asia/Seoul'})} · {thread.stepCount} {t('steps','단계')}{thread.retryCount>0&&<> · {t('Retries','재시도')} {thread.retryCount}</>}</small></div></div><div className="marketing-log-end"><span className={'marketing-status-pill '+publication.status}>{publication.label}</span><span className={'marketing-status-pill '+thread.status}>{statusText(thread.status)}</span><small>{'$'+Number(thread.total_reserved_usd).toFixed(2)}</small></div></summary>
      <div className="marketing-log-detail generation-thread-detail">
@@ -823,6 +824,14 @@ export function AdminMarketing({locale}:{locale:Locale}){
        <span className={'marketing-status-dot '+attempt.status}/>
        <div className="generation-attempt-copy"><div><strong>{operationLabel(attempt)}{attempt.retry_of_job_id&&<> · {t('Retry','재시도')} {Number(attempt.attempt_number||index+1)}</>}</strong><span className={'marketing-status-pill '+attempt.status}>{statusText(attempt.status)}</span></div><small>{new Date(attempt.created_at).toLocaleString(locale,{timeZone:'Asia/Seoul'})} · {'$'+Number(attempt.reserved_usd||0).toFixed(2)} · {Number(attempt.input_tokens||0).toLocaleString()} in / {Number(attempt.output_tokens||0).toLocaleString()} out</small>{attempt.error_message&&(()=>{const guide=failureGuide(attempt);return <div className="admin-error"><strong>{guide.title}</strong><p>{guide.cause}</p><p>{guide.action}</p><small>{friendlyError(attempt.error_message)}</small></div>;})()}</div>
       </div>)}</div>
+      {topicPlan&&<details className="marketing-topic-review"><summary>{t('AI topic planning','AI 주제 기획')} · {Number(topicPlan.candidates?.length||0)} {t('candidates','개 후보')} · {topicPlan.selected?t('Selected','선정됨'):t('All discarded','전체 폐기')}</summary>
+       <p>{t('Based on the last 60 days of saved and published Roundy drafts. Editorial scores are internal screening, not predicted reach.','최근 60일 초안 및 생성 기록을 비교합니다. 편집 점수는 내부 검수 기준이며 조회수 예측값이 아닙니다.')}</p>
+       <ol>{(Array.isArray(topicPlan.candidates)?topicPlan.candidates:[]).map((candidate:Row,index:number)=><li key={candidate.angle_key||index}>
+        <strong>{candidate.headline}</strong><span>{Number(candidate.score||0)}/100 · {candidate.status==='selected'?t('Selected','선정'):candidate.status==='discarded'?t('Discarded','폐기'):t('Eligible','적격')}</span>
+        <small>{candidate.reader_payoff}</small>
+        {!!candidate.reasons?.length&&<small>{candidate.reasons.join(' / ')}</small>}
+       </li>)}</ol>
+      </details>}
       <dl><div><dt>{t('Content workflow ID','콘텐츠 작업 ID')}</dt><dd>{thread.id}</dd></div><div><dt>{t('Steps','작업 단계')}</dt><dd>{thread.stepCount}</dd></div><div><dt>{t('Total reserved','총 예약액')}</dt><dd>{'$'+Number(thread.total_reserved_usd).toFixed(2)}</dd></div></dl>
       {attempts.some((a:Row)=>a.result_snapshot)&&<button type="button" className="admin-primary" onClick={e=>{e.preventDefault();openThreadResult(thread);}}>{t('View result / review notes','결과 및 검토 내용 보기')}</button>}
       {canRetry&&<button type="button" className="admin-secondary" disabled={busy||!!running} onClick={e=>{e.preventDefault();void retryJob(latest);}}>{canOfferSavedCtaRecovery(latest)?t('Recover saved result — no AI charge','저장된 결과로 무료 복구'):t('Retry same settings','같은 설정으로 재시도')}</button>}
