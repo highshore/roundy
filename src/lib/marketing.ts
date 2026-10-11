@@ -54,6 +54,23 @@ async function invokeMarketingWorker(db:Client,body:Record<string,unknown>,timeo
 // No generation route, including malformed suffixes, can reach legacy AI code.
 export async function marketingApi(req:NextRequest,db:Client,path:string[]){
  const id=path[0],service=createServiceRoleClient();
+
+ // All mutations below create a separate unapproved version; they never change the published or reserved original.
+ if(id==='draft'&&path.length===3&&uuid(path[1])&&path[2]==='versions'&&req.method==='GET')
+  return json(await versionHistory(path[1]));
+ if(id==='draft'&&path.length===3&&uuid(path[1])&&path[2]==='versions'&&req.method==='POST'){
+  const body=await req.json().catch(()=>null);
+  const actor=(await db.auth.getUser()).data.user;
+  if(!actor)return json({error:'Sign in required'},401);
+  return json(await regenerateVersion(path[1],body,actor.id));
+ }
+ if(id==='draft'&&path.length===4&&uuid(path[1])&&path[2]==='versions'&&path[3]==='restore'&&req.method==='POST'){
+  const body=await req.json().catch(()=>({}));
+  const actor=(await db.auth.getUser()).data.user;
+  if(!actor)return json({error:'Sign in required'},401);
+  return json(await restoreVersion(path[1],String(body.version_id||''),Number(body.revision),actor.id,body.confirm_restore===true));
+ }
+
  async function recheckForPublishing(draft:Row){
   const preflight=await reviewMarketingDraft(service,draft),report=mergePreflightQuality(draftQuality(draft),preflight);
   const stored=checked(await service.rpc('set_marketing_quality',{
