@@ -379,7 +379,7 @@ function immersiveMagazineCover(slide:Row,document:Row,assets:EditorialAssets,fi
  const eyebrow=String(slide.eyebrow||'ROUNDY / SEOUL').slice(0,28);
  return box({width:1080,height:1350,position:'relative',overflow:'hidden',background:'#20211f'},
   box({position:'absolute',top:0,left:0,width:1080,height:1350,overflow:'hidden'},photo(src)),
-  box({position:'absolute',inset:0,
+  box({position:'absolute',top:0,left:0,width:1080,height:1350,
    background:'linear-gradient(180deg,rgba(14,19,18,.12) 0%,rgba(14,19,18,.05) 24%,rgba(14,19,18,.38) 51%,rgba(14,19,18,.91) 100%)'}),
   box({position:'absolute',left:80,top:67},officialRoundyLogo(true,52)),
   box({position:'absolute',left:80,right:80,top:eyebrowY,height:38,alignItems:'center',gap:13},
