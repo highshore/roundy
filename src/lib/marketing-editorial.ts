@@ -7,6 +7,7 @@ import {campaignDraftQuality} from './marketing-campaign';
 import {eventCampaignDraftQuality} from './marketing-event-campaign';
 import {renderCompactEditorial,type EditorialAssets} from './marketing-visuals';
 import {createHash} from 'node:crypto';
+import {generatedMagazineJsonIssues} from './marketing-editorial-contract';
 import {CONTENT_PROFILES,CONTENT_POLICY_VERSION,postType,contentSchema,researchInstructions,writingInstructions,extractResearchEvidence,prepareContent,evaluateContent,classifyQualityIssues,type PostType,type Evidence,type Row} from './marketing-content-policy';
 import {trendEvidence} from './marketing-trend-radar';
 import {readTrendFactPack,trendFactPackIssues,trendPackForModel,type TrendFactPack} from './marketing-trend-guide';
@@ -150,12 +151,28 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
    :'';
   const instructions=writingInstructions(type,language,writingVariant,answerFirst,plan)+fallbackGuidance+(repair?'\nREPAIR PASS: Fix ONLY the listed quality issues. Preserve all supported facts, source IDs, uncertainty, card roles, and the approved topic. Do not add new claims. Return the complete corrected document in the same strict schema.':'');
   const payload={editorial_type:type,language,direction:sourceFreeSeoulFallback?'':input.instruction||'',evidence:sources,event:facts,...(type==='seoul_dating'?{seoul_format:seoulFormat}:{}),...(type==='seoul_trend'&&trendContext?{trend_context:{id:trendContext.id,trend_key:trendContext.trend_key,display_name:trendContext.display_name,category:trendContext.category,status:trendContext.status,observed_at:trendContext.observed_at,summary:trendContext.summary,content_angle:trendContext.content_angle,source_ids:sources.map(x=>x.id)},...(trendPack?{fact_pack:trendPackForModel(trendPack),fact_pack_layout:trendPack.layout,fact_pack_origin:trendPack.origin,no_additional_web_search:true}: {})}:{}),...(type==='trend_research'?{current_year:new Date().getUTCFullYear(),recent_history:trendHistory}:{}),...(type==='dating_myth'?{myth_candidate:candidateVariant==='backup'?'backup':'primary',recent_history:mythHistory}:{}),...(repair?{original_document:repair.document,quality_issues:repair.issues}:{})};
-  if(Buffer.byteLength(instructions+JSON.stringify(payload)+JSON.stringify(contentSchema(type,language,writingVariant,answerFirst,plan)),'utf8')>30000)throw new Error('PROMPT_SIZE_LIMIT');
+  const responseSchema=contentSchema(type,language,writingVariant,answerFirst,plan);
+  if(Buffer.byteLength(instructions+JSON.stringify(payload)+JSON.stringify(responseSchema),'utf8')>30000)throw new Error('PROMPT_SIZE_LIMIT');
   const control=ok(await db.from('marketing_ai_control').select('enabled,blocked_reason').eq('singleton',true).single());
   if(!control.enabled||control.blocked_reason)throw new Error('AI_PAUSED');
   ok(await db.from('marketing_generation_jobs').update({stage:repair?'repairing_copy':candidateVariant==='backup'?'writing_alternate_myth':'writing'}).eq('id',job.id));
-  const result=await call('chat/completions',{model:MODEL,reasoning_effort:'none',max_completion_tokens:4096,response_format:{type:'json_schema',json_schema:{name:'roundy_editorial_v2',strict:true,schema:contentSchema(type,language,writingVariant,answerFirst,plan)}},messages:[{role:'system',content:instructions},{role:'user',content:JSON.stringify(payload)}]},55000);
-  await record(result);return {...parseDocument(result),result};
+  const result=await call('chat/completions',{model:MODEL,reasoning_effort:'none',max_completion_tokens:4096,response_format:{type:'json_schema',json_schema:{name:'roundy_editorial_v2',strict:true,schema:responseSchema}},messages:[{role:'system',content:instructions},{role:'user',content:JSON.stringify(payload)}]},55000);
+  await record(result);
+  const parsed=parseDocument(result);
+  if(plan){
+   // Inspect RAW model output before normalizing legacy fields or stripping CTAs.
+   const violations=generatedMagazineJsonIssues(parsed.document,responseSchema,plan.slide_count);
+   if(violations.length){
+    const report={version:3,status:'rejected',issues:violations,review_required:true,code:'MAGAZINE_JSON_CONTRACT_INVALID'};
+    ok(await db.from('marketing_generation_jobs').update({quality_report:report,
+     result_snapshot:{draft_id:draft.id,content_language:language,growth_topic_type:type,
+      raw_content:parsed.raw.slice(0,24000),research_sources:sources,
+      images:[],carousel_slides:[],caption:'',quality_report:report}
+    }).eq('id',job.id));
+    throw new Error('MAGAZINE_JSON_CONTRACT_INVALID: '+violations.slice(0,3).join('; '));
+   }
+  }
+  return {...parsed,result};
  };
 
  const lockVerifiedBook=(document:Row)=>{
