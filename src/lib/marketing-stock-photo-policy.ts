@@ -7,9 +7,12 @@ export type PhotoSourcingPolicy={
  min_real_photos:number;
  ai_thumbnail_enabled:boolean;
  requested_ai_thumbnail:boolean;
+ // Null means licensed photos only. When present, this specific 5-card visual
+ // position is AI, and every other visual position needs a reviewed real photo.
+ ai_image_slot?:number|null;
 };
 // Read from the phase-1 DB settings. Once saved, a draft retains its own policy snapshot.
-export function configuredPhotoSourcingPolicy(settings:Record<string,unknown>|null|undefined,roles:string[]):PhotoSourcingPolicy|null{
+export function configuredPhotoSourcingPolicy(settings:Record<string,unknown>|null|undefined,roles:string[],aiSlotOverride?:number|null):PhotoSourcingPolicy|null{
  const count=roles.length;
  if(count!==3&&count!==5)return null; // Existing 4/6-card drafts are left intact.
  const key=count===5?'carousel_min_real_photos_5':'carousel_min_real_photos_3';
@@ -18,9 +21,13 @@ export function configuredPhotoSourcingPolicy(settings:Record<string,unknown>|nu
  // The legacy reviewed-photo publication safety guard requires at least two images.
  const minimum=Math.max(2,requested);
  const others=roles.filter((role,index)=>index>0&&role!=='cta'&&role!=='editorial_closing').length;
- const wantsAi=settings?.carousel_ai_thumbnail_enabled===true;
- const useAi=wantsAi&&count===5&&others>=minimum;
- return {version:1,slide_count:count,min_real_photos:minimum,ai_thumbnail_enabled:useAi,requested_ai_thumbnail:wantsAi};
+ const desiredSlot=aiSlotOverride===undefined?(settings?.carousel_ai_thumbnail_enabled===true?0:null):aiSlotOverride;
+ const useAi=Number.isInteger(desiredSlot)&&Number(desiredSlot)>=0&&Number(desiredSlot)<count-1
+  &&count===5&&others>=minimum&&
+  roles[Number(desiredSlot)]!=='cta'&&roles[Number(desiredSlot)]!=='editorial_closing';
+ if(aiSlotOverride!==undefined&&aiSlotOverride!==null&&!useAi)throw new Error('AI_IMAGE_SLOT_NOT_AVAILABLE');
+ return {version:1,slide_count:count,min_real_photos:minimum,ai_thumbnail_enabled:useAi&&desiredSlot===0,
+  requested_ai_thumbnail:useAi&&desiredSlot===0,ai_image_slot:useAi?Number(desiredSlot):null};
 }
 export function savedPhotoSourcingPolicy(value:unknown):PhotoSourcingPolicy|null{
  if(!value||typeof value!=='object')return null;
@@ -28,13 +35,21 @@ export function savedPhotoSourcingPolicy(value:unknown):PhotoSourcingPolicy|null
  if(p.version!==1||(p.slide_count!==3&&p.slide_count!==5)||!Number.isInteger(p.min_real_photos)
    ||Number(p.min_real_photos)<2||Number(p.min_real_photos)>p.slide_count
    ||typeof p.ai_thumbnail_enabled!=='boolean'||typeof p.requested_ai_thumbnail!=='boolean')return null;
+ if(p.ai_image_slot!==undefined&&p.ai_image_slot!==null&&
+  (!Number.isInteger(p.ai_image_slot)||Number(p.ai_image_slot)<0||Number(p.ai_image_slot)>=p.slide_count-1||
+   p.slide_count!==5))return null;
+ if(p.ai_image_slot!==undefined&&p.ai_thumbnail_enabled!==(p.ai_image_slot===0))return null;
  return p as PhotoSourcingPolicy;
+}
+export function aiImageSlotForPolicy(policy:PhotoSourcingPolicy|null|undefined):number|null{
+ if(!policy)return null;
+ return policy.ai_image_slot===undefined?(policy.ai_thumbnail_enabled?0:null):policy.ai_image_slot;
 }
 export type ReviewedPhoto={slot:number;review_status:string;storage_path?:string|null};
 export function requiredPhotoSlotsForRoles(roles:string[],policy?:PhotoSourcingPolicy|null):number[]{
  if(policy){
   if(roles.length!==policy.slide_count)throw new Error('STOCK_PHOTO_POLICY_SLIDE_COUNT_CHANGED');
-  const eligible=roles.map((role,index)=>({role,index})).filter(row=>row.role!=='cta'&&row.role!=='editorial_closing'&&(!policy.ai_thumbnail_enabled||row.index!==0)).map(row=>row.index);
+  const eligible=roles.map((role,index)=>({role,index})).filter(row=>row.role!=='cta'&&row.role!=='editorial_closing'&&(aiImageSlotForPolicy(policy)!==row.index)).map(row=>row.index);
   if(eligible.length<2)throw new Error('STOCK_PHOTOS_REQUIRE_TWO_CONTENT_CARDS');
   // Existing DB review guard supports up to three assigned photos. Never silently
   // relax a higher admin minimum: stockReady below will remain false for >3.
