@@ -358,6 +358,13 @@ export async function editManualMagazineSlideVersion(id:string,value:unknown,act
  const edit=composeManualMagazineEdit(source,value);
  const index=edit.index,photos=await listStockSelections(db,id);
  const photoSlots=requiredStockSlots(source);
+ // An AI image on a body card has no archived reusable source. Never replace
+ // it with an unrelated stock photo while presenting the edit as text-only.
+ if(index<edit.slides.length-1&&index!==0&&!photoSlots.includes(index))
+  throw new Error('NON_ARCHIVED_AI_CARD_UNEDITABLE: Use explicit image regeneration or licensed photo replacement.');
+ if(index===0&&source.content_document?.photo_sourcing?.ai_image_slot===0
+   &&!photoSlots.includes(0)&&!source.content_document?.regeneration_ai_cover_path)
+  throw new Error('ORIGINAL_AI_COVER_SOURCE_UNAVAILABLE');
  if(index===0&&source.content_document?.photo_sourcing?.ai_thumbnail_enabled===true
    &&!photoSlots.includes(0)&&!source.content_document?.regeneration_ai_cover_path)
   throw new Error('ORIGINAL_AI_COVER_SOURCE_UNAVAILABLE');
