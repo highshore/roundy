@@ -301,6 +301,9 @@ export async function regenerateVersion(id:string,value:unknown,actor:string){
   if(selectedPhotos.length&&(changingPhotoSlots.length||(needsCopy&&['all','caption'].includes(input.scope))))
    caption=photoCreditCaption(caption,selectedPhotos);
   const renderIndices=indices.filter(i=>input.mode!=='image'||photoSlots.includes(i)||i===0&&aiCover);
+  const previousPending=source.content_document?.thumbnail_render_pending===true;
+  const missingBefore=Array.isArray(source.images)?source.images.map((url:unknown,i:number)=>!url?i:-1).filter((i:number)=>i>=0):[];
+  const allPending=[...new Set([...renderIndices,...missingBefore])];
   const images=[...(source.images||[])];
   if(needsCopy||input.mode==='image'||input.mode==='render')
    for(const i of renderIndices)images[i]='';
