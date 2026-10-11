@@ -283,11 +283,13 @@ export async function regenerateVersion(id:string,value:unknown,actor:string){
    ok(await db.from('marketing_draft_photos').update({asset_id:next.id})
     .eq('draft_id',draft.id).eq('slot',slot));
   }
-  let document={...source.content_document,slides:nextSlides,thumbnail_render_pending:true};
+  let document:Row={...source.content_document,slides:nextSlides,thumbnail_render_pending:true};
   if(aiCover){const path=await regenerateAiCover(db,{...draft,carousel_slides:nextSlides},input);document={...document,regeneration_ai_cover_path:path};}
-  // Captions keep authored copy; only mandatory source credits track image changes.
+  // Restore mandatory source credits after caption rewrites. Image-only requests may
+  // update the credits solely to reflect changed photographer/license metadata.
   const selectedPhotos=await listStockSelections(db,draft.id);
-  if(changingPhotoSlots.length&&selectedPhotos.length)caption=photoCreditCaption(caption,selectedPhotos);
+  if(selectedPhotos.length&&(changingPhotoSlots.length||(needsCopy&&['all','caption'].includes(input.scope))))
+   caption=photoCreditCaption(caption,selectedPhotos);
   const renderIndices=indices.filter(i=>input.mode!=='image'||photoSlots.includes(i)||i===0&&aiCover);
   const images=[...(source.images||[])];
   if(needsCopy||input.mode==='image'||input.mode==='render')
