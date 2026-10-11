@@ -2,7 +2,7 @@ import {createElement as h} from 'react';
 import {ImageResponse} from 'next/og';
 import {readTrendFactPack,selectGuideFacts,factLabel} from './marketing-trend-guide';
 import {ROUNDY_IDENTITY as BRAND, EDITORIAL_PRESET, MAGAZINE_EDITORIAL_PRESET, isMagazineDocument, CAMPAIGN_PRESET, EVENT_CAMPAIGN_PRESET, type PresentationRow as Row} from './marketing-presentation';
-import {savedCarouselPlan,mobileCarouselFit,magazineCarouselFit,carouselNarrative,CAROUSEL_CANVAS} from './marketing-carousel-template';
+import {savedCarouselPlan,mobileCarouselFit,magazineCarouselFit,fitCarouselCopy,carouselNarrative,CAROUSEL_CANVAS,type MagazineRect} from './marketing-carousel-template';
 
 export type EditorialAssets = {
  photo?: string|null;
@@ -381,26 +381,68 @@ function magazineCover(slide:Row,document:Row,assets:EditorialAssets,fit:ReturnT
   brightPhotoFrame(photoSrc,0,photoY,1205-photoY,language,String(slide.highlight||'')),
   brightPhotoCredit(photoSrc?String(assets.cardCredits?.[0]||''):'',0));
 }
+// Only Magazine Context/Insight cards use this layout system. No copy is
+// abbreviated, photographed text is never overlaid, and legacy cards are
+// intentionally untouched. Numbers carry coral accents; prose stays charcoal.
+function magazineAccentedRows(lines:string[],size:number,weight:number,color:string){
+ const numeric=/^[₩$]?\d[\d,.]*(?:%|만원|원|명|곳|개|km|년|월|일|분|배|시간)?$/u;
+ return box({width:'100%',flexDirection:'column',alignItems:'flex-start'},
+  ...lines.map(line=>{
+   if(!line)return box({height:Math.ceil(size*1.26)});
+   const fragments=line.split(/([₩$]?\d[\d,.]*(?:%|만원|원|명|곳|개|km|년|월|일|분|배|시간)?)/gu)
+    .filter(Boolean);
+   return box({width:'100%',height:Math.ceil(size*1.26),alignItems:'baseline'},
+    ...fragments.map(fragment=>text(fragment,size,{
+     fontWeight:weight,whiteSpace:'pre',flexShrink:0,lineHeight:1.26,
+     letterSpacing:weight>=700?-.8:0,
+     color:numeric.test(fragment)?BRIGHT_EDITORIAL.coral:color
+    })));
+  }));
+}
+function magazinePhotoPanel(src:string|null,frame:MagazineRect){
+ // Contain instead of cover: image focal points must not be cropped off.
+ return !src?null:box({position:'absolute',left:frame.x,top:frame.y,
+  width:frame.width,height:frame.height,overflow:'hidden',
+  background:BRIGHT_EDITORIAL.paper},
+  photo(src,{objectFit:'contain',objectPosition:'center'}));
+}
+function magazineSourceFooter(slide:Row,index:number,document:Row,assets:EditorialAssets,hasPhoto:boolean){
+ const language=document.content_language==='en'?'en':'ko';
+ const photoCredit=hasPhoto?String(assets.cardCredits?.[index]||'').trim():'';
+ const idCount=Array.isArray(slide.source_ids)?slide.source_ids.length:0;
+ const source=String(slide.source_label||
+  (idCount>0?(language==='ko'?'자료 출처: 게시물 캡션':'Sources: see post caption'):'')).trim();
+ const options={width:920,availableHeight:50,preferred:18,minimum:18,maxLines:2,label:'MAGAZINE_FOOTNOTE'};
+ const credit=fitCarouselCopy(photoCredit,options);
+ const citation=fitCarouselCopy(source,options);
+ const gap=credit.lines.length&&citation.lines.length?4:0;
+ if(credit.height+citation.height+gap>76)throw new Error('MAGAZINE_SOURCE_FOOTER_OVERFLOW');
+ const creditY=1193,citeY=creditY+credit.height+gap;
+ return box({position:'absolute',left:80,top:creditY,width:920,flexDirection:'column',gap},
+  credit.lines.length?fittedRows(credit.lines,credit.fontSize,BRIGHT_EDITORIAL.muted,500,1.26):null,
+  citation.lines.length?fittedRows(citation.lines,citation.fontSize,BRIGHT_EDITORIAL.muted,500,1.26):null);
+}
 function magazineInformation(slide:Row,index:number,document:Row,assets:EditorialAssets,fit:ReturnType<typeof magazineCarouselFit>){
+ const e=fit.editorial;
+ if(!e)throw new Error('MAGAZINE_BODY_LAYOUT_MISSING');
  const language=document.content_language==='en'?'en':'ko',photoSrc=selectedPhoto(assets,index);
- const photographFirst=index%2===1;
- const titleY=photographFirst?731:235;
- const bodyY=titleY+fit.title.height+22;
- const copyEnd=bodyY+fit.body.height;
- if(photographFirst&&copyEnd>1187)throw new Error('MAGAZINE_PHOTO_FIRST_COPY_COLLISION');
- if(!photographFirst&&copyEnd>707)throw new Error('MAGAZINE_COPY_FIRST_PHOTO_COLLISION');
- const label=index===1?(language==='ko'?'CONTEXT / 핵심 배경':'CONTEXT / THE STORY')
-  :language==='ko'?'EDITORIAL / 인사이트':'EDITORIAL / INSIGHT';
- const frameY=photographFirst?232:756,frameHeight=photographFirst?426:448;
+ const label=slide.role==='context'
+  ?(language==='ko'?'CONTEXT / 배경':'CONTEXT / BACKGROUND')
+  :(language==='ko'?'INSIGHT / 발견':'INSIGHT / THE TAKEAWAY');
  return box({position:'relative',width:1080,height:1350,background:BRIGHT_EDITORIAL.paper,
   color:BRIGHT_EDITORIAL.ink,overflow:'hidden'},
-  brightHeader(),brightEyebrow(label,175),
-  photographFirst?brightPhotoFrame(photoSrc,index,frameY,frameHeight,language,String(slide.highlight||'')):null,
-  box({position:'absolute',left:80,right:80,top:titleY},brightHeadline(fit.title.lines,fit.title.fontSize)),
-  box({position:'absolute',left:80,right:80,top:bodyY},
+  brightHeader(),
+  box({position:'absolute',left:80,top:176,right:80},
+   text(label,23,{fontWeight:800,color:BRIGHT_EDITORIAL.body,letterSpacing:1.2})),
+  magazinePhotoPanel(photoSrc,e.photoRect),
+  box({position:'absolute',left:e.titleRect.x,top:e.titleRect.y,width:e.titleRect.width},
+   magazineAccentedRows(fit.title.lines,fit.title.fontSize,900,BRIGHT_EDITORIAL.ink)),
+  fit.highlight.lines.length?box({position:'absolute',left:e.highlightRect.x,top:e.highlightRect.y,
+   width:e.highlightRect.width},
+   magazineAccentedRows(fit.highlight.lines,fit.highlight.fontSize,750,BRIGHT_EDITORIAL.ink)):null,
+  box({position:'absolute',left:e.bodyRect.x,top:e.bodyRect.y,width:e.bodyRect.width},
    fittedRows(fit.body.lines,fit.body.fontSize,BRIGHT_EDITORIAL.body,500,1.26)),
-  !photographFirst?brightPhotoFrame(photoSrc,index,frameY,frameHeight,language,String(slide.highlight||'')):null,
-  brightPhotoCredit(photoSrc?String(assets.cardCredits?.[index]||''):'',index));
+  magazineSourceFooter(slide,index,document,assets,!!photoSrc));
 }
 function magazineClosing(slide:Row,document:Row,fit:ReturnType<typeof magazineCarouselFit>){
  const language=document.content_language==='en'?'en':'ko',type=String(slide.closing_type||'summary');
