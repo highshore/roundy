@@ -14,7 +14,7 @@ import {AdminMarketingQueue} from './admin-marketing-queue';
 import {AdminMarketingSettings} from './admin-marketing-settings';
 import {MarketingMobilePreview} from './marketing-mobile-preview';
 import {AdminMarketingRegeneration} from './admin-marketing-regeneration';
-import {LayoutDashboard,FileText,Images,CalendarDays,History,Film,Compass,Settings2,Link2,BarChart3,BookOpen,RefreshCw} from 'lucide-react';
+import {LayoutDashboard,FileText,Images,CalendarDays,History,Film,Compass,Settings2,Link2,BarChart3,BookOpen,RefreshCw,ArrowLeft,ZoomIn,X} from 'lucide-react';
 import './admin-marketing-workspace.css';
 import {CONTENT_PROFILES,postType} from '@/lib/marketing-content-policy';
 import {EDITORIAL_SETTINGS_DEFAULTS} from '@/lib/marketing-editorial-settings';
@@ -51,6 +51,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
  const [aiImageSlot,setAiImageSlot]=useState<number|null>(0);
  const [approvedPickerSlot,setApprovedPickerSlot]=useState<number|null>(null);
  const [approvedPool,setApprovedPool]=useState<Row[]>([]),[approvedSearch,setApprovedSearch]=useState('');
+ const [approvedPreviewAsset,setApprovedPreviewAsset]=useState<Row|null>(null);
  const [preflightState,setPreflightState]=useState<Row|null>(null),[preflightSerial,setPreflightSerial]=useState(0);
  const [uploadedImages,setUploadedImages]=useState<Row[]>([]),[uploadAssetType,setUploadAssetType]=useState<'photo'|'completed_card'>('photo');
  const [pendingMarketingImages,setPendingMarketingImages]=useState<PendingMarketingImage[]>([]),[pendingAssetType,setPendingAssetType]=useState<'photo'|'completed_card'>('photo');
@@ -398,6 +399,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
    if(!r.ok||r.data.error)throw new Error(r.data.error||'Could not load approved images');
    setApprovedPool((r.data.assets||[]).filter((item:Row)=>item.review_status==='approved'));
    setApprovedSearch('');
+   setApprovedPreviewAsset(null);
    setApprovedPickerSlot(slot);
   });
  }
@@ -411,7 +413,8 @@ export function AdminMarketing({locale}:{locale:Locale}){
    await mutate('/draft/'+target.id+'/assign-stock',{
     revision:target.revision,slot:approvedPickerSlot,asset_id:assetId,confirm_replace:replaceRendered
    });
-   setApprovedPickerSlot(null);await load(target.id);await refreshStock(target.id);
+   setApprovedPreviewAsset(null);setApprovedPickerSlot(null);
+   await load(target.id);await refreshStock(target.id);
    setNotice(t('Approved image assigned to this card. Render again before publishing.',
     '선택한 승인 사진을 이 카드에 지정했습니다. 게시 전에 이미지를 다시 렌더링하세요.'));
   });
@@ -980,39 +983,88 @@ export function AdminMarketing({locale}:{locale:Locale}){
    }):<p className="admin-empty">{t('No publishing history yet.','아직 게시 기록이 없습니다.')}</p>}</div>
    {channelRuns.length>publishVisible&&<button type="button" className="marketing-load-more" onClick={()=>setPublishVisible(v=>v+20)}>{t('Load 20 more','20개 더 보기')}</button>}
   </section>}
-  {approvedPickerSlot!==null&&<div className="marketing-approved-picker-backdrop" role="presentation" onClick={()=>setApprovedPickerSlot(null)}>
+  {approvedPickerSlot!==null&&<div className="marketing-approved-picker-backdrop" role="presentation"
+   onClick={()=>{setApprovedPreviewAsset(null);setApprovedPickerSlot(null);}}>
    <section className="marketing-approved-picker" role="dialog" aria-modal="true"
     aria-label={t('Choose previously approved photo','기존 승인 사진 선택')}
     onClick={e=>e.stopPropagation()}>
-    <header><div><small>{t('Approved Photo Library','승인 사진 라이브러리')}</small>
+    <header>
+     <div>
+      <small>{t('Approved Photo Library','승인 사진 라이브러리')}</small>
       <strong>{t('Choose image for card ','카드 사진 선택 ')}{approvedPickerSlot+1}</strong>
-      <p>{t('Previously approved images are available for explicit reuse, regardless of their original topic. License credits remain required.',
-       '이미 승인된 실사는 주제와 무관하게 직접 선택해 재사용할 수 있습니다. 사진 출처 및 라이선스 표기 의무는 유지됩니다.')}</p>
-     </div><button type="button" className="admin-secondary" onClick={()=>setApprovedPickerSlot(null)}>{t('Close','닫기')}</button></header>
-    <input type="search" value={approvedSearch} onChange={e=>setApprovedSearch(e.target.value)}
-      placeholder={t('Search place, topic, photographer, provider','주제, 사진가, 제공처 검색')}
-      aria-label={t('Search approved photos','승인된 사진 검색')}/>
-    <p className="admin-help">{t('Approved photos found: ','검색된 승인 사진: ')}{filteredApprovedPool.length}{' / '}{approvedPool.length}</p>
-    <div className="marketing-approved-picker-grid">
-     {filteredApprovedPool.map((asset:Row)=>{
-      const alreadyHere=stockPhotos.some((photo:Row)=>photo.asset_id===asset.id&&Number(photo.slot)!==approvedPickerSlot);
-      return <article key={asset.id}>
-       <div className="marketing-approved-picker-image">{asset.preview_url?<img loading="lazy" src={asset.preview_url} alt={String(asset.photographer||'Approved photo')}/>:null}</div>
-       <div className="marketing-approved-picker-copy">
-        <strong>{asset.photographer||asset.provider}</strong>
-        <small>{asset.provider} · {asset.topic_key||t('General','일반')} · {t('Used','사용')} {asset.used_by_count||0}</small>
-        <small>{asset.license_name||''}</small>
-        <div className="marketing-approved-picker-actions">
-         <button type="button" className="admin-primary" disabled={busy||alreadyHere} onClick={()=>void applyApprovedPhoto(String(asset.id))}>
-          {alreadyHere?t('Used in another card','다른 카드 사용 중'):t('Use on this card','이 카드에 사용')}</button>
-         {asset.source_url&&<a href={asset.source_url} target="_blank" rel="noopener noreferrer">{t('Original','원본')}</a>}
-        </div>
+      <p>{t('Choose from already reviewed photographs. Tap an image to inspect it.',
+       '승인된 실사 사진을 선택하세요. 이미지를 누르면 크게 확인할 수 있습니다.')}</p>
+     </div>
+     <button type="button" className="marketing-approved-picker-close"
+      aria-label={t('Close photo library','사진 라이브러리 닫기')}
+      onClick={()=>{setApprovedPreviewAsset(null);setApprovedPickerSlot(null);}}>
+      <X size={19} aria-hidden="true"/>
+     </button>
+    </header>
+    {approvedPreviewAsset?
+     <div className="marketing-approved-picker-detail" data-testid="marketing-approved-photo-detail">
+      <button type="button" className="marketing-approved-picker-back" onClick={()=>setApprovedPreviewAsset(null)}>
+       <ArrowLeft size={17} aria-hidden="true"/>{t('Back to all approved photos','승인 사진 목록으로')}
+      </button>
+      <div className="marketing-approved-picker-detail-media">
+       {approvedPreviewAsset.preview_url?
+        <img src={approvedPreviewAsset.preview_url} alt={String(approvedPreviewAsset.photographer||'Approved photograph')}/>:
+        <span>{t('Image preview unavailable','사진 미리보기를 사용할 수 없습니다')}</span>}
+      </div>
+      <div className="marketing-approved-picker-detail-copy">
+       <strong>{t('Photo by ','사진가: ')}{approvedPreviewAsset.photographer||t('Unknown','정보 없음')}</strong>
+       <p>{String(approvedPreviewAsset.provider||'').toUpperCase()} · {approvedPreviewAsset.license_name||t('License details','라이선스 정보')}</p>
+       <small>{t('Original search context','이미지 검색 키워드')}: {approvedPreviewAsset.search_query||approvedPreviewAsset.topic_key||'—'}</small>
+       <div className="marketing-approved-picker-detail-links">
+        {approvedPreviewAsset.source_url&&<a href={approvedPreviewAsset.source_url} target="_blank" rel="noopener noreferrer">{t('View original','원본 보기')}</a>}
+        {approvedPreviewAsset.license_url&&<a href={approvedPreviewAsset.license_url} target="_blank" rel="noopener noreferrer">{t('View license','라이선스 확인')}</a>}
        </div>
-      </article>;
-     })}
-     {!filteredApprovedPool.length&&<p className="admin-empty">{t('No matching approved photo. Clear the search or approve new photos in Photo library.',
-      '일치하는 승인 사진이 없습니다. 검색을 지우거나 사진 자산에서 신규 이미지를 검수하세요.')}</p>}
-    </div>
+       <button type="button" className="admin-primary"
+        disabled={busy||stockPhotos.some((photo:Row)=>photo.asset_id===approvedPreviewAsset.id&&Number(photo.slot)!==approvedPickerSlot)}
+        onClick={()=>void applyApprovedPhoto(String(approvedPreviewAsset.id))}>
+        {stockPhotos.some((photo:Row)=>photo.asset_id===approvedPreviewAsset.id&&Number(photo.slot)!==approvedPickerSlot)
+         ?t('Already used in another card','다른 카드에서 사용 중')
+         :t('Use this photo for card ','이 사진을 카드에 사용 ')+(approvedPickerSlot+1)}
+       </button>
+      </div>
+     </div>:
+     <>
+      <input type="search" value={approvedSearch} onChange={e=>setApprovedSearch(e.target.value)}
+       placeholder={t('Search topics, photographers, providers','주제, 사진가, 제공처 검색')}
+       aria-label={t('Search approved photos','승인된 사진 검색')}/>
+      <p className="marketing-approved-picker-count">
+       {t('Approved photos ','승인된 사진 ')}<strong>{filteredApprovedPool.length}</strong> / {approvedPool.length}
+       <span>{t('Tap a photo to enlarge','사진을 누르면 크게 볼 수 있습니다')}</span>
+      </p>
+      <div className="marketing-approved-picker-grid" data-testid="marketing-approved-photo-grid">
+       {filteredApprovedPool.map((asset:Row)=>{
+        const alreadyHere=stockPhotos.some((photo:Row)=>photo.asset_id===asset.id&&Number(photo.slot)!==approvedPickerSlot);
+        return <article key={asset.id} className="marketing-approved-picker-card">
+         <button type="button" className="marketing-approved-picker-image" onClick={()=>setApprovedPreviewAsset(asset)}
+          aria-label={t('Enlarge photo by ','사진 크게 보기, 사진가 ')+String(asset.photographer||asset.provider||'')}>
+          {asset.preview_url?<img loading="lazy" src={asset.preview_url} alt={String(asset.photographer||'Approved photo')}/>:
+           <span className="marketing-approved-picker-image-empty">{t('Preview unavailable','미리보기 없음')}</span>}
+          <span className="marketing-approved-picker-zoom"><ZoomIn size={13} aria-hidden="true"/>{t('View','크게 보기')}</span>
+         </button>
+         <div className="marketing-approved-picker-copy">
+          <strong title={String(asset.photographer||asset.provider||'')}>{asset.photographer||asset.provider||t('Unknown photographer','사진가 미상')}</strong>
+          <small>{String(asset.provider||'').toUpperCase()} · {t('Used in','기존 사용')} {Number(asset.used_by_count)||0}</small>
+          <small>{asset.license_name||t('License reviewed','라이선스 검수 완료')}</small>
+          <div className="marketing-approved-picker-actions">
+           <button type="button" className="admin-primary" disabled={busy||alreadyHere}
+            onClick={()=>void applyApprovedPhoto(String(asset.id))}>
+            {alreadyHere?t('Used in another card','다른 카드 사용 중'):t('Use photo','이 사진 선택')}
+           </button>
+          </div>
+         </div>
+        </article>;
+       })}
+       {!filteredApprovedPool.length&&<p className="admin-empty">
+        {t('No matching approved photo. Clear the search or review new photos.',
+         '검색 결과가 없습니다. 검색어를 지우거나 새 사진을 검수하세요.')}
+       </p>}
+      </div>
+     </>}
    </section>
   </div>}
   {regenerationSourceId&&<div className="marketing-version-modal" role="presentation" onClick={()=>setRegenerationSourceId(null)}>
