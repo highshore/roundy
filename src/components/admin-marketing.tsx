@@ -601,7 +601,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
       <p className="admin-help">{t('Review the original source, license, commercial edit rights, photographer, people and trademarks. Photographs appear in clean separate magazine panels.','원본 출처, 라이선스, 상업적 수정 권한, 사진가, 인물 및 상표를 검수하세요. 승인된 실사 사진은 밝은 매거진 카드의 독립된 사진 영역에 표시됩니다.')}</p>
       <p className="admin-help" role="status">{t('Approved real photos','승인된 실제 사진')} {stockReview?.approved??stockPhotos.filter((p:Row)=>p.review_status==='approved').length}/{stockReview?.minimum??draft.content_document?.photo_sourcing?.min_real_photos??3} — {stockReview?.ready?t('Ready for rendering','렌더링 준비 완료'):t('Awaiting human review or more photos','관리자 검수 또는 추가 사진 대기')}</p>
       {stockReview?.configured===false&&<p className="admin-error" role="alert">{t('Some sources need API keys, but Wikimedia Commons and Openverse work without one.','일부 이미지 제공자는 API 키가 필요하지만 Commons와 Openverse는 키 없이 검색 가능합니다.')}</p>}
-      <div className="marketing-draft-inbox">{stockPhotos.length?stockPhotos.map((photo:Row)=><article className="marketing-draft-card" key={photo.asset_id}>
+      <div className="marketing-draft-inbox">{stockPhotos.length?stockPhotos.map((photo:Row)=><article className="marketing-draft-card marketing-photo-review-card" key={photo.asset_id}>
        <img src={photo.preview_url} alt={t('Licensed photo candidate','라이선스 확인 사진 후보')}/>
        <div className="marketing-draft-copy">
         <strong>{t('Card','카드')} {Number(photo.slot)+1} · {photo.review_status==='approved'?t('Approved','승인됨'):photo.review_status==='rejected'?t('Rejected','거절됨'):t('Pending rights review','저작권 검수 대기')}</strong>
@@ -609,7 +609,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
        </div>
        {photo.review_status==='pending'&&<div className="admin-form-actions"><button type="button" className="admin-primary" disabled={busy||!!running} onClick={()=>void work(()=>reviewStock(photo,'approved'))}>{t('Approve photo','사진 승인')}</button><button type="button" className="admin-secondary" disabled={busy||!!running} onClick={()=>void work(()=>reviewStock(photo,'rejected'))}>{t('Reject','거절')}</button></div>}
       </article>):<p className="admin-empty">{t('No stock photos selected. Search for licensed images across available providers.','선정된 사진이 없습니다. 라이선스 확인 사진 후보를 검색하세요.')}</p>}</div>
-      {draft.status==='needs_approval'&&<div className="admin-form-actions">
+      {draft.status==='needs_approval'&&<div className="admin-form-actions marketing-photo-render-actions">
        <button type="button" className="admin-secondary" disabled={busy||!!running||!!draft.images?.length} onClick={()=>void work(discoverStock)}>{t('Search / replace photos','사진 재검색 / 교체')}</button>
        <button type="button" className="admin-primary" disabled={busy||!!running||dirty||stockReview?.ready!==true||!!draft.images?.length} onClick={()=>void work(renderStock)}>{draft.content_document?.photo_sourcing?.ai_thumbnail_enabled?t('Render approved photos + AI cover','승인 사진과 AI 썸네일 렌더링'):t('Render real photos (no image AI)','실제 사진 렌더링 (이미지 AI 없음)')}</button>
       </div>}
@@ -625,7 +625,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
     {isMagazine?<div className="marketing-setup">
       <strong>MAGAZINE EDITORIAL / {t('Slide structure','슬라이드 구성')}</strong>
       <p className="admin-help">{t('Feed cards have no buttons or forced sales actions. The last card summarizes the story, adds perspective or introduces Roundy quietly. Story and ad actions are independent.', '일반 피드에는 버튼이나 강제 홍보 문구가 없습니다. 마지막 장은 내용 요약, 새로운 관점 또는 짧은 브랜드 소개 중 하나이며 스토리와 광고 CTA는 별도로 관리합니다.')}</p>
-      <div className="marketing-draft-inbox">{(draft.carousel_slides||[]).map((slide:Row,index:number)=><article className="marketing-draft-card" key={index}>
+      <div className="marketing-draft-inbox">{(draft.carousel_slides||[]).map((slide:Row,index:number)=><article className="marketing-draft-card marketing-slide-outline-card" key={index}>
        <div className="marketing-draft-copy"><small>{String(slide.role||'').replaceAll('_',' ').toUpperCase()}{slide.role==='editorial_closing'?' / '+String(slide.closing_type||'SUMMARY').toUpperCase():''}</small>
        <strong>{slide.title}</strong><p>{draft.content_language==='en'?slide.body_en||slide.body:slide.body_ko||slide.body}</p></div>
       </article>)}</div>
