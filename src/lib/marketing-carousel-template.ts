@@ -133,8 +133,9 @@ function magazineBodyCandidate(
   width:920,availableHeight:370,preferred:36,minimum:34,
   maxLines:8,label:'MAGAZINE_BODY_DETAILS'});
  const highlight=fitCarouselCopy(takeawayText,{
-  width:layout==='split'?360:920,availableHeight:145,
-  preferred:36,minimum:32,maxLines:3,label:'MAGAZINE_BODY_TAKEAWAY'});
+  width:layout==='split'?360:920,availableHeight:185,
+  preferred:layout==='split'?44:38,minimum:layout==='split'?36:34,
+  maxLines:layout==='split'?4:3,label:'MAGAZINE_BODY_TAKEAWAY'});
  const hasHighlight=highlight.lines.length>0;
  const gapAfterTitle=hasHighlight?18:0;
  let photoRect:MagazineRect,highlightRect:MagazineRect,bodyRect:MagazineRect;
@@ -154,7 +155,7 @@ function magazineBodyCandidate(
   highlightRect=magazineRect(80,photoTop,920,highlight.height);
   const bodyY=photoTop+(hasHighlight?highlight.height+gapAfterTitle:0);
   bodyRect=magazineRect(80,bodyY,920,body.height);
-  const photoY=Math.max(780,bodyY+body.height+34);
+  const photoY=Math.max(690,bodyY+body.height+24);
   const photoHeight=1175-photoY;
   if(photoHeight<215)throw new Error('MAGAZINE_INFORMATION_PHOTO_TOO_SMALL');
   photoRect=magazineRect(80,photoY,920,photoHeight);
