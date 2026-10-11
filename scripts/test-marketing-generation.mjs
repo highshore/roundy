@@ -7,9 +7,9 @@ let checks=0;const check=(f)=>{f();checks++;};
 const id='4b9066d0-e01b-4cc4-92d1-469f56317a04';
 const eventId='11111111-1111-4111-8111-111111111111';
 const base={request_key:'manual:quality-test-001',revision:1,mode:'both',content_mode:'prelaunch',language:'en',visual_mode:'cards',instruction:''};
-function harness({denied=false,network=false,badSources=false,duplicate=false,photo403=false,answerFirst=false,photoSettings=null,photoFixture='none',templateSettings=null,slotNumber=1,unsafeFallback=false}={}){
+function harness({denied=false,network=false,badSources=false,duplicate=false,photo403=false,answerFirst=false,photoSettings=null,photoFixture='none',templateSettings=null,slotNumber=1,unsafeFallback=false,invalidMagazine=false}={}){
  const tables={instagram_post_drafts:[{id,status:'needs_approval',revision:1,caption:'Original',cta:'Follow',images:[],carousel_slides:[],content_mode:'prelaunch'}],marketing_generation_jobs:[],marketing_ai_control:[{singleton:true,enabled:true,blocked_reason:null}],marketing_automation_settings:[{singleton:true,carousel_answer_first_enabled:answerFirst,...(photoSettings||{}),...(templateSettings||{})}],marketing_uploaded_images:[],events:[{id:eventId,slug:'fixture',title:'Fixture event',title_ko:'테스트 모임',status:'live',deleted_at:null,marketing_enabled:true,starts_at:'2099-12-01T10:00:00Z',ends_at:'2099-12-01T12:00:00Z',venue:'Fixture public venue',capacity:12,seats_remaining:12,price_ladies:29000,price_gents:49000,event_language:'either',images:[]}]};
- const requests=[],stored=[];
+ const requests=[],stored=[],generated=[];
  class Q{
   constructor(t){this.rows=tables[t]||[];this.pred=[];this.patch=null;this.n=Infinity;}
   select(){return this;}update(p){this.patch=p;return this;}eq(k,v){this.pred.push(r=>r[k]===v);return this;}gt(k,v){this.pred.push(r=>r[k]>v);return this;}gte(k,v){this.pred.push(r=>r[k]>=v);return this;}is(k,v){return this.eq(k,v);}in(k,v){this.pred.push(r=>v.includes(r[k]));return this;}order(){return this;}limit(n){this.n=n;return this;}single(){return this.exec(true);}maybeSingle(){return this.exec(true);}then(a,b){return this.exec().then(a,b);}
@@ -141,10 +141,11 @@ function harness({denied=false,network=false,badSources=false,duplicate=false,ph
      type==='conversation_prompt'?['opener','followup','listen']:
      type==='mini_quiz'?['question','options','reveal']:
      old.slice(1,-1).map(s=>s.role);
-    const magazineRoles=requestedSlides===3?['cover','key_insight','editorial_closing']:
+    const magazineRoles=requestedSlides===3?['cover','insight','editorial_closing']:
      ['cover','context','insight','insight','editorial_closing'];
     c.design_preset='roundy_magazine_editorial_v2';
-    c.cta='';
+    c.editorial_schema_version=schema.properties.editorial_schema_version.enum[0];
+    delete c.cta; // The V3 AI JSON schema omits CTA entirely.
     c.caption_ko='서울의 일상에 관한 작고 분명한 이야기.\n\n서로 다른 관점을 살펴보면 일상의 작은 장면이 달라집니다.';
     c.caption_en='A closer look at the everyday details of Seoul.\n\nDifferent perspectives can change what we notice.';
     c.caption=ko?c.caption_ko:c.caption_en;
@@ -155,8 +156,9 @@ function harness({denied=false,network=false,badSources=false,duplicate=false,ph
      const picked=i===0?old[0]:final?old[old.length-2]:
       source(prefer[Math.min(i-1,prefer.length-1)]);
      const other=translation.find(s=>s.role===picked.role)||translation[1];
-     const clone={...picked,role,closing_type:final?'summary':'none',options:picked.options||[],
-      secondary_body:other.body};
+     const clone={...picked,role,closing_type:final?(type==='prelaunch'?'brand_outro':type==='korea_life'?'insight':'summary'):'none',options:picked.options||[],
+      body:String(picked.body||'').slice(0,ko?105:145),
+      secondary_body:String(other.body||'').slice(0,ko?120:90)};
      if((type==='prelaunch'||type==='live_event')&&final){
       clone.title=ko?'한 가지 남겨 둘 관점':'The perspective to keep';
       clone.body=ko?'한 번의 대화에는 서로의 속도를 존중하는 시간이 필요합니다.':'Each conversation deserves time and attention to the person in front of us.';
@@ -169,12 +171,12 @@ function harness({denied=false,network=false,badSources=false,duplicate=false,ph
       clone.secondary_body=ko?(i===2?'A quieter exchange gives one person room to finish a story.':'One small detail in an answer can lead to another perspective.')
        :i===2?'주변의 소음을 줄이면 누군가의 이야기에 머물기 쉬워집니다.':'상대가 건넨 짧은 말에서 다음 이야깃거리를 찾을 수 있습니다.';
      }
-     if(role==='key_insight'&&type==='seoul_dating'){
+     if(requestedSlides===3&&role==='insight'&&type==='seoul_dating'){
       clone.body=c.seoul.venues.map(v=>v.name).join(' / ');
       clone.secondary_body=fixture(type,ko?'en':'ko',load('src/lib/marketing-content-policy.ts').CONTENT_PROFILES).seoul.venues.map(v=>v.name).join(' / ');
       clone.source_ids=['S1','S2','S3'];
      }
-     if(role==='key_insight'&&type==='dating_myth'){
+     if(requestedSlides===3&&role==='insight'&&type==='dating_myth'){
       clone.title=ko?'이 통념은 사실일까요?':'What does evidence suggest?';
       clone.body=c.myth.claim;
       clone.secondary_body=ko?'The more questions you ask, the more they like you':'질문을 많이 할수록 상대가 더 좋아한다';
@@ -182,7 +184,7 @@ function harness({denied=false,network=false,badSources=false,duplicate=false,ph
      if(!final&&i>0&&load('src/lib/marketing-content-policy.ts').CONTENT_PROFILES[type].research){
       clone.source_ids=type==='seoul_dating'?(requestedSlides===3?['S1','S2','S3']:['S'+Math.min(i,3)]):type==='seoul_trend'?['S1','S2']:['S1'];
      }
-     if(role==='key_insight'&&type==='conversation_prompt'){
+     if(requestedSlides===3&&role==='insight'&&type==='conversation_prompt'){
       clone.body=ko?'첫 질문: 요즘 재미있었던 건 뭐예요? 후속 질문: 어떤 점이 좋았어요?':'First question: What did you enjoy recently? Follow-up: What stood out?';
       clone.secondary_body=ko?'First question: What did you enjoy recently? Follow-up: What stood out?':'첫 질문: 요즘 재미있었던 건 뭐예요? 후속 질문: 어떤 점이 좋았어요?';
      }
@@ -214,6 +216,39 @@ function harness({denied=false,network=false,badSources=false,duplicate=false,ph
     value.secondary_body=ko?'First question: Where did you enjoy going? Follow-up: What stood out?':'첫 질문: 최근 기억에 남는 곳은 어디예요? 후속 질문: 어떤 점이 좋았어요?';
    }
   }
+  // Seoul lifestyle magazine sample for the AI mock; never a reused brand ad.
+  // All statements are ordinary observations, not invented venue/trend facts.
+  if(c.design_preset==='roundy_magazine_editorial_v2'&&data.editorial_type==='korea_life'){
+   const ko=data.language==='ko',five=requestedSlides===5;
+   const titlesKo=['서울 골목은 천천히 볼수록 다르다','큰길과 골목의 차이','한 장면을 오래 바라보기',
+    '목적지보다 눈에 남는 것','새로운 서울은 관찰에서 시작'];
+   const titlesEn=['Seoul rewards a slower walk','Notice the quieter side streets',
+    'Give one detail your attention','Leave room for small detours','A different way to see Seoul'];
+   const bodiesKo=['익숙한 길도 속도를 조금 늦추면 전에는 지나쳤던 장면이 눈에 들어옵니다.',
+    '큰길에서 놓쳤던 가게와 소리는 골목을 걸을 때 더 선명하게 다가옵니다.',
+    '잠시 멈춰 서서 눈에 들어온 장면 하나를 충분히 살펴보세요.',
+    '동선을 빽빽하게 채우기보다 가벼운 우회를 남겨 두어도 좋습니다.',
+    '몇 곳을 다녀왔는지보다 어떤 장면이 기억에 남았는지 돌아보세요.'];
+   const bodiesEn=['Even a familiar walk can reveal more when you slow down.',
+    'Small storefronts and everyday sounds stand out away from the main road.',
+    'Pause and notice one detail you would otherwise walk past.',
+    'Leave room for a small detour instead of filling every minute.',
+    'Remember what caught your eye, not just the stops you made.'];
+   const positions=five?[0,1,2,3,4]:[0,2,4];
+   c.slides=c.slides.map((s,i)=>{
+    const index=positions[i];
+    return {...s,title:ko?titlesKo[index]:titlesEn[index],
+     body:ko?bodiesKo[index]:bodiesEn[index],
+     secondary_body:ko?bodiesEn[index]:bodiesKo[index],
+     highlight:'',options:[],source_ids:[]};
+   });
+   c.thumbnail_candidates=ko
+    ?[titlesKo[0],'익숙한 동네에서 새 장면 찾기','서두르지 않는 서울 골목 산책']
+    :[titlesEn[0],'Discover more on an ordinary walk','Small details change a familiar route'];
+   c.caption_ko='걷는 속도를 바꾸는 작은 실험.\n\n익숙한 서울의 거리도 천천히 살피면 눈에 들어오는 장면이 달라질 수 있습니다.';
+   c.caption_en='Look beyond the main street.\n\nA slower route can leave room for details that are easy to miss when every walk is a checklist.';
+   c.caption=ko?c.caption_ko:c.caption_en;
+  }
   if(unsafeFallback&&data.editorial_type==='korea_life'){
    c.slides[0].body='요즘 인기 급상승 서울 카페의 예약 시간은 19:30입니다.';
   }
@@ -222,10 +257,16 @@ function harness({denied=false,network=false,badSources=false,duplicate=false,ph
    const card=c.slides.find(s=>s.role==='myth');if(card){card.title=ko?'침묵이 생기면 실패일까?':'Does silence mean failure?';card.body=c.myth.claim;}
   }
   if(duplicate)c.slides=c.slides.map(s=>({...s,title:c.slides[0].title,body:c.slides[0].body}));
+   if(invalidMagazine&&c.design_preset==='roundy_magazine_editorial_v2'){
+    if(invalidMagazine==='cta')c.cta='Learn More';
+    if(invalidMagazine==='role')c.slides[c.slides.length-1].role='cta';
+    if(invalidMagazine==='caption')c.caption_en+='\n\nLearn More';
+   }
+   if(c.design_preset==='roundy_magazine_editorial_v2')generated.push(structuredClone(c));
   return {ok:true,json:async()=>({choices:[{finish_reason:'stop',message:{content:JSON.stringify(c)}}],usage:{prompt_tokens:400,completion_tokens:600}})};
  }};
  const source=fs.readFileSync(file,'utf8');vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText,context);cache[file]=context.exports;return context.exports;}
- return {api:load('src/lib/marketing-generation.ts'),policy:load('src/lib/marketing-content-policy.ts'),editorial:load('src/lib/marketing-editorial.ts'),tables,requests,stored};
+ return {api:load('src/lib/marketing-generation.ts'),policy:load('src/lib/marketing-content-policy.ts'),editorial:load('src/lib/marketing-editorial.ts'),contract:load('src/lib/marketing-editorial-contract.ts'),tables,requests,stored,generated};
 }
 for(const language of ['en','ko'])for(const type of Object.keys(harness().policy.CONTENT_PROFILES)){
  const h=harness(),input={...base,language,content_mode:type==='prelaunch'||type==='live_event'?type:'growth_carousel',topic_type:type==='prelaunch'||type==='live_event'?undefined:type,campaign_pattern:type==='prelaunch'?'poster':undefined,event_id:type==='live_event'?eventId:undefined,event_campaign_stage:type==='live_event'?'launch':undefined,instruction:type==='book_insight'?"You're Not Listening":''};
@@ -392,6 +433,67 @@ for(const language of ['ko','en'])for(const type of Object.keys(harness().policy
  })));
  check(()=>assert.equal(r.draft.content_document.carousel_template.slide_count,3));
 }
+// Integration: simulate the actual AI call with a strict-schema mock response.
+// The samples go through generateEditorialCopy -> raw-contract check -> prepareContent
+// -> draft persistence. No live AI request, Meta publishing or image-design changes.
+for(const count of [3,5])for(const language of ['ko','en']){
+ const settings={carousel_mode:count===3?'alternating':'fixed',carousel_default_slides:5,
+  carousel_title_font_size_px:72,carousel_body_font_size_px:36};
+ const h=harness({answerFirst:true,templateSettings:settings,slotNumber:1});
+ const r=await h.api.runGeneration(id,{...base,
+  request_key:'sample:editorial-v3-'+count+'-'+language,
+  content_mode:'growth_carousel',topic_type:'korea_life',language},null);
+ check(()=>assert.equal(r.job.status,'completed','V3 '+count+'/'+language+': '+JSON.stringify({error:r.error,job:r.job.error_message,quality:r.draft.quality_report})));
+ const raw=h.generated[0];
+ check(()=>assert.ok(raw,'Mock AI must return a V3 JSON document'));
+ const write=h.requests.find(x=>x.url.endsWith('chat/completions')).body;
+ const schema=write.response_format.json_schema.schema;
+ const roles=count===3?['cover','insight','editorial_closing']:['cover','context','insight','insight','editorial_closing'];
+ check(()=>assert.equal(raw.editorial_schema_version,3));
+ for(const slide of raw.slides){
+  const visible=[slide.title,slide.body,slide.highlight,...slide.options].join(' ');
+  check(()=>assert.equal(language==='ko'?/[A-Za-z]{3,}/.test(visible):/[가-힣]/.test(visible),false,
+   'The visible image copy must stay in the selected language'));
+ }
+ check(()=>assert.deepEqual(raw.slides.map(x=>x.role),roles));
+ check(()=>assert.equal(Object.hasOwn(raw,'cta'),false,'New feed AI JSON must not contain CTA'));
+ check(()=>assert.equal(schema.properties.cta,undefined));
+ check(()=>assert.equal(h.contract.generatedMagazineJsonIssues(raw,schema,count).length,0,'Raw AI JSON must meet the actual strict schema'));
+ check(()=>assert.equal(r.draft.content_document.answer_first,true));
+ check(()=>assert.equal(raw.slides[0].title,raw.thumbnail_candidates[0]));
+ check(()=>assert.ok(['summary','insight','brand_outro'].includes(raw.slides.at(-1).closing_type)));
+ check(()=>assert.equal(r.draft.cta,''));
+ check(()=>assert.equal(r.draft.quality_report.status,'passed'));
+ check(()=>assert.ok(!/Learn More|지금 확인하기|자세히 보기|신청하기/i.test(r.draft.caption)));
+ check(()=>assert.ok(!/one content-type action|server appends one content-type action/i.test(write.messages[0].content)));
+ check(()=>assert.match(write.messages[0].content,/SEOUL LIFESTYLE MAGAZINE/));
+ check(()=>assert.match(write.messages[0].content,/TWO TO THREE short mobile lines/));
+ check(()=>assert.match(write.messages[0].content,/Choose final closing_type yourself/));
+ for(const [label,invalid] of [
+  ['unrequested CTA',{...raw,cta:'Learn More'}],
+  ['wrong role',{...raw,slides:raw.slides.map((slide,i)=>i===count-1?{...slide,role:'cta'}:slide)}],
+  ['advertising caption',{...raw,caption_en:raw.caption_en+'\\n\\nLearn More'}]
+ ]){
+  check(()=>assert.ok(h.contract.generatedMagazineJsonIssues(invalid,schema,count).length>0,label+' must fail raw schema review'));
+ }
+ console.log('V3 MOCK SAMPLE '+count+' cards / '+language+': '+JSON.stringify({
+  roles:raw.slides.map(x=>x.role),headlines:raw.slides.map(x=>x.title),
+  closing_type:raw.slides.at(-1).closing_type,caption:raw.caption
+ }));
+}
+for(const invalidMagazine of ['cta','role','caption']){
+ const settings={carousel_mode:'fixed',carousel_default_slides:5,carousel_title_font_size_px:72,carousel_body_font_size_px:36};
+ const h=harness({answerFirst:true,templateSettings:settings,invalidMagazine});
+ const r=await h.api.runGeneration(id,{...base,
+  request_key:'sample:reject-v3-'+invalidMagazine,
+  content_mode:'growth_carousel',topic_type:'korea_life'},null);
+ check(()=>assert.equal(r.job.status,'failed',invalidMagazine+' must fail closed'));
+ check(()=>assert.match(r.job.error_message||'',/MAGAZINE_JSON_CONTRACT_INVALID/));
+ check(()=>assert.equal(r.draft.caption,'Original','Invalid model output may not overwrite the working draft'));
+ check(()=>assert.ok(h.tables.marketing_generation_jobs[0].result_snapshot.raw_content));
+ check(()=>assert.equal(h.requests.filter(x=>x.url.endsWith('chat/completions')).length,1,'No paid repair loop on schema violations'));
+}
+
 const adminMarketingSource=fs.readFileSync(new URL('../src/components/admin-marketing.tsx',import.meta.url),'utf8');
 check(()=>assert.ok(adminMarketingSource.includes("...(basis==='growth_carousel'?{topic_type:topic}:{})")));
 check(()=>assert.ok(adminMarketingSource.includes("request.content_mode==='growth_carousel'")));

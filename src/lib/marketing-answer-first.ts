@@ -36,11 +36,16 @@ export function magazineRolesForCount(count:3|5,legacy=false):string[]{
 }
 export function magazineAnswerFirstPrompt(count:3|5):string{
  return [
-  'ANSWER-FIRST (REQUIRED): SEOUL MAGAZINE EDITORIAL. Deliver a precise conclusion first, then verifiable context, one idea per slide. This is reader service journalism, not an advertising campaign.',
-  count===3?'Three cards: cover with answer-first headline, insight with a concrete and source-grounded fact, editorial_closing with a thoughtful summary, insight or subtle brand outro.':'Five cards: cover with answer-first headline, context giving real background, two distinct insights with verifiable details, editorial_closing with a useful summary, insight or subtle brand outro.',
-  'Never generate a call-to-action, signup, visit, explore, learn more, click-like UI, promotional caption action, or compulsory brand promotion.',
-  'Preserve all attribution and limitations, source IDs and truthful specific Seoul venue names. Never invent statistics or claim venue availability.',
-  'Return exactly three distinct factual thumbnail candidates in the primary post language; first must equal cover title. Avoid clickbait and bait-and-switch.'
+  'ANSWER-FIRST (REQUIRED): Write for an independent Seoul lifestyle MAGAZINE, not a Roundy advertisement. Open with the specific answer, useful conclusion, grounded finding, or compelling observation. The cover must deliver the point immediately, never tease a reveal on later cards.',
+  count===3
+   ?'THREE SLIDES IN ORDER: 1 Editorial Cover (role cover) = clear answer-first headline and one-line explanatory subtitle. 2 Key Insight (JSON role insight, NOT key_insight) = ONE concrete supported finding, scene, example or fresh perspective that explains the cover, with evidence IDs when research-based. 3 Editorial Closing (role editorial_closing) = useful synthesis, not a CTA.'
+   :'FIVE SLIDES IN ORDER: 1 Editorial Cover (role cover) = the answer-first conclusion. 2 Context (role context) = one clear what/why/where background point. 3 Insight 01 (role insight) = one specific fact, observation or example. 4 Insight 02 (role insight) = a DIFFERENT relevant detail or perspective, not Insight 01 restated. 5 Editorial Closing (role editorial_closing) = reader-value synthesis, never a CTA.',
+  'ONE MESSAGE PER CARD. Make every short headline distinct, concrete and informative: aim for Korean 8–22 characters or English 3–9 words. Keep each body around TWO TO THREE short mobile lines, not paragraphs of generic explanation. Context is not another cover, and closing is not a repeat of the cover.',
+  'Choose final closing_type yourself based on the CONTENT, not a fixed last-page template: summary for a helpful recap; insight for a genuinely fresh interpretive takeaway; brand_outro ONLY if truthful Roundy identity is organically relevant to the story. All non-final slides must have closing_type none. Never add an action button, fake link, website invitation or promotional tagline.',
+  'Lead with interesting, specific information and grounded detail. Cite source_ids on evidence-dependent claims, and retain study/sample limitations. For source-free lifestyle scenes label them as observations or illustrative situations; do not invent venue openings, trends, statistics, popularity, prices or dates.',
+  'Write visible slide title/body/highlight/options ONLY in the post language. Put faithful translation in secondary_body for storage; do NOT print bilingual labels or mix Korean/English unnecessarily. Proper place names and original publication titles are allowed.',
+  'Never generate calls to click, join, sign up, apply, reserve, learn more, read more or follow in any slide OR caption. In particular ban 지금 확인하기, 자세히 보기, 신청하기, Learn More. Avoid brand-first promotion even on the closing slide.',
+  'Return exactly THREE distinct factual, concise thumbnail_candidates in the post language. Candidate 1 must exactly match the cover title. No suspense questions, bait-and-switch, inflated claims, unverified rankings or invented evidence.'
  ].join('\n');
 }
 export function editorialRolesForCount(type:string,legacy:readonly string[],count:3|5){
