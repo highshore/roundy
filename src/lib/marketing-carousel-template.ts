@@ -111,12 +111,16 @@ export type MagazineBodyFit={
  photoRect:MagazineRect;takeawayLabelY:number|null;
 };
 const magazineRect=(x:number,y:number,width:number,height:number):MagazineRect=>({x,y,width,height});
+// Canonical display spellings avoid missing Unicode unit glyphs in Instagram raster output.
+// The source JSON is unchanged; only the rendered representation is normalized.
+const magazineDisplayUnits=(value:string)=>value.replace(/㎡/g,'m²').replace(/㎢/g,'km²')
+ .replace(/㎞/g,'km').replace(/㎝/g,'cm').replace(/㎜/g,'mm').replace(/㎏/g,'kg');
 function magazineBodyCandidate(
  slide:Record<string,any>,plan:CarouselPlan,index:number,language:string,layout:MagazineBodyLayout
 ):MagazineBodyFit{
- const titleText=String(slide?.title||'').trim();
- const bodyText=String(language==='en'?(slide?.body_en||slide?.body||''):(slide?.body_ko||slide?.body||'')).trim();
- const takeawayText=String(slide?.highlight||'').trim();
+ const titleText=magazineDisplayUnits(String(slide?.title||'').trim());
+ const bodyText=magazineDisplayUnits(String(language==='en'?(slide?.body_en||slide?.body||''):(slide?.body_ko||slide?.body||'')).trim());
+ const takeawayText=magazineDisplayUnits(String(slide?.highlight||'').trim());
  const isPhoto=layout==='photo',isSplit=layout==='split';
  const titleX=isPhoto?644:80,titleY=isPhoto?255:240,titleWidth=isPhoto?356:920;
  const title=fitCarouselCopy(titleText,{
