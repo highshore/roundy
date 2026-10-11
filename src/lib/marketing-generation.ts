@@ -1,6 +1,6 @@
 import {prepareSavedCtaRecovery,SAVED_CTA_RECOVERY_VERSION} from './marketing-output-recovery';
 import {loadEditorialAssets} from './marketing-render-assets';
-import {photoCreditCaption,configuredPhotoSourcingPolicy,savedPhotoSourcingPolicy} from './marketing-stock-photo-policy';
+import {photoCreditCaption,configuredPhotoSourcingPolicy,savedPhotoSourcingPolicy,aiImageSlotForPolicy} from './marketing-stock-photo-policy';
 import {photoCardSourceLabel} from './marketing-photo-rights';
 import {resolveCarouselPlan,savedCarouselPlan,type CarouselPlan} from './marketing-carousel-template';
 import {reviewMarketingDraft,mergePreflightQuality} from './marketing-preflight-service';
@@ -25,7 +25,7 @@ type Row=Record<string,any>;
 type DB=ReturnType<typeof createServiceRoleClient>;
 type ContentLanguage='ko'|'en';
 type VisualSource='auto_ai'|'uploaded'|'none'|'pexels'|'stock';
-export type GenerationInput={carousel_plan?:CarouselPlan|null;answer_first_enabled?:boolean;request_key:string;revision:number;mode:'text'|'image'|'both';content_mode:'prelaunch'|'live_event'|'growth_carousel';visual_mode:'cards'|'photo';visual_source?:VisualSource;topic_type?:string;instruction?:string;language?:ContentLanguage;confirm_photo?:boolean;render_only?:boolean;campaign_pattern?:'auto'|'poster'|'problem_solution'|'how_it_works'|'benefit_stack'|'countdown';campaign_tone?:'modern_premium'|'soft_romantic'|'bold_teaser';launch_date?:string;event_id?:string;event_campaign_stage?:'auto'|'launch'|'experience'|'venue'|'participants'|'momentum'|'imminent'|'last_call';event_campaign_pattern?:'auto'|'event_poster'|'experience'|'social_proof'|'offer'|'last_call'};
+export type GenerationInput={carousel_plan?:CarouselPlan|null;answer_first_enabled?:boolean;ai_image_slot?:number|null;request_key:string;revision:number;mode:'text'|'image'|'both';content_mode:'prelaunch'|'live_event'|'growth_carousel';visual_mode:'cards'|'photo';visual_source?:VisualSource;topic_type?:string;instruction?:string;language?:ContentLanguage;confirm_photo?:boolean;render_only?:boolean;campaign_pattern?:'auto'|'poster'|'problem_solution'|'how_it_works'|'benefit_stack'|'countdown';campaign_tone?:'modern_premium'|'soft_romantic'|'bold_teaser';launch_date?:string;event_id?:string;event_campaign_stage?:'auto'|'launch'|'experience'|'venue'|'participants'|'momentum'|'imminent'|'last_call';event_campaign_pattern?:'auto'|'event_poster'|'experience'|'social_proof'|'offer'|'last_call'};
 const topics=['mbti','dating_archetype','book_insight','trend_research','meme_remix','dating_myth','conversation_prompt','seoul_dating','korea_life','mini_quiz'];
 const allowedTopics=[...topics,'seoul_trend'];
 const researchTopics=new Set(['book_insight','trend_research','dating_myth','seoul_dating','seoul_trend']);
@@ -40,6 +40,10 @@ export function validateGenerationInput(value:unknown):GenerationInput{
  if(!['text','image','both'].includes(v.mode)||!['prelaunch','live_event','growth_carousel'].includes(v.content_mode)||!['cards','photo'].includes(v.visual_mode))throw new Error('INVALID_GENERATION_OPTIONS');
  if(v.instruction!==undefined&&(typeof v.instruction!=='string'||v.instruction.trim().length>500))throw new Error('INSTRUCTION_LIMIT_500');
  if(v.answer_first_enabled!==undefined&&typeof v.answer_first_enabled!=='boolean')throw new Error('INVALID_ANSWER_FIRST_OPTION');
+ if(v.ai_image_slot!==undefined&&v.ai_image_slot!==null&&(!Number.isInteger(v.ai_image_slot)||v.ai_image_slot<0||v.ai_image_slot>3))
+  throw new Error('INVALID_AI_IMAGE_SLOT');
+ if(v.ai_image_slot!==undefined&&(v.mode==='image'||v.visual_mode!=='cards'||!['auto_ai','pexels','stock'].includes(String(v.visual_source||'auto_ai'))))
+  throw new Error('AI_IMAGE_SLOT_NOT_APPLICABLE');
  const topicType=v.content_mode==='growth_carousel'?v.topic_type:undefined;
  if(topicType!=null&&!allowedTopics.includes(topicType))throw new Error('INVALID_GROWTH_TOPIC');
  if(v.language!==undefined&&!['ko','en'].includes(v.language))throw new Error('INVALID_CONTENT_LANGUAGE');
@@ -280,17 +284,17 @@ async function generateVisualSet(db:DB,draft:Row,input:GenerationInput,job:Row){
  await progress(db,job,'saving_visual_set');
  return encoded.slice(0,3).map(value=>'data:image/jpeg;base64,'+value);
 }
-// A single optional AI cover; the three (or two) actual-photo slots are independently
+// A single optional AI card; the three (or two) actual-photo slots are independently
 // licensed/approved Pexels assets. Never call this to compensate for missing photos.
-async function generateAiThumbnail(db:DB,draft:Row,job:Row):Promise<string>{
- await progress(db,job,'generating_thumbnail_only');
+async function generateAiCard(db:DB,draft:Row,job:Row,slot:number):Promise<string>{
+ await progress(db,job,'generating_ai_card_'+(slot+1));
  const prompt=[
-  'Generate ONE original, photorealistic TEXT-FREE Instagram cover photograph, not a carousel or collage.',
+  'Generate ONE original, photorealistic TEXT-FREE editorial image for card '+(slot+1)+' of this Instagram carousel. Never generate a collage.',
   'Portrait 4:5. Contemporary Seoul editorial atmosphere with readable negative space for typography.',
   'It is an illustration only, never depict a named real venue, real participant, actual event photo or verified documentary evidence.',
   'Natural everyday adults and lighting; no writing, text, signs, logos, watermarks, screenshots, advertising layouts or branded products.',
-  'The server overlays the exact cover title; do not generate typography.',
-  'Cover context:',visualContext(draft).split('\n').slice(0,5).join('\n')
+  'The server overlays the exact card headline and body; do not generate typography.',
+  'Selected card context:',visualContext(draft).split('\n')[slot]||'',
  ].join('\n');
  const result=await upstream('images/generations',{
   model:IMAGE_MODEL,prompt,n:1,size:'1024x1280',quality:'low',
@@ -370,18 +374,21 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
  const stockVisuals=wantsVisuals&&['pexels','stock'].includes(visualSource);
  const uploadedVisuals=(input.render_only||input.mode==='image')&&visualSource==='uploaded';
  const eventNeedsAiFallback=input.content_mode==='live_event'&&autoVisuals&&eventRealPhotos.length<3;
- const coverCost=managedPhotoSourcing&&(input.mode==='image'?existingPhotoPolicy?.ai_thumbnail_enabled===true:preference?.carousel_ai_thumbnail_enabled===true&&plan?.slide_count!==3);
+ const selectedAiSlot=input.mode==='image'?aiImageSlotForPolicy(existingPhotoPolicy):
+  input.ai_image_slot===undefined?(preference?.carousel_ai_thumbnail_enabled===true&&plan?.slide_count===5?0:null):
+   input.ai_image_slot;
+ const coverCost=managedPhotoSourcing&&selectedAiSlot!==null;
  const operation=stockVisuals?(input.mode==='image'||input.render_only?(coverCost?'photo':'render'):coverCost?'copy_photo':research?'research':'copy'):autoVisuals
   ?(input.content_mode==='live_event'&&!eventNeedsAiFallback
     ?(input.mode==='image'||input.render_only?'render':research?'research':'copy')
     :(input.mode==='image'||input.render_only||recoveryPatch?'photo':'copy_photo'))
   :uploadedVisuals?'render':research?'research':'copy';
- const fingerprint=createHash('sha256').update(JSON.stringify({id:draftId,revision:input.revision,mode:input.mode,content:input.content_mode,language:input.language,visual:input.visual_mode,visual_source:visualSource,topic:input.topic_type||'',instruction:input.instruction,campaign_pattern:input.campaign_pattern||null,campaign_tone:input.campaign_tone||null,launch_date:input.launch_date||null,event_id:input.event_id||draft.event_id||null,event_campaign_stage:input.event_campaign_stage||null,event_campaign_pattern:input.event_campaign_pattern||null,render:!!input.render_only,carousel_slot:plan?.reservation_number||null,carousel_count:plan?.slide_count||null,answer_first_enabled:input.answer_first_enabled===true,photo_first:managedPhotoSourcing,saved_recovery_of:thread?.recoverySourceJobId||null})).digest('hex');
+ const fingerprint=createHash('sha256').update(JSON.stringify({id:draftId,revision:input.revision,mode:input.mode,content:input.content_mode,language:input.language,visual:input.visual_mode,visual_source:visualSource,topic:input.topic_type||'',instruction:input.instruction,campaign_pattern:input.campaign_pattern||null,campaign_tone:input.campaign_tone||null,launch_date:input.launch_date||null,event_id:input.event_id||draft.event_id||null,event_campaign_stage:input.event_campaign_stage||null,event_campaign_pattern:input.event_campaign_pattern||null,render:!!input.render_only,carousel_slot:plan?.reservation_number||null,carousel_count:plan?.slide_count||null,answer_first_enabled:input.answer_first_enabled===true,photo_first:managedPhotoSourcing,ai_image_slot:selectedAiSlot,saved_recovery_of:thread?.recoverySourceJobId||null})).digest('hex');
  const reservation=checked(await db.rpc('reserve_marketing_generation',{p_key:input.request_key,p_fingerprint:fingerprint,p_draft:draftId,p_revision:input.revision,p_operation:operation,p_actor:actor,p_automatic:automatic})).data as Row,job=reservation.job as Row;
  if(!reservation.accepted)return {draft,job,deduplicated:true};
  let contentQuality:Row|null=null;
  try{
-  const requestPayload={carousel_plan:plan,answer_first_enabled:input.answer_first_enabled===true,photo_first:managedPhotoSourcing,mode:input.mode,content_mode:input.content_mode,language:input.language,visual_mode:input.visual_mode,visual_source:visualSource,topic_type:input.topic_type||null,trend_id:draft.trend_id||null,instruction:input.instruction||'',campaign_pattern:input.campaign_pattern||null,campaign_tone:input.campaign_tone||null,launch_date:input.launch_date||null,event_id:input.event_id||draft.event_id||null,event_campaign_stage:input.event_campaign_stage||null,event_campaign_pattern:input.event_campaign_pattern||null,confirm_photo:input.confirm_photo===true,render_only:input.render_only===true,...(recoverySource?{saved_recovery_of:recoverySource.id}: {})};
+  const requestPayload={carousel_plan:plan,answer_first_enabled:input.answer_first_enabled===true,photo_first:managedPhotoSourcing,ai_image_slot:selectedAiSlot,mode:input.mode,content_mode:input.content_mode,language:input.language,visual_mode:input.visual_mode,visual_source:visualSource,topic_type:input.topic_type||null,trend_id:draft.trend_id||null,instruction:input.instruction||'',campaign_pattern:input.campaign_pattern||null,campaign_tone:input.campaign_tone||null,launch_date:input.launch_date||null,event_id:input.event_id||draft.event_id||null,event_campaign_stage:input.event_campaign_stage||null,event_campaign_pattern:input.event_campaign_pattern||null,confirm_photo:input.confirm_photo===true,render_only:input.render_only===true,...(recoverySource?{saved_recovery_of:recoverySource.id}: {})};
   const threadId=thread?.threadId||job.id,attemptNumber=thread?.attemptNumber||1,workflowId=await resolveContentWorkflowId(db,draft,job,thread);
   checked(await db.from('marketing_generation_jobs').update({
    request_payload:requestPayload,
@@ -399,7 +406,7 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
   }else if(operation!=='photo'&&operation!=='render'){
    const copy=await generateCopy(db,draft,input,job,research);contentQuality=copy.quality_report;await progress(db,job,'saving_copy');
    const roles=Array.isArray(copy.carousel_slides)?copy.carousel_slides.map((slide:Row)=>String(slide.role||'')):[];
-   const policy=managedPhotoSourcing?configuredPhotoSourcingPolicy(preference,roles):null;
+   const policy=managedPhotoSourcing?configuredPhotoSourcingPolicy(preference,roles,input.ai_image_slot):null;
    const contentDocument=policy?{...copy.content_document,photo_sourcing:policy}:copy.content_document;
    draft=await savePartial(db,draft,{...copy,content_document:contentDocument,
     ...(String((contentDocument as Row)?.design_preset||'')==='roundy_magazine_editorial_v2'?{render_style:'editorial'}:{}),
@@ -437,10 +444,11 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
     Object.assign(assets,await approvedStockCardAssets(db,draft));
      assets.cardCredits=Object.fromEntries(selected.map((photo:Row)=>[Number(photo.slot),photoCardSourceLabel(photo)]));
     const policy=savedPhotoSourcingPolicy(draft.content_document?.photo_sourcing);
-    if(policy?.ai_thumbnail_enabled){
-     const cover=await generateAiThumbnail(db,draft,job);
-     assets.photo=cover;
-     assets.cardPhotos={...(assets.cardPhotos||{}),0:cover};
+    const aiSlot=aiImageSlotForPolicy(policy);
+    if(aiSlot!==null){
+     const generated=await generateAiCard(db,draft,job,aiSlot);
+     if(aiSlot===0)assets.photo=generated;
+     assets.cardPhotos={...(assets.cardPhotos||{}),[aiSlot]:generated};
      assets.reusePhotos=false;
     }
     const images=await renderCardsWithAssets(db,draft,job,assets);
