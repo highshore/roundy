@@ -94,6 +94,48 @@ for(const count of [3,5])for(const language of ['ko','en']){
   await sharp(raw).jpeg({quality:85}).toFile(file);imagePaths.push(file);tested++;
  }
 }
+// New production layout is opt-in by immutable cover_layout; old V2 card output
+// above remains ivory/panel-based even after code deployment.
+for(const count of [3,5])for(const language of ['ko','en']){
+ const plan=layout.resolveCarouselPlan({...settings,carousel_mode:count===5?'fixed':'alternating'},count===3?1:null);
+ const roles=expected[count];
+ const slides=roles.map((role,i)=>({
+  role,closing_type:i===count-1?'summary':'none',eyebrow:'SEOUL / LIFE',
+  title:language==='ko'?(i===0?'첫 대화의 시작은 질문':'대화를 이어가는 한 가지 방법'):(i===0?'The first question changes things':'One idea to try next time'),
+  body:language==='ko'?'다음 만남에서 서로 좋아하는 장소를 물어보세요.':'Ask about a favorite place when you meet.',
+  body_ko:'다음 만남에서 서로 좋아하는 장소를 물어보세요.',
+  body_en:'Ask about a favorite place when you meet.',secondary_body:language==='ko'?'Ask about a favorite place when you meet.':'다음 만남에서 서로 좋아하는 장소를 물어보세요.',
+  highlight:'',source_ids:[]
+ }));
+ const doc={design_preset:MAGAZINE_EDITORIAL_PRESET,
+  cover_layout:presentation.MAGAZINE_IMMERSIVE_LAYOUT,
+  carousel_template:plan,content_language:language,post_type:'conversation_prompt',slides};
+ const assets={cardPhotos:{0:fixturePhoto,1:fixturePhoto,2:fixturePhoto,3:fixturePhoto},
+  cardCredits:{0:'QA TEST IMAGE',1:'QA TEST IMAGE'},reusePhotos:false};
+ assert.equal(presentation.isImmersiveMagazineDocument(doc),true);
+ const schema=policy.contentSchema('conversation_prompt',language,'',true,plan);
+ assert.ok(schema.required.includes('cover_layout'));
+ assert.equal(schema.properties.cover_layout.enum[0],presentation.MAGAZINE_IMMERSIVE_LAYOUT);
+ const coverJson=JSON.stringify(visuals.magazineCarouselTree(slides[0],0,count,doc,assets));
+ assert.ok(coverJson.includes('linear-gradient(180deg'));
+ assert.ok(coverJson.includes('width:1080')||coverJson.includes('"width":1080'));
+ const cover=Buffer.from(await visuals.renderCompactEditorial(slides[0],0,count,doc,assets).arrayBuffer());
+ const upper=await sharp(cover).extract({left:540,top:300,width:1,height:1}).removeAlpha().raw().toBuffer();
+ const lower=await sharp(cover).extract({left:540,top:1230,width:1,height:1}).removeAlpha().raw().toBuffer();
+ assert.ok(upper[1]>upper[0]+10,'Full-bleed photo remains visible above the lower copy');
+ assert.ok(lower[1]<upper[1],'Lower cover gradient protects legibility');
+ const endingJson=JSON.stringify(visuals.magazineCarouselTree(slides[count-1],count-1,count,doc,assets));
+ assert.ok(endingJson.includes('ROUNDY / SEOUL'),'Closing includes unmistakable Roundy branding');
+ assert.ok(endingJson.includes('Roundy'),'Closing provides a conversational brand invitation');
+ assert.ok(!endingJson.includes('Explore Roundy')&&!endingJson.includes('Roundy 둘러보기'));
+ const caption=presentation.buildBilingualCaption({...doc,caption_ko:'다음 약속에서 새 질문을 꺼내보세요.\n\n상대의 답을 먼저 들어보세요.',caption_en:'Try a new question next time.\n\nListen to the answer first.'},[]);
+ assert.ok(caption.includes('Roundy'),'Caption contains a brand invitation');
+ assert.ok(caption.includes('@roundy.meet'));
+ const pic='quality-artifacts/immersive-'+count+'-'+language+'-cover.jpg';
+ await sharp(cover).jpeg({quality:84}).toFile(pic);
+ const ending=Buffer.from(await visuals.renderCompactEditorial(slides[count-1],count-1,count,doc,assets).arrayBuffer());
+ await sharp(ending).jpeg({quality:84}).toFile('quality-artifacts/immersive-'+count+'-'+language+'-closing.jpg');
+}
 const noCopy=String(fs.readFileSync('src/lib/marketing-visuals.ts'));
 assert.ok(!noCopy.slice(noCopy.indexOf('function magazineCover'),noCopy.indexOf('export function standardCarouselTree')).includes('Roundy 둘러보기'));
 const sql=read('supabase/migrations/20261011030500_roundy_magazine_editorial_preflight.sql');
