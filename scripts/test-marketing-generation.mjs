@@ -402,7 +402,7 @@ for(const language of ['ko','en'])for(const type of Object.keys(harness().policy
  check(()=>assert.equal(r.draft.carousel_slides.length,3,JSON.stringify({
   type,language,actual:r.draft.carousel_slides.length,
   stored_plan:r.draft.content_document?.carousel_template,
-  writing_schema_lengths:h.requests.filter(x=>x.url.endsWith('chat/completions')).map(x=>x.body.response_format.json_schema.schema.properties.slides.minItems),
+  writing_schema_lengths:h.requests.filter(x=>x.url.endsWith('chat/completions')&&x.body.response_format?.json_schema?.schema?.properties?.slides).map(x=>x.body.response_format.json_schema.schema.properties.slides.minItems),
   job_payload:h.tables.marketing_generation_jobs.at(-1)?.request_payload,
   draft_role:r.draft.draft_kind
  })));
