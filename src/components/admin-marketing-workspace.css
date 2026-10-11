@@ -477,3 +477,46 @@
  .marketing-kpi-card,.marketing-settings-switch,.marketing-settings-switch::after{transition:none}
  .marketing-kpi-card:hover{transform:none}
 }
+
+/* Action feedback stays visible even when the review buttons are far below the workspace header. */
+.marketing-workspace-toast{
+ position:fixed;
+ z-index:1200;
+ left:16px;
+ right:16px;
+ bottom:calc(94px + env(safe-area-inset-bottom, 0px));
+ max-width:600px;
+ margin-inline:auto;
+ padding:13px 42px 13px 16px;
+ border:1px solid #343b36;
+ border-radius:14px;
+ background:#202924;
+ color:#fff;
+ box-shadow:0 12px 36px rgba(0,0,0,.16);
+ font-size:14px;
+ line-height:1.55;
+ overflow-wrap:anywhere;
+}
+.marketing-workspace-toast.is-error{
+ border-color:#edbdb8;
+ background:#fff7f5;
+ color:#9f3028;
+}
+.marketing-workspace-toast button{
+ position:absolute;
+ top:7px;
+ right:8px;
+ display:grid;
+ place-items:center;
+ width:30px;
+ height:30px;
+ border:0;
+ border-radius:8px;
+ background:transparent;
+ color:inherit;
+ font-size:23px;
+ cursor:pointer;
+}
+@media(min-width:768px){
+ .marketing-workspace-toast{bottom:24px}
+}
