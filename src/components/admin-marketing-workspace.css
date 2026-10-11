@@ -520,3 +520,20 @@
 @media(min-width:768px){
  .marketing-workspace-toast{bottom:24px}
 }
+
+.marketing-workspace .marketing-auth-warning{
+ border:1px solid #edc3bd;
+ background:#fff8f6;
+ color:#472d29;
+ margin:16px 0;
+ padding:18px;
+}
+.marketing-workspace .marketing-auth-warning strong{display:block;font-weight:750}
+.marketing-workspace .marketing-auth-warning p{margin:9px 0 13px;line-height:1.55}
+.marketing-workspace .marketing-publish-blockers{
+ border-left:3px solid #da7f6d;
+ padding:9px 12px;
+ margin-top:10px;
+ line-height:1.6;
+ overflow-wrap:anywhere;
+}
