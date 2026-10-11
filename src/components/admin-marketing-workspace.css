@@ -910,3 +910,15 @@
  .marketing-asset-lightbox-image{height:min(48dvh,420px);min-height:200px}
  .marketing-asset-lightbox-review{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
+
+
+/* Stage 2: inspect all AI topic options without changing the existing inbox. */
+.marketing-topic-review{border:1px solid var(--admin-border,#dfdfd9);border-radius:14px;padding:14px 16px;background:var(--admin-surface,#fff);margin:12px 0}
+.marketing-topic-review>summary{font-weight:700;cursor:pointer;list-style-position:inside}
+.marketing-topic-review>p{color:var(--admin-muted,#6d706d);font-size:.86rem;margin:10px 0}
+.marketing-topic-review ol{margin:8px 0 0;padding:0 0 0 22px;display:grid;gap:9px}
+.marketing-topic-review li{padding:9px 0;border-bottom:1px solid #e8e9e4;overflow-wrap:anywhere}
+.marketing-topic-review li:last-child{border-bottom:0}
+.marketing-topic-review li>strong{display:block;line-height:1.45}
+.marketing-topic-review li>span{display:block;color:#565e58;font-size:.78rem;margin-top:2px}
+.marketing-topic-review li>small{display:block;color:#6d706d;line-height:1.45;margin-top:4px}
