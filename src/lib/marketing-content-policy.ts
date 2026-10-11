@@ -1,7 +1,7 @@
 import {readTrendFactPack,trendFactPackIssues,trendGuideRoles} from './marketing-trend-guide';
 import {fiveEditorialRoles,editorialRolesForCount,magazineRolesForCount,magazineAnswerFirstPrompt,withAnswerFirstSchema,answerFirstPrompt,answerFirstIssues} from './marketing-answer-first';
 import {savedCarouselPlan,mobileCarouselFit,magazineCarouselFit,type CarouselPlan} from './marketing-carousel-template';
-import {captionCtaIssues,EDITORIAL_AD_CTA, compactContentSchema, compactWritingInstructions, normalizeCompactDocument, compactQualityIssues, buildBilingualCaption, isCompactDocument, isMagazineDocument, hasObsoletePositioning} from './marketing-presentation';
+import {captionCtaIssues,EDITORIAL_AD_CTA, compactContentSchema, compactWritingInstructions, normalizeCompactDocument, compactQualityIssues, buildBilingualCaption, isCompactDocument, isMagazineDocument, isLegacyMagazineDocument, isSupportedMagazineDocument, hasObsoletePositioning} from './marketing-presentation';
 // Shared deterministic content contracts. This module never calls a paid API.
 export type Row = Record<string, any>;
 export const CONTENT_POLICY_VERSION = 13;
@@ -252,8 +252,9 @@ export function evaluateContent(value:unknown,type:PostType,language:string,sour
  const existingRoles=type==='seoul_trend'&&c.trend_layout?trendGuideRoles(String(c.trend_layout)):profile.roles;
  const plan=savedCarouselPlan(c);
  const magazine=isMagazineDocument(c);
- const expectedRoles=magazine?magazineRolesForCount(plan?.slide_count===3?3:5):plan?editorialRolesForCount(type,existingRoles,plan.slide_count):c.answer_first===true?fiveEditorialRoles(type,existingRoles):existingRoles;
- for(const issue of compactQualityIssues(c,language))add(issue);
+ const expectedRoles=magazine?magazineRolesForCount(plan?.slide_count===3?3:5,isLegacyMagazineDocument(c)):plan?editorialRolesForCount(type,existingRoles,plan.slide_count):c.answer_first===true?fiveEditorialRoles(type,existingRoles):existingRoles;
+ if(magazine&&!isSupportedMagazineDocument(c))add('지원하지 않는 Magazine Editorial 스키마 버전입니다.');
+  for(const issue of compactQualityIssues(c,language))add(issue);
  for(const issue of answerFirstIssues(c,language))add(issue);
  if(plan){
   slides.forEach((slide:Row,index:number)=>{
