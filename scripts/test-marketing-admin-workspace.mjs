@@ -89,14 +89,18 @@ assert.match(css,/@media\(max-width:540px\)/);
 assert.match(css,/--mw-accent:#ff6666/);
 assert.match(css,/marketing-mobile-preview/);
 assert.match(css,/marketing-copy-options-grid/);
-// Regression: magazine outlines have no image column. The mixed media editor
-// and approved-photo modal fit mobile widths without inheriting floating actions.
+// Stage 3 replaces the former text-only outline with a responsive,
+ // source-preserving integrated editor. Existing photo actions remain.
+const editorialStudio=read('src/components/admin-marketing-editorial-studio.tsx');
+const editorialCss=read('src/components/admin-marketing-editorial-studio.css');
+assert.match(src,/AdminMarketingEditorialStudio/);
+assert.match(editorialStudio,/roundy-editorial-cards/);
+assert.match(editorialStudio,/roundy-editorial-card-media/);
+assert.match(editorialCss,/@media\(max-width:465px\)/);
 for(const className of [
- 'marketing-draft-card marketing-slide-outline-card',
  'marketing-photo-slot',
  'admin-form-actions marketing-photo-render-actions'
 ])assert.ok(src.includes(className),'Missing responsive marketing layout: '+className);
-assert.match(css,/\.marketing-workspace \.marketing-draft-card\.marketing-slide-outline-card\{\s*grid-template-columns:minmax\(0,1fr\)/);
 assert.match(css,/\.marketing-photo-slot\{\s*display:grid;grid-template-columns:112px minmax\(0,1fr\)/);
 assert.match(css,/\.marketing-approved-picker-backdrop/);
 assert.match(css,/\.marketing-approved-picker-grid/);
