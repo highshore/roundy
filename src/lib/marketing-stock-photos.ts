@@ -2,7 +2,7 @@ import 'server-only';
 import {createHash} from 'node:crypto';
 import sharp from 'sharp';
 import {allSelectedPhotosApproved,requiredPhotoSlotsForRoles,savedPhotoSourcingPolicy} from './marketing-stock-photo-policy';
-import {licensedImageUrl,validLicensedPhoto,photoRightsIssues,type PhotoProvider,PHOTO_PROVIDERS} from './marketing-photo-rights';
+import {licensedImageUrl,fullReviewPhotoUrl,validLicensedPhoto,photoRightsIssues,type PhotoProvider,PHOTO_PROVIDERS} from './marketing-photo-rights';
 import {searchLicensedPhotos,providerConfigured,trackUnsplashDownload} from './marketing-photo-providers';
 import type {createServiceRoleClient} from './supabase/service';
 
@@ -185,7 +185,12 @@ export function stockReady(draft:Row,photos:SourcePhoto[]){
 }
 async function getRemotePhoto(asset:Row){
  const provider=String(asset.provider) as PhotoProvider;
- const uri=licensedImageUrl(asset.image_url,provider);
+ // Pexels' saved large2x URL may crop portraits to landscape (w=940&h=650).
+ // Archive an appropriately resized original instead; existing approved bytes
+ // are immutable and are never altered by this source display correction.
+ const uri=provider==='pexels'
+  ?fullReviewPhotoUrl(asset,1280)
+  :licensedImageUrl(asset.image_url,provider);
  if(!uri||!validLicensedPhoto(asset))throw new Error('UNTRUSTED_STOCK_IMAGE_URL');
  const response=await fetch(uri,{cache:'no-store',redirect:'error',signal:AbortSignal.timeout(12000)});
  if(!response.ok||!/^image\/(jpeg|png|webp)/i.test(response.headers.get('content-type')||''))
