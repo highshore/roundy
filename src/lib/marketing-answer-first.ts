@@ -30,13 +30,14 @@ export function threeEditorialRoles(type:string,legacy:readonly string[]):string
  if(type==='seoul_trend'&&legacy.includes('facts'))return ['cover','facts','cta'];
  return THREE_ROLE_CHOICES[type]||[legacy[0],legacy.find(x=>x!=='cover'&&x!=='cta')||legacy[1],legacy[legacy.length-1]];
 }
-export function magazineRolesForCount(count:3|5):string[]{
- return count===3?['cover','key_insight','editorial_closing']:['cover','context','insight','insight','editorial_closing'];
+// The unversioned V2 three-card role remains readable; new V3 stories use insight.
+export function magazineRolesForCount(count:3|5,legacy=false):string[]{
+ return count===3?(legacy?['cover','key_insight','editorial_closing']:['cover','insight','editorial_closing']):['cover','context','insight','insight','editorial_closing'];
 }
 export function magazineAnswerFirstPrompt(count:3|5):string{
  return [
   'ANSWER-FIRST (REQUIRED): SEOUL MAGAZINE EDITORIAL. Deliver a precise conclusion first, then verifiable context, one idea per slide. This is reader service journalism, not an advertising campaign.',
-  count===3?'Three cards: cover with answer-first headline, key_insight with a concrete and source-grounded fact, editorial_closing with a thoughtful summary, insight or subtle brand outro.':'Five cards: cover with answer-first headline, context giving real background, two distinct insights with verifiable details, editorial_closing with a useful summary, insight or subtle brand outro.',
+  count===3?'Three cards: cover with answer-first headline, insight with a concrete and source-grounded fact, editorial_closing with a thoughtful summary, insight or subtle brand outro.':'Five cards: cover with answer-first headline, context giving real background, two distinct insights with verifiable details, editorial_closing with a useful summary, insight or subtle brand outro.',
   'Never generate a call-to-action, signup, visit, explore, learn more, click-like UI, promotional caption action, or compulsory brand promotion.',
   'Preserve all attribution and limitations, source IDs and truthful specific Seoul venue names. Never invent statistics or claim venue availability.',
   'Return exactly three distinct factual thumbnail candidates in the primary post language; first must equal cover title. Avoid clickbait and bait-and-switch.'
@@ -105,7 +106,7 @@ export function answerFirstIssues(doc:CopyRow,language:string):string[]{
  if(slides.length!==count)add('Answer-First 카드뉴스는 설정한 '+count+'장 구성이 필요합니다.');
  if(slides[0]?.role!=='cover'&&slides[0]?.role!=='hook')add('Answer-First 첫 장은 결론형 표지여야 합니다.');
  if(doc?.design_preset==='roundy_magazine_editorial_v2'){
-  const expected=magazineRolesForCount(count);
+  const expected=magazineRolesForCount(count,doc.editorial_schema_version==null);
   if(slides.some((slide:CopyRow,i:number)=>slide.role!==expected[i]))add('Answer-First 에디토리얼 카드 역할 또는 순서가 올바르지 않습니다.');
  }else if(slides[count-1]?.role!=='cta')add('Answer-First 마지막 장은 CTA여야 합니다.');
  const choices=doc.thumbnail_candidates;
