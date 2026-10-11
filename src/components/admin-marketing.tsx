@@ -65,7 +65,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
  const [trendUsageView,setTrendUsageView]=useState<'unused'|'used'>('unused');
  const [generationVisible,setGenerationVisible]=useState(20),[publishVisible,setPublishVisible]=useState(20);
  const inFlight=useRef(false),mounted=useRef(true),stockPreferredSet=useRef(false);
- function selectDraft(next:Row|null){setPreflightState(null);setDraft(next?structuredClone(next):null);setDirty(false);if(next){setBasis(next.draft_kind==='growth_carousel'?'growth_carousel':next.content_mode);setTopic(next.growth_topic_type||'conversation_prompt');setContentLanguage(next.content_language==='en'?'en':'ko');if(next.event_id)setEventId(String(next.event_id));if(next.event_campaign_stage)setEventCampaignStage(String(next.event_campaign_stage));}}
+ function selectDraft(next:Row|null){setPreflightState(null);setRegenerationFocus(null);setDraft(next?structuredClone(next):null);setDirty(false);if(next){setBasis(next.draft_kind==='growth_carousel'?'growth_carousel':next.content_mode);setTopic(next.growth_topic_type||'conversation_prompt');setContentLanguage(next.content_language==='en'?'en':'ko');if(next.event_id)setEventId(String(next.event_id));if(next.event_campaign_stage)setEventCampaignStage(String(next.event_campaign_stage));}}
  async function load(preferredId?:string){
   const r=await request();if(!r.ok)throw new Error(r.data.error||'Could not load marketing');if(!mounted.current)return;
   setData(r.data);setSettings(r.data.settings);setGeneration(r.data.generation);
