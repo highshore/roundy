@@ -39,10 +39,11 @@ export function AdminMarketingRegeneration({sourceId,locale,onCreated,onClose}:{
  const [loading,setLoading]=useState(true),[working,setWorking]=useState(false);
  const [error,setError]=useState(''),[message,setMessage]=useState('');
  const [mode,setMode]=useState<Mode>('text'),[scope,setScope]=useState<Scope>('all');
+ const [imageSource,setImageSource]=useState<'online'|'ai'>('online');
  const [indices,setIndices]=useState<number[]>([]),[instruction,setInstruction]=useState('');
  const [compare,setCompare]=useState(false),[comparisonId,setComparisonId]=useState<string>('');
  const [viewId,setViewId]=useState<string>(sourceId);
- useEffect(()=>{setViewId(sourceId);setCompare(false);setMode('text');setScope('all');setIndices([]);setInstruction('');},[sourceId]);
+ useEffect(()=>{setViewId(sourceId);setCompare(false);setMode('text');setScope('all');setImageSource('online');setIndices([]);setInstruction('');},[sourceId]);
  useEffect(()=>{
   let active=true;setLoading(true);setError('');
   api('/draft/'+sourceId+'/versions').then(v=>{
@@ -54,11 +55,13 @@ export function AdminMarketingRegeneration({sourceId,locale,onCreated,onClose}:{
  },[sourceId]);
  const source=useMemo(()=>versions.find(x=>x.id===viewId)||versions.find(x=>x.id===sourceId)||versions.at(-1)||null,[versions,viewId,sourceId]);
  const photos=hasPhotos(source||{});
+ const missingCount=(source?.images||[]).filter((url:unknown)=>!url).length;
  const slides=(source?.carousel_slides||[]) as Row[];
  const targetIndices=scope==='slides'?indices:scope==='caption'?[]:scope==='cover_title'?[0]:scope==='body'?slides.slice(1).map((_,i)=>i+1):slides.map((_,i)=>i);
  const aiCover=Boolean(source?.content_document?.photo_sourcing?.ai_thumbnail_enabled&&targetIndices.includes(0)&&
    !source?.content_document?.photo_sourcing?.photo_slots?.includes?.(0));
- const estimate=cost(mode,aiCover);
+ const estimate=imageSource==='ai'&&['image','both'].includes(mode)?(mode==='both'?.20:.15):cost(mode,false);
+ const aiCoverEligible=Boolean(source?.content_document?.photo_sourcing?.ai_thumbnail_enabled===true);
  const before=useMemo(()=>versions.find(x=>x.id===comparisonId)||versions[0]||null,[versions,comparisonId]);
  const actionsDisabled=loading||working||!source||!slides.length;
  function quick(next:Mode,index:number){
@@ -81,7 +84,7 @@ export function AdminMarketingRegeneration({sourceId,locale,onCreated,onClose}:{
   try{
    const result=await api('/draft/'+source.id+'/versions',{
     request_key:'rework:'+uuid(),revision:source.revision,mode,scope,slide_indices:indices,
-    instruction,confirm_cost:true
+    instruction,image_source:imageSource,confirm_cost:true
    });
    if(!result?.draft?.id)throw new Error('NEW_VERSION_NOT_SAVED');
    setMessage(t('New unapproved draft saved. Review copy and photos before publishing.',
@@ -151,7 +154,7 @@ export function AdminMarketingRegeneration({sourceId,locale,onCreated,onClose}:{
       '변경된 카드가 사진 검수 또는 재렌더링을 기다리고 있습니다.')}</strong>
     <p>{t('Approve newly sourced photos in the main Draft editor, then finish rendering only the changed slides. Untouched slides and old approvals stay intact.',
      '새로 검색한 사진은 메인 초안 편집기에서 저작권 검수 후 승인하세요. 승인 후 변경한 카드만 렌더링하며, 변경하지 않은 카드와 기존 사진 승인은 보존됩니다.')}</p>
-    <button type="button" className="admin-secondary" disabled={working} onClick={()=>void finishRendering()}>
+    <button type="button" className="admin-secondary" disabled={working||!source.regeneration_parent_id} onClick={()=>void finishRendering()}>
      <Images size={14}/>{t('Render changed cards after approval ($0 AI)','사진 승인 후 변경 카드만 렌더링 (AI $0)')}</button>
    </div>}
    <div className="marketing-version-slides">
@@ -185,6 +188,15 @@ export function AdminMarketingRegeneration({sourceId,locale,onCreated,onClose}:{
       {mode==='text'&&<><option value="cover_title">{t('Cover title only','표지 제목만')}</option><option value="body">{t('Body text only','본문 텍스트만')}</option><option value="caption">{t('Instagram caption only','Instagram 캡션만')}</option></>}
      </select></label>
     </div>
+    {(mode==='image'||mode==='both')&&<fieldset className="marketing-version-indices">
+     <legend>{t('Image replacement source','이미지 교체 방식')}</legend>
+     <label><input type="radio" name={'image-source-'+sourceId} checked={imageSource==='online'} onChange={()=>setImageSource('online')}/>
+      {t('Search licensed online photos (Pexels, Wikimedia, Openverse)','온라인 사진 검색 (Pexels, Wikimedia, Openverse)')}</label>
+     <label><input type="radio" name={'image-source-'+sourceId} checked={imageSource==='ai'} onChange={()=>setImageSource('ai')}/>
+      {t('Generate a new AI image','AI 이미지 새로 생성')}</label>
+     {imageSource==='ai'&&!aiCoverEligible&&<p className="admin-error">{t('This post uses a real-photo cover. AI cover generation is unavailable unless its saved photo policy allows an AI thumbnail.','이 콘텐츠는 실사 표지를 사용 중입니다. 저장된 사진 정책에서 AI 썸네일을 허용하지 않아 AI 표지 생성이 제한됩니다.')}</p>}
+     {imageSource==='ai'&&<p className="admin-help">{t('AI generation is limited to the cover, to preserve the minimum three real photos in a five-card carousel.','5장 카드뉴스 실제 사진 3장 이상 정책을 유지하기 위해 AI 이미지는 표지에서만 생성합니다.')}</p>}
+    </fieldset>}
     {scope==='slides'&&<fieldset className="marketing-version-indices"><legend>{t('Choose slides','수정할 슬라이드 선택')}</legend>
      {slides.map((_:Row,i:number)=><label key={i}><input type="checkbox" checked={indices.includes(i)} disabled={working} onChange={e=>setIndices(current=>e.target.checked?[...current,i].sort((a,b)=>a-b):current.filter(x=>x!==i))}/> {i+1}{t('th card','번 카드')}</label>)}
     </fieldset>}
@@ -199,7 +211,7 @@ export function AdminMarketingRegeneration({sourceId,locale,onCreated,onClose}:{
      <p>{t('Licensed photo lookup and server rendering do not call image AI. New photos require manual rights approval. Published/scheduled snapshots are immutable.',
       '실사 사진 검색과 서버 렌더링은 이미지 AI를 호출하지 않습니다. 신규 사진은 수동 저작권 승인 대상이며 게시 및 예약 기록은 변경되지 않습니다.')}</p>
     </div>
-    <button type="button" className="admin-primary" disabled={actionsDisabled||scope==='slides'&&!indices.length}
+    <button type="button" className="admin-primary" disabled={actionsDisabled||scope==='slides'&&!indices.length||(imageSource==='ai'&&['image','both'].includes(mode)&&(!aiCoverEligible||scope!=='slides'||indices.length!==1||indices[0]!==0))}
      onClick={()=>void regenerate()}>{working?t('Saving new version…','새 버전 저장 중…'):t('Generate and save new version','새 버전 재생성 및 저장')}</button>
    </div>
    <div className="marketing-version-history">
