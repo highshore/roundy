@@ -215,7 +215,7 @@ function harness({denied=false,network=false,badSources=false,duplicate=false,ph
     ?['서울에서 한 사람씩 직접 만나기','로테이션 소개팅으로 대화 시작하기','서울에서 서로를 알아가는 방법']
     :['Meet people face to face in Seoul','Try one-on-one conversations in Seoul','Choose matches mutually after talking'];
    const wanted=body.response_format.json_schema.schema.properties.thumbnail_candidates.minItems;
-   if(wanted===5)headlines.push(language==='ko'?'서울에서 내 이야기부터 꺼내보는 순간':'Sharing a small story changes a first meeting',language==='ko'?'처음 만나서 함께 이야기할 때 생기는 변화':'What changes when two people actually listen');
+   if(wanted===5)headlines.push(language==='ko'?'서울에서 내 이야기부터 꺼내보는 순간':'Sharing a small story changes a first meeting',language==='ko'?'처음 만나서 함께 이야기할 때 생기는 변화':'A first conversation leaves room to listen');
    c.thumbnail_candidates=headlines;
    if(data.editorial_type){
     const helper=load('src/lib/marketing-answer-first.ts');
