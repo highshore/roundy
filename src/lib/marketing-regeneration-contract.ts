@@ -41,11 +41,11 @@ export function targetedSlideIndices(request:Pick<RegenerationRequest,'scope'|'s
 }
 export function estimatedUsd(mode:RegenerationRequest['mode'],scope:RegenerationScope,aiCover=false):number{
  if(mode==='render'||mode==='image'&&!aiCover)return 0;
- return (mode==='text'?0.02:mode==='both'?0.02:0)+(aiCover&&['image','both'].includes(mode)?0.15:0);
+ return aiCover&&mode==='both'?0.20:(mode==='text'||mode==='both'?0.02:0)+(aiCover&&mode==='image'?0.15:0);
 }
 export type Rewrite={slides?:Array<{index:number;title?:string;body?:string;highlight?:string}>;caption?:string};
 const trimmed=(x:unknown,max:number)=>typeof x==='string'&&x.trim()&&x.trim().length<=max?x.trim():null;
-export function applySelectiveRewrite(original:Slide[],oldCaption:string,request:RegenerationRequest,rewrite:Rewrite){
+export function applySelectiveRewrite(original:Slide[],oldCaption:string,request:RegenerationRequest,rewrite:Rewrite,language:'ko'|'en'='ko'){
  const targets=targetedSlideIndices(request,original.length),selected=new Set(targets);
  const next=original.map(slide=>({...slide}));let caption=oldCaption;
  if(request.mode==='render'||request.mode==='image')return {slides:next,caption,changed_indices:targets};
@@ -69,8 +69,9 @@ export function applySelectiveRewrite(original:Slide[],oldCaption:string,request
    const body=trimmed(value.body,550);
    if(!body)throw new Error('INVALID_REGENERATED_BODY');
    next[index].body=body;
-   if(next[index].body_ko!==undefined&&next[index].body_en===undefined)next[index].body_ko=body;
-   if(next[index].body_en!==undefined&&next[index].body_ko===undefined)next[index].body_en=body;
+   // Rendering prioritizes localized body fields. Only the primary-language field may change.
+   const localized=language==='en'?'body_en':'body_ko';
+   if(next[index][localized]!==undefined)next[index][localized]=body;
    // A primary-language field changes with the rendered body; secondary translations
    // are not rewritten without explicit model output and remain reviewable.
    if(request.scope!=='body'&&typeof value.highlight==='string'&&value.highlight.length<=120)next[index].highlight=value.highlight;
