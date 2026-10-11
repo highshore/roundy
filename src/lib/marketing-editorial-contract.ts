@@ -2,7 +2,7 @@
 // Chat Completions. This runs before any compatibility normalization can hide
 // unexpected CTA fields or mutate slide roles. No database or provider calls.
 import {magazineRolesForCount} from './marketing-answer-first';
-import {EDITORIAL_AD_CTA, MAGAZINE_EDITORIAL_PRESET, MAGAZINE_EDITORIAL_SCHEMA_VERSION} from './marketing-presentation';
+import {captionCoreIssues, EDITORIAL_AD_CTA, MAGAZINE_EDITORIAL_PRESET, MAGAZINE_EDITORIAL_SCHEMA_VERSION} from './marketing-presentation';
 
 type Schema = Record<string, any>;
 const own=(value:Record<string,unknown>,key:string)=>Object.prototype.hasOwnProperty.call(value,key);
@@ -51,14 +51,17 @@ export function generatedMagazineJsonIssues(value:unknown,schema:Schema,slideCou
   const card=slides[i];
   if(!object(card))continue;
   if(card.role!==roles[i])add('slides['+i+'].role: expected '+roles[i]);
-  if(card.closing_type!==(i===roles.length-1?card.closing_type:'none'))
+  if(i<roles.length-1&&card.closing_type!=='none')
    add('slides['+i+'].closing_type: body/cover must be none');
   if(i===roles.length-1&&!['summary','insight','brand_outro'].includes(String(card.closing_type||'')))
    add('slides['+i+'].closing_type: invalid editorial closing');
   if(EDITORIAL_AD_CTA.test([card.title,card.body,card.highlight,...(Array.isArray(card.options)?card.options:[])].join(' ')))
    add('slides['+i+']: advertising CTA prohibited');
  }
- if(EDITORIAL_AD_CTA.test([value.caption,value.caption_ko,value.caption_en].join(' ')))
-  add('caption: advertising CTA prohibited');
+ if(EDITORIAL_AD_CTA.test([value.caption,value.caption_ko,value.caption_en].join(' '))||
+   ['ko','en'].some(language=>{
+    const raw=value['caption_'+language];
+    return typeof raw==='string'&&captionCoreIssues(raw,language).some(issue=>/CTA|URL|계정명|해시태그/.test(issue));
+   }))add('caption: advertising CTA prohibited');
  return issues;
 }
