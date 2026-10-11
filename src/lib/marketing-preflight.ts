@@ -1,6 +1,6 @@
 import {answerFirstIssues} from './marketing-answer-first';
 import {mobileCarouselFit,magazineCarouselFit,savedCarouselPlan,resolveCarouselPlan} from './marketing-carousel-template';
-import {requiredPhotoSlotsForRoles,savedPhotoSourcingPolicy} from './marketing-stock-photo-policy';
+import {requiredPhotoSlotsForRoles,savedPhotoSourcingPolicy,aiImageSlotForPolicy} from './marketing-stock-photo-policy';
 import {photoRightsIssues,captionHasRequiredCredits} from './marketing-photo-rights';
 import {isMagazineDocument,EDITORIAL_AD_CTA} from './marketing-presentation';
 
@@ -74,7 +74,8 @@ export function evaluateMarketingPreflight(draft:Record<string,any>,settings:Rec
  if(minimum>3)realIssues.push('설정한 실제 사진 최소 '+minimum+'장은 현재 3장까지 지원하는 사진 배치 정책을 초과합니다. 설정을 조정하거나 사진 배치 기능을 확장하세요.');
  if(photos.length<minimum)realIssues.push('실제 사진이 '+photos.length+'장입니다. 최소 '+minimum+'장을 확보하세요.');
  if(requiredSlots.length&&photos.some(p=>!requiredSlots.includes(Number(p.slot))))realIssues.push('지정되지 않은 카드 위치에 실제 사진이 배치되어 있습니다.');
- if(photoPolicy?.ai_thumbnail_enabled&&photos.some(p=>Number(p.slot)===0))realIssues.push('AI 썸네일 설정 시 첫 장에는 실제 사진을 중복 배치할 수 없습니다.');
+ const aiSlot=aiImageSlotForPolicy(photoPolicy);
+ if(aiSlot!==null&&photos.some(p=>Number(p.slot)===aiSlot))realIssues.push('AI 이미지로 지정한 카드와 승인 실사 사진이 같은 위치에 배치됐습니다.');
  if(!['pexels','stock'].includes(String(draft.visual_source)))realIssues.push('실제 사진 원본 및 승인 기록이 연결되지 않았습니다. 승인된 사진 자산을 사용하세요.');
  add('real_photos',realIssues,'실제 사진 '+photos.length+'장으로 최소 '+minimum+'장을 충족했습니다.');
 
