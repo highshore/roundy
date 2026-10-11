@@ -134,6 +134,7 @@ export function AdminMarketingEditorialStudio({draft,locale,disabled,onUpdated,o
    {!manualSupported&&<p className="admin-help">{t('Direct text-only edits require an archived approved photo source. These cards can still be reviewed; use the upload workflow for unarchived artwork.','텍스트 직접 수정에는 보존된 승인 사진 원본이 필요합니다. 원본이 없는 완성 이미지에서는 업로드 방식으로 새 버전을 제작하세요.')}</p>}
    <div className="roundy-editorial-cards">{slides.map((slide:Row,index:number)=>{
     const current=editing===index,visual=Array.isArray(draft.images)?draft.images[index]:'';
+    const unarchivedAi=index>0&&index<slides.length-1&&doc?.photo_sourcing?.ai_image_slot===index;
     const primary=text(language==='en'?slide.body_en||slide.body:slide.body_ko||slide.body);
     return <article className={'roundy-editorial-card '+(current?'is-editing':'')} key={index}>
      <div className="roundy-editorial-card-media">
@@ -144,9 +145,10 @@ export function AdminMarketingEditorialStudio({draft,locale,disabled,onUpdated,o
       <small>{String(slide.role||'').replaceAll('_',' ').toUpperCase()}</small>
       <strong>{slide.title}</strong><p>{primary}</p>
       {!!slide.source_ids?.length&&<small>{t('Source references retained','출처 ID 유지')}: {slide.source_ids.join(', ')}</small>}
+      {unarchivedAi&&<small>{t('AI-generated body image must be replaced through the reviewed photo workflow before text editing.','AI 본문 이미지는 재사용 가능한 원본이 없어 승인 사진으로 교체한 후 문구를 수정할 수 있습니다.')}</small>}
       <div className="roundy-editorial-card-buttons">
-       <button type="button" className="admin-secondary" disabled={disabled||working||!manualSupported} onClick={()=>current?setEditing(null):startEdit(index)}><PenLine size={13}/>{current?t('Cancel','취소'):t('Edit text','텍스트 수정')}</button>
-       <button type="button" className="admin-secondary" disabled={disabled||working} onClick={()=>onRequestAiEdit(index)}><RefreshCw size={13}/>{t('AI rewrite','AI 재작성')}</button>
+       <button type="button" className="admin-secondary" disabled={disabled||working||!manualSupported||unarchivedAi} onClick={()=>current?setEditing(null):startEdit(index)}><PenLine size={13}/>{current?t('Cancel','취소'):t('Edit text','텍스트 수정')}</button>
+       <button type="button" className="admin-secondary" disabled={disabled||working||unarchivedAi} onClick={()=>onRequestAiEdit(index)}><RefreshCw size={13}/>{t('AI rewrite','AI 재작성')}</button>
        {index<slides.length-1&&<button type="button" className="admin-secondary" disabled={disabled||working} onClick={onRequestPhotoEdit}><ImageIcon size={13}/>{t('Photos','이미지')}</button>}
       </div>
      </div>
