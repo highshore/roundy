@@ -269,9 +269,11 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
   const body=await req.json().catch(()=>({}));
   if(!Number.isInteger(body.revision)||!(body.ai_image_slot===null||Number.isInteger(body.ai_image_slot)))
    return json({error:'INVALID_AI_IMAGE_SLOT'},400);
-  const draft=checked(await service.from('instagram_post_drafts').select('id,revision,images').eq('id',path[1]).maybeSingle());
+  const draft=checked(await service.from('instagram_post_drafts').select('id,revision,images,carousel_slides').eq('id',path[1]).maybeSingle());
   if(!draft)return json({error:'DRAFT_NOT_FOUND'},404);
   if(draft.revision!==body.revision)return json({error:'DRAFT_CHANGED_REFRESH_FIRST'},409);
+  if(body.ai_image_slot===null&&Array.isArray(draft.carousel_slides)&&draft.carousel_slides.length===5)
+   return json({error:'FIVE_CARD_NEEDS_THREE_REAL_AND_ONE_AI_IMAGE'},400);
   if((draft.images||[]).length&&!body.confirm_replace)
    return json({error:'CONFIRM_REPLACE_RENDERED_IMAGES'},409);
   try{
