@@ -60,8 +60,15 @@ export function topicHistoryFromRows(drafts:unknown[],jobs:unknown[],excludeDraf
  }
  const selected:TopicHistoryItem[]=[];
  for(const item of items.sort((a,b)=>b.created_at.localeCompare(a.created_at))){
-  if(selected.some(prev=>(Boolean(item.angle_key)&&item.angle_key===prev.angle_key)||
-   similarity(item.headline,prev.headline)>=.90))continue;
+  const duplicateIndex=selected.findIndex(prev=>(Boolean(item.angle_key)&&item.angle_key===prev.angle_key)||
+   similarity(item.headline,prev.headline)>=.90);
+  if(duplicateIndex>=0){
+   // An imported draft may hold the selected topic key while an adjacent
+   // completed job snapshot only holds its title. Keep the stronger metadata.
+   if(item.angle_key&&!selected[duplicateIndex].angle_key)
+    selected[duplicateIndex]={...item,created_at:selected[duplicateIndex].created_at};
+   continue;
+  }
   selected.push(item);
   if(selected.length>=120)break;
  }
