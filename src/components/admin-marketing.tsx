@@ -803,6 +803,11 @@ export function AdminMarketing({locale}:{locale:Locale}){
      <summary>{imageUrl?<img className="marketing-log-thumb" src={imageUrl} alt=""/>:<span className="marketing-log-thumb placeholder"/>}<div className="marketing-log-main"><span className={'marketing-status-dot '+r.status}/><div><strong>{contentTitle(record||r)}</strong><small>{contentLabel(record||r)} · {language} · {new Date(r.created_at||r.scheduled_for).toLocaleString(locale,{timeZone:'Asia/Seoul'})}</small></div></div><div className="marketing-log-end"><span className={'marketing-status-pill '+r.status}>{statusText(r.status)}</span></div></summary>
       <div className="marketing-log-detail">
        <p>{r.message||t('No additional message.','추가 메시지가 없습니다.')}</p>
+       {channel==='instagram'&&r.status==='failed'&&/Instagram API error 190/.test(String(r.message||''))&&
+        <p className="admin-error" role="status">
+         {t('Meta rejected the old token before any post was sent. Reconnect @roundy.meet under Connections before reviewing a retry. Previously failed posts never retry automatically.',
+         'Meta가 게시 전 인증 토큰을 거부했습니다(190). 먼저 연결 메뉴에서 @roundy.meet 인증을 복구하고 재시도를 검토하세요. 실패 게시물은 자동 재시도하지 않습니다.')}
+        </p>}
        <dl>
         <div><dt>{t('Run ID','게시 ID')}</dt><dd>{r.id}</dd></div>
         {r.scheduled_for&&<div><dt>{t('Reserved KST time','KST 발행 예정')}</dt><dd>{new Date(r.scheduled_for).toLocaleString(locale,{timeZone:'Asia/Seoul'})} KST</dd></div>}
@@ -833,7 +838,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
           {t('Admin verified not published, attempt #','관리자 미게시 확인, 시도 #')}{review.attempt_no} — {review.review_note}
          </p>)}
         </div>}
-        {['needs_review','failed'].includes(r.status)&&<button type="button" className="admin-secondary" disabled={busy}
+        {['needs_review','failed'].includes(r.status)&&<button type="button" className="admin-secondary" disabled={busy||instagramNeedsReconnect}
          onClick={()=>{
           if(!window.confirm(t('Have you personally checked Instagram and confirmed NO post was published? Never retry an uncertain result before verifying.','Instagram에서 실제로 게시물이 발행되지 않았음을 직접 확인했습니까? 결과가 불확실하면 확인 전 재시도하면 안 됩니다.')))return;
           const note=window.prompt(t('Record how you verified NO post on Instagram (12 characters or more).','Instagram 미게시를 어떻게 확인했는지 12자 이상 기록하세요.'))||'';
