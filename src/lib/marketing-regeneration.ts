@@ -238,10 +238,15 @@ export async function regenerateVersion(id:string,value:unknown,actor:string){
   .eq('regeneration_request_key',input.request_key).maybeSingle()) as Row|null;
  if(previous)return {draft:ok(await db.from('instagram_post_drafts').select('*').eq('id',previous.id).single()),deduplicated:true};
  const indices=targetedSlideIndices(input,slides.length),oldPhotos=await listStockSelections(db,id);
+ const imageSource=(value as Row)?.image_source==='ai'?'ai':'online';
+ if((value as Row)?.image_source!==undefined&&!['ai','online'].includes(String((value as Row).image_source)))throw new Error('INVALID_IMAGE_SOURCE');
  const photoSlots=requiredStockSlots(source);
- const aiCover=indices.includes(0)&&['image','both'].includes(input.mode)
+ const aiCover=imageSource==='ai'&&indices.includes(0)&&['image','both'].includes(input.mode)
   &&source.content_document?.photo_sourcing?.ai_thumbnail_enabled===true
   &&!photoSlots.includes(0);
+ if(imageSource==='ai'&&['image','both'].includes(input.mode)
+  &&(!aiCover||indices.some(i=>i!==0)))
+  throw new Error('AI_COVER_ONLY: 현재 실사 사진 최소 개수 정책에 따라 AI 생성은 AI 표지가 설정된 콘텐츠의 첫 번째 카드만 지원합니다.');
  if(['image','both'].includes(input.mode)){
   // The editorial closing is text-only. Whole-post image regeneration updates
   // every photograph but must preserve text-only cards, not reject the operation.
@@ -280,7 +285,7 @@ export async function regenerateVersion(id:string,value:unknown,actor:string){
    await db.from('marketing_generation_jobs').update({input_tokens:usage.prompt_tokens||0,
     output_tokens:usage.completion_tokens||0,stage:'copy_written'}).eq('id',job.id);
   }
-  const changingPhotoSlots=indices.filter(index=>photoSlots.includes(index)&&['image','both'].includes(input.mode));
+  const changingPhotoSlots=imageSource==='ai'?[]:indices.filter(index=>photoSlots.includes(index)&&['image','both'].includes(input.mode));
   const claimed=new Set(oldPhotos.map(p=>String(p.asset_id)));
   for(const slot of changingPhotoSlots){
    const next=await replacementAsset(db,source,slot,claimed,input.instruction);
