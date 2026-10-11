@@ -390,7 +390,7 @@ function magazineInformation(slide:Row,index:number,document:Row,assets:Editoria
  const copyEnd=bodyY+fit.body.height;
  if(photographFirst&&copyEnd>1187)throw new Error('MAGAZINE_PHOTO_FIRST_COPY_COLLISION');
  if(!photographFirst&&copyEnd>707)throw new Error('MAGAZINE_COPY_FIRST_PHOTO_COLLISION');
- const label=index===1&&savedCarouselPlan(document)?.slide_count===5?(language==='ko'?'CONTEXT / 핵심 배경':'CONTEXT / THE STORY')
+ const label=index===1&&(savedCarouselPlan(document)?.slide_count===5||isLegacyMagazineDocument(document))?(language==='ko'?'CONTEXT / 핵심 배경':'CONTEXT / THE STORY')
   :language==='ko'?'EDITORIAL / 인사이트':'EDITORIAL / INSIGHT';
  const frameY=photographFirst?232:756,frameHeight=photographFirst?426:448;
  return box({position:'relative',width:1080,height:1350,background:BRIGHT_EDITORIAL.paper,
