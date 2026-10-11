@@ -1,11 +1,12 @@
 import {readTrendFactPack,trendFactPackIssues,trendGuideRoles} from './marketing-trend-guide';
 import {EDITORIAL_ENGAGEMENT_POLICY,evaluateEditorialEngagement} from './marketing-editorial-quality';
+import {EDITORIAL_STORYBOARD_VERSION,reviewMagazineStoryboard,evaluateHeadlineOptions} from './marketing-editorial-storyboard';
 import {fiveEditorialRoles,editorialRolesForCount,magazineRolesForCount,magazineAnswerFirstPrompt,withAnswerFirstSchema,answerFirstPrompt,answerFirstIssues} from './marketing-answer-first';
 import {savedCarouselPlan,mobileCarouselFit,magazineCarouselFit,type CarouselPlan} from './marketing-carousel-template';
 import {captionCtaIssues,EDITORIAL_AD_CTA, compactContentSchema, compactWritingInstructions, normalizeCompactDocument, compactQualityIssues, buildBilingualCaption, isCompactDocument, isMagazineDocument, isImmersiveMagazineDocument, hasObsoletePositioning} from './marketing-presentation';
 // Shared deterministic content contracts. This module never calls a paid API.
 export type Row = Record<string, any>;
-export const CONTENT_POLICY_VERSION = 15;
+export const CONTENT_POLICY_VERSION = 16;
 export const CONTENT_PROFILES = {
  prelaunch:{roles:['cover','concept','cta'],research:false,label:'오픈 전 홍보',brief:'A concrete social friction, the in-person Rotation Dating format, then launch-update CTA. No invented dates, bookings, testimonials, seats or discounts.'},
  live_event:{roles:['cover','event','cta'],research:false,label:'이벤트 모집',brief:'Invite around the actual supplied event. The event card uses only server-supplied date/location/prices. No fabricated participants, scarcity or discounts.'},
@@ -263,6 +264,12 @@ export function evaluateContent(value:unknown,type:PostType,language:string,sour
  const expectedRoles=magazine?magazineRolesForCount(plan?.slide_count===3?3:5):plan?editorialRolesForCount(type,existingRoles,plan.slide_count):c.answer_first===true?fiveEditorialRoles(type,existingRoles):existingRoles;
  for(const issue of compactQualityIssues(c,language))add(issue);
  for(const issue of answerFirstIssues(c,language))add(issue);
+ // Scoped to newly generated magazines. Historic render/approval snapshots
+ // remain readable under the policy that produced them.
+ if(c.editorial_storyboard_version===EDITORIAL_STORYBOARD_VERSION&&isMagazineDocument(c)){
+  const storyboard=reviewMagazineStoryboard(c,language);
+  if(storyboard)for(const issue of storyboard.issues)add('스토리보드 검수: '+issue);
+ }
  if(plan){
   slides.forEach((slide:Row,index:number)=>{
    try{magazine?magazineCarouselFit(slide,plan,index,language):mobileCarouselFit(slide,plan,index,language);}
@@ -426,5 +433,9 @@ export function prepareContent(value:Row,type:PostType,language:string,sources:E
  if(isCompactDocument(document))caption=buildBilingualCaption(document,cited,disclaimerKo,disclaimerEn);
  else caption=[str(document.caption),language==='ko'?'서울에서 만나는 로테이션 소개팅, Roundy.':'Roundy — Rotation Dating in Seoul.',cited.length?'출처 / Sources\n'+cited.map(s=>s.title+' — '+s.url).join('\n'):'', '@roundy.meet | roundy.team'].filter(Boolean).join('\n\n');
  if(caption.length>2000){report.issues.push('출처를 포함한 캡션이 2,000자를 넘습니다.');report.status='rejected';}
- return {document:{...document,content_language:language},report,slides,caption,cta:str(document.cta),sources:cited,profile:profile.label};
+ const enriched=document.editorial_storyboard_version===EDITORIAL_STORYBOARD_VERSION&&isMagazineDocument(document)
+  ?{...document,editorial_headline_reviews:evaluateHeadlineOptions(document,language),
+     editorial_storyboard_review:reviewMagazineStoryboard(document,language)}
+  :document;
+ return {document:{...enriched,content_language:language},report,slides,caption,cta:str(document.cta),sources:cited,profile:profile.label};
 }
