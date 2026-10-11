@@ -1,10 +1,11 @@
 import {readTrendFactPack,trendFactPackIssues,trendGuideRoles} from './marketing-trend-guide';
+import {EDITORIAL_ENGAGEMENT_POLICY,evaluateEditorialEngagement} from './marketing-editorial-quality';
 import {fiveEditorialRoles,editorialRolesForCount,magazineRolesForCount,magazineAnswerFirstPrompt,withAnswerFirstSchema,answerFirstPrompt,answerFirstIssues} from './marketing-answer-first';
 import {savedCarouselPlan,mobileCarouselFit,magazineCarouselFit,type CarouselPlan} from './marketing-carousel-template';
 import {captionCtaIssues,EDITORIAL_AD_CTA, compactContentSchema, compactWritingInstructions, normalizeCompactDocument, compactQualityIssues, buildBilingualCaption, isCompactDocument, isMagazineDocument, isImmersiveMagazineDocument, hasObsoletePositioning} from './marketing-presentation';
 // Shared deterministic content contracts. This module never calls a paid API.
 export type Row = Record<string, any>;
-export const CONTENT_POLICY_VERSION = 14;
+export const CONTENT_POLICY_VERSION = 15;
 export const CONTENT_PROFILES = {
  prelaunch:{roles:['cover','concept','cta'],research:false,label:'오픈 전 홍보',brief:'A concrete social friction, the in-person Rotation Dating format, then launch-update CTA. No invented dates, bookings, testimonials, seats or discounts.'},
  live_event:{roles:['cover','event','cta'],research:false,label:'이벤트 모집',brief:'Invite around the actual supplied event. The event card uses only server-supplied date/location/prices. No fabricated participants, scarcity or discounts.'},
@@ -26,7 +27,7 @@ export type TrendTopicKey=typeof TREND_TOPIC_KEYS[number];
 export const DATING_MYTH_KEYS=['questions_and_liking','first_impression_speed','silence_means_failure','similarity_compatibility','opposites_attract','delayed_reply_attraction','self_disclosure_intimacy','eye_contact_attraction','nervousness_attractiveness','other_dating_belief'] as const;
 export type DatingMythKey=typeof DATING_MYTH_KEYS[number];
 export type Evidence={id:string;url:string;title:string;evidence:string};
-export type QualityReport={version:number;status:'passed'|'rejected';issues:string[];review_required:boolean};
+export type QualityReport={version:number;status:'passed'|'rejected';issues:string[];review_required:boolean;editorial_score?:number;editorial_threshold?:number;editorial_policy_version?:number};
 export type QualitySeverity='critical'|'quality'|'formatting';
 export function qualitySeverity(issue:string):QualitySeverity{
  const critical=[
@@ -202,10 +203,11 @@ export function writingInstructions(type:PostType,language:string,variant='',ans
   'Editorial type: '+type+'. '+(magazine&&type==='prelaunch'?'Explain how face-to-face social formats work in Seoul with clear, useful editorial context; never invent an opening date or invite follows, registrations or clicks.':magazine&&type==='live_event'?'Explain ONE verified upcoming Seoul event as service journalism; date, location, program and pricing only from supplied server facts. No tickets, buy, RSVP, Book Now, link or other sales action.':CONTENT_PROFILES[type].brief),
   'VOICE: '+toneGuide(type,language),
   ...(magazine?[
-   'EDITORIAL TEST: Imagine a friend forwarding this because it names a familiar moment or gives them a line they could actually say. Replace abstract advice with specific observable situations. Do not claim universal outcomes. Every informational card should show WHAT someone does, says, notices or checks. It should teach more than "communication matters".',
-   'HOOK TEST: The cover must make somebody stop scrolling without inventing facts. Compare: weak "질문은 목적에서 시작된다" / strong "좋은 모임은 첫 질문이 다르다"; weak "성공적인 관계의 핵심" / strong "처음 만나면 무슨 얘기부터 할까?". Adapt to the REAL evidence, not these example topics. Put one factual concrete payoff immediately in the following cards.',
+   'EDITORIAL TEST: Imagine a friend forwarding this because it names a familiar moment or gives them a line they could actually say. Replace abstract advice with specific observable situations. Do not claim universal outcomes. Every informational card should show WHAT someone does, says, notices or checks. It should teach more than "communication matters". If the entire carousel could be summarized as "ask a follow-up question", reject that idea and choose a sharper observation.',
+   'HOOK TEST: Privately brainstorm five DISTINCT truthful headline approaches (relatable conflict, surprising observation, practical cost of a mistake, curiosity and useful specificity). Publish only the strongest headline in the existing schema. Do not output headline candidates or invent statistics. Avoid weak titles like "메뉴판 보며 꺼내는 첫 질문" or "자연스러운 대화의 시작". Give the next slide a concrete payoff that earns the swipe.',
    'HUMAN VOICE: Do not sound like a textbook or corporate thought leadership. Avoid vague nouns (목적, 구조, 방향, 관계 형성, 가치, 본질), overpolished conclusions ("중요합니다", "도움이 됩니다", "생각해볼 수 있습니다", "의미 있는", "더 나은"), and motivational sign-offs. Use short vivid sentences and one original quoted line of natural dialogue when relevant. The quoted line is YOUR EXAMPLE, NEVER a purported quotation from a book, participant or source.',
-   'FINAL CARD: Make the final summary useful on its own; if the reader saved only one sentence it should be this one. No overt sales actions in generated copy. The renderer adds a context-sensitive Roundy brand connection underneath so avoid repeating the handle in the generated card.'
+   'FINAL CARD: Make the final summary useful on its own; if the reader saved only one sentence it should be this one. No overt sales actions in generated copy. The renderer adds a context-sensitive Roundy brand connection underneath so avoid repeating the handle in the generated card.',
+    'VALUE DENSITY: Do not turn one obvious conversation tip into five cards. Each middle slide must advance a DIFFERENT insight, real-life friction, observation or usable example. Favour what readers might save or send to a friend over classroom instructions like "물어보세요", "답에서 하나를 골라요" and "이어가세요". Give a specific WHY, not only steps.'
   ]:[]),
   'Roles in EXACT order: '+(plan?magazineRolesForCount(plan.slide_count):answerFirst?fiveEditorialRoles(type,type==='seoul_trend'?trendGuideRoles(variant):CONTENT_PROFILES[type].roles):type==='seoul_trend'?trendGuideRoles(variant):CONTENT_PROFILES[type].roles).join(', ')+'. Each slide must move the idea forward with a different title AND different body. Never pad or restate the same idea.',
   'Prefer concrete scenes, actions, questions and observable details over abstract emotional nouns. One main idea per sentence. Vary sentence length. Contractions and fragments are fine when natural.',
@@ -401,7 +403,12 @@ export function evaluateContent(value:unknown,type:PostType,language:string,sour
   const detail=slides[1],questionCount=(String(detail?.body||'')+' '+String(detail?.highlight||'')+' '+(Array.isArray(detail?.options)?detail.options.join(' '):'')).match(/[?？]/g)?.length||0;
   if(questionCount<2)add('3장 구성에도 실제 첫 질문과 후속 질문이 모두 필요합니다.');
  }
- return {version:2,status:issues.length?'rejected':'passed',issues,review_required:true};
+ // Opt-in flag on newly generated immersive magazines protects previously approved drafts.
+ const impact=isImmersiveMagazineDocument(c)&&c.editorial_engagement_policy===EDITORIAL_ENGAGEMENT_POLICY
+  ?evaluateEditorialEngagement(c,language):null;
+ if(impact)for(const problem of impact.issues)add('에디토리얼 편집 검수: '+problem);
+ return {version:2,status:issues.length?'rejected':'passed',issues,review_required:true,
+  ...(impact?{editorial_score:impact.score,editorial_threshold:impact.threshold,editorial_policy_version:impact.version}:{})};
 }
 export function prepareContent(value:Row,type:PostType,language:string,sources:Evidence[]){
  const document=normalizeCompactDocument(value,language),report=evaluateContent(document,type,language,sources),profile=CONTENT_PROFILES[type];
