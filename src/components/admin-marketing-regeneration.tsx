@@ -16,7 +16,7 @@ function cost(mode:Mode,aiCover:boolean){
  if(mode==='render')return 0;
  if(aiCover&&mode==='both')return .20;
  if(aiCover&&mode==='image')return .15;
- return mode==='text'||mode==='both'?.02:0;
+ return (mode==='text'||mode==='both')?.02:0;
 }
 function short(value:unknown,limit=130){
  const text=typeof value==='string'?value.trim():'';
@@ -92,6 +92,19 @@ export function AdminMarketingRegeneration({sourceId,locale,onCreated,onClose}:{
   }catch(e){setError(e instanceof Error?e.message:String(e));}
   finally{setWorking(false);}
  }
+ async function finishRendering(){
+  if(!source||working)return;
+  setWorking(true);setError('');setMessage('');
+  try{
+   const result=await api('/draft/'+source.id+'/versions/render',{revision:source.revision});
+   if(!result.draft?.id)throw new Error('RENDER_NOT_COMPLETED');
+   onCreated(result.draft);setViewId(result.draft.id);
+   setMessage(t('Only modified cards were rendered; review the new quality report.',
+    '변경된 카드만 재렌더링했습니다. 새로운 품질 검사 결과를 확인하세요.'));
+   await refreshHistory(result.draft.id);
+  }catch(e){setError(e instanceof Error?e.message:String(e));}
+  finally{setWorking(false);}
+ }
  async function restore(version:Row){
   if(!source||working)return;
   if(!window.confirm(t('Restore this saved version into a NEW unapproved draft? The current, published and scheduled versions remain unchanged.',
@@ -133,6 +146,14 @@ export function AdminMarketingRegeneration({sourceId,locale,onCreated,onClose}:{
    <p className="marketing-version-origin"><strong>{t('Working from','기준 버전')} v{source.version}</strong>
     <span>{firstTitle(source)}</span>
     <span>{source.status==='published'?t('Published original','발행 원본'):source.status==='scheduled'?t('Reserved original','예약 원본'):t('Unpublished source','미게시 기준')}</span></p>
+   {Number(source.version)>1&&source.images?.some((url:unknown)=>!url)&&<div className="marketing-version-pending">
+    <strong>{t('Changed cards are awaiting approved photos or rendering.',
+      '변경된 카드가 사진 검수 또는 재렌더링을 기다리고 있습니다.')}</strong>
+    <p>{t('Approve newly sourced photos in the main Draft editor, then finish rendering only the changed slides. Untouched slides and old approvals stay intact.',
+     '새로 검색한 사진은 메인 초안 편집기에서 저작권 검수 후 승인하세요. 승인 후 변경한 카드만 렌더링하며, 변경하지 않은 카드와 기존 사진 승인은 보존됩니다.')}</p>
+    <button type="button" className="admin-secondary" disabled={working} onClick={()=>void finishRendering()}>
+     <Images size={14}/>{t('Render changed cards after approval ($0 AI)','사진 승인 후 변경 카드만 렌더링 (AI $0)')}</button>
+   </div>
    <div className="marketing-version-slides">
     {slides.map((slide:Row,index:number)=><article className="marketing-version-slide" key={index}>
      {source.images?.[index]?<img src={source.images[index]} alt={t('Existing slide','기존 슬라이드')+' '+(index+1)}/>:<div className="marketing-version-empty-image">{t('Needs rendering','렌더링 필요')}</div>}
