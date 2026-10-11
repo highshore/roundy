@@ -1,5 +1,5 @@
 'use client';
-import {useCallback,useEffect,useMemo,useState} from 'react';
+import {useCallback,useEffect,useMemo,useState,type SyntheticEvent} from 'react';
 import {ArrowLeft,ArrowRight,CheckCircle2,Clock3,ExternalLink,Image as ImageIcon,RefreshCw,Search,ShieldCheck,ShieldX,X,ZoomIn} from 'lucide-react';
 import {tr,type Locale} from '@/lib/locale';
 
@@ -65,7 +65,7 @@ export function AdminMarketingAssets({locale,onOpenDraft}:{
   document.addEventListener('keydown',onKeyDown);
   return()=>document.removeEventListener('keydown',onKeyDown);
  },[viewingId,viewIndex,visible]);
- function usePreviewFallback(event:React.SyntheticEvent<HTMLImageElement>,asset:Asset){
+ function usePreviewFallback(event:SyntheticEvent<HTMLImageElement>,asset:Asset){
   const img=event.currentTarget;
   const fallback=String(asset.preview_url||'');
   if(fallback&&!img.dataset.fallbackUsed&&img.src!==fallback){
