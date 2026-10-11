@@ -243,8 +243,13 @@ export async function regenerateVersion(id:string,value:unknown,actor:string){
   &&source.content_document?.photo_sourcing?.ai_thumbnail_enabled===true
   &&!photoSlots.includes(0);
  if(['image','both'].includes(input.mode)){
-  if(input.mode==='image'&&indices.some(i=>!photoSlots.includes(i)&&!(i===0&&aiCover)))
+  // The editorial closing is text-only. Whole-post image regeneration updates
+  // every photograph but must preserve text-only cards, not reject the operation.
+  const photoTargets=indices.filter(i=>photoSlots.includes(i)||(i===0&&aiCover));
+  if(input.mode==='image'&&!photoTargets.length)
    throw new Error('SLIDE_HAS_NO_REPLACEABLE_IMAGE');
+  if(input.mode==='image'&&input.scope==='slides'&&photoTargets.length!==indices.length)
+   throw new Error('SELECTED_SLIDE_HAS_NO_REPLACEABLE_IMAGE');
   if(!['stock','pexels'].includes(source.visual_source))throw new Error('LICENSED_PHOTO_SOURCE_REQUIRED');
   if(input.scope==='slides'&&indices.some(i=>!photoSlots.includes(i)&&!(i===0&&aiCover)))
    throw new Error('SLIDE_HAS_NO_REPLACEABLE_IMAGE');
