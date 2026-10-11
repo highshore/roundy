@@ -30,6 +30,35 @@ async function graph(path:string,fields?:Record<string,string>){
  const response=await fetch(root+path,{method:fields?'POST':'GET',headers:{Authorization:'Bearer '+token(),...(fields?{'Content-Type':'application/x-www-form-urlencoded'}:{})},body:fields?new URLSearchParams(fields):undefined,signal:AbortSignal.timeout(25000)});
  const data=await response.json();if(!response.ok||data.error)throw new Error('Instagram API error '+(data.error?.code??response.status)+'. Check account access, token expiry and media requirements.');return data;
 }
+// Configuration alone is not a live Instagram connection. Never return secrets or
+// Meta's raw OAuth response to the admin browser.
+async function instagramConnectionHealth(){
+ const configured=connection();
+ const base={...configured,instagram_configured:configured.instagram,instagram_checked_at:new Date().toISOString()};
+ if(!configured.instagram)return {...base,instagram:false,instagram_status:'not_configured'};
+ try{
+  const response=await fetch('https://graph.instagram.com/'+apiVersion()+'/me?fields=user_id%2Cusername',{
+   method:'GET',headers:{Authorization:'Bearer '+token()},
+   signal:AbortSignal.timeout(10000),cache:'no-store'
+  });
+  const result=await response.json().catch(()=>({})) as Record<string,any>;
+  if(!response.ok||result.error){
+   const code=Number(result.error?.code)||response.status;
+   const subcode=Number(result.error?.error_subcode)||null;
+   return {...base,instagram:false,instagram_status:code===190?'token_invalid':'verification_failed',
+    instagram_error_code:code,instagram_error_subcode:subcode};
+  }
+  if(String(result.username||'').toLowerCase()!=='roundy.meet'||
+   String(result.user_id||'')!==String(userId())){
+   return {...base,instagram:false,instagram_status:'account_mismatch'};
+  }
+  return {...base,instagram:true,instagram_status:'valid',instagram_account:'@roundy.meet'};
+ }catch{
+  // A timeout/network failure is not proof that the credentials were revoked.
+  return {...base,instagram:false,instagram_status:'verification_unavailable'};
+ }
+}
+
 async function graphJson(path:string,body:Record<string,unknown>){
  const response=await fetch('https://graph.instagram.com/'+apiVersion()+'/'+path,{
   method:'POST',
@@ -727,7 +756,7 @@ Deno.serve(async req=>{
   const schedulerKey=req.headers.get('x-marketing-secret');
   if(schedulerKey){const {data,error}=await service.rpc('marketing_scheduler_authorized',{p_secret:schedulerKey});if(error||data!==true)return json({error:'Unauthorized'},401);}
   else {const authorization=req.headers.get('Authorization')??'';adminClient=createClient(url,Deno.env.get('SUPABASE_ANON_KEY')!,{global:{headers:{Authorization:authorization}},auth:{persistSession:false}});const {data:{user},error}=await adminClient.auth.getUser();if(error||!user)return json({error:'Sign in required'},401);const {data:admin,error:adminError}=await adminClient.rpc('is_admin');if(adminError||admin!==true)return json({error:'Administrator access required'},403);}
-  if(req.method==='GET')return json(connection());
+  if(req.method==='GET')return json(await instagramConnectionHealth());
   if(req.method!=='POST')return json({error:'Method not allowed'},405);
   if(adminClient){
    const body=await req.json();
