@@ -116,7 +116,7 @@ const richSamples=[
   body:'서울숲과 월드컵공원은 같은 서울의 녹지이지만 경험이 다릅니다. 서울숲은 문화예술공원과 생태숲 등 여러 주제 공간을 가까이에서 옮겨 다니기 좋습니다. 반면 월드컵공원은 난지도 쓰레기 매립지를 생태공원으로 바꾼 장소로, 하늘공원과 노을공원 등 5개 공원으로 구성됩니다.',
   source_label:'서울특별시 2026 방문 가이드',source_ids:['S1'],reference:officialSources.parks}
 ];
-const fixturePhotoPaths=['public/images/discovery-offline.webp',
+const fixturePhotoPaths=['public/images/yeouido.webp',
  'public/images/roundy-mingle-hero-photo.webp','public/images/discovery-hero-poster.webp'];
 const officialFixturePhotos=await Promise.all(fixturePhotoPaths.map(async path=>{
  assert.ok(fs.existsSync(path),'Image QA fixture required: '+path);
@@ -128,7 +128,8 @@ const editorialAssets={cardPhotos:{1:officialFixturePhotos[0],2:officialFixtureP
  2:'QA / existing Roundy site photo',3:'QA / existing Roundy site photo'},reusePhotos:false};
 const noOverlap=(a,b)=>a.x>=b.x+b.width||b.x>=a.x+a.width||
  a.y>=b.y+b.height||b.y>=a.y+a.height;
-const fullCopy=value=>String(value).replace(/\s/gu,'');
+const fullCopy=value=>String(value).replace(/㎡/g,'m²').replace(/㎢/g,'km²')
+ .replace(/㎞/g,'km').replace(/㎝/g,'cm').replace(/㎜/g,'mm').replace(/㎏/g,'kg').replace(/\s/gu,'');
 let richRendered=0;
 for(const sample of richSamples){
  assert.ok(sample.reference.startsWith('https://english.seoul.go.kr/'));
@@ -152,6 +153,10 @@ for(const sample of richSamples){
  assert.ok(json.includes('objectFit')&&json.includes('contain'),'No subject-cropping photo fit');
  assert.ok(!json.includes('rgba(')&&!json.includes('Learn More')&&!json.includes('Roundy 둘러보기'));
  assert.ok(json.includes(sample.source_label),'Preserve source provenance');
+ if(sample.slug==='information-insight'){
+  assert.ok(json.includes('m²'),'Unicode square-meter units must be rendered legibly');
+  assert.ok(!json.includes('㎡'),'Unsupported compatibility glyph must not be rasterized');
+ }
  const raw=Buffer.from(await visuals.renderCompactEditorial(slide,sample.index,5,doc,editorialAssets).arrayBuffer());
  const meta=await sharp(raw).metadata();
  assert.equal(meta.width,1080);assert.equal(meta.height,1350);
