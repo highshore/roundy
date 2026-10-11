@@ -183,7 +183,7 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
   const signed=stored.length?checked(await service.storage.from('marketing-images')
    .createSignedUrls(stored.map(asset=>String(asset.storage_path)),3600)) as Row[]:[];
   const previews=new Map(signed.map((item,index)=>[stored[index]?.id,String(item.signedUrl||'')]));
-  const previewAssets=all.map(asset=>({...asset,
+  const previewAssets:Row[]=all.map((asset:Row):Row=>({...asset,
    preview_url:previews.get(asset.id)||asset.preview_url||asset.image_url}));
   const ids=previewAssets.map(asset=>asset.id);
   const usage=ids.length
