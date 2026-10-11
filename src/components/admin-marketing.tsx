@@ -708,7 +708,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
         <select value={selectedAiSlot===null?'none':String(selectedAiSlot)}
          disabled={busy||!!running||dirty||draft.status!=='needs_approval'}
          onChange={e=>{const next=e.target.value==='none'?null:Number(e.target.value);void changeAiCardSlot(next);}}>
-         <option value="none">{t('No AI image','AI 사용 안 함')}</option>
+         <option value="none" disabled={(draft.carousel_slides||[]).length===5}>{t('No AI image (3-card only)','AI 사용 안 함 (3장 콘텐츠 전용)')}</option>
          {(draft.carousel_slides||[]).length===5&&([0,1,2,3] as const).map(slot=>
           <option value={slot} key={slot}>{t('Card','카드')} {slot+1} — {slot===0?t('Cover','표지'):slot===1?t('Context','배경'):t('Insight','인사이트')}</option>)}
         </select>
