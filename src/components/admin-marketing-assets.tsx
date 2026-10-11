@@ -1,6 +1,6 @@
 'use client';
 import {useCallback,useEffect,useMemo,useState} from 'react';
-import {CheckCircle2,Clock3,ExternalLink,Image as ImageIcon,RefreshCw,Search,ShieldCheck,ShieldX} from 'lucide-react';
+import {ArrowLeft,ArrowRight,CheckCircle2,Clock3,ExternalLink,Image as ImageIcon,RefreshCw,Search,ShieldCheck,ShieldX,X,ZoomIn} from 'lucide-react';
 import {tr,type Locale} from '@/lib/locale';
 
 type Asset=Record<string,any>;
@@ -19,6 +19,8 @@ export function AdminMarketingAssets({locale,onOpenDraft}:{
  const [filter,setFilter]=useState<Filter>('all'),[query,setQuery]=useState('');
  const [loading,setLoading]=useState(true),[busyId,setBusyId]=useState('');
  const [error,setError]=useState(''),[notice,setNotice]=useState('');
+ const [viewingId,setViewingId]=useState<string|null>(null);
+ const [showArchived,setShowArchived]=useState(false);
  const load=useCallback(async()=>{
   const response=await fetch(BASE+'/photos/assets',{cache:'no-store'});
   const result=await response.json().catch(()=>({error:'PHOTO_LIBRARY_UNAVAILABLE'}));
@@ -37,6 +39,39 @@ export function AdminMarketingAssets({locale,onOpenDraft}:{
   return [asset.photographer,asset.topic_key,asset.provider_photo_id,
    asset.review_note,asset.review_status].some(value=>String(value||'').toLowerCase().includes(keyword));
  }),[assets,filter,query]);
+ const viewed=assets.find(asset=>asset.id===viewingId)||null;
+ const viewIndex=visible.findIndex(asset=>asset.id===viewingId);
+ const fullPreview=(asset:Asset)=>String(asset.review_preview_url||asset.preview_url||'');
+ const canShowArchive=(asset:Asset)=>asset.review_status==='approved'&&
+  !!asset.preview_url&&String(asset.preview_url)!==fullPreview(asset);
+ const openPhoto=(asset:Asset)=>{setShowArchived(false);setViewingId(String(asset.id));};
+ const closePhoto=()=>{setViewingId(null);setShowArchived(false);};
+ const movePhoto=(direction:number)=>{
+  if(viewIndex<0||!visible.length)return;
+  const candidate=visible[(viewIndex+direction+visible.length)%visible.length];
+  if(candidate)openPhoto(candidate);
+ };
+ useEffect(()=>{
+  if(!viewingId)return;
+  const onKeyDown=(event:KeyboardEvent)=>{
+   if(event.key==='Escape')setViewingId(null);
+   if(event.key==='ArrowRight'&&viewIndex>=0&&visible.length>1){
+    const next=visible[(viewIndex+1)%visible.length];if(next)openPhoto(next);
+   }
+   if(event.key==='ArrowLeft'&&viewIndex>=0&&visible.length>1){
+    const prev=visible[(viewIndex-1+visible.length)%visible.length];if(prev)openPhoto(prev);
+   }
+  };
+  document.addEventListener('keydown',onKeyDown);
+  return()=>document.removeEventListener('keydown',onKeyDown);
+ },[viewingId,viewIndex,visible]);
+ function usePreviewFallback(event:React.SyntheticEvent<HTMLImageElement>,asset:Asset){
+  const img=event.currentTarget;
+  const fallback=String(asset.preview_url||'');
+  if(fallback&&!img.dataset.fallbackUsed&&img.src!==fallback){
+   img.dataset.fallbackUsed='true';img.src=fallback;
+  }
+ }
  async function review(asset:Asset,status:'approved'|'rejected'){
   const question=status==='approved'
    ?t('Have you personally checked the original source, license, people, trademarks and brand endorsement risks for this image? Approval archives the actual image.','해당 사진의 원본 출처, 상업적 수정 권한, 라이선스, 인물, 상표 및 브랜드 오인 위험를 직접 확인했습니까? 승인하면 원본을 보관합니다.')
@@ -53,6 +88,7 @@ export function AdminMarketingAssets({locale,onOpenDraft}:{
    const result=await response.json().catch(()=>({error:'PHOTO_REVIEW_FAILED'}));
    if(!response.ok)throw new Error(result.error||'PHOTO_REVIEW_FAILED');
    await load();
+   closePhoto();
    setNotice(status==='approved'
     ?t('Photo approved and archived for reuse.','사진이 승인되어 재사용 자산으로 보관됐습니다.')
     :t('Photo marked rejected.','사진을 거절 상태로 변경했습니다.'));
@@ -96,14 +132,23 @@ export function AdminMarketingAssets({locale,onOpenDraft}:{
        '콘텐츠 생성 시 여러 제공자의 사진을 가져옵니다. 신규 자산은 관리자 승인 전 사용하지 않습니다.')}</p>
      </div>:
     <div className="marketing-asset-grid">{visible.map(asset=><article key={asset.id} className="marketing-asset-card">
-      <div className="marketing-asset-photo">
-       {asset.preview_url?<img loading="lazy" src={asset.preview_url} alt={String(asset.provider||'Photo')+' photo by '+asset.photographer}/>:<ImageIcon/>}
-       <span className={'marketing-workspace-pill marketing-workspace-pill-'+asset.review_status}>
-        {asset.review_status==='approved'?<CheckCircle2 size={13}/>:asset.review_status==='pending'?<Clock3 size={13}/>:<ShieldX size={13}/>}
-        {t(...(statusText[asset.review_status as Filter]||statusText.pending))}
-       </span>
-      </div>
+      <button type="button" className="marketing-asset-photo" onClick={()=>openPhoto(asset)}
+       aria-label={t('Examine complete photo by ','전체 사진 검수, 사진가 ')+String(asset.photographer||asset.provider||'')}>
+       {fullPreview(asset)?
+        <img loading="lazy" src={fullPreview(asset)}
+         onError={event=>usePreviewFallback(event,asset)}
+         alt={String(asset.provider||'Photo')+' photo by '+String(asset.photographer||'')}/>:
+        <ImageIcon size={32} aria-hidden="true"/>}
+       <span className="marketing-asset-view-action"><ZoomIn size={15} aria-hidden="true"/>{t('View full image','전체 사진 보기')}</span>
+      </button>
       <div className="marketing-asset-info">
+       <div className="marketing-asset-status-row">
+        <span className={'marketing-workspace-pill marketing-workspace-pill-'+asset.review_status}>
+         {asset.review_status==='approved'?<CheckCircle2 size={13}/>:asset.review_status==='pending'?<Clock3 size={13}/>:<ShieldX size={13}/>}
+         {t(...(statusText[asset.review_status as Filter]||statusText.pending))}
+        </span>
+        <small>{t('Uncropped photo preview','잘림 없는 사진 미리보기')}</small>
+       </div>
        <strong>{asset.photographer||asset.provider||'Unknown'} <span className="marketing-workspace-muted">#{asset.provider_photo_id}</span></strong>
        <p>{String(asset.provider||'').toUpperCase()} · {String(asset.topic_key||'').replaceAll('_',' ')} · {t('Used in','연결 초안')} {Number(asset.used_by_count)||0}</p>
        <p><strong>{asset.license_name||t('License not verified','라이선스 확인 불가')}</strong> · {asset.commercial_use_allowed?t('Commercial use permitted','상업 이용 허용'):t('Commercial use blocked','상업 이용 차단')} · {asset.modifications_allowed?t('Editing permitted','편집 허용'):t('Editing blocked','편집 차단')} · {asset.attribution_required?t('Credit required','출처 표기 필수'):t('Credit not required','출처 표기 의무 없음')}</p>
@@ -140,6 +185,72 @@ export function AdminMarketingAssets({locale,onOpenDraft}:{
        </div>
       </div>
      </article>)}</div>}
+
+   {viewed&&<div className="marketing-asset-lightbox-backdrop" role="presentation" onClick={closePhoto}>
+    <section className="marketing-asset-lightbox" role="dialog" aria-modal="true"
+     aria-label={t('Photo rights review','사진 원본 및 권리 검수')} onClick={event=>event.stopPropagation()}>
+     <header className="marketing-asset-lightbox-head">
+      <div><small>{t('PHOTO REVIEW / FULL IMAGE','사진 원본 전체 보기')}</small>
+       <strong>{viewed.photographer||viewed.provider||t('Photo review','사진 검수')}</strong>
+      </div>
+      <button type="button" className="marketing-asset-lightbox-close" onClick={closePhoto}
+       aria-label={t('Close enlarged photo','확대 사진 닫기')}><X size={20}/></button>
+     </header>
+     <div className="marketing-asset-lightbox-body">
+      <div className="marketing-asset-lightbox-image-pane">
+       <div className="marketing-asset-lightbox-image">
+        {(showArchived&&canShowArchive(viewed)?viewed.preview_url:fullPreview(viewed))?
+         <img src={showArchived&&canShowArchive(viewed)?viewed.preview_url:fullPreview(viewed)}
+          onError={event=>usePreviewFallback(event,viewed)}
+          alt={String(viewed.photographer||viewed.provider||'')+' photograph'}/>:
+         <ImageIcon size={44} aria-hidden="true"/>}
+       </div>
+       {canShowArchive(viewed)&&<div className="marketing-asset-lightbox-views" role="group"
+        aria-label={t('Compare source and archived crop','원본과 저장된 이미지 비교')}>
+        <button type="button" aria-pressed={!showArchived}
+         onClick={()=>setShowArchived(false)}>{t('Full source photograph','잘리지 않은 원본')}</button>
+        <button type="button" aria-pressed={showArchived}
+         onClick={()=>setShowArchived(true)}>{t('Approved 4:5 crop','승인된 4:5 이미지')}</button>
+       </div>}
+       <p className="marketing-workspace-muted">
+        {showArchived&&canShowArchive(viewed)
+         ?t('Approved 4:5 archive used when composing feed cards.','게시용 카드에 사용하는 승인 보관 이미지입니다.')
+         :t('Uncropped photo with original composition for review.','검수를 위해 사진 전체 구도가 잘리지 않게 표시됩니다.')}
+       </p>
+      </div>
+      <div className="marketing-asset-lightbox-details">
+       <span className={'marketing-workspace-pill marketing-workspace-pill-'+viewed.review_status}>
+        {t(...(statusText[viewed.review_status as Filter]||statusText.pending))}
+       </span>
+       <strong>{viewed.photographer||t('Photographer unavailable','사진가 정보 없음')}</strong>
+       <p>{String(viewed.provider||'').toUpperCase()} · #{viewed.provider_photo_id}</p>
+       <p>{viewed.license_name||t('License information not verified','라이선스 확인 필요')}</p>
+       <p>{viewed.commercial_use_allowed?t('Commercial use permitted','상업 이용 허용'):t('Commercial use blocked','상업 이용 불가')}
+        {' / '}{viewed.modifications_allowed?t('Edits permitted','편집 허용'):t('Edits blocked','편집 제한')}</p>
+       <p>{t('Review faces, trademarks and implied endorsement before approving.','승인 전 초상권, 상표 및 홍보 오인 가능성을 확인하세요.')}</p>
+       <div className="marketing-asset-links">
+        {viewed.source_url&&<a href={viewed.source_url} target="_blank" rel="noopener noreferrer">{t('Source page','원본 페이지')}<ExternalLink size={14}/></a>}
+        {viewed.license_url&&<a href={viewed.license_url} target="_blank" rel="noopener noreferrer">{t('License','라이선스')}<ExternalLink size={14}/></a>}
+        {viewed.license_evidence_url&&<a href={viewed.license_evidence_url} target="_blank" rel="noopener noreferrer">{t('License evidence','출처 검증')}<ExternalLink size={14}/></a>}
+       </div>
+       {viewed.review_status==='pending'&&<div className="marketing-asset-lightbox-review">
+        <button type="button" className="admin-primary" disabled={!!busyId} onClick={()=>void review(viewed,'approved')}>{t('Approve this photo','이 사진 승인')}</button>
+        <button type="button" className="admin-secondary" disabled={!!busyId} onClick={()=>void review(viewed,'rejected')}>{t('Reject','거절')}</button>
+       </div>}
+       {viewed.review_status==='approved'&&<p className="marketing-workspace-muted">
+        <ShieldCheck size={14}/>{t('Approved and available for reuse','검수 완료 · 승인 사진 재사용 가능')}
+       </p>}
+      </div>
+     </div>
+     <footer className="marketing-asset-lightbox-footer">
+      <small>{viewIndex>=0?`${viewIndex+1} / ${visible.length}`:t('Photo review','사진 검수')}</small>
+      {viewIndex>=0&&visible.length>1&&<div>
+       <button type="button" onClick={()=>movePhoto(-1)}><ArrowLeft size={16}/>{t('Previous','이전')}</button>
+       <button type="button" onClick={()=>movePhoto(1)}>{t('Next','다음')}<ArrowRight size={16}/></button>
+      </div>}
+     </footer>
+    </section>
+   </div>}
    <details className="marketing-asset-usage">
     <summary>{t('Photo search diagnostics','이미지 검색 제공자별 기록')} ({attempts.length})</summary>
     <div>{attempts.length===0?<p className="marketing-workspace-muted">{t('No provider attempts recorded','검색 기록 없음')}</p>:attempts.slice(0,40).map(entry=>
