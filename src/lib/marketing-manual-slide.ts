@@ -1,0 +1,57 @@
+// Explicit manual edits to one Magazine Editorial card.
+// Returns a new immutable copy: role, source IDs, photo assignments and other
+// slides are never accepted from the browser or rewritten by this helper.
+import {magazineCarouselFit,savedCarouselPlan} from './marketing-carousel-template';
+import {EDITORIAL_AD_CTA} from './marketing-presentation';
+import {evaluateHeadlineOptions,reviewMagazineStoryboard} from './marketing-editorial-storyboard';
+
+type Row=Record<string,any>;
+const isText=(v:unknown,max:number)=>typeof v==='string'&&v.trim().length>0&&v.trim().length<=max;
+export type ManualEditResult={
+ request_key:string;revision:number;index:number;slides:Row[];document:Row;
+};
+export function composeManualMagazineEdit(source:Row,value:unknown):ManualEditResult {
+ const v=(value&&typeof value==='object'&&!Array.isArray(value)?value:{}) as Row;
+ const slides=source?.carousel_slides as Row[]||[],original=source?.content_document||{};
+ if(original.design_preset!=='roundy_magazine_editorial_v2'||!Array.isArray(slides)||![3,5].includes(slides.length))
+  throw new Error('MAGAZINE_SLIDES_REQUIRED');
+ const plan=savedCarouselPlan(original);
+ if(!plan||plan.slide_count!==slides.length)throw new Error('CAROUSEL_RESERVATION_MISMATCH');
+ if(!Number.isInteger(v.revision)||v.revision!==source.revision)throw new Error('DRAFT_CHANGED_REFRESH_FIRST');
+ if(typeof v.request_key!=='string'||!/^manual:[a-zA-Z0-9-]{8,100}$/.test(v.request_key))
+  throw new Error('INVALID_MANUAL_EDIT_KEY');
+ if(!Number.isInteger(v.index)||v.index<0||v.index>=slides.length)
+  throw new Error('INVALID_MANUAL_SLIDE_INDEX');
+ if(!isText(v.title,72)||!isText(v.body,260)||!isText(v.secondary_body,260))
+  throw new Error('MANUAL_TEXT_LENGTH_INVALID');
+ if(v.highlight!==undefined&&(typeof v.highlight!=='string'||v.highlight.length>80))
+  throw new Error('MANUAL_HIGHLIGHT_INVALID');
+ const index=v.index,sourceSlide=slides[index],language=source.content_language==='en'?'en':'ko';
+ const title=v.title.trim(),body=v.body.trim(),secondary=v.secondary_body.trim();
+ const highlight=String(v.highlight??sourceSlide.highlight??'').trim();
+ if(EDITORIAL_AD_CTA.test([title,body,secondary,highlight].join(' ')))
+  throw new Error('FEED_AD_CTA_NOT_ALLOWED');
+ if(index===0&&sourceSlide.title!==title&&(!Array.isArray(original.thumbnail_candidates)||original.thumbnail_candidates.length<3))
+  throw new Error('HEADLINE_OPTIONS_REQUIRED');
+ const changed={...sourceSlide,title,body,secondary_body:secondary,highlight,
+  body_ko:language==='ko'?body:secondary,body_en:language==='en'?body:secondary};
+ // Never accept role/source_ids/closing_type/options/metadata/photo URLs from the browser.
+ magazineCarouselFit(changed,plan,index,language);
+ const nextSlides=slides.map((slide:Row,i:number)=>i===index?changed:{...slide});
+ let nextDoc={...original,slides:nextSlides,thumbnail_render_pending:index===0};
+ if(index===0&&original.thumbnail_candidates){
+  const choices=[...original.thumbnail_candidates],selected=Number(original.thumbnail_selected_index??0);
+  if(!Number.isInteger(selected)||selected<0||selected>=choices.length)throw new Error('INVALID_THUMBNAIL_CHOICE');
+  choices[selected]=title;
+  if(new Set(choices.map((x:string)=>x.normalize('NFKC').replace(/\s+/g,'').toLowerCase())).size!==choices.length)
+   throw new Error('DUPLICATE_THUMBNAIL_COPY');
+  nextDoc={...nextDoc,thumbnail_candidates:choices};
+ }
+ const storyboard=reviewMagazineStoryboard(nextDoc,language);
+ nextDoc={...nextDoc,
+  ...(original.editorial_storyboard_version?{
+   editorial_headline_reviews:evaluateHeadlineOptions(nextDoc,language),
+   editorial_storyboard_review:storyboard
+  }:{})};
+ return {request_key:v.request_key,revision:v.revision,index,slides:nextSlides,document:nextDoc};
+}

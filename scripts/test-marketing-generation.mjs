@@ -214,6 +214,8 @@ function harness({denied=false,network=false,badSources=false,duplicate=false,ph
    const headlines=language==='ko'
     ?['서울에서 한 사람씩 직접 만나기','로테이션 소개팅으로 대화 시작하기','서울에서 서로를 알아가는 방법']
     :['Meet people face to face in Seoul','Try one-on-one conversations in Seoul','Choose matches mutually after talking'];
+   const wanted=body.response_format.json_schema.schema.properties.thumbnail_candidates.minItems;
+   if(wanted===5)headlines.push(language==='ko'?'서울에서 내 이야기부터 꺼내보는 순간':'Sharing a small story changes a first meeting',language==='ko'?'처음 만나서 함께 이야기할 때 생기는 변화':'A first conversation leaves room to listen');
    c.thumbnail_candidates=headlines;
    if(data.editorial_type){
     const helper=load('src/lib/marketing-answer-first.ts');
@@ -305,7 +307,7 @@ for(const language of ['en','ko'])for(const type of Object.keys(harness().policy
 {const p=harness().policy,c=fixture('dating_myth','ko',p.CONTENT_PROFILES);c.caption_ko='연구가 증명했다. 이 통념은 완전히 거짓이다.';c.caption=c.caption_ko;const q=p.evaluateContent(c,'dating_myth','ko',[{id:'S1',url:'https://doi.org/10.1234/attentive.2024',title:'Attentive Conversation Study (2024)',evidence:'Attentive Conversation Study 2024 limited sample association'}]);check(()=>assert.equal(q.status,'rejected'));check(()=>assert.ok(q.issues.some(x=>x.includes('단정'))));}
 {const p=harness().policy,c=fixture('trend_research','en',p.CONTENT_PROFILES);c.caption_en='Recent research suggests this pattern matters.';c.caption=c.caption_en;const q=p.evaluateContent(c,'trend_research','en',[{id:'S1',url:'https://doi.org/10.1234/attentive.2024',title:'Attentive Conversation Study (2024)',evidence:'Attentive Conversation Study 2024 limited sample association'}]);check(()=>assert.equal(q.status,'rejected'));check(()=>assert.ok(q.issues.some(x=>x.includes('현재 연도'))));}
 {const p=harness().policy,c=fixture('book_insight','en',p.CONTENT_PROFILES);const q=p.evaluateContent(c,'book_insight','en',[{id:'S1',url:'https://english-school.example',title:'English lessons',evidence:'Unrelated tutoring services'}]);check(()=>assert.equal(q.status,'rejected'));const quiz=fixture('mini_quiz','en',p.CONTENT_PROFILES);quiz.slides[2].options=['Same','Same'];check(()=>assert.equal(p.evaluateContent(quiz,'mini_quiz','en').status,'rejected'));}
-{const p=harness().policy;check(()=>assert.equal(p.CONTENT_POLICY_VERSION,15));const ko=fixture('prelaunch','ko',p.CONTENT_PROFILES);ko.caption='진정한 인연을 위한 특별한 만남';check(()=>assert.equal(p.evaluateContent(ko,'prelaunch','ko').status,'rejected'));const en=fixture('prelaunch','en',p.CONTENT_PROFILES);en.caption='Discover meaningful human connections in a premium experience.';check(()=>assert.equal(p.evaluateContent(en,'prelaunch','en').status,'rejected'));check(()=>assert.match(p.writingInstructions('conversation_prompt','ko'),/실제 SNS|당장 써볼 수|AI\/마케팅 표현|AI\/marketing|상투적인|generic AI/i));}
+{const p=harness().policy;check(()=>assert.equal(p.CONTENT_POLICY_VERSION,16));const ko=fixture('prelaunch','ko',p.CONTENT_PROFILES);ko.caption='진정한 인연을 위한 특별한 만남';check(()=>assert.equal(p.evaluateContent(ko,'prelaunch','ko').status,'rejected'));const en=fixture('prelaunch','en',p.CONTENT_PROFILES);en.caption='Discover meaningful human connections in a premium experience.';check(()=>assert.equal(p.evaluateContent(en,'prelaunch','en').status,'rejected'));check(()=>assert.match(p.writingInstructions('conversation_prompt','ko'),/실제 SNS|당장 써볼 수|AI\/마케팅 표현|AI\/marketing|상투적인|generic AI/i));}
 
 {const p=harness().policy;check(()=>assert.equal(p.qualitySeverity('실제 인용된 출처가 없습니다.'),'critical'));check(()=>assert.equal(p.qualitySeverity('카드 제목이 중복되거나 지나치게 유사합니다.'),'quality'));const presentation=harness().api?null:null;}
 for(const language of ['ko','en'])for(const type of Object.keys(harness().policy.CONTENT_PROFILES)){
@@ -375,7 +377,7 @@ for(const language of ['ko','en'])for(const ordinal of [1,2,3,4]){
  check(()=>assert.equal(result.draft.images.length,expected));
  check(()=>assert.equal(result.draft.content_document.carousel_template.slide_count,expected));
  check(()=>assert.equal(result.draft.content_document.carousel_template.reservation_number,ordinal));
- check(()=>assert.equal(result.draft.content_document.thumbnail_candidates.length,3));
+ check(()=>assert.equal(result.draft.content_document.thumbnail_candidates.length,5));
  const writing=h.requests.find(x=>x.url.endsWith('chat/completions')).body;
  check(()=>assert.equal(writing.response_format.json_schema.schema.properties.slides.minItems,expected));
  check(()=>assert.match(writing.messages[0].content,/ANSWER-FIRST \(REQUIRED\)/));

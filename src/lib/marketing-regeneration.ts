@@ -15,6 +15,7 @@ import {eventCampaignDraftQuality} from './marketing-event-campaign';
 import {renderPrelaunchCampaign,renderLiveEventCampaign} from './marketing-visuals';
 import {CAMPAIGN_PRESET,EVENT_CAMPAIGN_PRESET} from './marketing-presentation';
 import {reviewMarketingDraft,mergePreflightQuality} from './marketing-preflight-service';
+import {composeManualMagazineEdit} from './marketing-manual-slide';
 
 type DB=ReturnType<typeof createServiceRoleClient>;
 type Row=Record<string,any>;
@@ -162,6 +163,10 @@ async function regenerateAiCover(db:DB,draft:Row,request:RegenerationRequest){
 }
 async function renderVersionCards(db:DB,draft:Row,indices:number[]){
  const slides=sourceSlides(draft),photos=await listStockSelections(db,draft.id);
+ const aiBodySlot=draft.content_document?.photo_sourcing?.ai_image_slot;
+ if(Number.isInteger(aiBodySlot)&&aiBodySlot>0&&indices.includes(aiBodySlot)
+   &&!photos.some(p=>Number(p.slot)===aiBodySlot))
+  throw new Error('NON_ARCHIVED_AI_CARD_UNEDITABLE: An AI body card needs explicit image replacement, not a silent stock substitution.');
  if(!['pexels','stock'].includes(draft.visual_source))throw new Error('RENDER_SOURCE_UNAVAILABLE: 원본 실사 승인 자료가 없어 안전하게 재렌더링할 수 없습니다.');
  if(!stockReady(draft,photos))return {draft,ready:false};
  const assets=await loadEditorialAssets();
@@ -341,6 +346,66 @@ export async function regenerateVersion(id:string,value:unknown,actor:string){
   throw error;
  }
 }
+/**
+ * A free, scoped manual edit creates a NEW candidate version. Published,
+ * approved, scheduled and source image snapshots are never modified.
+ * The archive's source_ids, role, rights and immutable reservation survive.
+ */
+export async function editManualMagazineSlideVersion(id:string,value:unknown,actor:string){
+ if(!uuid(id)||!uuid(actor))throw new Error('INVALID_MANUAL_EDIT');
+ const db=createServiceRoleClient();
+ const source=ok(await db.from('instagram_post_drafts').select('*').eq('id',id).single()) as Row;
+ if(!['pexels','stock'].includes(String(source.visual_source)))
+  throw new Error('MANUAL_EDIT_LICENSED_PHOTOS_ONLY');
+ if(source.content_document?.thumbnail_render_pending===true)
+  throw new Error('RENDER_PENDING_COVER_FIRST');
+ const edit=composeManualMagazineEdit(source,value);
+ const index=edit.index,photos=await listStockSelections(db,id);
+ const photoSlots=requiredStockSlots(source);
+ // An AI image on a body card has no archived reusable source. Never replace
+ // it with an unrelated stock photo while presenting the edit as text-only.
+ if(index<edit.slides.length-1&&index!==0&&!photoSlots.includes(index))
+  throw new Error('NON_ARCHIVED_AI_CARD_UNEDITABLE: Use explicit image regeneration or licensed photo replacement.');
+ if(index===0&&source.content_document?.photo_sourcing?.ai_image_slot===0
+   &&!photoSlots.includes(0)&&!source.content_document?.regeneration_ai_cover_path)
+  throw new Error('ORIGINAL_AI_COVER_SOURCE_UNAVAILABLE');
+ if(index===0&&source.content_document?.photo_sourcing?.ai_thumbnail_enabled===true
+   &&!photoSlots.includes(0)&&!source.content_document?.regeneration_ai_cover_path)
+  throw new Error('ORIGINAL_AI_COVER_SOURCE_UNAVAILABLE');
+ const prev=ok(await db.from('instagram_post_drafts').select('id')
+  .eq('regeneration_request_key',edit.request_key).maybeSingle()) as Row|null;
+ if(prev)return {draft:ok(await db.from('instagram_post_drafts').select('*').eq('id',prev.id).single()),deduplicated:true};
+ const snapshot=serializableSnapshot(source,photos);
+ const child=await insertVersion(db,source,snapshot,photos,{
+  requestKey:edit.request_key,mode:'manual',scope:'slides',indices:[index],
+  instruction:'Manual editorial text revision, card '+(index+1),visible:false
+ });
+ try {
+  const images=Array.isArray(source.images)?[...source.images]:[];
+  images[index]=''; // Old image depicts the previous text; never publish it again.
+  const changed=ok(await db.from('instagram_post_drafts').update({
+   content_document:edit.document,carousel_slides:edit.slides,images,
+   revision:2,quality_report:unapprovedQuality(),quality_revision:null,
+   regenerated_at:new Date().toISOString(),updated_at:new Date().toISOString()
+  }).eq('id',child.id).eq('status','needs_approval').eq('revision',1).select('*').single()) as Row;
+  const rendered=await renderVersionCards(db,changed,[index]);
+  let reviewed=await recheck(db,rendered.draft);
+  const finalPhotos=await listStockSelections(db,child.id),now=new Date().toISOString();
+  reviewed=ok(await db.from('instagram_post_drafts').update({
+   imported_at:now,regeneration_saved_snapshot:serializableSnapshot(reviewed,finalPhotos),
+   updated_at:now
+  }).eq('id',child.id).eq('status','needs_approval').select('*').single()) as Row;
+  return {draft:reviewed,new_version:true,manual_edit:true,
+   changed_indices:[index],requires_photo_review:!rendered.ready||!reviewed.images.every(Boolean),
+   actor,estimated_usd:0};
+ }catch(error){
+  // A failed edit is not exposed as an apparently reviewable new draft.
+  await db.from('instagram_post_drafts').delete().eq('id',child.id)
+   .eq('status','needs_approval').is('imported_at',null);
+  throw error;
+ }
+}
+
 export async function restoreVersion(id:string,targetId:string,revision:number,actor:string,confirmed:boolean){
  if(!uuid(id)||!uuid(targetId)||confirmed!==true)throw new Error('RESTORE_CONFIRMATION_REQUIRED');
  const db=createServiceRoleClient();

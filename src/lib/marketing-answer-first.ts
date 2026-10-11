@@ -1,5 +1,6 @@
 // Editorial-only Answer-First contract. Does not generate images or schedule publication.
 import {type CarouselPlan,withCarouselPlan,savedCarouselPlan} from './marketing-carousel-template';
+import {EDITORIAL_HEADLINE_VERSION} from './marketing-editorial-storyboard';
 export type CopyRow=Record<string,any>;
 export const ANSWER_FIRST_VERSION=1;
 const clean=(v:unknown)=>typeof v==='string'?v.replace(/\r\n?/g,'\n').trim():'';
@@ -39,7 +40,7 @@ export function magazineAnswerFirstPrompt(count:3|5):string{
   count===3?'Three cards: cover with answer-first headline, key_insight with a concrete and source-grounded fact, editorial_closing with a thoughtful summary, insight or subtle brand outro.':'Five cards: cover with answer-first headline, context giving real background, two distinct insights with verifiable details, editorial_closing with a useful summary, insight or subtle brand outro.',
   'No signup, click, link, learn more, fake button, or sales CTA on feed cards. The last editorial_closing must give a useful take-home point; the server adds a different context-aware Roundy brand bridge beneath that point, plus one friendly invitation in the caption. Do not repeat the brand line in the generated body.',
   'Preserve all attribution and limitations, source IDs and truthful specific Seoul venue names. Never invent statistics or claim venue availability.',
-  'Produce three distinct, concrete scroll-stopping cover headlines. Candidate 1 MUST equal slides[0].title. None may duplicate any OTHER slide title, and none may depend on an invented claim. A real reader should immediately recognize the situation or promised practical takeaway. Prefer a person, action or natural spoken question over abstract nouns. No bait-and-switch.'
+  'Produce exactly FIVE distinct, truthful scroll-stopping headlines: a relatable moment, a contrast, a defensible surprising observation, a concrete benefit and a specific perspective. Candidate 1 MUST equal slides[0].title. Never strengthen evidence, invent insights or promise results. All five must accurately describe the same real story.'
  ].join('\n');
 }
 export function editorialRolesForCount(type:string,legacy:readonly string[],count:3|5){
@@ -77,8 +78,10 @@ export function fiveEventRoles(pattern:string,legacy:readonly string[]):string[]
 export function withAnswerFirstSchema(schema:CopyRow,language:string,enabled:boolean){
  if(!enabled)return schema;
  const max=language==='en'?64:34;
+ const magazine=schema?.properties?.design_preset?.enum?.[0]==='roundy_magazine_editorial_v2';
+ const quantity=magazine?5:3;
  return {...schema,properties:{...schema.properties,thumbnail_candidates:{
-  type:'array',minItems:3,maxItems:3,items:{type:'string',minLength:6,maxLength:max}
+  type:'array',minItems:quantity,maxItems:quantity,items:{type:'string',minLength:6,maxLength:max}
  }},required:[...schema.required,'thumbnail_candidates']};
 }
 export function answerFirstPrompt(language:string,count:3|5=5){
@@ -109,11 +112,12 @@ export function answerFirstIssues(doc:CopyRow,language:string):string[]{
   if(slides.some((slide:CopyRow,i:number)=>slide.role!==expected[i]))add('Answer-First 에디토리얼 카드 역할 또는 순서가 올바르지 않습니다.');
  }else if(slides[count-1]?.role!=='cta')add('Answer-First 마지막 장은 CTA여야 합니다.');
  const choices=doc.thumbnail_candidates;
- if(!Array.isArray(choices)||choices.length<3)add('썸네일 문구 후보가 최소 3개 필요합니다.');
+ const desired=doc?.cover_editorial_version===EDITORIAL_HEADLINE_VERSION?5:3;
+ if(!Array.isArray(choices)||choices.length!==desired)add('썸네일 문구 후보가 정확히 '+desired+'개 필요합니다.');
  else{
   const limit=language==='en'?64:34;
   if(choices.some((c:unknown)=>typeof c!=='string'||clean(c).length<6||clean(c).length>limit))add('썸네일 문구 후보는 모바일에서 읽기 쉬운 길이로 작성해야 합니다.');
-  if(new Set(choices.map(norm)).size!==choices.length)add('썸네일 문구 후보 3개가 서로 달라야 합니다.');
+  if(new Set(choices.map(norm)).size!==choices.length)add('썸네일 문구 후보가 서로 달라야 합니다.');
   for(const title of choices){
    if(typeof title!=='string')continue;
    if(/[?？]\s*$/.test(clean(title))||/^(어디서|어떻게|뭘|무엇을|왜|어떤)\b/.test(clean(title))||/^(where|how|why|what|which)\b/i.test(clean(title)))
@@ -135,10 +139,12 @@ export function answerFirstIssues(doc:CopyRow,language:string):string[]{
 }
 export function applyAnswerFirstDocument(raw:CopyRow,enabled:boolean,plan:CarouselPlan|null=null){
  if(!enabled)return withCarouselPlan(raw,plan);
- // The first AI headline must be one of the three separately reviewable candidates.
+ // New magazine versions have five candidates; historical posts retain three.
  const choices=Array.isArray(raw.thumbnail_candidates)?raw.thumbnail_candidates.map(clean):[];
  const slides=Array.isArray(raw.slides)?raw.slides:[];
+ const magazine=raw?.design_preset==='roundy_magazine_editorial_v2'&&!!plan;
  return {...withCarouselPlan(raw,plan),answer_first:true,answer_first_version:ANSWER_FIRST_VERSION,
+  ...(magazine?{cover_editorial_version:EDITORIAL_HEADLINE_VERSION,editorial_storyboard_version:1}:{}),
   thumbnail_candidates:choices,thumbnail_selected_index:0,thumbnail_render_pending:false,
   slides:slides.map((s:CopyRow,i:number)=>i===0&&choices[0]?{...s,title:choices[0]}:s)};
 }

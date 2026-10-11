@@ -31,8 +31,9 @@ async function api(path:string,body?:unknown){
  return v;
 }
 function firstTitle(d:Row){return short(d.carousel_slides?.[0]?.title||d.caption||'',75);}
-export function AdminMarketingRegeneration({sourceId,locale,onCreated,onClose}:{
- sourceId:string;locale:Locale;onCreated:(draft:Row)=>void;onClose?:()=>void
+export function AdminMarketingRegeneration({sourceId,locale,onCreated,onClose,focusSlide}:{
+ sourceId:string;locale:Locale;onCreated:(draft:Row)=>void;onClose?:()=>void;
+ focusSlide?:{index:number;nonce:number}|null
 }){
  const t=(en:string,ko:string)=>tr(locale,en,ko);
  const [versions,setVersions]=useState<Row[]>([]);
@@ -44,6 +45,11 @@ export function AdminMarketingRegeneration({sourceId,locale,onCreated,onClose}:{
  const [compare,setCompare]=useState(false),[comparisonId,setComparisonId]=useState<string>('');
  const [viewId,setViewId]=useState<string>(sourceId);
  useEffect(()=>{setViewId(sourceId);setCompare(false);setMode('text');setScope('all');setImageSource('online');setIndices([]);setInstruction('');},[sourceId]);
+ useEffect(()=>{
+  if(!focusSlide||focusSlide.index<0)return;
+  setMode('text');setScope('slides');setIndices([focusSlide.index]);setInstruction('');
+  document.getElementById('roundy-regeneration-options-'+sourceId)?.scrollIntoView({behavior:'smooth',block:'nearest'});
+ },[sourceId,focusSlide?.nonce,focusSlide?.index]);
  useEffect(()=>{
   let active=true;setLoading(true);setError('');
   api('/draft/'+sourceId+'/versions').then(v=>{
