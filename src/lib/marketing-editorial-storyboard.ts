@@ -25,7 +25,7 @@ export function evaluateHeadlineOptions(doc:Document,language:string):HeadlineRe
  const ko=language!=='en';
  const bodyContext=rest.map((x:Slide)=>[txt(x.title),txt(x.body)].join(' ')).join(' ');
  return choices.map((v:unknown,index:number)=>{
-  const title=txt(v),reasons:string[];let score=100;const notes:string[]=[];
+  const title=txt(v);let score=100;const notes:string[]=[];
   const deduct=(v:number,note:string)=>{score-=v;notes.push(note);};
   const length=Array.from(title).length;
   if(length<(ko?9:16)||length>(ko?28:55))deduct(18,ko?'제목 길이를 조정하세요.':'Consider a more compact headline.');
@@ -58,7 +58,7 @@ export function reviewMagazineStoryboard(doc:Document,language:string):Storyboar
   if(editorialOverlap(body[i].body,body[j].body)>=.79)overlaps.push([i+2,j+2]);
  }
  if(overlaps.length)issues.push(ko
-  ?'서로 다른 카드에서 같은 설명을 반복합니다 ('+overlaps.map(([a,b])=>a+'·'+b+'번').join(', ')+'). 실제 사례나 새로운 관찰로 구별하세요.'
+  ?'서로 다른 카드에서 같은 설명을 반복합니다 ('+overlaps.map(([a,b])=>a+'번과 '+b+'번').join(', ')+'). 실제 사례나 새로운 관찰로 구별하세요.'
   :'Some body cards repeat substantially the same explanation. Give each a distinct insight or example.');
  if(body.length>=3&&short.length>=2)issues.push(ko
   ?'5장 구성에 비해 정보가 부족합니다. 각 카드에 다른 구체적 장면이나 독자 효용을 추가하세요.'
