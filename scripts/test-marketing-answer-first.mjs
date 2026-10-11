@@ -12,7 +12,7 @@ const layoutCode=ts.transpileModule(read('src/lib/marketing-carousel-template.ts
 const layoutModule={exports:{}};
 vm.runInNewContext(layoutCode,{module:layoutModule,exports:layoutModule.exports});
 vm.runInNewContext(js,{module,exports:module.exports,
- require:name=>{if(name==='./marketing-carousel-template')return layoutModule.exports;throw new Error('Unexpected module '+name);}
+ require:name=>{if(name==='./marketing-carousel-template')return layoutModule.exports;if(name==='./marketing-editorial-storyboard')return {EDITORIAL_HEADLINE_VERSION:1};throw new Error('Unexpected module '+name);}
 });
 const {
  fiveEditorialRoles,fiveCampaignRoles,fiveEventRoles,withAnswerFirstSchema,
