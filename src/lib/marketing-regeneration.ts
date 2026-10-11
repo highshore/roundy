@@ -351,3 +351,32 @@ export async function restoreVersion(id:string,targetId:string,revision:number,a
  }).eq('id',child.id).select('*').single()) as Row;
  return {draft:restored,restored_from:target.id,actor};
 }
+
+
+/**
+ * Renders precisely the edited cards once newly sourced stock assets pass the
+ * existing human review. No AI image calls, no re-render of untouched cards,
+ * and never modifies a reserved or published draft.
+ */
+export async function finishVersionRendering(id:string,revision:number){
+ if(!uuid(id)||!Number.isInteger(revision))throw new Error('INVALID_RENDER_REQUEST');
+ const db=createServiceRoleClient();
+ const draft=ok(await db.from('instagram_post_drafts').select('*').eq('id',id).single()) as Row;
+ if(draft.status!=='needs_approval'||!draft.regeneration_parent_id)
+  throw new Error('VERSION_DRAFT_NOT_EDITABLE');
+ if(draft.revision!==revision)throw new Error('DRAFT_CHANGED_REFRESH_FIRST');
+ const target=Array.isArray(draft.regeneration_slide_indices)?draft.regeneration_slide_indices:[];
+ if(!target.length)throw new Error('VERSION_HAS_NO_TARGET_SLIDES');
+ const renderIndices=target.filter((i:number)=>typeof draft.images?.[i]!=='string'||!draft.images[i].trim());
+ if(!renderIndices.length)throw new Error('VERSION_ALREADY_RENDERED');
+ const photos=await listStockSelections(db,id);
+ if(!stockReady(draft,photos))throw new Error('STOCK_PHOTOS_NOT_APPROVED');
+ const result=await renderVersionCards(db,draft,renderIndices);
+ if(!result.ready)throw new Error('STOCK_PHOTOS_NOT_APPROVED');
+ const checked=await recheck(db,result.draft);
+ const snapshot=serializableSnapshot(checked,await listStockSelections(db,id));
+ const saved=ok(await db.from('instagram_post_drafts').update({
+  regeneration_saved_snapshot:snapshot,updated_at:new Date().toISOString()
+ }).eq('id',id).eq('status','needs_approval').select('*').single()) as Row;
+ return {draft:saved,rendered_slide_indices:renderIndices};
+}
