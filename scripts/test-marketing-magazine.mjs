@@ -94,6 +94,100 @@ for(const count of [3,5])for(const language of ['ko','en']){
   await sharp(raw).jpeg({quality:85}).toFile(file);imagePaths.push(file);tested++;
  }
 }
+// Real information-rich editorial fixtures from Seoul Metropolitan Government
+// public materials. These images remain local QA previews, NEVER approved assets.
+const editorialPlan=layout.resolveCarouselPlan(settings);
+const officialSources={
+ forest:'https://english.seoul.go.kr/%EA%B3%B5%EC%9B%90/?pidx=11',
+ garden:'https://english.seoul.go.kr/experience-the-beauty-of-traditional-korean-gardens-at-namsan-as-korean-forest-garden-opens-june-27/',
+ parks:'https://english.seoul.go.kr/wp-content/uploads/2026/03/2026_guidebook_EN.pdf'
+};
+const richSamples=[
+ {index:1,expectedLayout:'photo',slug:'photo-context',
+  title:'서울숲, 다섯 풍경',highlight:'숲길과 연못',
+  body:'서울숲은 2005년 6월 문을 연 도심 공원으로, 뚝섬문화예술공원과 생태숲 등 다른 성격의 공간을 한곳에 모았습니다. 연못과 숲길을 번갈아 걸으며 한 장소에서도 산책 동선을 다르게 짤 수 있습니다.',
+  source_label:'서울특별시 공원 안내',source_ids:['S1'],reference:officialSources.forest},
+ {index:2,expectedLayout:'information',slug:'information-insight',
+  title:'남산 한국숲정원, 11개 정원',highlight:'폐식물원 부지를 재구성한 도심 정원',
+  body:'남산 한국숲정원은 2026년 6월 27일 개장한 약 3만㎡ 규모의 정원입니다. 서울시는 기존 남산 야외식물원 부지를 활용해 3개 주제로 나뉜 11개 정원을 만들었습니다. 전통적인 자연 경관을 현대적인 산책 공간으로 경험할 수 있다는 점이 핵심입니다.',
+  source_label:'서울특별시, 2026년 7월 보도자료',source_ids:['S1'],reference:officialSources.garden},
+ {index:3,expectedLayout:'split',slug:'split-insight',
+  title:'서울숲 vs 월드컵공원',highlight:'도심 숲과 매립지 재생 공원의 차이',
+  body:'서울숲과 월드컵공원은 같은 서울의 녹지이지만 경험이 다릅니다. 서울숲은 문화예술공원과 생태숲 등 여러 주제 공간을 가까이에서 옮겨 다니기 좋습니다. 반면 월드컵공원은 난지도 쓰레기 매립지를 생태공원으로 바꾼 장소로, 하늘공원과 노을공원 등 5개 공원으로 구성됩니다.',
+  source_label:'서울특별시 2026 방문 가이드',source_ids:['S1'],reference:officialSources.parks}
+];
+const fixturePhotoPaths=['public/images/discovery-offline.webp',
+ 'public/images/roundy-mingle-hero-photo.webp','public/images/discovery-hero-poster.webp'];
+const officialFixturePhotos=await Promise.all(fixturePhotoPaths.map(async path=>{
+ assert.ok(fs.existsSync(path),'Image QA fixture required: '+path);
+ return 'data:image/jpeg;base64,'+
+  (await sharp(fs.readFileSync(path)).resize(900,1180,{fit:'inside'}).jpeg({quality:83}).toBuffer()).toString('base64');
+}));
+const editorialAssets={cardPhotos:{1:officialFixturePhotos[0],2:officialFixturePhotos[1],
+ 3:officialFixturePhotos[2]},cardCredits:{1:'QA / existing Roundy site photo',
+ 2:'QA / existing Roundy site photo',3:'QA / existing Roundy site photo'},reusePhotos:false};
+const noOverlap=(a,b)=>a.x>=b.x+b.width||b.x>=a.x+a.width||
+ a.y>=b.y+b.height||b.y>=a.y+a.height;
+const fullCopy=value=>String(value).replace(/\s/gu,'');
+let richRendered=0;
+for(const sample of richSamples){
+ assert.ok(sample.reference.startsWith('https://english.seoul.go.kr/'));
+ const role=sample.index===1?'context':'insight';
+ const slide={role,title:sample.title,body:sample.body,body_ko:sample.body,
+  highlight:sample.highlight,source_label:sample.source_label,
+  source_ids:sample.source_ids,closing_type:'none'};
+ const fit=layout.magazineCarouselFit(slide,editorialPlan,sample.index,'ko');
+ assert.equal(fit.editorial?.layout,sample.expectedLayout,sample.slug+' should auto-select '+sample.expectedLayout);
+ assert.ok(fit.body.fontSize>=29,'Never shrink body copy below 29px');
+ assert.equal(fullCopy(fit.body.lines.join('')),fullCopy(sample.body),'Body copy was shortened or lost');
+ assert.equal(fullCopy(fit.title.lines.join('')),fullCopy(sample.title),'Headline was shortened or lost');
+ assert.equal(fullCopy(fit.highlight.lines.join('')),fullCopy(sample.highlight),'Takeaway was shortened or lost');
+ assert.ok(noOverlap(fit.editorial.titleRect,fit.editorial.photoRect));
+ assert.ok(noOverlap(fit.editorial.bodyRect,fit.editorial.photoRect));
+ assert.ok(noOverlap(fit.editorial.highlightRect,fit.editorial.photoRect));
+ assert.ok(fit.editorial.bodyRect.y+fit.editorial.bodyRect.height<=1185);
+ const doc={design_preset:MAGAZINE_EDITORIAL_PRESET,carousel_template:editorialPlan,content_language:'ko'};
+ const tree=visuals.magazineCarouselTree(slide,sample.index,5,doc,editorialAssets);
+ const json=JSON.stringify(tree);
+ assert.ok(json.includes('objectFit')&&json.includes('contain'),'No subject-cropping photo fit');
+ assert.ok(!json.includes('rgba(')&&!json.includes('Learn More')&&!json.includes('Roundy 둘러보기'));
+ assert.ok(json.includes(sample.source_label),'Preserve source provenance');
+ const raw=Buffer.from(await visuals.renderCompactEditorial(slide,sample.index,5,doc,editorialAssets).arrayBuffer());
+ const meta=await sharp(raw).metadata();
+ assert.equal(meta.width,1080);assert.equal(meta.height,1350);
+ const output='quality-artifacts/magazine-body-'+sample.slug+'.jpg';
+ await sharp(raw).jpeg({quality:88}).toFile(output);
+ imagePaths.push(output);richRendered++;
+}
+// Korean long title + max-density body, English mixed numbers, and Hangul wrap.
+const additionalCases=[
+ {slug:'long-ko',index:2,language:'ko',
+  title:'서울의 오래된 장소가 새로운 문화 공간으로 바뀌는 과정에서 생기는 차이',
+  body:richSamples[1].body+' 계절에 따라 풍경과 이용 방식도 달라집니다.',
+  highlight:'11개 정원, 3개 테마',expectedMinimum:30},
+ {slug:'mixed-en',index:2,language:'en',
+  title:'11 gardens, 3 themes in Seoul',
+  body:'Seoul’s Korean Forest Garden opened June 27, 2026, transforming a roughly 30,000 m² site into 11 gardens organized around 3 themes. It offers a place to explore Korean forest landscapes through the seasons, not just one conventional garden path.',
+  highlight:'30,000 m² in 3 themes',expectedMinimum:30}
+];
+for(const sample of additionalCases){
+ const slide={role:'insight',title:sample.title,body:sample.body,
+  body_ko:sample.language==='ko'?sample.body:'',
+  body_en:sample.language==='en'?sample.body:'',
+  highlight:sample.highlight,source_ids:['S1'],closing_type:'none'};
+ const doc={design_preset:MAGAZINE_EDITORIAL_PRESET,carousel_template:editorialPlan,
+  content_language:sample.language};
+ const fit=layout.magazineCarouselFit(slide,editorialPlan,sample.index,sample.language);
+ assert.ok(fit.body.fontSize>=sample.expectedMinimum);
+ assert.equal(fullCopy(fit.body.lines.join('')),fullCopy(sample.body));
+ assert.equal(fullCopy(fit.title.lines.join('')),fullCopy(sample.title));
+ const raw=Buffer.from(await visuals.renderCompactEditorial(slide,sample.index,5,doc,editorialAssets).arrayBuffer());
+ assert.equal((await sharp(raw).metadata()).width,1080);
+ const output='quality-artifacts/magazine-body-'+sample.slug+'.jpg';
+ await sharp(raw).jpeg({quality:85}).toFile(output);imagePaths.push(output);richRendered++;
+}
+console.log('PASS magazine body editorial: '+richRendered+' information-rich 1080x1350 QA renders; Photo, Information, Split layout selection, source labels, full Hangul copy, numeric/English text and collision checks.');
+
 const noCopy=String(fs.readFileSync('src/lib/marketing-visuals.ts'));
 assert.ok(!noCopy.slice(noCopy.indexOf('function magazineCover'),noCopy.indexOf('export function standardCarouselTree')).includes('Roundy 둘러보기'));
 const sql=read('supabase/migrations/20261011030500_roundy_magazine_editorial_preflight.sql');
