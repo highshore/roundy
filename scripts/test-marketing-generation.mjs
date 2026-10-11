@@ -7,7 +7,7 @@ let checks=0;const check=(f)=>{f();checks++;};
 const id='4b9066d0-e01b-4cc4-92d1-469f56317a04';
 const eventId='11111111-1111-4111-8111-111111111111';
 const base={request_key:'manual:quality-test-001',revision:1,mode:'both',content_mode:'prelaunch',language:'en',visual_mode:'cards',instruction:''};
-function harness({denied=false,network=false,badSources=false,duplicate=false,photo403=false,answerFirst=false,photoSettings=null,photoFixture='none',templateSettings=null,slotNumber=1,unsafeFallback=false}={}){
+function harness({denied=false,network=false,badSources=false,duplicate=false,photo403=false,answerFirst=false,photoSettings=null,photoFixture='none',templateSettings=null,slotNumber=1,unsafeFallback=false,topicOutcome='pass'}={}){
  const tables={instagram_post_drafts:[{id,status:'needs_approval',revision:1,caption:'Original',cta:'Follow',images:[],carousel_slides:[],content_mode:'prelaunch'}],marketing_generation_jobs:[],marketing_ai_control:[{singleton:true,enabled:true,blocked_reason:null}],marketing_automation_settings:[{singleton:true,carousel_answer_first_enabled:answerFirst,...(photoSettings||{}),...(templateSettings||{})}],marketing_uploaded_images:[],events:[{id:eventId,slug:'fixture',title:'Fixture event',title_ko:'테스트 모임',status:'live',deleted_at:null,marketing_enabled:true,starts_at:'2099-12-01T10:00:00Z',ends_at:'2099-12-01T12:00:00Z',venue:'Fixture public venue',capacity:12,seats_remaining:12,price_ladies:29000,price_gents:49000,event_language:'either',images:[]}]};
  const requests=[],stored=[];
  class Q{
@@ -84,7 +84,7 @@ function harness({denied=false,network=false,badSources=false,duplicate=false,ph
     reader_payoff:ko?'독자가 첫 만남에서 자주 생기는 어색함을 다르게 해석하고 실천할 만한 관찰을 얻습니다.':'Readers will gain a concrete and realistic way to understand a familiar social moment.',
     scene:ko?'첫 만남에서 질문은 많지만 대화가 이어지지 않는 현실적인 카페의 장면.':'Two adults meet at a cafe and notice a small but very familiar social friction.',
     core_insight:ko?'질문을 늘리는 것보다 서로 자신의 경험을 조금씩 나누는 편이 대화를 만드는 데 도움이 될 수도 있습니다.':'Sharing a small personal observation can invite an exchange that does not feel like an interview.',
-    novelty:5,reader_value:5,curiosity:5,shareability:5,
+    novelty:topicOutcome==='reject'?1:5,reader_value:topicOutcome==='reject'?1:5,curiosity:topicOutcome==='reject'?1:5,shareability:topicOutcome==='reject'?1:5,
     editorial_reason:'Distinct realistic perspective with a specific reader payoff.'
    }));
    return {ok:true,json:async()=>({choices:[{finish_reason:'stop',message:{content:JSON.stringify({candidates})}}],usage:{input_tokens:450,output_tokens:720}})};
@@ -407,6 +407,19 @@ for(const language of ['ko','en'])for(const type of Object.keys(harness().policy
   draft_role:r.draft.draft_kind
  })));
  check(()=>assert.equal(r.draft.content_document.carousel_template.slide_count,3));
+}
+// A rejected five-topic batch never advances to paid writing, research or visuals.
+{
+ const h=harness({answerFirst:true,topicOutcome:'reject',templateSettings:{carousel_mode:'fixed',carousel_default_slides:5}});
+ const request={...base,request_key:'manual:discard-topics-001',content_mode:'growth_carousel',topic_type:'conversation_prompt'};
+ const r=await h.api.runGeneration(id,request,null);
+ check(()=>assert.equal(r.job.status,'failed'));
+ check(()=>assert.match(r.error||'',/TOPIC_CANDIDATES_DISCARDED/));
+ check(()=>assert.equal(h.tables.marketing_generation_jobs[0].request_payload.topic_selection.status,'discarded'));
+ check(()=>assert.equal(h.tables.marketing_generation_jobs[0].quality_report.status,'rejected'));
+ check(()=>assert.equal(h.requests.filter(x=>x.url.endsWith('chat/completions')).length,1));
+ check(()=>assert.equal(h.requests.filter(x=>x.url.endsWith('/responses')||x.url.endsWith('images/generations')).length,0));
+ check(()=>assert.equal(h.tables.instagram_post_drafts[0].images.length,0));
 }
 const adminMarketingSource=fs.readFileSync(new URL('../src/components/admin-marketing.tsx',import.meta.url),'utf8');
 check(()=>assert.ok(adminMarketingSource.includes("...(basis==='growth_carousel'?{topic_type:topic}:{})")));
