@@ -153,7 +153,7 @@ export function AdminMarketingRegeneration({sourceId,locale,onCreated,onClose}:{
      '새로 검색한 사진은 메인 초안 편집기에서 저작권 검수 후 승인하세요. 승인 후 변경한 카드만 렌더링하며, 변경하지 않은 카드와 기존 사진 승인은 보존됩니다.')}</p>
     <button type="button" className="admin-secondary" disabled={working} onClick={()=>void finishRendering()}>
      <Images size={14}/>{t('Render changed cards after approval ($0 AI)','사진 승인 후 변경 카드만 렌더링 (AI $0)')}</button>
-   </div>
+   </div>}
    <div className="marketing-version-slides">
     {slides.map((slide:Row,index:number)=><article className="marketing-version-slide" key={index}>
      {source.images?.[index]?<img src={source.images[index]} alt={t('Existing slide','기존 슬라이드')+' '+(index+1)}/>:<div className="marketing-version-empty-image">{t('Needs rendering','렌더링 필요')}</div>}
