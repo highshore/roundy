@@ -60,6 +60,7 @@ export function AdminMarketingRegeneration({sourceId,locale,onCreated,onClose}:{
  const aiCover=Boolean(source?.content_document?.photo_sourcing?.ai_thumbnail_enabled&&targetIndices.includes(0)&&
    !source?.content_document?.photo_sourcing?.photo_slots?.includes?.(0));
  const estimate=imageSource==='ai'&&['image','both'].includes(mode)?(mode==='both'?.20:.15):cost(mode,false);
+ const aiCoverEligible=Boolean(source?.content_document?.photo_sourcing?.ai_thumbnail_enabled===true);
  const before=useMemo(()=>versions.find(x=>x.id===comparisonId)||versions[0]||null,[versions,comparisonId]);
  const actionsDisabled=loading||working||!source||!slides.length;
  function quick(next:Mode,index:number){
@@ -192,6 +193,7 @@ export function AdminMarketingRegeneration({sourceId,locale,onCreated,onClose}:{
       {t('Search licensed online photos (Pexels, Wikimedia, Openverse)','온라인 사진 검색 (Pexels, Wikimedia, Openverse)')}</label>
      <label><input type="radio" name={'image-source-'+sourceId} checked={imageSource==='ai'} onChange={()=>setImageSource('ai')}/>
       {t('Generate a new AI image','AI 이미지 새로 생성')}</label>
+     {imageSource==='ai'&&!aiCoverEligible&&<p className="admin-error">{t('This post uses a real-photo cover. AI cover generation is unavailable unless its saved photo policy allows an AI thumbnail.','이 콘텐츠는 실사 표지를 사용 중입니다. 저장된 사진 정책에서 AI 썸네일을 허용하지 않아 AI 표지 생성이 제한됩니다.')}</p>}
      {imageSource==='ai'&&<p className="admin-help">{t('AI generation is limited to the cover, to preserve the minimum three real photos in a five-card carousel.','5장 카드뉴스 실제 사진 3장 이상 정책을 유지하기 위해 AI 이미지는 표지에서만 생성합니다.')}</p>}
     </fieldset>}
     {scope==='slides'&&<fieldset className="marketing-version-indices"><legend>{t('Choose slides','수정할 슬라이드 선택')}</legend>
@@ -208,7 +210,7 @@ export function AdminMarketingRegeneration({sourceId,locale,onCreated,onClose}:{
      <p>{t('Licensed photo lookup and server rendering do not call image AI. New photos require manual rights approval. Published/scheduled snapshots are immutable.',
       '실사 사진 검색과 서버 렌더링은 이미지 AI를 호출하지 않습니다. 신규 사진은 수동 저작권 승인 대상이며 게시 및 예약 기록은 변경되지 않습니다.')}</p>
     </div>
-    <button type="button" className="admin-primary" disabled={actionsDisabled||scope==='slides'&&!indices.length}
+    <button type="button" className="admin-primary" disabled={actionsDisabled||scope==='slides'&&!indices.length||(imageSource==='ai'&&['image','both'].includes(mode)&&(!aiCoverEligible||scope!=='slides'||indices.length!==1||indices[0]!==0))}
      onClick={()=>void regenerate()}>{working?t('Saving new version…','새 버전 저장 중…'):t('Generate and save new version','새 버전 재생성 및 저장')}</button>
    </div>
    <div className="marketing-version-history">
