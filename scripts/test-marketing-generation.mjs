@@ -400,6 +400,62 @@ for(const language of ['ko','en'])for(const type of Object.keys(harness().policy
  })));
  check(()=>assert.equal(r.draft.content_document.carousel_template.slide_count,3));
 }
+// Integration: simulate the actual AI call with a strict-schema mock response.
+// The samples go through generateEditorialCopy -> raw-contract check -> prepareContent
+// -> draft persistence. No live AI request, Meta publishing or image-design changes.
+for(const count of [3,5])for(const language of ['ko','en']){
+ const settings={carousel_mode:count===3?'alternating':'fixed',carousel_default_slides:5,
+  carousel_title_font_size_px:72,carousel_body_font_size_px:36};
+ const h=harness({answerFirst:true,templateSettings:settings,slotNumber:1});
+ const r=await h.api.runGeneration(id,{...base,
+  request_key:'sample:editorial-v3-'+count+'-'+language,
+  content_mode:'growth_carousel',topic_type:'korea_life',language},null);
+ check(()=>assert.equal(r.job.status,'completed','V3 '+count+'/'+language+': '+JSON.stringify({error:r.error,job:r.job.error_message,quality:r.draft.quality_report})));
+ const raw=h.generated[0];
+ check(()=>assert.ok(raw,'Mock AI must return a V3 JSON document'));
+ const write=h.requests.find(x=>x.url.endsWith('chat/completions')).body;
+ const schema=write.response_format.json_schema.schema;
+ const roles=count===3?['cover','insight','editorial_closing']:['cover','context','insight','insight','editorial_closing'];
+ check(()=>assert.equal(raw.editorial_schema_version,3));
+ check(()=>assert.deepEqual(raw.slides.map(x=>x.role),roles));
+ check(()=>assert.equal(Object.hasOwn(raw,'cta'),false,'New feed AI JSON must not contain CTA'));
+ check(()=>assert.equal(schema.properties.cta,undefined));
+ check(()=>assert.equal(h.contract.generatedMagazineJsonIssues(raw,schema,count).length,0,'Raw AI JSON must meet the actual strict schema'));
+ check(()=>assert.equal(r.draft.content_document.answer_first,true));
+ check(()=>assert.equal(raw.slides[0].title,raw.thumbnail_candidates[0]));
+ check(()=>assert.ok(['summary','insight','brand_outro'].includes(raw.slides.at(-1).closing_type)));
+ check(()=>assert.equal(r.draft.cta,''));
+ check(()=>assert.equal(r.draft.quality_report.status,'passed'));
+ check(()=>assert.ok(!/Learn More|지금 확인하기|자세히 보기|신청하기/i.test(r.draft.caption)));
+ check(()=>assert.ok(!/one content-type action|server appends one content-type action/i.test(write.messages[0].content)));
+ check(()=>assert.match(write.messages[0].content,/SEOUL LIFESTYLE MAGAZINE/));
+ check(()=>assert.match(write.messages[0].content,/TWO TO THREE short mobile lines/));
+ check(()=>assert.match(write.messages[0].content,/Choose final closing_type yourself/));
+ for(const [label,invalid] of [
+  ['unrequested CTA',{...raw,cta:'Learn More'}],
+  ['wrong role',{...raw,slides:raw.slides.map((slide,i)=>i===count-1?{...slide,role:'cta'}:slide)}],
+  ['advertising caption',{...raw,caption_en:raw.caption_en+'\\n\\nLearn More'}]
+ ]){
+  check(()=>assert.ok(h.contract.generatedMagazineJsonIssues(invalid,schema,count).length>0,label+' must fail raw schema review'));
+ }
+ console.log('V3 MOCK SAMPLE '+count+' cards / '+language+': '+JSON.stringify({
+  roles:raw.slides.map(x=>x.role),headlines:raw.slides.map(x=>x.title),
+  closing_type:raw.slides.at(-1).closing_type,caption:raw.caption
+ }));
+}
+for(const invalidMagazine of ['cta','role','caption']){
+ const settings={carousel_mode:'fixed',carousel_default_slides:5,carousel_title_font_size_px:72,carousel_body_font_size_px:36};
+ const h=harness({answerFirst:true,templateSettings:settings,invalidMagazine});
+ const r=await h.api.runGeneration(id,{...base,
+  request_key:'sample:reject-v3-'+invalidMagazine,
+  content_mode:'growth_carousel',topic_type:'korea_life'},null);
+ check(()=>assert.equal(r.job.status,'failed',invalidMagazine+' must fail closed'));
+ check(()=>assert.match(r.job.error_message||'',/MAGAZINE_JSON_CONTRACT_INVALID/));
+ check(()=>assert.equal(r.draft.caption,'Original','Invalid model output may not overwrite the working draft'));
+ check(()=>assert.ok(h.tables.marketing_generation_jobs[0].result_snapshot.raw_content));
+ check(()=>assert.equal(h.requests.filter(x=>x.url.endsWith('chat/completions')).length,1,'No paid repair loop on schema violations'));
+}
+
 const adminMarketingSource=fs.readFileSync(new URL('../src/components/admin-marketing.tsx',import.meta.url),'utf8');
 check(()=>assert.ok(adminMarketingSource.includes("...(basis==='growth_carousel'?{topic_type:topic}:{})")));
 check(()=>assert.ok(adminMarketingSource.includes("request.content_mode==='growth_carousel'")));
