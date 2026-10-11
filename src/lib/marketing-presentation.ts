@@ -1,7 +1,8 @@
 // Pure presentation contracts: no network, paid model calls, or destructive text truncation.
 export type PresentationRow = Record<string, any>;
 export const EDITORIAL_PRESET = 'roundy_compact_editorial_v1'; // Immutable, already-rendered snapshots.
-export const MAGAZINE_EDITORIAL_PRESET = 'roundy_magazine_editorial_v2';
+export const MAGAZINE_EDITORIAL_PRESET = 'roundy_magazine_editorial_v2'; // Historical pixels remain unchanged.
+export const MAGAZINE_IMMERSIVE_LAYOUT = 'photo_full_bleed_brand_v1'; // New generations only.
 export const CAMPAIGN_PRESET = 'roundy_prelaunch_campaign_v1';
 export const EVENT_CAMPAIGN_PRESET = 'roundy_live_event_campaign_v1';
 export const ROUNDY_IDENTITY = {
@@ -68,6 +69,51 @@ export function normalizeCaptionCore(value:unknown,language:string):string{
 }
 
 export function isMagazineDocument(v: PresentationRow) { return v?.design_preset === MAGAZINE_EDITORIAL_PRESET; }
+export function isImmersiveMagazineDocument(v: PresentationRow) {
+ return isMagazineDocument(v)&&v?.cover_layout===MAGAZINE_IMMERSIVE_LAYOUT;
+}
+// Branded closing and captions are selected by deterministic story keys, not
+// random generation or repetitive sales CTAs. No promise of available seats,
+// verified attendees, dates or safety is made.
+const ROUNDY_BRAND_STORYLINES={
+ ko:[
+  '서로를 알아가는 건, 결국 마주 앉아 나누는 대화니까. 서울에서, Roundy.',
+  '첫 대화가 조금 덜 어색한 만남. 서울에서 한 사람씩 만나보는 Roundy.',
+  '소개만 주고받기보다 직접 이야기해보기. 서울에서, Roundy.',
+  '모임에서 건진 질문을 실제 만남에서도 꺼내보세요. 서울에서, Roundy.',
+  '한 사람씩 직접 만나고, 대화로 알아가는 시간. 서울에서, Roundy.'
+ ],
+ en:[
+  'Real connections start with a conversation, face to face. Roundy, Seoul.',
+  'Less profile talk. More real conversation, one person at a time. Roundy.',
+  'Meet face to face, talk naturally, and discover more. Roundy, Seoul.',
+  'Found a question worth asking? Try it in a real conversation. Roundy.',
+  'Get to know someone through a conversation, not just a profile. Roundy.'
+ ]
+} as const;
+const ROUNDY_CAPTION_INVITES={
+ ko:[
+  '서울에서 직접 만나 이야기해보고 싶다면, Roundy를 기억해 주세요.',
+  '한 사람씩 마주 앉아 이야기하는 만남. 서울에서, Roundy.',
+  '처음 만나는 사람과의 대화가 궁금하다면, Roundy에서 시작해 보세요.',
+  '다음 만남에선 어떤 질문을 꺼내볼까요? 대화를 중심에 두는 Roundy.',
+  '서울에서 새로운 대화를 시작하는 방법을 찾는다면, Roundy.'
+ ],
+ en:[
+  'Want more face-to-face conversations in Seoul? Keep Roundy in mind.',
+  'One person at a time, face to face. That is the idea behind Roundy.',
+  'Curious where a real conversation might lead? Discover Roundy in Seoul.',
+  'What would you ask at your next first meeting? Roundy puts conversation first.',
+  'For a more conversational way to meet people in Seoul, think Roundy.'
+ ]
+} as const;
+export function editorialBrandBridge(doc:PresentationRow,language:string,placement:'slide'|'caption'='slide'){
+ const key=language==='en'?'en':'ko',variant=placement==='caption'?ROUNDY_CAPTION_INVITES:ROUNDY_BRAND_STORYLINES;
+ const seed=String(doc?.post_type||'')+'|'+String(doc?.slides?.[0]?.title||'');
+ let hash=2166136261;
+ for(const ch of seed){hash^=ch.charCodeAt(0);hash=Math.imul(hash,16777619);}
+ return variant[key][(hash>>>0)%variant[key].length];
+}
 export function isCompactDocument(v: PresentationRow) { return v?.design_preset === EDITORIAL_PRESET || isMagazineDocument(v); }
 // Feed imagery must never contain web-style buttons or solicit clicks on static cards.
 export const EDITORIAL_AD_CTA = /(?:지금\s*(?:확인|신청|예약|구매)|자세히\s*보기|신청하기|프로필\s*링크|링크\s*클릭|바로\s*가기|더\s*알아보기|learn\s*more|click\s*(?:here|the\s*link)|sign\s*up|book\s*now|apply\s*now|shop\s*now|link\s*in\s*bio|explore\s*roundy|roundy\s*둘러보기)/i;
@@ -86,6 +132,7 @@ export function compactContentSchema(schema: PresentationRow, language: string, 
     properties: {
       ...baseProperties,
       design_preset: {type:'string', enum:[magazine?MAGAZINE_EDITORIAL_PRESET:EDITORIAL_PRESET]},
+      ...(magazine?{cover_layout:{type:'string',enum:[MAGAZINE_IMMERSIVE_LAYOUT]}}:{}),
       ...(!magazine?{cta:{type:'string',enum:[generatedCta(language)],minLength:1,maxLength:MAX_MARKETING_CTA_LENGTH}}:{}),
       caption:text(ko?400:520),
       caption_ko: text(400), caption_en: text(520), tagline: text(64),
@@ -100,7 +147,7 @@ export function compactContentSchema(schema: PresentationRow, language: string, 
         required:[...schema.properties.slides.items.required, 'secondary_body', ...(magazine?['closing_type']:[])],
       }},
     },
-    required:[...(magazine?schema.required.filter((field:string)=>field!=='cta'):schema.required), 'design_preset', 'caption_ko', 'caption_en', 'tagline', 'hashtags'],
+    required:[...(magazine?schema.required.filter((field:string)=>field!=='cta'):schema.required), 'design_preset', ...(magazine?['cover_layout']:[]), 'caption_ko', 'caption_en', 'tagline', 'hashtags'],
   };
 }
 export function compactWritingInstructions(language: string, magazine = false) {
@@ -111,17 +158,17 @@ export function compactWritingInstructions(language: string, magazine = false) {
    'Write caption_ko and caption_en as clean 2-4 paragraph cores without URLs, hashtags, source list or CTA.',
   ].join('\n');
   return [
-    'APPROVED VISUAL PRESET: '+MAGAZINE_EDITORIAL_PRESET+'. A premium, bright Seoul lifestyle MAGAZINE, not an advertisement. Warm ivory #fffefa, charcoal #20211f headlines, coral #ff6666 emphasized words, genuine light photographs in a distinct panel, generous white space and clear magazine hierarchy. NO button, fake link, forced brand pitch, full-bleed dark photograph, scrim, page counter, sticker, sidebar, or sales footer.',
+    'EDITORIAL VISUAL PRESET: '+MAGAZINE_EDITORIAL_PRESET+' with cover_layout '+MAGAZINE_IMMERSIVE_LAYOUT+'. Cover is a FULL-BLEED 4:5 photographic magazine cover with strong, short type in a subtle bottom readability gradient. Subsequent cards use airy warm ivory panels, black copy and Roundy coral highlights. No fake buttons, clickable-looking links, numbered badges, stickers or dark scrims on body cards. The final card keeps an informative conclusion and a separate subtle Roundy invitation set by the renderer.',
     'Roundy is a Seoul-based Rotation Dating service for Korean and international adults. Korean-Korean meetings are also part of the service. In Korean, always call the format 로테이션 소개팅. In English, call it Rotation Dating. Never label the service 1:1 Mingle. Do not describe the whole service as English-only or as a language class/exchange. Do not invent a particular event language.',
     'Write compact, complete sentences on the FIRST writing call. There is no automatic paid compression/rewrite call. Do not fill the available maximum length. One card = one useful point, one short example, and at most one takeaway.',
-    'COVER: aim for a short headline (Korean 8-22 characters / English 3-9 words), plus ONE short subtitle that can fit on a single line. Aim for 2-3 striking title lines. No hashtags or source bibliography in the title. Put nuance in the caption rather than repeating the hook.',
-    'CONTENT: aim for Korean body 40-90 characters and English body 8-20 words, no more than two short paragraphs. highlight is optional: use one concrete takeaway, or an empty string; never repeat the body verbatim. No generic headings such as 핵심 정리 or 알아보기.',
+    'COVER: write a magnetic but truthful scroll-stopping headline (Korean ideally 8-22 characters / English 3-9 words) and ONE short subtitle. Lead with a recognizable situation, surprising but verifiable contrast or immediately useful suggestion, NEVER a vague motivational slogan. Image fills the background; copy sits at the lower third, so keep text concise. Aim for 2-3 impactful lines with no bibliography in the title.',
+    'CONTENT: one useful idea per card; prioritize a scene people recognize, a plausible actual question they could ask, a tiny observation, or a specific next step. Korean body ideally 25-75 characters; English 8-20 words. Use quoted speech only as a clearly original example, not a purported book or interview quote. No generic headings such as 핵심 정리, 의미 있는 관계, 알아보기 or Important Points. Avoid abstract nouns such as 목적, 방향, 구조, 분위기 without immediately grounding them in a concrete action.',
     language==='en'
       ? 'title/body/highlight/options are English. secondary_body is a short, faithful Korean rendering of the same idea for storage and caption parity only; it is NOT visible on the image. The Korean and English must preserve the same uncertainty and limitations.'
       : 'title/body/highlight/options are Korean. secondary_body is a short, faithful English rendering of the same idea for storage and caption parity only; it is NOT visible on the image. Only original book titles/authors may remain English when editorially necessary. Use Korean conversation examples for Korean content, not mandatory English lessons.',
-    'caption_ko and caption_en are concise bilingual Instagram editorial cores, not card-by-card summaries. Use 2-4 short paragraphs: a short hook (KO <=30 chars / EN <=12 words) and useful context. No marketing CTA, handles, URL, hashtags, labels or brand footer; the server appends only source credits and small publication identity, NEVER forced sales or engagement actions. Caption is the primary-language compatibility copy. Do not invent trending metrics.',
+    'caption_ko and caption_en are natural bilingual Instagram editorial cores, not card-by-card summaries. Use 2-4 short paragraphs starting with a relatable hook (KO <=30 chars / EN <=12 words), then one useful example or practical detail. No marketing CTA, handles, URLs, hashtags, labels or branded footer inside model copy. The server appends one varied, light Roundy invitation and source credits after review. Never invent trends, metrics, endorsements or testimonials.',
     'Source IDs must stay linked to each sourced idea. Bibliographic facts, limitations and uncertainty must survive compression. Sources will be printed as small footnotes and full links in the caption by the server. Never fabricate a citation or copy a test/example book.',
-    'There is NO top-level cta field. All slides have a closing_type field: none for cover and body cards; on the final editorial_closing choose summary, insight, or brand_outro according to the story. Prefer summary or insight when either delivers reader value. Brand outro is a brief, truthful identity statement without an action, button, link-style element or sales language. No CTA on any feed image.',
+    'There is NO top-level cta field. All slides have closing_type: none for cover and body; the last editorial_closing has summary, insight or brand_outro. Make its TITLE and BODY a valuable punchy synthesis or a small practical action. Do not insert the company handle into the content body: the server adds a varied Roundy brand bridge beneath the takeaway. Never draw buttons, text links, sales instructions or fake click affordances on feed images.',
   ].join('\n');
 }
 export function normalizeCompactDocument(raw: PresentationRow, language: string) {
@@ -205,8 +252,8 @@ export function compactQualityIssues(c: PresentationRow, language: string): stri
 }
 export function buildBilingualCaption(c: PresentationRow, sources: PresentationRow[], disclaimerKo='', disclaimerEn='') {
   const bibliography=sources.map((s, i)=>'['+(i+1)+'] '+clean(s.title)+'\n'+clean(s.url)).join('\n');
-  const ko=[clean(c.caption_ko),disclaimerKo,...(isMagazineDocument(c)?[]:[captionAction(String(c.post_type),'ko')])].filter(Boolean).join('\n\n');
-  const en=[clean(c.caption_en),disclaimerEn,...(isMagazineDocument(c)?[]:[captionAction(String(c.post_type),'en')])].filter(Boolean).join('\n\n');
+  const ko=[clean(c.caption_ko),disclaimerKo,...(isImmersiveMagazineDocument(c)?[editorialBrandBridge(c,'ko','caption')]:isMagazineDocument(c)?[]:[captionAction(String(c.post_type),'ko')])].filter(Boolean).join('\n\n');
+  const en=[clean(c.caption_en),disclaimerEn,...(isImmersiveMagazineDocument(c)?[editorialBrandBridge(c,'en','caption')]:isMagazineDocument(c)?[]:[captionAction(String(c.post_type),'en')])].filter(Boolean).join('\n\n');
   return [
     ko,
     en,
