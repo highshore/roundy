@@ -216,6 +216,39 @@ function harness({denied=false,network=false,badSources=false,duplicate=false,ph
     value.secondary_body=ko?'First question: Where did you enjoy going? Follow-up: What stood out?':'첫 질문: 최근 기억에 남는 곳은 어디예요? 후속 질문: 어떤 점이 좋았어요?';
    }
   }
+  // Seoul lifestyle magazine sample for the AI mock; never a reused brand ad.
+  // All statements are ordinary observations, not invented venue/trend facts.
+  if(c.design_preset==='roundy_magazine_editorial_v2'&&data.editorial_type==='korea_life'){
+   const ko=data.language==='ko',five=requestedSlides===5;
+   const titlesKo=['서울 골목은 천천히 볼수록 다르다','큰길과 골목의 차이','한 장면을 오래 바라보기',
+    '목적지보다 눈에 남는 것','새로운 서울은 관찰에서 시작'];
+   const titlesEn=['Seoul rewards a slower walk','Notice the quieter side streets',
+    'Give one detail your attention','Leave room for small detours','A different way to see Seoul'];
+   const bodiesKo=['익숙한 길도 속도를 조금 늦추면 전에는 지나쳤던 장면이 눈에 들어옵니다.',
+    '큰길에서 놓쳤던 가게와 소리는 골목을 걸을 때 더 선명하게 다가옵니다.',
+    '잠시 멈춰 서서 눈에 들어온 장면 하나를 충분히 살펴보세요.',
+    '동선을 빽빽하게 채우기보다 가벼운 우회를 남겨 두어도 좋습니다.',
+    '몇 곳을 다녀왔는지보다 어떤 장면이 기억에 남았는지 돌아보세요.'];
+   const bodiesEn=['Even a familiar walk can reveal more when you slow down.',
+    'Small storefronts and everyday sounds stand out away from the main road.',
+    'Pause and notice one detail you would otherwise walk past.',
+    'Leave room for a small detour instead of filling every minute.',
+    'Remember what caught your eye, not just the stops you made.'];
+   const positions=five?[0,1,2,3,4]:[0,2,4];
+   c.slides=c.slides.map((s,i)=>{
+    const index=positions[i];
+    return {...s,title:ko?titlesKo[index]:titlesEn[index],
+     body:ko?bodiesKo[index]:bodiesEn[index],
+     secondary_body:ko?bodiesEn[index]:bodiesKo[index],
+     highlight:'',options:[],source_ids:[]};
+   });
+   c.thumbnail_candidates=ko
+    ?[titlesKo[0],'익숙한 동네에서 새 장면 찾기','서두르지 않는 서울 골목 산책']
+    :[titlesEn[0],'Discover more on an ordinary walk','Small details change a familiar route'];
+   c.caption_ko='걷는 속도를 바꾸는 작은 실험.\n\n익숙한 서울의 거리도 천천히 살피면 눈에 들어오는 장면이 달라질 수 있습니다.';
+   c.caption_en='Look beyond the main street.\n\nA slower route can leave room for details that are easy to miss when every walk is a checklist.';
+   c.caption=ko?c.caption_ko:c.caption_en;
+  }
   if(unsafeFallback&&data.editorial_type==='korea_life'){
    c.slides[0].body='요즘 인기 급상승 서울 카페의 예약 시간은 19:30입니다.';
   }
@@ -417,6 +450,11 @@ for(const count of [3,5])for(const language of ['ko','en']){
  const schema=write.response_format.json_schema.schema;
  const roles=count===3?['cover','insight','editorial_closing']:['cover','context','insight','insight','editorial_closing'];
  check(()=>assert.equal(raw.editorial_schema_version,3));
+ for(const slide of raw.slides){
+  const visible=[slide.title,slide.body,slide.highlight,...slide.options].join(' ');
+  check(()=>assert.equal(language==='ko'?/[A-Za-z]{3,}/.test(visible):/[가-힣]/.test(visible),false,
+   'The visible image copy must stay in the selected language'));
+ }
  check(()=>assert.deepEqual(raw.slides.map(x=>x.role),roles));
  check(()=>assert.equal(Object.hasOwn(raw,'cta'),false,'New feed AI JSON must not contain CTA'));
  check(()=>assert.equal(schema.properties.cta,undefined));
