@@ -13,6 +13,7 @@ import {AdminMarketingAssets} from './admin-marketing-assets';
 import {AdminMarketingQueue} from './admin-marketing-queue';
 import {AdminMarketingSettings} from './admin-marketing-settings';
 import {MarketingMobilePreview} from './marketing-mobile-preview';
+import {AdminMarketingRegeneration} from './admin-marketing-regeneration';
 import {LayoutDashboard,FileText,Images,CalendarDays,History,Film,Compass,Settings2,Link2,BarChart3,BookOpen,RefreshCw} from 'lucide-react';
 import './admin-marketing-workspace.css';
 import {CONTENT_PROFILES,postType} from '@/lib/marketing-content-policy';
@@ -51,6 +52,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
  const [uploadedImages,setUploadedImages]=useState<Row[]>([]),[uploadAssetType,setUploadAssetType]=useState<'photo'|'completed_card'>('photo');
  const [pendingMarketingImages,setPendingMarketingImages]=useState<PendingMarketingImage[]>([]),[pendingAssetType,setPendingAssetType]=useState<'photo'|'completed_card'>('photo');
  const [resultPreview,setResultPreview]=useState<Row|null>(null);
+ const [regenerationSourceId,setRegenerationSourceId]=useState<string|null>(null);
  const [activeTab,setActiveTab]=useState<'overview'|'draft'|'assets'|'queue'|'growth'|'reels'|'stories'|'generation'|'trend'|'publishing'|'automation'|'connection'>('overview');
  const [generationFilter,setGenerationFilter]=useState<'all'|'completed'|'failed'|'running'>('all');
  const [trendLanguage,setTrendLanguage]=useState<'ko'|'en'>('ko');
@@ -621,7 +623,9 @@ export function AdminMarketing({locale}:{locale:Locale}){
      <div className="ordered-image-list">{uploadedImages.map((img:Row,index:number)=><div key={img.id} className="marketing-draft-card">{img.signed_url?<img src={img.signed_url} alt=""/>:<span className="marketing-draft-thumb placeholder"/>}<div className="marketing-draft-copy"><strong>{index+1}. {img.asset_type==='completed_card'?t('Completed card','완성 카드'):t('Photo source','사진 소스')}</strong><select value={img.role} onChange={e=>void work(()=>updateUpload(img.id,{role:e.target.value}))}><option value="cover">{t('Cover','표지')}</option><option value="body">{t('Body','본문')}</option><option value="flexible">{t('Flexible','자동 배치')}</option></select></div><div className="admin-form-actions"><button type="button" className="admin-secondary" disabled={busy||index===0} onClick={()=>void work(()=>moveUpload(index,-1))}>↑</button><button type="button" className="admin-secondary" disabled={busy||index===uploadedImages.length-1} onClick={()=>void work(()=>moveUpload(index,1))}>↓</button><button type="button" className="admin-secondary" disabled={busy} onClick={()=>void work(()=>deleteUpload(img.id))}>{t('Delete','삭제')}</button></div></div>)}</div>
      <button type="button" className="admin-primary" disabled={busy||!!running||dirty||uploadedImages.length===0} onClick={()=>void work(renderUploaded)}>{t('Render with uploaded images — $0 image AI','업로드 이미지로 렌더 — 이미지 AI $0')}</button>
     </div>}
-    <label><span>{t('Caption','캡션')}</span><textarea rows={10} value={draft.caption||''} maxLength={2000} disabled={busy||!!running||draft.status!=='needs_approval'} onChange={e=>changeDraft('caption',e.target.value)}/></label>
+    <AdminMarketingRegeneration sourceId={String(draft.id)} locale={locale}
+      onCreated={created=>{selectDraft(created);void load(created.id).catch(e=>setError(String(e?.message||e)));setActiveTab('draft');}}/>
+     <label><span>{t('Caption','캡션')}</span><textarea rows={10} value={draft.caption||''} maxLength={2000} disabled={busy||!!running||draft.status!=='needs_approval'} onChange={e=>changeDraft('caption',e.target.value)}/></label>
     {isMagazine?<div className="marketing-setup">
       <strong>MAGAZINE EDITORIAL / {t('Slide structure','슬라이드 구성')}</strong>
       <p className="admin-help">{t('Feed cards have no buttons or forced sales actions. The last card summarizes the story, adds perspective or introduces Roundy quietly. Story and ad actions are independent.', '일반 피드에는 버튼이나 강제 홍보 문구가 없습니다. 마지막 장은 내용 요약, 새로운 관점 또는 짧은 브랜드 소개 중 하나이며 스토리와 광고 CTA는 별도로 관리합니다.')}</p>
@@ -753,6 +757,9 @@ export function AdminMarketing({locale}:{locale:Locale}){
         {r.external_id&&<div><dt>Instagram ID</dt><dd>{r.external_id}</dd></div>}
        </dl>
        {r.external_url&&<a className="admin-secondary" href={r.external_url} target="_blank" rel="noreferrer">{t('Open published post','게시물 보기')}</a>}
+       {channel==='instagram'&&r.snapshot?.draft_id&&r.snapshot?.media_kind!=='reel'&&<button
+         type="button" className="admin-secondary" disabled={busy}
+         onClick={()=>setRegenerationSourceId(String(r.snapshot.draft_id))}>{t('Regenerate as new draft','새 초안으로 복제 및 재생성')}</button>}
        {channel==='instagram'&&r.snapshot?.draft_id&&r.snapshot?.media_kind!=='reel'&&<>
         <button type="button" className="admin-secondary" disabled={busy}
          onClick={()=>void work(async()=>{
@@ -792,7 +799,14 @@ export function AdminMarketing({locale}:{locale:Locale}){
    }):<p className="admin-empty">{t('No publishing history yet.','아직 게시 기록이 없습니다.')}</p>}</div>
    {channelRuns.length>publishVisible&&<button type="button" className="marketing-load-more" onClick={()=>setPublishVisible(v=>v+20)}>{t('Load 20 more','20개 더 보기')}</button>}
   </section>}
-  {resultPreview&&<div className="marketing-result-backdrop" role="presentation" onClick={()=>setResultPreview(null)}>
+  {regenerationSourceId&&<div className="marketing-version-modal" role="presentation" onClick={()=>setRegenerationSourceId(null)}>
+    <div role="dialog" aria-modal="true" aria-label={t('Regenerate previous Instagram post','기존 Instagram 콘텐츠 재생성')} onClick={e=>e.stopPropagation()}>
+     <AdminMarketingRegeneration sourceId={regenerationSourceId} locale={locale}
+      onClose={()=>setRegenerationSourceId(null)}
+      onCreated={created=>{setRegenerationSourceId(null);setActiveTab('draft');selectDraft(created);void load(created.id).catch(e=>setError(String(e?.message||e)));}}/>
+    </div>
+   </div>}
+   {resultPreview&&<div className="marketing-result-backdrop" role="presentation" onClick={()=>setResultPreview(null)}>
    <section className="marketing-result-modal" role="dialog" aria-modal="true" aria-labelledby="marketing-result-title" onClick={e=>e.stopPropagation()}>
     <div className="marketing-result-head"><div><p className="admin-kicker">{t('Saved generation result','저장된 생성 결과')}</p><Heading level={2} id="marketing-result-title">{contentTitle(resultPreview.snapshot||resultPreview.attempt)}</Heading></div><button type="button" className="admin-secondary" onClick={()=>setResultPreview(null)}>{t('Close','닫기')}</button></div>
     <p className="admin-help">{new Date(resultPreview.attempt.created_at).toLocaleString(locale,{timeZone:'Asia/Seoul'})} KST · {t('Attempt','시도')} {resultPreview.attempt.attempt_number}</p>
