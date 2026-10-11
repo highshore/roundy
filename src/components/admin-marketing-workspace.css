@@ -293,6 +293,58 @@
 .marketing-preflight-status .marketing-quality-status .admin-error{color:#ad3d3d}
 .marketing-workspace .marketing-editor>.marketing-quality-status{border:1px solid var(--mw-border);
  border-radius:14px;padding:14px;background:#f8f8f4}
+/* Text-only magazine outlines should never use the thumbnail column. */
+.marketing-workspace .marketing-draft-card.marketing-slide-outline-card{
+ grid-template-columns:minmax(0,1fr);align-items:start;min-width:0;gap:0;padding:15px 18px
+}
+.marketing-workspace .marketing-slide-outline-card .marketing-draft-copy{width:100%;min-width:0;gap:8px}
+.marketing-workspace .marketing-slide-outline-card .marketing-draft-copy small{
+ font-size:10px;font-weight:750;letter-spacing:.04em;line-height:1.4;color:#737670
+}
+.marketing-workspace .marketing-slide-outline-card .marketing-draft-copy strong{
+ font-size:17px;line-height:1.35;white-space:normal;overflow:visible;text-overflow:clip;
+ word-break:keep-all;overflow-wrap:anywhere
+}
+.marketing-workspace .marketing-slide-outline-card .marketing-draft-copy p{
+ margin:0;font-size:13px;line-height:1.55;white-space:pre-wrap;word-break:keep-all;
+ overflow-wrap:anywhere;color:#5d605b
+}
+/* Licensed photo rows: thumbnail + metadata, with actions in their own row. */
+.marketing-workspace .marketing-draft-card.marketing-photo-review-card{
+ grid-template-columns:72px minmax(0,1fr);align-items:start;gap:12px 14px;min-width:0
+}
+.marketing-workspace .marketing-photo-review-card>img{width:72px;height:88px}
+.marketing-workspace .marketing-photo-review-card .marketing-draft-copy{width:100%;min-width:0;gap:8px}
+.marketing-workspace .marketing-photo-review-card .marketing-draft-copy strong{
+ font-size:14px;line-height:1.35;white-space:normal;overflow:visible;text-overflow:clip;
+ word-break:keep-all;overflow-wrap:anywhere
+}
+.marketing-workspace .marketing-photo-review-card .marketing-draft-copy small{
+ font-size:11px;line-height:1.5;overflow-wrap:anywhere
+}
+.marketing-workspace .marketing-photo-review-card .marketing-draft-copy a{
+ display:inline;white-space:normal;overflow-wrap:anywhere
+}
+.marketing-workspace .marketing-photo-review-card>.admin-form-actions{
+ grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:stretch;position:static!important;
+ bottom:auto!important;width:100%;gap:10px;margin:0;padding:12px 0 0!important;
+ border-top:1px solid var(--mw-border)!important;background:transparent!important
+}
+.marketing-workspace .marketing-photo-review-card>.admin-form-actions>button{
+ flex:1 1 125px!important;width:auto!important;min-width:0!important;
+ min-height:44px!important;padding:10px 12px!important;line-height:1.3;
+ white-space:normal;word-break:keep-all
+}
+/* Search and render buttons need adequate room instead of narrow pills. */
+.marketing-workspace .marketing-setup .marketing-photo-render-actions{
+ display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch;
+ position:static;bottom:auto;width:100%;gap:10px;padding:0;margin:13px 0 0;
+ border-top:0;background:transparent
+}
+.marketing-workspace .marketing-setup .marketing-photo-render-actions>button{
+ width:100%;min-width:0;min-height:46px;padding:11px 13px;line-height:1.35;
+ white-space:normal;word-break:keep-all
+}
 /* Actual phone carousel */
 .marketing-mobile-preview{display:grid;justify-items:stretch;gap:17px;min-width:0;
  padding:20px;border:1px solid var(--mw-border);border-radius:22px;
@@ -410,6 +462,16 @@
  .marketing-overview-actions{width:100%}
  .marketing-overview-actions .admin-primary,.marketing-overview-actions .admin-secondary{min-height:42px}
  .marketing-mobile-preview{padding:14px}
+ .marketing-workspace .marketing-editor .marketing-setup{padding:14px;border-radius:15px}
+ .marketing-workspace .marketing-draft-card.marketing-slide-outline-card{padding:13px 14px}
+ .marketing-workspace .marketing-slide-outline-card .marketing-draft-copy strong{font-size:16px}
+ .marketing-workspace .marketing-draft-card.marketing-photo-review-card{
+  grid-template-columns:68px minmax(0,1fr);gap:10px
+ }
+ .marketing-workspace .marketing-photo-review-card>img{width:68px;height:84px}
+ .marketing-workspace .marketing-setup .marketing-photo-render-actions{
+  grid-template-columns:minmax(0,1fr)
+ }
 }
 @media(prefers-reduced-motion:reduce){
  .marketing-kpi-card,.marketing-settings-switch,.marketing-settings-switch::after{transition:none}

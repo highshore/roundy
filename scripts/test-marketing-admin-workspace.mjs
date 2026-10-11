@@ -89,6 +89,19 @@ assert.match(css,/@media\(max-width:540px\)/);
 assert.match(css,/--mw-accent:#ff6666/);
 assert.match(css,/marketing-mobile-preview/);
 assert.match(css,/marketing-copy-options-grid/);
+// Regression: magazine outlines have no image column and photo-review buttons
+// never inherit the three-column manual-upload action grid on small screens.
+for(const className of [
+ 'marketing-draft-card marketing-slide-outline-card',
+ 'marketing-draft-card marketing-photo-review-card',
+ 'admin-form-actions marketing-photo-render-actions'
+])assert.ok(src.includes(className),'Missing responsive marketing layout: '+className);
+assert.match(css,/\.marketing-workspace \.marketing-draft-card\.marketing-slide-outline-card\{\s*grid-template-columns:minmax\(0,1fr\)/);
+assert.match(css,/\.marketing-workspace \.marketing-draft-card\.marketing-photo-review-card\{\s*grid-template-columns:72px minmax\(0,1fr\)/);
+assert.match(css,/\.marketing-workspace \.marketing-photo-review-card>\.admin-form-actions\{\s*grid-column:1\/-1;display:flex/);
+assert.match(css,/\.marketing-workspace \.marketing-photo-review-card>\.admin-form-actions>button\{\s*flex:1 1 125px!important/);
+assert.match(css,/\.marketing-workspace \.marketing-setup \.marketing-photo-render-actions\{\s*display:grid/);
+assert.match(css,/@media\(max-width:540px\)\{[\s\S]*?\.marketing-workspace \.marketing-setup \.marketing-photo-render-actions\{\s*grid-template-columns:minmax\(0,1fr\)/);
 const previewSource=read('src/components/marketing-mobile-preview.tsx');
 assert.match(previewSource,/draft\.images/);
 assert.match(previewSource,/draft\.carousel_slides/);
