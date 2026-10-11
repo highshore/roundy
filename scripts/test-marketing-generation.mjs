@@ -73,6 +73,22 @@ function harness({denied=false,network=false,badSources=false,duplicate=false,ph
    ]:[{type:'url_citation',url:'https://doi.org/10.1234/attentive.2024',title:'Attentive Conversation Study (2024)',start_index:0,end_index:notes.length}];
    return {ok:true,json:async()=>({status:'completed',output:[{type:'web_search_call',status:'completed',action:{sources:[{url:'https://unrelated.example/english-school'}]}},{type:'message',content:[{type:'output_text',text:notes,annotations}]}],usage:{input_tokens:800,output_tokens:180}})};
   }
+  if(body.response_format?.json_schema?.name==='roundy_topic_candidates_v1'){
+   const ko=String(body.messages[0].content).includes('natural contemporary Korean');
+   const heads=ko
+    ?['소개팅이 면접처럼 느껴지는 이유','카톡에선 웃긴데 만나면 어색한 이유','첫 만남 직후 떠오르는 기억','주말 약속이 자꾸 미뤄지는 순간','시끄러운 카페에서 대화가 끊기는 이유']
+    :['Why first dates can feel like interviews','Why texting feels easier than meeting','The first detail you remember after a date','Why weekend plans take so long','When a busy cafe makes talking difficult'];
+   const concepts=['first_date_interview_questions','texting_versus_meeting_context','after_date_first_memory','weekend_social_planning_friction','loud_cafe_conversation_cost'];
+   const candidates=heads.map((headline,i)=>({
+    headline,angle_key:concepts[i],
+    reader_payoff:ko?'독자가 첫 만남에서 자주 생기는 어색함을 다르게 해석하고 실천할 만한 관찰을 얻습니다.':'Readers will gain a concrete and realistic way to understand a familiar social moment.',
+    scene:ko?'첫 만남에서 질문은 많지만 대화가 이어지지 않는 현실적인 카페의 장면.':'Two adults meet at a cafe and notice a small but very familiar social friction.',
+    core_insight:ko?'질문을 늘리는 것보다 서로 자신의 경험을 조금씩 나누는 편이 대화를 만드는 데 도움이 될 수도 있습니다.':'Sharing a small personal observation can invite an exchange that does not feel like an interview.',
+    novelty:5,reader_value:5,curiosity:5,shareability:5,
+    editorial_reason:'Distinct realistic perspective with a specific reader payoff.'
+   }));
+   return {ok:true,json:async()=>({choices:[{finish_reason:'stop',message:{content:JSON.stringify({candidates})}}],usage:{input_tokens:450,output_tokens:720}})};
+  }
   const data=JSON.parse(body.messages[1].content);
   let c;
   // Campaigns have their own model schemas; an editorial fixture is not a
