@@ -96,31 +96,33 @@ export async function prepareStockSelections(db:DB,draft:Row,opts:{replace?:bool
  const topic=photoTopic(draft),slots=requiredStockSlots(draft);
  const recently=await usedRecently(db,draft.id);
  const selected=await listStockSelections(db,draft.id);
- const picked:Row[]=[];
- // Keep existing assets when resuming the SAME draft after a human approval.
+ const picked=new Map<number,Row>();
+ const chosenIds=()=>new Set([...picked.values()].map(asset=>String(asset.asset_id||asset.id)));
+ const nextUnfilled=()=>slots.find(slot=>!picked.has(slot));
+ // Preserve explicit card assignments even if earlier slots are still empty.
+ // Selecting "find missing" must never move or erase an approved photo.
  if(!opts.replace)for(const asset of selected){
-  if(picked.length>=slots.length)break;
-  if(asset.slot!==slots[picked.length]||asset.review_status==='rejected')continue;
+  if(!slots.includes(Number(asset.slot))||asset.review_status==='rejected')continue;
   if(asset.review_status==='approved'&&!asset.storage_path)continue;
-  if(!validLicensedPhoto(asset))continue;
-  if(picked.some(item=>item.id===asset.asset_id))continue;
-  picked.push(asset);
+  if(!validLicensedPhoto(asset)||chosenIds().has(String(asset.asset_id)))continue;
+  picked.set(Number(asset.slot),asset);
  }
  const previousIds=new Set(selected.map(p=>p.asset_id));
  const existing=check(await db.from('marketing_photo_assets').select('*')
   .eq('topic_key',topic).eq('review_status','approved').order('reviewed_at',{ascending:false}).limit(150)).data||[];
  for(const asset of existing){
-  if(picked.length>=slots.length)break;
-  if(!asset.storage_path||!validLicensedPhoto(asset)||recently.has(asset.id)||picked.some(item=>item.id===asset.id)
+  if(picked.size>=slots.length)break;
+  if(!asset.storage_path||!validLicensedPhoto(asset)||recently.has(asset.id)||chosenIds().has(String(asset.id))
     ||(opts.replace&&previousIds.has(asset.id)))continue;
-  picked.push(asset);
+  const slot=nextUnfilled();if(slot===undefined)break;
+  picked.set(slot,asset);
  }
  // Bounded provider fallback. Candidates are never used before human approval.
  let attempts=0;
  for(const provider of PHOTO_PROVIDERS){
-  if(picked.length>=slots.length||attempts>=MAX_PROVIDER_ATTEMPTS)break;
-  for(let attempt=0;attempt<ATTEMPTS_PER_PROVIDER&&picked.length<slots.length&&attempts<MAX_PROVIDER_ATTEMPTS;attempt++){
-   const slot=slots[Math.min(picked.length,slots.length-1)];
+  if(picked.size>=slots.length||attempts>=MAX_PROVIDER_ATTEMPTS)break;
+  for(let attempt=0;attempt<ATTEMPTS_PER_PROVIDER&&picked.size<slots.length&&attempts<MAX_PROVIDER_ATTEMPTS;attempt++){
+   const slot=nextUnfilled();if(slot===undefined)break;
    const query=photoSearchQuery(draft,topic,slot,attempt);
    if(!providerConfigured(provider)){
     await logProviderAttempt(db,draft.id,provider,query,'skipped','API_KEY_NOT_CONFIGURED',0);
@@ -156,18 +158,20 @@ export async function prepareStockSelections(db:DB,draft:Row,opts:{replace?:bool
     .eq('provider',provider).in('provider_photo_id',ids)).data||[];
    pool.sort((a:Row,b:Row)=>rank(b)-rank(a));
    for(const asset of pool){
-    if(picked.length>=slots.length)break;
+    if(picked.size>=slots.length)break;
     if(asset.review_status==='rejected'||!validLicensedPhoto(asset)
-      ||recently.has(asset.id)||picked.some(item=>item.id===asset.id)
+      ||recently.has(asset.id)||chosenIds().has(String(asset.id))
       ||(opts.replace&&previousIds.has(asset.id)))continue;
     if(asset.review_status==='approved'&&!asset.storage_path)continue;
-    picked.push(asset);
+    const free=nextUnfilled();if(free===undefined)break;
+    picked.set(free,asset);
    }
   }
  }
  // Do not destroy a previous approved assignment when replacement failed.
- if(!picked.length&&opts.replace&&selected.length)return selected;
- const assignments=picked.map((asset,index)=>({draft_id:draft.id,asset_id:asset.asset_id||asset.id,slot:slots[index]}));
+ if(!picked.size&&opts.replace&&selected.length)return selected;
+ const assignments=[...picked.entries()].sort((a,b)=>a[0]-b[0])
+  .map(([slot,asset])=>({draft_id:draft.id,asset_id:asset.asset_id||asset.id,slot}));
  const unchanged=assignments.length===selected.length&&assignments.every((r,i)=>r.slot===selected[i]?.slot&&r.asset_id===selected[i]?.asset_id);
  if(!unchanged){
   check(await db.from('marketing_draft_photos').delete().eq('draft_id',draft.id));
