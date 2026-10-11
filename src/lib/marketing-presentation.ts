@@ -2,6 +2,9 @@
 export type PresentationRow = Record<string, any>;
 export const EDITORIAL_PRESET = 'roundy_compact_editorial_v1'; // Immutable, already-rendered snapshots.
 export const MAGAZINE_EDITORIAL_PRESET = 'roundy_magazine_editorial_v2';
+// The design preset remains stable. This marker distinguishes new role contracts from
+// unversioned V2 snapshots without rewriting any previously saved documents.
+export const MAGAZINE_EDITORIAL_SCHEMA_VERSION = 3;
 export const CAMPAIGN_PRESET = 'roundy_prelaunch_campaign_v1';
 export const EVENT_CAMPAIGN_PRESET = 'roundy_live_event_campaign_v1';
 export const ROUNDY_IDENTITY = {
@@ -68,6 +71,12 @@ export function normalizeCaptionCore(value:unknown,language:string):string{
 }
 
 export function isMagazineDocument(v: PresentationRow) { return v?.design_preset === MAGAZINE_EDITORIAL_PRESET; }
+export function isLegacyMagazineDocument(v: PresentationRow) {
+ return isMagazineDocument(v) && v.editorial_schema_version == null;
+}
+export function isSupportedMagazineDocument(v: PresentationRow) {
+ return isMagazineDocument(v) && (v.editorial_schema_version == null || v.editorial_schema_version === MAGAZINE_EDITORIAL_SCHEMA_VERSION);
+}
 export function isCompactDocument(v: PresentationRow) { return v?.design_preset === EDITORIAL_PRESET || isMagazineDocument(v); }
 // Feed imagery must never contain web-style buttons or solicit clicks on static cards.
 export const EDITORIAL_AD_CTA = /(?:지금\s*(?:확인|신청|예약|구매)|자세히\s*보기|신청하기|프로필\s*링크|링크\s*클릭|바로\s*가기|더\s*알아보기|learn\s*more|click\s*(?:here|the\s*link)|sign\s*up|book\s*now|apply\s*now|shop\s*now|link\s*in\s*bio|explore\s*roundy|roundy\s*둘러보기)/i;
@@ -86,6 +95,7 @@ export function compactContentSchema(schema: PresentationRow, language: string, 
     properties: {
       ...baseProperties,
       design_preset: {type:'string', enum:[magazine?MAGAZINE_EDITORIAL_PRESET:EDITORIAL_PRESET]},
+       ...(magazine?{editorial_schema_version:{type:'integer',enum:[MAGAZINE_EDITORIAL_SCHEMA_VERSION]}}:{}),
       ...(!magazine?{cta:{type:'string',enum:[generatedCta(language)],minLength:1,maxLength:MAX_MARKETING_CTA_LENGTH}}:{}),
       caption:text(ko?400:520),
       caption_ko: text(400), caption_en: text(520), tagline: text(64),
@@ -100,7 +110,7 @@ export function compactContentSchema(schema: PresentationRow, language: string, 
         required:[...schema.properties.slides.items.required, 'secondary_body', ...(magazine?['closing_type']:[])],
       }},
     },
-    required:[...(magazine?schema.required.filter((field:string)=>field!=='cta'):schema.required), 'design_preset', 'caption_ko', 'caption_en', 'tagline', 'hashtags'],
+    required:[...(magazine?schema.required.filter((field:string)=>field!=='cta'):schema.required), 'design_preset', ...(magazine?['editorial_schema_version']:[]), 'caption_ko', 'caption_en', 'tagline', 'hashtags'],
   };
 }
 export function compactWritingInstructions(language: string, magazine = false) {
@@ -121,6 +131,7 @@ export function compactWritingInstructions(language: string, magazine = false) {
       : 'title/body/highlight/options are Korean. secondary_body is a short, faithful English rendering of the same idea for storage and caption parity only; it is NOT visible on the image. Only original book titles/authors may remain English when editorially necessary. Use Korean conversation examples for Korean content, not mandatory English lessons.',
     'caption_ko and caption_en are concise bilingual Instagram editorial cores, not card-by-card summaries. Use 2-4 short paragraphs: a short hook (KO <=30 chars / EN <=12 words) and useful context. No marketing CTA, handles, URL, hashtags, labels or brand footer; the server appends only source credits and small publication identity, NEVER forced sales or engagement actions. Caption is the primary-language compatibility copy. Do not invent trending metrics.',
     'Source IDs must stay linked to each sourced idea. Bibliographic facts, limitations and uncertainty must survive compression. Sources will be printed as small footnotes and full links in the caption by the server. Never fabricate a citation or copy a test/example book.',
+    'Set editorial_schema_version to 3. New three-card roles are cover, insight, editorial_closing; new five-card roles are cover, context, insight, insight, editorial_closing. Do not produce key_insight, cta, or any other role for new Magazine Editorial feed documents.',
     'There is NO top-level cta field. All slides have a closing_type field: none for cover and body cards; on the final editorial_closing choose summary, insight, or brand_outro according to the story. Prefer summary or insight when either delivers reader value. Brand outro is a brief, truthful identity statement without an action, button, link-style element or sales language. No CTA on any feed image.',
   ].join('\n');
 }
