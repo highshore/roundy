@@ -104,16 +104,16 @@ const officialSources={
 };
 const richSamples=[
  {index:1,expectedLayout:'photo',slug:'photo-context',
-  title:'서울숲, 다섯 풍경',highlight:'숲길과 연못',
-  body:'서울숲은 2005년 6월 문을 연 도심 공원으로, 뚝섬문화예술공원과 생태숲 등 다른 성격의 공간을 한곳에 모았습니다. 연못과 숲길을 번갈아 걸으며 한 장소에서도 산책 동선을 다르게 짤 수 있습니다.',
+  title:'서울숲에서 걷는 법',highlight:'숲길과 연못, 예술 공간까지',
+  body:'서울숲은 2005년 문을 연 도심 공원입니다. 생태숲과 문화예술공원 등 서로 다른 공간을 오가며 한 번의 산책에서도 여러 분위기를 경험할 수 있습니다.',
   source_label:'서울특별시 공원 안내',source_ids:['S1'],reference:officialSources.forest},
  {index:2,expectedLayout:'information',slug:'information-insight',
-  title:'남산 한국숲정원, 11개 정원',highlight:'폐식물원 부지를 재구성한 도심 정원',
-  body:'남산 한국숲정원은 2026년 6월 27일 개장한 약 3만㎡ 규모의 정원입니다. 서울시는 기존 남산 야외식물원 부지를 활용해 3개 주제로 나뉜 11개 정원을 만들었습니다. 전통적인 자연 경관을 현대적인 산책 공간으로 경험할 수 있다는 점이 핵심입니다.',
+  title:'남산이 정원으로 달라졌다',highlight:'3개 주제, 11개 정원',
+  body:'2026년 6월, 기존 남산 야외식물원 부지에 약 3만㎡ 규모의 한국숲정원이 문을 열었습니다. 산책길마다 전통적인 한국 숲의 서로 다른 모습을 만나볼 수 있습니다.',
   source_label:'서울특별시, 2026년 7월 보도자료',source_ids:['S1'],reference:officialSources.garden},
  {index:3,expectedLayout:'split',slug:'split-insight',
-  title:'서울숲 vs 월드컵공원',highlight:'도심 숲과 매립지 재생 공원의 차이',
-  body:'서울숲과 월드컵공원은 같은 서울의 녹지이지만 경험이 다릅니다. 서울숲은 문화예술공원과 생태숲 등 여러 주제 공간을 가까이에서 옮겨 다니기 좋습니다. 반면 월드컵공원은 난지도 쓰레기 매립지를 생태공원으로 바꾼 장소로, 하늘공원과 노을공원 등 5개 공원으로 구성됩니다.',
+  title:'서울숲 vs 월드컵공원',highlight:'산책의 분위기가 다르다',
+  body:'서울숲은 문화예술공원과 생태숲을 함께 둘러보기 좋습니다. 월드컵공원은 과거 난지도 매립지를 복원한 장소로, 하늘공원과 노을공원 등 5개 공원으로 나뉩니다.',
   source_label:'서울특별시 월드컵공원 안내',source_ids:['S1'],reference:officialSources.parks}
 ];
 const fixturePhotoPaths=['public/images/yeouido.webp',
@@ -139,7 +139,9 @@ for(const sample of richSamples){
   source_ids:sample.source_ids,closing_type:'none'};
  const fit=layout.magazineCarouselFit(slide,editorialPlan,sample.index,'ko');
  assert.equal(fit.editorial?.layout,sample.expectedLayout,sample.slug+' should auto-select '+sample.expectedLayout);
- assert.ok(fit.body.fontSize>=29,'Never shrink body copy below 29px');
+ assert.ok(fit.body.fontSize>=34,'Body copy stays at a mobile-readable font size');
+ assert.ok(fit.body.lines.length<=8,'No wall-of-text paragraph');
+ assert.ok(fit.editorial.photoRect.width>=500,'Image must remain visually prominent');
  assert.equal(fullCopy(fit.body.lines.join('')),fullCopy(sample.body),'Body copy was shortened or lost');
  assert.equal(fullCopy(fit.title.lines.join('')),fullCopy(sample.title),'Headline was shortened or lost');
  assert.equal(fullCopy(fit.highlight.lines.join('')),fullCopy(sample.highlight),'Takeaway was shortened or lost');
@@ -153,6 +155,8 @@ for(const sample of richSamples){
  assert.ok(json.includes('objectFit')&&json.includes('contain'),'No subject-cropping photo fit');
  assert.ok(!json.includes('rgba(')&&!json.includes('Learn More')&&!json.includes('Roundy 둘러보기'));
  assert.ok(json.includes(sample.source_label),'Preserve source provenance');
+ assert.ok(!json.includes('핵심 정보')&&!json.includes('KEY TAKEAWAY'),
+  'Do not add redundant microheadings above takeaway');
  if(sample.slug==='information-insight'){
   assert.ok(json.includes('m²'),'Unicode square-meter units must be rendered legibly');
   assert.ok(!json.includes('㎡'),'Unsupported compatibility glyph must not be rasterized');
@@ -168,11 +172,11 @@ for(const sample of richSamples){
 const additionalCases=[
  {slug:'long-ko',index:2,language:'ko',
   title:'서울의 오래된 장소가 새로운 문화 공간으로 바뀌는 과정에서 생기는 차이',
-  body:richSamples[1].body+' 계절에 따라 풍경과 이용 방식도 달라집니다.',
+  body:richSamples[1].body+' 각 정원은 서로 다른 숲의 특징을 보여줍니다.',
   highlight:'11개 정원, 3개 테마',expectedMinimum:30},
  {slug:'mixed-en',index:2,language:'en',
   title:'11 gardens, 3 themes in Seoul',
-  body:'Seoul’s Korean Forest Garden opened June 27, 2026, transforming a roughly 30,000 m² site into 11 gardens organized around 3 themes. It offers a place to explore Korean forest landscapes through the seasons, not just one conventional garden path.',
+  body:'Seoul’s Korean Forest Garden opened June 27, 2026. It reused a roughly 30,000 m² site at Namsan, turning it into 11 gardens across 3 themes. Each section reveals a different view of a Korean woodland landscape.',
   highlight:'30,000 m² in 3 themes',expectedMinimum:30}
 ];
 for(const sample of additionalCases){
