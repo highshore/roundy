@@ -10,6 +10,8 @@ import {photoCreditCaption} from './marketing-stock-photo-policy';
 import {photoCardSourceLabel} from './marketing-photo-rights';
 import {loadEditorialAssets} from './marketing-render-assets';
 import {editorialCard,draftQuality} from './marketing-editorial';
+import {campaignDraftQuality} from './marketing-campaign';
+import {eventCampaignDraftQuality} from './marketing-event-campaign';
 import {renderPrelaunchCampaign,renderLiveEventCampaign} from './marketing-visuals';
 import {CAMPAIGN_PRESET,EVENT_CAMPAIGN_PRESET} from './marketing-presentation';
 import {reviewMarketingDraft,mergePreflightQuality} from './marketing-preflight-service';
@@ -197,7 +199,8 @@ async function renderVersionCards(db:DB,draft:Row,indices:number[]){
  return {draft:saved as Row,ready:true};
 }
 async function recheck(db:DB,draft:Row){
- const report=draftQuality(draft);
+ const report=draft.content_document?.design_preset===CAMPAIGN_PRESET?campaignDraftQuality(draft):
+  draft.content_document?.design_preset===EVENT_CAMPAIGN_PRESET?eventCampaignDraftQuality(draft):draftQuality(draft);
  try{
   const preflight=await reviewMarketingDraft(db,draft);
   const quality=mergePreflightQuality(report,preflight,false);
@@ -221,7 +224,8 @@ export async function versionHistory(id:string){
   mode:d.regeneration_mode||'original',scope:d.regeneration_scope||null,
   slide_indices:d.regeneration_slide_indices||[],instruction:d.regeneration_instruction||'',
   created_at:d.generated_at,status:d.status,revision:d.revision,images:d.images,caption:d.caption,
-  carousel_slides:d.carousel_slides,
+  carousel_slides:d.carousel_slides,visual_source:d.visual_source,content_document:d.content_document,
+  content_language:d.content_language,draft_kind:d.draft_kind,
   before:d.regeneration_before||null,snapshot:d.regeneration_saved_snapshot||null
  }))};
 }
@@ -239,6 +243,8 @@ export async function regenerateVersion(id:string,value:unknown,actor:string){
   &&source.content_document?.photo_sourcing?.ai_thumbnail_enabled===true
   &&!photoSlots.includes(0);
  if(['image','both'].includes(input.mode)){
+  if(input.mode==='image'&&indices.some(i=>!photoSlots.includes(i)&&!(i===0&&aiCover)))
+   throw new Error('SLIDE_HAS_NO_REPLACEABLE_IMAGE');
   if(!['stock','pexels'].includes(source.visual_source))throw new Error('LICENSED_PHOTO_SOURCE_REQUIRED');
   if(input.scope==='slides'&&indices.some(i=>!photoSlots.includes(i)&&!(i===0&&aiCover)))
    throw new Error('SLIDE_HAS_NO_REPLACEABLE_IMAGE');
@@ -264,7 +270,7 @@ export async function regenerateVersion(id:string,value:unknown,actor:string){
   let nextSlides=slides.map(s=>({...s})),caption=String(source.caption||'');
   if(needsCopy){
    const {rewrite,usage}=await copyViaModel(source,input);
-   const result=applySelectiveRewrite(slides,caption,input,rewrite);
+   const result=applySelectiveRewrite(slides,caption,input,rewrite,source.content_language==='en'?'en':'ko');
    nextSlides=result.slides;caption=result.caption;
    await db.from('marketing_generation_jobs').update({input_tokens:usage.prompt_tokens||0,
     output_tokens:usage.completion_tokens||0,stage:'copy_written'}).eq('id',job.id);
