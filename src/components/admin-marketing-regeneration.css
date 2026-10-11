@@ -66,3 +66,7 @@
 .marketing-version-record-actions button{flex:1 1 80px}
 }
 @media(max-width:390px){.marketing-version-slides{grid-template-columns:1fr}.marketing-version-slide>img{max-height:320px;object-fit:contain;background:#f5f4f1}}
+
+.marketing-version-pending{border:1px solid #ffb9ad;background:#fff8f6;border-radius:12px;padding:14px;display:grid;gap:9px;font-size:12px}
+.marketing-version-pending p{margin:0;color:#6f6662;line-height:1.55}
+.marketing-version-pending button{justify-self:start}
