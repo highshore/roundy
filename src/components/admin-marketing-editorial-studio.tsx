@@ -12,9 +12,10 @@ type Props={
  onUpdated:(draft:Row)=>void;
  onRequestAiEdit:(index:number)=>void;
  onRequestPhotoEdit:()=>void;
+ onRerenderCover:()=>void;
 };
 function text(value:unknown){return typeof value==='string'?value:'';}
-export function AdminMarketingEditorialStudio({draft,locale,disabled,onUpdated,onRequestAiEdit,onRequestPhotoEdit}:Props){
+export function AdminMarketingEditorialStudio({draft,locale,disabled,onUpdated,onRequestAiEdit,onRequestPhotoEdit,onRerenderCover}:Props){
  const t=(en:string,ko:string)=>tr(locale,en,ko);
  const slides=(Array.isArray(draft.carousel_slides)?draft.carousel_slides:[]) as Row[];
  const doc=draft.content_document||{},headlines=(Array.isArray(doc.thumbnail_candidates)?doc.thumbnail_candidates:[]) as string[];
@@ -108,8 +109,10 @@ export function AdminMarketingEditorialStudio({draft,locale,disabled,onUpdated,o
      </article>;
     })}
    </div>
-   {doc.thumbnail_render_pending&&<p role="alert" className="admin-error">{t('The selected headline has not been rendered into the cover yet. Use the existing render action before publishing.',
-    '선택된 제목을 실제 표지에 다시 렌더링해야 합니다. 기존 렌더링 기능으로 처리한 뒤 승인하세요.')}</p>}
+   {doc.thumbnail_render_pending&&<div className="roundy-editorial-pending"><p role="alert" className="admin-error">{t('The selected headline must be re-rendered into the cover before publishing.',
+    '선택한 제목으로 표지를 다시 렌더링해야 게시할 수 있습니다.')}</p>
+    <button type="button" className="admin-primary" disabled={disabled||working} onClick={onRerenderCover}>{t('Re-render selected cover','선택한 표지 다시 렌더링')}</button>
+   </div>}
   </div>}
   <div className="roundy-editorial-section">
    <div className="roundy-editorial-section-title"><h4>{t('Storyboard and information density','슬라이드 구성 및 정보량')}</h4>
