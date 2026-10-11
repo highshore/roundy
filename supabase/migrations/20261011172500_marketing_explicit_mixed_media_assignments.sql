@@ -47,9 +47,9 @@ begin
     values(p_draft,allowed[i],asset);
    i:=i+1;
  end loop;
- policy:=jsonb_set(jsonb_set(jsonb_set(policy,'{ai_image_slot}',to_jsonb(p_ai_slot),true),
-   '{ai_thumbnail_enabled}',to_jsonb(p_ai_slot=0),true),
-   '{requested_ai_thumbnail}',to_jsonb(p_ai_slot=0),true);
+ policy:=jsonb_set(jsonb_set(jsonb_set(policy,'{ai_image_slot}',coalesce(to_jsonb(p_ai_slot),'null'::jsonb),true),
+   '{ai_thumbnail_enabled}',to_jsonb(p_ai_slot is not distinct from 0),true),
+   '{requested_ai_thumbnail}',to_jsonb(p_ai_slot is not distinct from 0),true);
  update public.instagram_post_drafts set
    content_document=jsonb_set(d.content_document,'{photo_sourcing}',policy,true),
    images='{}'::text[],revision=d.revision+1,updated_at=now()
