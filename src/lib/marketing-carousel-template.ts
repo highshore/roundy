@@ -121,51 +121,62 @@ function magazineBodyCandidate(
  const titleText=magazineDisplayUnits(String(slide?.title||'').trim());
  const bodyText=magazineDisplayUnits(String(language==='en'?(slide?.body_en||slide?.body||''):(slide?.body_ko||slide?.body||'')).trim());
  const takeawayText=magazineDisplayUnits(String(slide?.highlight||'').trim());
- const isPhoto=layout==='photo',isSplit=layout==='split';
- const titleY=240,titleWidth=920;
+ const rightSplit=index%2===0;
  const title=fitCarouselCopy(titleText,{
-  width:titleWidth,availableHeight:245,
-  preferred:Math.min(isPhoto?70:69,plan.title_font_size_px),
-  minimum:49,maxLines:4,label:'MAGAZINE_BODY_TITLE'});
- const titleRect=magazineRect(80,titleY,titleWidth,title.height);
- // Photo Editorial dedicates a broad, separate image band to the photograph.
- // A panorama can fill the band without sacrificing its subject to cropping.
- const photoTop=titleY+title.height+22;
- const photoRect:MagazineRect=isPhoto
-  ?magazineRect(80,photoTop,920,465)
-  :isSplit
-   ?magazineRect(index%2===1?80:622,0,378,540)
-   :magazineRect(680,0,320,500);
- const highlightBaseY=isPhoto?photoTop+photoRect.height+22:titleY+title.height+27;
- const textX=isSplit?(index%2===1?500:80):80;
- const copyWidth=isPhoto?920:isSplit?500:560;
- const highlightX=80,highlightWidth=920;
- const highlight=fitCarouselCopy(takeawayText,{
-  width:highlightWidth,availableHeight:130,
-  preferred:35,minimum:29,maxLines:3,label:'MAGAZINE_BODY_TAKEAWAY'});
- const hasTakeaway=highlight.lines.length>0;
- const takeawayLabelY=hasTakeaway?highlightBaseY:null;
- const highlightY=highlightBaseY+(hasTakeaway?29:0);
- const bodyY=hasTakeaway?highlightY+highlight.height+18:highlightBaseY;
- const maxCopyY=1185;
+  width:920,availableHeight:245,preferred:Math.min(68,plan.title_font_size_px),
+  minimum:52,maxLines:3,label:'MAGAZINE_BODY_TITLE'});
+ const titleRect=magazineRect(80,235,920,title.height);
+ const photoTop=titleRect.y+titleRect.height+27;
+ // Body copy is always full-width: never force a 100-character Korean paragraph
+ // into a narrow 350px column of tiny, stacked lines.
  const body=fitCarouselCopy(bodyText,{
-  width:copyWidth,availableHeight:maxCopyY-bodyY,
-  preferred:isPhoto?34:isSplit?33:35,minimum:isPhoto?30:30,
-  maxLines:isPhoto?10:isSplit?17:16,label:'MAGAZINE_BODY_DETAILS'});
- if(bodyY+body.height>maxCopyY+.001)throw new Error('MAGAZINE_BODY_COPY_COLLISION');
- if(isSplit)photoRect.y=Math.max(bodyY,475);
- else if(!isPhoto)photoRect.y=Math.max(bodyY,550);
- photoRect.height=Math.min(photoRect.height,1185-photoRect.y);
- if(photoRect.height<190)throw new Error('MAGAZINE_PHOTO_FRAME_TOO_SMALL');
- const bodyRect=magazineRect(textX,bodyY,copyWidth,body.height);
- const highlightRect=magazineRect(highlightX,highlightY,highlightWidth,highlight.height);
- // All editorial rectangles are distinct. Overflow is an error, not ellipsis
- // or a hidden layer. Other templates are considered before rejecting.
+  width:920,availableHeight:370,preferred:36,minimum:34,
+  maxLines:8,label:'MAGAZINE_BODY_DETAILS'});
+ const highlight=fitCarouselCopy(takeawayText,{
+  width:layout==='split'?360:920,availableHeight:145,
+  preferred:36,minimum:32,maxLines:3,label:'MAGAZINE_BODY_TAKEAWAY'});
+ const hasHighlight=highlight.lines.length>0;
+ const gapAfterTitle=hasHighlight?18:0;
+ let photoRect:MagazineRect,highlightRect:MagazineRect,bodyRect:MagazineRect;
+ if(layout==='photo'){
+  // Photo-led spread. Large horizontal photograph, then a brief takeaway
+  // and a readable full-width paragraph. No fake UI or overlaid text.
+  const copyHeight=body.height+(hasHighlight?highlight.height+gapAfterTitle:0);
+  const available=1175-photoTop-22-copyHeight;
+  const photoHeight=Math.min(575,Math.floor(available));
+  if(photoHeight<370)throw new Error('MAGAZINE_PHOTO_TOO_SMALL');
+  photoRect=magazineRect(80,photoTop,920,photoHeight);
+  const takeawayY=photoTop+photoHeight+22;
+  highlightRect=magazineRect(80,takeawayY,920,highlight.height);
+  bodyRect=magazineRect(80,takeawayY+(hasHighlight?highlight.height+gapAfterTitle:0),920,body.height);
+ }else if(layout==='information'){
+  // Information-first: one wide, short paragraph above a supporting photo.
+  highlightRect=magazineRect(80,photoTop,920,highlight.height);
+  const bodyY=photoTop+(hasHighlight?highlight.height+gapAfterTitle:0);
+  bodyRect=magazineRect(80,bodyY,920,body.height);
+  const photoY=Math.max(780,bodyY+body.height+34);
+  const photoHeight=1175-photoY;
+  if(photoHeight<215)throw new Error('MAGAZINE_INFORMATION_PHOTO_TOO_SMALL');
+  photoRect=magazineRect(80,photoY,920,photoHeight);
+ }else{
+  // Split: picture and distilled takeaway side by side, full-width supporting
+  // details below. Avoid making the entire explanation a 10-15-line column.
+  const copyHeight=body.height;
+  const available=1175-photoTop-26-copyHeight;
+  const photoHeight=Math.min(545,Math.floor(available));
+  if(photoHeight<360)throw new Error('MAGAZINE_SPLIT_PHOTO_TOO_SMALL');
+  photoRect=magazineRect(rightSplit?474:80,photoTop,526,photoHeight);
+  highlightRect=magazineRect(rightSplit?80:634,photoTop+25,360,highlight.height);
+  bodyRect=magazineRect(80,photoTop+photoHeight+26,920,body.height);
+ }
+ const rects=[titleRect,highlightRect,bodyRect];
  const intersects=(a:MagazineRect,b:MagazineRect)=>a.width>0&&a.height>0&&b.width>0&&b.height>0&&
   a.x<b.x+b.width&&b.x<a.x+a.width&&a.y<b.y+b.height&&b.y<a.y+a.height;
- if([titleRect,bodyRect,highlightRect].some(rect=>intersects(rect,photoRect)))
+ if(rects.some(rect=>intersects(rect,photoRect)))
   throw new Error('MAGAZINE_BODY_PHOTO_TEXT_COLLISION');
- return {layout,title,body,highlight,titleRect,bodyRect,highlightRect,photoRect,takeawayLabelY};
+ if(bodyRect.y+bodyRect.height>1175||highlightRect.y+highlightRect.height>1175)
+  throw new Error('MAGAZINE_BODY_COPY_COLLISION');
+ return {layout,title,body,highlight,titleRect,bodyRect,highlightRect,photoRect,takeawayLabelY:null};
 }
 function magazineBodyFit(slide:Record<string,any>,plan:CarouselPlan,index:number,language:string):MagazineBodyFit{
  const body=String(language==='en'?(slide?.body_en||slide?.body||''):(slide?.body_ko||slide?.body||''));
