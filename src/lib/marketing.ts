@@ -56,6 +56,32 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
  const id=path[0],service=createServiceRoleClient();
 
  // All mutations below create a separate unapproved version; they never change the published or reserved original.
+
+ // Skipping is an administrative review action, not a publishing/quality-gated action.
+ // Handle it here instead of the legacy route so it has revision and status guards.
+ if(id==='draft'&&path.length===3&&uuid(path[1])&&path[2]==='skip'&&req.method==='POST'){
+  const body=await req.json().catch(()=>({}));
+  if(body.revision!==undefined&&(!Number.isInteger(body.revision)||body.revision<1))
+   return json({error:'INVALID_SKIP_REVISION'},400);
+  const current=checked(await service.from('instagram_post_drafts')
+   .select('id,status,draft_role,revision,imported_at').eq('id',path[1]).maybeSingle());
+  if(!current)return json({error:'DRAFT_NOT_FOUND'},404);
+  if(current.status!=='needs_approval'||current.draft_role!=='candidate'||!current.imported_at)
+   return json({error:'DRAFT_NOT_EDITABLE'},409);
+  if(body.revision!==undefined&&body.revision!==current.revision)
+   return json({error:'DRAFT_CHANGED_REFRESH_FIRST'},409);
+  const active=checked(await service.from('marketing_generation_jobs').select('id')
+   .eq('draft_id',current.id).eq('status','running')
+   .gt('created_at',new Date(Date.now()-300000).toISOString()).limit(1));
+  if(active.length)return json({error:'GENERATION_ALREADY_RUNNING'},409);
+  const skipped=checked(await service.from('instagram_post_drafts')
+   .update({status:'skipped',eligible_for_optimization:false})
+   .eq('id',current.id).eq('revision',current.revision)
+   .eq('status','needs_approval').eq('draft_role','candidate')
+   .select('id,status,revision').maybeSingle());
+  if(!skipped)return json({error:'DRAFT_CHANGED_REFRESH_FIRST'},409);
+  return json({draft:skipped,skipped:true});
+ }
  if(id==='draft'&&path.length===3&&uuid(path[1])&&path[2]==='versions'&&req.method==='GET')
   return json(await versionHistory(path[1]));
  if(id==='draft'&&path.length===3&&uuid(path[1])&&path[2]==='versions'&&req.method==='POST'){
