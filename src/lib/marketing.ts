@@ -180,8 +180,9 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
   // Always preview the actual archived bytes that were approved, not a
   // provider hotlink that may have changed since human review.
   const stored=all.filter(asset=>asset.review_status==='approved'&&asset.storage_path);
-  const signed=stored.length?checked(await service.storage.from('marketing-images')
-   .createSignedUrls(stored.map(asset=>String(asset.storage_path)),3600)) as Row[]:[];
+  const signedResult=stored.length?await service.storage.from('marketing-images')
+   .createSignedUrls(stored.map(asset=>String(asset.storage_path)),3600):null;
+  const signed:Row[]=signedResult?.error?[]:(signedResult?.data||[]);
   const previews=new Map(signed.map((item,index)=>[stored[index]?.id,String(item.signedUrl||'')]));
   const previewAssets:Row[]=all.map((asset:Row):Row=>({...asset,
    preview_url:previews.get(asset.id)||asset.preview_url||asset.image_url}));
@@ -220,11 +221,18 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
   const draft=checked(await service.from('instagram_post_drafts').select('id,content_document,carousel_slides').eq('id',draftId).maybeSingle());
   if(!draft)return json({error:'DRAFT_NOT_FOUND'},404);
   const photos=await listStockSelections(service,draftId);
+  const archived=photos.filter(photo=>photo.review_status==='approved'&&photo.storage_path);
+  const archiveUrls=archived.length?await service.storage.from('marketing-images')
+   .createSignedUrls(archived.map(photo=>String(photo.storage_path)),3600):null;
+  const archivedPreview=new Map<string,string>((archiveUrls?.data||[]).map((photo,index)=>[
+    String(archived[index].asset_id),String(photo.signedUrl||'')
+  ]));
+  const displayPhotos=photos.map(photo=>({...photo,preview_url:archivedPreview.get(String(photo.asset_id))||photo.preview_url}));
   const policy=draft.content_document?.photo_sourcing||null;
   const required=requiredStockSlots(draft).length;
   const minimum=Number(policy?.min_real_photos||required);
   const approved=photos.filter((photo:Row)=>photo.review_status==='approved'&&!!photo.storage_path).length;
-  return json({photos,ready:stockReady(draft,photos),required,minimum,approved,
+  return json({photos:displayPhotos,ready:stockReady(draft,photos),required,minimum,approved,
    awaiting_review:!stockReady(draft,photos),
    missing:Math.max(0,minimum-approved),policy,
    provider:'Licensed stock',providers:supportedPhotoSources.map(provider=>({name:provider,configured:providerConfigured(provider)})),configured:true});
