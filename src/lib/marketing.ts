@@ -1,4 +1,4 @@
-import {versionHistory,regenerateVersion,restoreVersion} from './marketing-regeneration';
+import {versionHistory,regenerateVersion,restoreVersion,finishVersionRendering} from './marketing-regeneration';
 import {savedCtaRecoverySource} from './marketing-output-recovery';
 import {selectAnswerFirstHeadline} from './marketing-answer-first';
 import { NextRequest, NextResponse } from 'next/server';
@@ -63,6 +63,10 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
   const actor=(await db.auth.getUser()).data.user;
   if(!actor)return json({error:'Sign in required'},401);
   return json(await regenerateVersion(path[1],body,actor.id));
+ }
+ if(id==='draft'&&path.length===4&&uuid(path[1])&&path[2]==='versions'&&path[3]==='render'&&req.method==='POST'){
+  const body=await req.json().catch(()=>({}));
+  return json(await finishVersionRendering(path[1],Number(body.revision)));
  }
  if(id==='draft'&&path.length===4&&uuid(path[1])&&path[2]==='versions'&&path[3]==='restore'&&req.method==='POST'){
   const body=await req.json().catch(()=>({}));
