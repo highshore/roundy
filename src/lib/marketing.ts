@@ -172,10 +172,20 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
  // The existing reviewed licensed-photo library is shared across drafts. Read-only browse;
  // approval/rejection reuses the protected /photos/:id/review route below.
  if(id==='photos'&&path.length===2&&path[1]==='assets'&&req.method==='GET'){
-  const all=checked(await service.from('marketing_photo_assets')
-   .select('id,provider,provider_photo_id,source_url,image_url,preview_url,photographer,photographer_url,license_name,license_url,license_evidence_url,license_checked_at,commercial_use_allowed,modifications_allowed,attribution_required,search_query,review_status,review_note,reviewed_by,reviewed_at,storage_path,topic_key,created_at')
-   .order('created_at',{ascending:false}).limit(200)) as Row[];
-  const ids=all.map(asset=>asset.id);
+  const onlyApproved=req.nextUrl.searchParams.get('status')==='approved';
+  let photoQuery=service.from('marketing_photo_assets')
+   .select('id,provider,provider_photo_id,source_url,image_url,preview_url,photographer,photographer_url,license_name,license_url,license_evidence_url,license_checked_at,commercial_use_allowed,modifications_allowed,attribution_required,search_query,review_status,review_note,reviewed_by,reviewed_at,storage_path,content_sha256,topic_key,created_at');
+  if(onlyApproved)photoQuery=photoQuery.eq('review_status','approved');
+  const all=checked(await photoQuery.order(onlyApproved?'reviewed_at':'created_at',{ascending:false}).limit(200)) as Row[];
+  // Always preview the actual archived bytes that were approved, not a
+  // provider hotlink that may have changed since human review.
+  const stored=all.filter(asset=>asset.review_status==='approved'&&asset.storage_path);
+  const signed=stored.length?checked(await service.storage.from('marketing-images')
+   .createSignedUrls(stored.map(asset=>String(asset.storage_path)),3600)) as Row[]:[];
+  const previews=new Map(signed.map((item,index)=>[stored[index]?.id,String(item.signedUrl||'')]));
+  const previewAssets=all.map(asset=>({...asset,
+   preview_url:previews.get(asset.id)||asset.preview_url||asset.image_url}));
+  const ids=previewAssets.map(asset=>asset.id);
   const usage=ids.length
    ?checked(await service.from('marketing_draft_photos')
      .select('asset_id,draft_id,slot').in('asset_id',ids).limit(2000)) as Row[]:[];
@@ -184,14 +194,14 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
    const key=String(linked.asset_id),previous=byAsset.get(key)||[];
    byAsset.set(key,[...previous,linked]);
   }
-  return json({assets:all.map(asset=>({
+  return json({assets:previewAssets.map(asset=>({
    ...asset,used_by_count:(byAsset.get(asset.id)||[]).length,
    used_by_drafts:(byAsset.get(asset.id)||[]).slice(0,20)
   })),counts:{
-   all:all.length,
-   approved:all.filter(x=>x.review_status==='approved').length,
-   pending:all.filter(x=>x.review_status==='pending').length,
-   rejected:all.filter(x=>x.review_status==='rejected').length
+   all:previewAssets.length,
+   approved:previewAssets.filter(x=>x.review_status==='approved').length,
+   pending:previewAssets.filter(x=>x.review_status==='pending').length,
+   rejected:previewAssets.filter(x=>x.review_status==='rejected').length
   },limit:200,photo_policy:'Verified original source, commercial rights, modifications and human approval required'});
  }
  if(id==='photos'&&path.length===2&&path[1]==='attempts'&&req.method==='GET'){
@@ -228,13 +238,48 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
    return json({photo});
   }catch(error){return json({error:error instanceof Error?error.message:'PHOTO_REVIEW_FAILED'},400);}
  }
+ // Approved assets can be assigned deterministically to a specific card.
+ // Atomic service-role RPC enforces approval, rights, draft revision, uniqueness,
+ // archived bytes, and immutable scheduled/published snapshots.
+ if(id==='draft'&&path.length===3&&uuid(path[1])&&path[2]==='assign-stock'&&req.method==='POST'){
+  const body=await req.json().catch(()=>({}));
+  if(!Number.isInteger(body.revision)||!Number.isInteger(body.slot)||!uuid(String(body.asset_id||'')))
+   return json({error:'INVALID_PHOTO_ASSIGNMENT'},400);
+  const draft=checked(await service.from('instagram_post_drafts').select('id,revision,images').eq('id',path[1]).maybeSingle());
+  if(!draft)return json({error:'DRAFT_NOT_FOUND'},404);
+  if(draft.revision!==body.revision)return json({error:'DRAFT_CHANGED_REFRESH_FIRST'},409);
+  if((draft.images||[]).length&&!body.confirm_replace)
+   return json({error:'CONFIRM_REPLACE_RENDERED_IMAGES'},409);
+  try{
+   const updated=checked(await service.rpc('assign_marketing_approved_photo',{
+    p_draft:path[1],p_revision:body.revision,p_slot:body.slot,p_asset:body.asset_id
+   }));
+   return json({draft:updated,photos:await listStockSelections(service,path[1])});
+  }catch(error){return json({error:error instanceof Error?error.message:'PHOTO_ASSIGNMENT_FAILED'},409);}
+ }
+ if(id==='draft'&&path.length===3&&uuid(path[1])&&path[2]==='image-layout'&&req.method==='POST'){
+  const body=await req.json().catch(()=>({}));
+  if(!Number.isInteger(body.revision)||!(body.ai_image_slot===null||Number.isInteger(body.ai_image_slot)))
+   return json({error:'INVALID_AI_IMAGE_SLOT'},400);
+  const draft=checked(await service.from('instagram_post_drafts').select('id,revision,images').eq('id',path[1]).maybeSingle());
+  if(!draft)return json({error:'DRAFT_NOT_FOUND'},404);
+  if(draft.revision!==body.revision)return json({error:'DRAFT_CHANGED_REFRESH_FIRST'},409);
+  if((draft.images||[]).length&&!body.confirm_replace)
+   return json({error:'CONFIRM_REPLACE_RENDERED_IMAGES'},409);
+  try{
+   const updated=checked(await service.rpc('set_marketing_draft_ai_slot',{
+    p_draft:path[1],p_revision:body.revision,p_ai_slot:body.ai_image_slot
+   }));
+   return json({draft:updated,photos:await listStockSelections(service,path[1])});
+  }catch(error){return json({error:error instanceof Error?error.message:'AI_IMAGE_SLOT_UPDATE_FAILED'},409);}
+ }
  if(id==='draft'&&path.length===3&&uuid(path[1])&&path[2]==='refresh-stock'&&req.method==='POST'){
   const body=await req.json().catch(()=>({}));
   const draft=checked(await service.from('instagram_post_drafts').select('*').eq('id',path[1]).maybeSingle());
   if(!draft||draft.draft_role!=='candidate'||draft.status!=='needs_approval'||!['pexels','stock'].includes(String(draft.visual_source)))return json({error:'STOCK_DRAFT_NOT_EDITABLE'},409);
   if(body.revision!==draft.revision||draft.images?.length)return json({error:'DRAFT_CHANGED_OR_ALREADY_RENDERED'},409);
   try{
-   const photos=await prepareStockSelections(service,draft,{replace:true});
+   const photos=await prepareStockSelections(service,draft,{replace:false});
    return json({photos,ready:stockReady(draft,photos),required:requiredStockSlots(draft).length});
   }catch(error){return json({error:error instanceof Error?error.message:'STOCK_DISCOVERY_FAILED'},400);}
  }
