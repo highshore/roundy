@@ -454,7 +454,11 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
     const images=await renderCardsWithAssets(db,draft,job,assets);
     await progress(db,job,'saving_images');
     // Record every provider, creator and ORIGINAL source URL in the final draft caption.
-    const captionWithCredit=photoCreditCaption(String(draft.caption||''),selected);
+    const originalCaption=String(draft.caption||'')
+     .replace(/\n\n(?:Photos:|Photo sources \/ 사진 출처:)[\s\S]*$/,'')
+     .replace(/\n\nAI-generated editorial illustration: Card \d+$/,'');
+    const captionWithCredit=photoCreditCaption(aiSlot===null?originalCaption:
+     originalCaption+'\n\nAI-generated editorial illustration: Card '+(aiSlot+1),selected);
     draft=await savePartial(db,draft,{images,caption:captionWithCredit,generation_source:automatic?'automation':'manual',visual_source:visualSource,last_regeneration_mode:input.mode,last_regeneration_instruction:input.instruction});
    }else{
     // Missing, insufficient, unlicensed or unapproved Pexels photos are a review
