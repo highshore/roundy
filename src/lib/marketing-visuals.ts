@@ -437,15 +437,11 @@ function magazineInformation(slide:Row,index:number,document:Row,assets:Editoria
   magazinePhotoPanel(photoSrc,e.photoRect),
   box({position:'absolute',left:e.titleRect.x,top:e.titleRect.y,width:e.titleRect.width},
    magazineAccentedRows(fit.title.lines,fit.title.fontSize,900,BRIGHT_EDITORIAL.ink)),
-  e.takeawayLabelY!==null?box({
-   position:'absolute',left:e.highlightRect.x,top:e.takeawayLabelY,width:e.highlightRect.width},
-   text(language==='ko'?'핵심 정보':'KEY TAKEAWAY',19,{
-    color:BRIGHT_EDITORIAL.coral,fontWeight:800,letterSpacing:.5})):null,
   fit.highlight.lines.length?box({position:'absolute',left:e.highlightRect.x,top:e.highlightRect.y,
    width:e.highlightRect.width},
    magazineAccentedRows(fit.highlight.lines,fit.highlight.fontSize,750,BRIGHT_EDITORIAL.ink)):null,
   box({position:'absolute',left:e.bodyRect.x,top:e.bodyRect.y,width:e.bodyRect.width},
-   magazineAccentedRows(fit.body.lines,fit.body.fontSize,500,BRIGHT_EDITORIAL.body)),
+   fittedRows(fit.body.lines,fit.body.fontSize,BRIGHT_EDITORIAL.body,500,1.26)),
   magazineSourceFooter(slide,index,document,assets,!!photoSrc));
 }
 function magazineClosing(slide:Row,document:Row,fit:ReturnType<typeof magazineCarouselFit>){
