@@ -22,6 +22,7 @@ export function AdminMarketingEditorialStudio({draft,locale,disabled,onUpdated,o
  const scores=(Array.isArray(doc.editorial_headline_reviews)?doc.editorial_headline_reviews:[]) as Row[];
  const storyboard=doc.editorial_storyboard_review as Row|null;
  const language=draft.content_language==='en'?'en':'ko';
+ const manualSupported=['stock','pexels'].includes(String(draft.visual_source));
  const chosen=Number(doc.thumbnail_selected_index??0);
  const [editing,setEditing]=useState<number|null>(null);
  const [working,setWorking]=useState(false);
@@ -31,6 +32,7 @@ export function AdminMarketingEditorialStudio({draft,locale,disabled,onUpdated,o
  useEffect(()=>{setEditing(null);setError('');},[draft.id,draft.revision]);
  function startEdit(index:number){
   const slide=slides[index];if(!slide||disabled||working)return;
+  if(!manualSupported){setError(t('This image source has no reusable verified photo archive. Keep the original and use a new upload/re-render instead.','이 이미지 유형은 검증된 원본을 다시 사용할 수 없습니다. 기존 게시물을 보존하고 새 원본을 업로드해 렌더링하세요.'));return;}
   setEditing(index);setError('');
   setFields({title:text(slide.title),body:text(slide.body),
    secondary_body:text(slide.secondary_body|| (language==='en'?slide.body_ko:slide.body_en)),
@@ -129,6 +131,7 @@ export function AdminMarketingEditorialStudio({draft,locale,disabled,onUpdated,o
   </div>
   <div className="roundy-editorial-section">
    <div className="roundy-editorial-section-title"><h4>{t('Card-by-card preview and edits','카드별 미리보기 및 수정')}</h4><span>{slides.length} {t('cards','장')}</span></div>
+   {!manualSupported&&<p className="admin-help">{t('Direct text-only edits require an archived approved photo source. These cards can still be reviewed; use the upload workflow for unarchived artwork.','텍스트 직접 수정에는 보존된 승인 사진 원본이 필요합니다. 원본이 없는 완성 이미지에서는 업로드 방식으로 새 버전을 제작하세요.')}</p>}
    <div className="roundy-editorial-cards">{slides.map((slide:Row,index:number)=>{
     const current=editing===index,visual=Array.isArray(draft.images)?draft.images[index]:'';
     const primary=text(language==='en'?slide.body_en||slide.body:slide.body_ko||slide.body);
@@ -142,7 +145,7 @@ export function AdminMarketingEditorialStudio({draft,locale,disabled,onUpdated,o
       <strong>{slide.title}</strong><p>{primary}</p>
       {!!slide.source_ids?.length&&<small>{t('Source references retained','출처 ID 유지')}: {slide.source_ids.join(', ')}</small>}
       <div className="roundy-editorial-card-buttons">
-       <button type="button" className="admin-secondary" disabled={disabled||working} onClick={()=>current?setEditing(null):startEdit(index)}><PenLine size={13}/>{current?t('Cancel','취소'):t('Edit text','텍스트 수정')}</button>
+       <button type="button" className="admin-secondary" disabled={disabled||working||!manualSupported} onClick={()=>current?setEditing(null):startEdit(index)}><PenLine size={13}/>{current?t('Cancel','취소'):t('Edit text','텍스트 수정')}</button>
        <button type="button" className="admin-secondary" disabled={disabled||working} onClick={()=>onRequestAiEdit(index)}><RefreshCw size={13}/>{t('AI rewrite','AI 재작성')}</button>
        {index<slides.length-1&&<button type="button" className="admin-secondary" disabled={disabled||working} onClick={onRequestPhotoEdit}><ImageIcon size={13}/>{t('Photos','이미지')}</button>}
       </div>
