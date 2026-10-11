@@ -739,7 +739,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
              onClick={()=>void showApprovedPhotoPicker(index)}>
              {t('Choose approved photo','승인 사진 선택')}
             </button>
-            {status==='pending'&&<button type="button" className="admin-secondary" disabled={busy||!!running}
+            {status==='pending'&&assigned&&<button type="button" className="admin-secondary" disabled={busy||!!running}
               onClick={()=>void work(()=>reviewStock(assigned,'approved'))}>{t('Review & approve','검수 후 승인')}</button>}
           </div>}
           {real&&assigned&&<small className="marketing-photo-slot-credit">
