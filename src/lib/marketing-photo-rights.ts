@@ -32,6 +32,26 @@ export function licensedImageUrl(value:unknown,provider:PhotoProvider):string|nu
  if(['wikimedia','openverse'].includes(provider)&&!path.startsWith('/wikipedia/'))return null;
  return url;
 }
+/**
+ * Source-original preview for human photo review, distinct from the already
+ * approved, immutable 4:5 archived render. Never construct a URL from an
+ * unverified host. Pexels "large2x" can contain w=940&h=650, which crops a
+ * portrait photo into landscape; use its uncropped portrait source instead.
+ */
+export function fullReviewPhotoUrl(photo:LicensedPhoto,width:1100|1280=1100):string|null{
+ const provider=s(photo.provider) as PhotoProvider;
+ if(!PHOTO_PROVIDERS.includes(provider))return null;
+ const uri=licensedImageUrl(photo.preview_url,provider)||licensedImageUrl(photo.image_url,provider);
+ if(!uri)return null;
+ if(provider!=='pexels')return uri;
+ const url=new URL(uri);
+ url.searchParams.delete('h');
+ url.searchParams.delete('dpr');
+ url.searchParams.delete('fit');
+ url.searchParams.delete('crop');
+ url.searchParams.set('w',String(width));
+ return url.toString();
+}
 export function normalizeOpenLicense(name:unknown,url:unknown):{name:string;url:string;attribution:boolean}|null{
  const raw=s(name).toLowerCase(),value=s(url);
  let parsed:URL;
