@@ -65,7 +65,7 @@ export function reviewMagazineStoryboard(doc:Document,language:string):Storyboar
   :'The reserved five-card format needs distinct, useful detail on each middle card.');
  const distinct=body.length-overlaps.length;
  const dense=body.filter(s=>Array.from(txt(s.body)).length>=(ko?55:100)).length;
- const suggested_count:3|5=distinct>=3&&short.length===0&&dense>=1?5:3;
+ const suggested_count:3|5=distinct>=3&&short.length===0?5:3;
  const density:StoryboardReview['density']=short.length>=2?'thin':dense>=2?'dense':'balanced';
  return {
   version:EDITORIAL_STORYBOARD_VERSION,reserved_count:plan.slide_count,suggested_count,density,
