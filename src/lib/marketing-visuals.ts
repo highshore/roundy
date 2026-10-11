@@ -1,8 +1,9 @@
 import {createElement as h} from 'react';
 import {ImageResponse} from 'next/og';
 import {readTrendFactPack,selectGuideFacts,factLabel} from './marketing-trend-guide';
-import {ROUNDY_IDENTITY as BRAND, EDITORIAL_PRESET, MAGAZINE_EDITORIAL_PRESET, isMagazineDocument, CAMPAIGN_PRESET, EVENT_CAMPAIGN_PRESET, type PresentationRow as Row} from './marketing-presentation';
+import {ROUNDY_IDENTITY as BRAND, EDITORIAL_PRESET, MAGAZINE_EDITORIAL_PRESET, isMagazineDocument, isLegacyMagazineDocument, isSupportedMagazineDocument, CAMPAIGN_PRESET, EVENT_CAMPAIGN_PRESET, type PresentationRow as Row} from './marketing-presentation';
 import {savedCarouselPlan,mobileCarouselFit,magazineCarouselFit,carouselNarrative,CAROUSEL_CANVAS} from './marketing-carousel-template';
+import {magazineRolesForCount} from './marketing-answer-first';
 
 export type EditorialAssets = {
  photo?: string|null;
@@ -389,7 +390,7 @@ function magazineInformation(slide:Row,index:number,document:Row,assets:Editoria
  const copyEnd=bodyY+fit.body.height;
  if(photographFirst&&copyEnd>1187)throw new Error('MAGAZINE_PHOTO_FIRST_COPY_COLLISION');
  if(!photographFirst&&copyEnd>707)throw new Error('MAGAZINE_COPY_FIRST_PHOTO_COLLISION');
- const label=index===1?(language==='ko'?'CONTEXT / 핵심 배경':'CONTEXT / THE STORY')
+ const label=index===1&&savedCarouselPlan(document)?.slide_count===5?(language==='ko'?'CONTEXT / 핵심 배경':'CONTEXT / THE STORY')
   :language==='ko'?'EDITORIAL / 인사이트':'EDITORIAL / INSIGHT';
  const frameY=photographFirst?232:756,frameHeight=photographFirst?426:448;
  return box({position:'relative',width:1080,height:1350,background:BRIGHT_EDITORIAL.paper,
@@ -422,10 +423,9 @@ function magazineClosing(slide:Row,document:Row,fit:ReturnType<typeof magazineCa
 }
 export function magazineCarouselTree(slide:Row,index:number,total:number,document:Row,assets:EditorialAssets={}){
  const plan=savedCarouselPlan(document);
- if(!isMagazineDocument(document)||!plan||total!==plan.slide_count||index<0||index>=total)
+ if(!isSupportedMagazineDocument(document)||!plan||total!==plan.slide_count||index<0||index>=total)
   throw new Error('MAGAZINE_TEMPLATE_MISMATCH');
- const role=slide.role,expected=total===3?['cover','key_insight','editorial_closing']:
-  ['cover','context','insight','insight','editorial_closing'];
+ const role=slide.role,expected=magazineRolesForCount(total as 3|5,isLegacyMagazineDocument(document));
  if(role!==expected[index])throw new Error('MAGAZINE_SLIDE_ROLE_MISMATCH');
  const language=document.content_language==='en'?'en':'ko';
  const fit=magazineCarouselFit(slide,plan,index,language);
