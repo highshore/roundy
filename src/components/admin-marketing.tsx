@@ -474,6 +474,10 @@ export function AdminMarketing({locale}:{locale:Locale}){
   </header>
   {error&&<p className="admin-error" role="alert">{error}</p>}
   {notice&&<p role="status" className="marketing-workspace-feedback">{notice}</p>}
+  {(error||notice)&&<div className={'marketing-workspace-toast'+(error?' is-error':'')} data-testid="marketing-action-feedback">
+   <span>{error||notice}</span>
+   <button type="button" aria-label={t('Dismiss message','메시지 닫기')} onClick={()=>{setError('');setNotice('');}}>×</button>
+  </div>}
   {channel==='instagram'&&<nav className="marketing-subtabs marketing-workspace-nav" aria-label={t('Marketing sections','마케팅 메뉴')}>
    {[
     {group:'WORKSPACE',tabs:tabItems.filter(([id])=>primaryMarketingTabs.has(id))},
@@ -639,7 +643,17 @@ export function AdminMarketing({locale}:{locale:Locale}){
     {!!draft.research_sources?.length&&<div className="growth-sources">{draft.research_sources.map((s:Row)=><a key={s.url} href={s.url} target="_blank" rel="noreferrer">{s.publisher||s.title}</a>)}</div>}
     {draft.status==='needs_approval'&&<div className="admin-form-actions"><button type="button" className="admin-secondary" disabled={busy||!!running||!dirty} onClick={()=>void work(async()=>{await mutate('/draft/'+draft.id,{revision:draft.revision,caption:draft.caption,cta:draft.cta,destination_url:draft.destination_url},'PUT');await load(draft.id);})}>{t('Save edits','수정 저장')}</button><button type="button" className="admin-primary" disabled={busy||!!running||dirty||!preflightReady||!draft.caption?.trim()||!draft.images?.length||draft.quality_report?.status!=='passed'||draft.quality_revision!==draft.revision} onClick={()=>{if(window.confirm(t('Approve this exact revision and schedule it for Instagram?','현재 버전의 문구와 이미지를 승인하고 Instagram 게시를 예약할까요?')))void work(async()=>{const result=await mutate('/draft/'+draft.id+'/approve',{revision:draft.revision});await load(draft.id);
   const when=result.run?.scheduled_for?new Date(result.run.scheduled_for).toLocaleString(locale,{timeZone:'Asia/Seoul'}):'';
-  setNotice(t('Approved and reserved for ','승인 완료, 발행 예약: ')+when+' KST');});}}>{t('Approve & schedule','승인 후 예약')}</button><button type="button" className="admin-secondary" disabled={busy||!!running||dirty||!preflightReady||!draft.caption?.trim()||!draft.images?.length||draft.quality_report?.status!=='passed'||draft.quality_revision!==draft.revision} onClick={()=>{if(window.confirm(t('Publish this exact saved revision to @roundy.meet NOW? This bypasses the recommended posting time and cannot be undone here.','현재 저장된 버전을 @roundy.meet에 지금 바로 게시할까요? 추천 게시 시간을 무시하며 여기서 게시를 되돌릴 수 없습니다.')))void work(async()=>{const result=await mutate('/draft/'+draft.id+'/publish-now',{revision:draft.revision});await load(draft.id);setNotice(result.published?t('Published to @roundy.meet.','@roundy.meet에 바로 게시했습니다.'):result.needs_review?t('Publish attempt needs review. Check Instagram before resolving it.','게시 결과 확인이 필요합니다. 처리 전에 Instagram에서 실제 게시 여부를 확인하세요.'):result.deferred?t('Daily Feed limit reached. Reserved for '+String(result.feed_date_kst)+' KST.','Feed 일일 한도를 초과해 '+String(result.feed_date_kst)+' KST로 예약했습니다.'):t('Queued for immediate publishing. Refresh status before trying again.','즉시 게시 큐에 넣었습니다. 다시 누르기 전에 상태를 새로고침하세요.'));});}}>{t('Publish now','바로 게시')}</button><button type="button" className="admin-secondary" disabled={busy||!!running} onClick={()=>void work(async()=>{await mutate('/draft/'+draft.id+'/skip',{});await load();})}>{t('Skip','건너뛰기')}</button></div>}
+  setNotice(t('Approved and reserved for ','승인 완료, 발행 예약: ')+when+' KST');});}}>{t('Approve & schedule','승인 후 예약')}</button><button type="button" className="admin-secondary" disabled={busy||!!running||dirty||!preflightReady||!draft.caption?.trim()||!draft.images?.length||draft.quality_report?.status!=='passed'||draft.quality_revision!==draft.revision} onClick={()=>{if(window.confirm(t('Publish this exact saved revision to @roundy.meet NOW? This bypasses the recommended posting time and cannot be undone here.','현재 저장된 버전을 @roundy.meet에 지금 바로 게시할까요? 추천 게시 시간을 무시하며 여기서 게시를 되돌릴 수 없습니다.')))void work(async()=>{const result=await mutate('/draft/'+draft.id+'/publish-now',{revision:draft.revision});await load(draft.id);setNotice(result.published?t('Published to @roundy.meet.','@roundy.meet에 바로 게시했습니다.'):result.needs_review?t('Publish attempt needs review. Check Instagram before resolving it.','게시 결과 확인이 필요합니다. 처리 전에 Instagram에서 실제 게시 여부를 확인하세요.'):result.deferred?t('Daily Feed limit reached. Reserved for '+String(result.feed_date_kst)+' KST.','Feed 일일 한도를 초과해 '+String(result.feed_date_kst)+' KST로 예약했습니다.'):t('Queued for immediate publishing. Refresh status before trying again.','즉시 게시 큐에 넣었습니다. 다시 누르기 전에 상태를 새로고침하세요.'));});}}>{t('Publish now','바로 게시')}</button><button type="button" className="admin-secondary" disabled={busy||!!running} onClick={()=>{
+   const target=draft;
+   if(!window.confirm(t('Skip this draft? It will leave the review inbox without publishing. Any unsaved edits will be discarded.','이 초안을 건너뛸까요? 게시되지 않고 승인 대기함에서 제외됩니다. 저장하지 않은 수정사항은 사라집니다.')))return;
+   void work(async()=>{
+    const title=contentTitle(target),shortId=String(target.id).slice(0,8);
+    const remaining=(data.drafts||[]).filter((row:Row)=>row.id!==target.id).length;
+    await mutate('/draft/'+target.id+'/skip',{revision:target.revision});
+    await load();
+    setNotice(t('Skipped: '+title+' (#'+shortId+'). '+remaining+' drafts remain. Similar-looking drafts are separate records.','건너뛰기 완료: '+title+' (#'+shortId+'). 남은 승인 대기 초안 '+remaining+'건. 같은 제목의 콘텐츠도 각각 별도 초안입니다.'));
+   });
+  }}>{t('Skip','건너뛰기')}</button></div>}
     <p className="admin-help">{t('Generation never publishes. Copy is saved before images, so an image failure does not lose it.','생성만으로는 게시되지 않습니다. 이미지를 만들기 전에 문구부터 저장하므로 이미지 생성이 실패해도 문구는 남습니다.')}</p>
    </div><MarketingMobilePreview draft={draft} locale={locale}/></div>}
   </>}
