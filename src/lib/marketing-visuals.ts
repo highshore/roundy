@@ -403,7 +403,7 @@ function magazinePhotoPanel(src:string|null,frame:MagazineRect){
  // Contain instead of cover: image focal points must not be cropped off.
  return !src?null:box({position:'absolute',left:frame.x,top:frame.y,
   width:frame.width,height:frame.height,overflow:'hidden',
-  background:'#f3f1eb'},
+  background:BRIGHT_EDITORIAL.paper},
   photo(src,{objectFit:'contain',objectPosition:'center'}));
 }
 function magazineSourceFooter(slide:Row,index:number,document:Row,assets:EditorialAssets,hasPhoto:boolean){
