@@ -5,7 +5,7 @@ import {createClient} from '@/lib/supabase/client';
 import {tr,type Locale} from '@/lib/locale';
 import {createTimelineReel} from '@/lib/marketing-reel-timeline-renderer';
 import {mp4RecorderMime} from '@/lib/marketing-reel-renderer';
-import {REEL_FORMATS,type ReelPlan,type ReelScene} from '@/lib/marketing-reel-creative';
+import type {ReelPlan,ReelScene} from '@/lib/marketing-reel-creative';
 import './admin-marketing-reel-creative.css';
 
 type Row=Record<string,any>;
