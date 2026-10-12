@@ -73,6 +73,22 @@ function harness({denied=false,network=false,badSources=false,duplicate=false,ph
    ]:[{type:'url_citation',url:'https://doi.org/10.1234/attentive.2024',title:'Attentive Conversation Study (2024)',start_index:0,end_index:notes.length}];
    return {ok:true,json:async()=>({status:'completed',output:[{type:'web_search_call',status:'completed',action:{sources:[{url:'https://unrelated.example/english-school'}]}},{type:'message',content:[{type:'output_text',text:notes,annotations}]}],usage:{input_tokens:800,output_tokens:180}})};
   }
+  if(body.response_format?.json_schema?.name==='roundy_topic_critic_v1'){
+   // The independent critic receives NO writer self-scores, only eligible topics.
+   const data=JSON.parse(body.messages[1].content);
+   const reviews=data.candidates.map(c=>({
+    angle_key:c.angle_key,hook:5,scene:5,originality:5,usefulness:5,shareability:5,
+    decision:'approve',reason:'이 장면에는 구체적인 갈등과 서로 다른 관점이 충분히 담겨 있습니다.'
+   }));
+   return {ok:true,json:async()=>({choices:[{finish_reason:'stop',message:{content:JSON.stringify({reviews})}}],
+    usage:{input_tokens:250,output_tokens:180}})};
+  }
+  if(body.response_format?.json_schema?.name==='roundy_copy_critic_v1'){
+   const document={hook:5,scene:5,originality:5,progression:5,shareability:5,
+    decision:'pass',reason:'장면과 핵심 관찰이 분명하고 각 카드가 서로 다른 유용한 정보를 제공합니다.',issues:[]};
+   return {ok:true,json:async()=>({choices:[{finish_reason:'stop',message:{content:JSON.stringify(document)}}],
+    usage:{input_tokens:320,output_tokens:160}})};
+  }
   if(body.response_format?.json_schema?.name==='roundy_topic_candidates_v1'){
    const ko=String(body.messages[0].content).includes('natural contemporary Korean');
    const heads=ko
