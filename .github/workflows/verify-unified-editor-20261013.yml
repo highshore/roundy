@@ -19,7 +19,7 @@ jobs:
       - name: Apply checksum-pinned reviewed patch
         run: |
           curl --fail --silent --show-error --max-time 60 https://sb-2rrl5dpvwfdy.vercel.run/release/editor.patch -o /tmp/editor.patch
-          echo '9b9c806058684c3758ed7d4eb3a602e211a99a6e8f50d1c1ae9a4bd9d791efe0  /tmp/editor.patch' | sha256sum -c -
+          echo '4523da5a2527f1169fd57c9eb303ad7dda61a7708ec98ebf923dafec9c8ed45e  /tmp/editor.patch' | sha256sum -c -
           git apply --check /tmp/editor.patch
           git apply /tmp/editor.patch
           git diff --stat
@@ -45,7 +45,7 @@ jobs:
           import json,hashlib,pathlib,urllib.request
           base='https://sb-2rrl5dpvwfdy.vercel.run/release/'
           manifest=urllib.request.urlopen(base+'qa-manifest.json',timeout=30).read()
-          assert hashlib.sha256(manifest).hexdigest()=='b91d2d2bac6e38456e0b9c514a7d2bb48cd8601056f97a41a25dcb808d923a1a'
+          assert hashlib.sha256(manifest).hexdigest()=='36d981195aa79a9eb9737c5b8dbcf24d3776acc4b681fad29f3b341a8edcb80d'
           out=pathlib.Path('quality-artifacts/unified-editor');out.mkdir(parents=True,exist_ok=True)
           for row in json.loads(manifest):
             name=row['name'];assert '/' not in name and name.endswith(('.png','.txt'))
