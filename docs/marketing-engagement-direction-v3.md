@@ -81,3 +81,11 @@ increase or publishing gate relaxation is introduced.
   independent re-ranking, malformed model output, language-mode selection
   and the fail-closed review/repair wiring. Real provider costs, judgments,
   runtime limits and final image quality still need a bounded smoke test.
+
+## Independent-editor failure recovery (2026-10-12)
+
+- The `EDITORIAL_INDEPENDENT_REVIEW_REJECTED` result is a **copy gate**, not a cache or photo error. The rejected copy is held in the job snapshot and will not publish.
+- Verified news/Seoul trend carousels use a separate fact-first critic brief. A human-interest scene may be a reader deciding between verified programs; invented visitor quotes or forced romantic conversations are not required. Each slide must deliver different information tied to the same cover promise.
+- On the **one existing copy repair** the writer now receives the independent editor's concise reason, itemized defects, lowest-scoring dimensions and a length-specific storyboard. It can rewrite the full narrative while keeping approved subject, source IDs, uncertainty, role order and exact 3/5-card reservation. No third critic review, unbounded retry, extra automatic web research, image expense or lowered publication threshold is introduced.
+- The admin Generation History displays a compact failure explanation, with long raw editor notes in a disclosure. Retry remains manual, may incur charges, and generates a new unapproved draft. Historical posts, source records and admin approvals are unchanged.
+- Offline regression coverage: `scripts/test-marketing-independent-critic.mjs` plus existing magazine, source and marketing tests. A fully successful live AI generation cannot be guaranteed by static tests; failed copy remains blocked from publication.
