@@ -74,6 +74,10 @@ jobs:
         if: always()
         with:
           name: instagram-audit-render-qa
-          path: quality-artifacts
+          path: |
+            quality-artifacts
+            scripts/instagram-audit.part1
+            scripts/instagram-audit.part2
+            scripts/instagram-audit.patch
           if-no-files-found: ignore
-          retention-days: 3
+          retention-days: 1
