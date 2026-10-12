@@ -30,7 +30,7 @@ export function AdminMarketingSettings({locale,settings,onChange,onSave,busy}:{
       <input type="number" min={1} max={10} step={1} value={Number(value('feed_daily_max_posts'))}
        onChange={e=>set('feed_daily_max_posts',Number(e.target.value))}/></label>
      <label>{label(t('Carousel mode','카드뉴스 구성'),
-      t('Alternating follows the final approved publication order.','Alternating은 최종 승인 예약 순서대로 3장과 5장을 번갈아 적용합니다.'))}
+      t('Alternating reserves 3/5 story cards. A separate Roundy card is appended when enabled.','Alternating은 스토리 3장과 5장을 예약합니다. Roundy 소개 카드는 마지막에 별도로 추가됩니다.'))}
       <select value={value('carousel_mode')} onChange={e=>set('carousel_mode',e.target.value)}>
        <option value="fixed">Fixed · 5 {t('slides','장')}</option>
        <option value="alternating">Alternating · 3 → 5</option>
@@ -46,11 +46,11 @@ export function AdminMarketingSettings({locale,settings,onChange,onSave,busy}:{
     <legend><ImageIcon size={18}/>{t('Real photo policy','실제 사진 기준')}</legend>
     <div className="marketing-settings-fields">
      <label>{label(t('Minimum photos · 5 cards','5장 중 실제 사진 최소 수'),
-      t('Existing Roundy renderer supports 2–3 approved real photos.','기존 Roundy 렌더러는 승인된 실제 사진을 2~3장 사용합니다.'))}
+      t('Legacy posts use 2–3 real photos. New branded posts require one photo on every story card.','기존 게시물은 실사 2~3장을 사용합니다. 신규 브랜드 분리형 게시물은 모든 스토리 카드에 이미지가 필요합니다.'))}
       <input type="number" min={2} max={3} step={1} value={min5}
        onChange={e=>set('carousel_min_real_photos_5',Number(e.target.value))}/></label>
      <label>{label(t('Minimum photos · 3 cards','3장 중 실제 사진 최소 수'),
-      t('Two real photos, with the final card reserved for the CTA.','실제 사진 2장, 마지막 장은 CTA로 구성합니다.'))}
+      t('Legacy minimum. New 3-story posts require 3 images plus one dedicated Roundy graphic.','기존 게시물의 최소값입니다. 새 3장 스토리는 이미지 3장과 전용 Roundy 그래픽 1장이 필요합니다.'))}
       <input type="number" min={2} max={2} step={1} value={min3}
        onChange={e=>set('carousel_min_real_photos_3',Number(e.target.value))}/></label>
     </div>
@@ -66,6 +66,10 @@ export function AdminMarketingSettings({locale,settings,onChange,onSave,busy}:{
        t('AI thumbnail','AI 썸네일'),
        t('AI imagery may be used for the cover only, after photo approval.',
         '사진 검수 완료 후 표지에 한해 AI 이미지를 사용할 수 있습니다.')],
+      ['carousel_brand_outro_enabled',
+       t('Separate Roundy brand card','마지막 독립 Roundy 소개 카드'),
+       t('New 3/5-story posts become 4/6 cards. Every story card needs its own image; old posts are unchanged.',
+        '새 3장/5장 스토리는 총 4장/6장이 됩니다. 모든 스토리에 개별 이미지가 필요하며 기존 게시물은 유지됩니다.')],
       ['carousel_answer_first_enabled',
        'Answer-First',
        t('Lead with the result and choose from three headline candidates.',
