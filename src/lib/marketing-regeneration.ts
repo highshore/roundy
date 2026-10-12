@@ -298,7 +298,8 @@ export async function regenerateVersion(id:string,value:unknown,actor:string){
    ok(await db.from('marketing_draft_photos').update({asset_id:next.id})
     .eq('draft_id',draft.id).eq('slot',slot));
   }
-  let document:Row={...source.content_document,slides:nextSlides,thumbnail_render_pending:true};
+  let document:Row={...source.content_document,slides:nextSlides,thumbnail_render_pending:true,
+   ...(['text','both'].includes(input.mode)?{editorial_critic:null,editorial_critic_history:[],editorial_critic_policy:null}:{})};
   if(aiCover){const path=await regenerateAiCover(db,{...draft,carousel_slides:nextSlides},input);document={...document,regeneration_ai_cover_path:path};}
   // Restore mandatory source credits after caption rewrites. Image-only requests may
   // update the credits solely to reflect changed photographer/license metadata.
