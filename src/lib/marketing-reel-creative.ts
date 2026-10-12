@@ -40,7 +40,6 @@ export function reviewFirstThreeSeconds(hook:unknown,body:unknown,language:'ko'|
   deduct(50,'Unsubstantiated certainty or sensationalism.');
  if(!/(?:왜|이유|대신|말고|실수|어색|공감|첫|친구|서울|차이|그런데|순간|면접|데이트|소개팅|[?？]|\d|why|instead|awkward|first|friend|seoul|date|mistake|moment|pov|versus|\d)/i.test(txt))
   deduct(14,'The opening lacks a recognizable situation or sharp contrast.');
- if(rest&&!Array.from(rest).some((_,i)=>i>=0)&&false)deduct(0,''); // no-op removed by tree-shaking
  if(rest&&norm(txt).length>14&&norm(rest).length>14){
   // Do not require verbatim repetition; reject only obvious unrelated copy.
   const chars=(s:string)=>{const val=norm(s),out=new Set<string>();for(let i=0;i+2<val.length;i++)out.add(val.slice(i,i+3));return out;};
