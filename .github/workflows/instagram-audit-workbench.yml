@@ -7,6 +7,9 @@ on:
       - scripts/instagram-audit.patch
 permissions:
   contents: write
+concurrency:
+  group: instagram-audit-workbench
+  cancel-in-progress: true
 jobs:
   validate:
     if: github.ref == 'refs/heads/fix/instagram-workflow-audit-20261012'
@@ -16,28 +19,41 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: fix/instagram-workflow-audit-20261012
-      - name: Export tracked source for isolated review
-        run: |
-          git archive --format=tar HEAD src scripts supabase package.json package-lock.json tsconfig.json next-env.d.ts next.config.ts .github docs public | gzip > /tmp/roundy-audit-source.tar.gz
-      - uses: actions/upload-artifact@v4
-        with:
-          name: roundy-audit-source
-          path: /tmp/roundy-audit-source.tar.gz
-          retention-days: 1
-      - name: Apply reviewed patch
+      - name: Apply exact reviewed edits, verifying old and new hashes
         if: hashFiles('scripts/instagram-audit.patch') != ''
         run: |
-          git apply --check scripts/instagram-audit.patch
-          git apply scripts/instagram-audit.patch
+          python - <<'PY'
+          import base64,gzip,json,hashlib,pathlib
+          edits=json.loads(gzip.decompress(base64.b64decode(pathlib.Path('scripts/instagram-audit.patch').read_text())))
+          for item in edits:
+            p=pathlib.Path(item['path'])
+            assert not p.is_absolute() and '..' not in p.parts
+            assert p.parts[0] in ('src','scripts','docs','supabase') or str(p) in ('package.json','package-lock.json')
+            old=p.read_text() if p.exists() else ''
+            assert (hashlib.sha256(old.encode()).hexdigest() if p.exists() else None)==item['before'], str(p)
+            result=old
+            for a,b,text in reversed(item['edits']):
+              assert 0<=a<=b<=len(old)
+              result=result[:a]+text+result[b:]
+            assert hashlib.sha256(result.encode()).hexdigest()==item['after'], str(p)
+            p.parent.mkdir(parents=True,exist_ok=True)
+            p.write_text(result)
+          PY
       - uses: actions/setup-node@v4
         if: hashFiles('scripts/instagram-audit.patch') != ''
         with:
           node-version: 22
           cache: npm
-      - name: Verify implementation without external AI or posting
+      - name: Install locked dependencies and generate forward-only migration
         if: hashFiles('scripts/instagram-audit.patch') != ''
         run: |
           npm ci
+          npx --no-install supabase migration new --help
+          npx --no-install supabase migration new instagram_editorial_workflow
+          cp scripts/marketing-workflow-schema.sql "$(ls -t supabase/migrations/*_instagram_editorial_workflow.sql | head -1)"
+      - name: Typecheck, regressions and rendering without live AI or posting
+        if: hashFiles('scripts/instagram-audit.patch') != ''
+        run: |
           npm run typecheck
           npm test
           for test in scripts/test-marketing-*.mjs; do node "$test"; done
