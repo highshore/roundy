@@ -62,7 +62,7 @@ export function evaluateMarketingPreflight(draft:Record<string,any>,settings:Rec
 
  const photoPolicy=savedPhotoSourcingPolicy(doc.photo_sourcing);
  const currentMin=intended===3?numeric(settings?.carousel_min_real_photos_3,2):numeric(settings?.carousel_min_real_photos_5,3);
- const minimum=Math.max(2,currentMin,photoPolicy?.min_real_photos||0);
+ let minimum=Math.max(2,currentMin,photoPolicy?.min_real_photos||0);
  const roles=slides.map((s:Record<string,any>)=>str(s?.role));
  let requiredSlots:number[]=[];
  const realIssues:string[]=[];
@@ -71,7 +71,9 @@ export function evaluateMarketingPreflight(draft:Record<string,any>,settings:Rec
  try{requiredSlots=requiredPhotoSlotsForRoles(roles,photoPolicy);}catch{
   realIssues.push('실제 사진 배치 정보가 카드 수와 일치하지 않습니다. 사진을 다시 검색하고 배치하세요.');
  }
- if(minimum>3)realIssues.push('설정한 실제 사진 최소 '+minimum+'장은 현재 3장까지 지원하는 사진 배치 정책을 초과합니다. 설정을 조정하거나 사진 배치 기능을 확장하세요.');
+ minimum=Math.max(minimum,requiredSlots.length);
+ if(requiredSlots.some(slot=>!photos.some(photo=>Number(photo.slot)===slot)))
+  realIssues.push('사진이 필요한 카드 중 아직 지정되지 않은 위치가 있습니다.');
  if(photos.length<minimum)realIssues.push('실제 사진이 '+photos.length+'장입니다. 최소 '+minimum+'장을 확보하세요.');
  if(requiredSlots.length&&photos.some(p=>!requiredSlots.includes(Number(p.slot))))realIssues.push('지정되지 않은 카드 위치에 실제 사진이 배치되어 있습니다.');
  const aiSlot=aiImageSlotForPolicy(photoPolicy);

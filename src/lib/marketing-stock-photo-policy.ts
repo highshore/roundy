@@ -51,9 +51,10 @@ export function requiredPhotoSlotsForRoles(roles:string[],policy?:PhotoSourcingP
   if(roles.length!==policy.slide_count)throw new Error('STOCK_PHOTO_POLICY_SLIDE_COUNT_CHANGED');
   const eligible=roles.map((role,index)=>({role,index})).filter(row=>row.role!=='cta'&&row.role!=='editorial_closing'&&(aiImageSlotForPolicy(policy)!==row.index)).map(row=>row.index);
   if(eligible.length<2)throw new Error('STOCK_PHOTOS_REQUIRE_TWO_CONTENT_CARDS');
-  // Existing DB review guard supports up to three assigned photos. Never silently
-  // relax a higher admin minimum: stockReady below will remain false for >3.
-  return eligible.slice(0,Math.min(3,policy.min_real_photos));
+  // Every non-AI visual card requires an approved real photo.
+  // Five-card photo-only drafts need four photos; mixed drafts need three.
+  if(eligible.length<policy.min_real_photos)throw new Error('STOCK_PHOTO_MINIMUM_CANNOT_BE_MET');
+  return eligible;
  }
  const needed=Math.min(3,Math.max(2,roles.length-1));
  const eligible=roles.map((role,index)=>({role,index})).filter(row=>row.role!=='cta'&&row.role!=='editorial_closing').map(row=>row.index);

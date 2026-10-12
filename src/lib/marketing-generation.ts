@@ -502,7 +502,7 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
    event_campaign_stage:draft.event_campaign_stage||draft.content_document?.event_campaign_stage||null,event_campaign_pattern:draft.event_campaign_pattern||draft.content_document?.event_campaign_pattern||null,event_campaign_version:draft.event_campaign_version||draft.content_document?.campaign_version||null,event_facts_snapshot:draft.event_facts_snapshot||draft.content_document?.event_facts||null,
    generation_recovery:(quality as Row).recovery||draft.content_document?.generation_recovery||null,
    stock_photo_selections:stockPhotos,photos_pending_review:photoReviewRequired,
-   real_photos_required:savedPhotoSourcingPolicy(draft.content_document?.photo_sourcing)?.min_real_photos||null,
+   real_photos_required:stockVisuals?requiredStockSlots(draft).length:null,
    real_photos_selected:stockPhotos.length,
    real_photos_approved:stockPhotos.filter(photo=>photo.review_status==='approved').length,
    photo_review_reason:photoReviewRequired?(stockPhotos.length===0?'NO_APPROVED_OR_DISCOVERED_PHOTOS':'INSUFFICIENT_OR_UNREVIEWED_PHOTOS'):null

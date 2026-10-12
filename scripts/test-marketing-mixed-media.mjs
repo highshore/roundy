@@ -31,6 +31,13 @@ for(const [ai,slots] of [[0,[1,2,3]],[1,[0,2,3]],[2,[0,1,3]],[3,[0,1,2]]]){
  assert.equal(allSelectedPhotosApproved(five,approved([0,1,2,3].filter(v=>v!==ai).map((v,i)=>i===0?ai:v)),p),false);
  assert.equal(savedPhotoSourcingPolicy(JSON.parse(JSON.stringify(p))).ai_image_slot,ai);
 }
+const allPhoto=configuredPhotoSourcingPolicy(settings,five,null);
+assert.equal(aiImageSlotForPolicy(allPhoto),null);
+assert.deepEqual(Array.from(requiredPhotoSlotsForRoles(five,allPhoto)),[0,1,2,3]);
+assert.equal(allSelectedPhotosApproved(five,approved([0,1,2]),allPhoto),false,'a fourth photo card cannot be silently skipped');
+assert.equal(allSelectedPhotosApproved(five,approved([0,1,2,3]),allPhoto),true);
+const fourMinimum=configuredPhotoSourcingPolicy({...settings,carousel_min_real_photos_5:4},five,null);
+assert.equal(allSelectedPhotosApproved(five,approved([0,1,2,3]),fourMinimum),true);
 const old=savedPhotoSourcingPolicy({version:1,slide_count:5,min_real_photos:3,
  ai_thumbnail_enabled:true,requested_ai_thumbnail:true});
 assert.equal(aiImageSlotForPolicy(old),0,'legacy approved drafts retain their original AI cover');
@@ -43,6 +50,7 @@ const generation=src('src/lib/marketing-generation.ts');
 const picker=src('src/components/admin-marketing.tsx');
 const stock=src('src/lib/marketing-stock-photos.ts');
 const ddl=src('supabase/migrations/20261011172500_marketing_explicit_mixed_media_assignments.sql');
+const fourPhotoMigration=src('supabase/migrations/20261012133000_marketing_four_real_photo_cards.sql');
 assert.match(api,/path\[2\]==='assign-stock'/);
 assert.match(api,/path\[2\]==='image-layout'/);
 assert.match(api,/confirm_replace/);
@@ -62,4 +70,8 @@ assert.match(ddl,/PHOTO_ASSET_NOT_APPROVED_FOR_REUSE/);
 assert.match(ddl,/PHOTO_ALREADY_USED_IN_THIS_CAROUSEL/);
 assert.match(ddl,/DRAFT_CHANGED_REFRESH_FIRST/);
 assert.match(ddl,/grant execute on function public.assign_marketing_approved_photo/);
+assert.match(fourPhotoMigration,/cardinality\(allowed\)/);
+assert.doesNotMatch(fourPhotoMigration,/limit 3|MAX_THREE_REVIEWED_PHOTOS|selected_count>3/i);
+assert.match(picker,/AI 없음 — 실사 4장/);
+assert.doesNotMatch(picker,/\.slice\(0,3\)\.map\(\(row:Row\)=>Number\(row\.index\)\)/);
 console.log('PASS explicit mixed image slots, licensed photo reuse, safe assignment, previous draft compatibility and source fallback');

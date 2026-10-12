@@ -509,7 +509,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
  const realPhotoSlots=Array.isArray(draft?.carousel_slides)
   ?draft.carousel_slides.map((slide:Row,index:number)=>({role:String(slide.role||''),index}))
    .filter((row:Row)=>row.role!=='cta'&&row.role!=='editorial_closing'&&row.index!==selectedAiSlot)
-   .slice(0,3).map((row:Row)=>Number(row.index)):[];
+   .map((row:Row)=>Number(row.index)):[];
  const filteredApprovedPool=approvedPool.filter((photo:Row)=>{
   const q=approvedSearch.trim().toLowerCase();
   return !q||[photo.photographer,photo.provider,photo.topic_key,photo.search_query,photo.provider_photo_id]
@@ -736,12 +736,12 @@ export function AdminMarketing({locale}:{locale:Locale}){
         <select value={selectedAiSlot===null?'none':String(selectedAiSlot)}
          disabled={busy||!!running||dirty||draft.status!=='needs_approval'}
          onChange={e=>{const next=e.target.value==='none'?null:Number(e.target.value);void changeAiCardSlot(next);}}>
-         <option value="none" disabled={(draft.carousel_slides||[]).length===5}>{t('No AI image (3-card only)','AI 사용 안 함 (3장 콘텐츠 전용)')}</option>
+         <option value="none">{(draft.carousel_slides||[]).length===5?t('No AI — four real photos','AI 없음 — 실사 4장'):t('No AI — two real photos','AI 없음 — 실사 2장')}</option>
          {(draft.carousel_slides||[]).length===5&&([0,1,2,3] as const).map(slot=>
           <option value={slot} key={slot}>{t('Card','카드')} {slot+1} — {slot===0?t('Cover','표지'):slot===1?t('Context','배경'):t('Insight','인사이트')}</option>)}
         </select>
        </label>
-       <small>{t('Five-card posts need at least three real photos. The closing card remains typography-only.','5장 콘텐츠는 실사 최소 3장이 필수이며, 마지막 장은 텍스트 전용입니다.')}</small>
+       <small>{t('Five cards: three real photos + one AI card, or four real photos with no AI. The closing card is text-only.','5장 구성은 실사 3장 + AI 1장 또는 실사만 4장입니다. 마지막 장은 텍스트 전용입니다.')}</small>
       </div>
       <div className="marketing-photo-slot-grid">
        {(draft.carousel_slides||[]).slice(0,-1).map((slide:Row,index:number)=>{
@@ -780,13 +780,13 @@ export function AdminMarketing({locale}:{locale:Locale}){
        })}
       </div>
       <div className="marketing-photo-editor-footer">
-       <p role="status">{t('Real photos approved','실사 승인')} {stockReview?.approved??stockPhotos.filter((p:Row)=>p.review_status==='approved').length}/{stockReview?.minimum??draft.content_document?.photo_sourcing?.min_real_photos??3}
-        {' — '}{stockReview?.ready?t('Ready to render','렌더링 준비됨'):t('Needs assignments or review','사진 지정 및 검수 필요')}</p>
+       <p role="status">{t('Real photos approved','실사 승인')} {stockReview?.approved??stockPhotos.filter((p:Row)=>p.review_status==='approved').length}/{Math.max(realPhotoSlots.length,Number(stockReview?.required||0),Number(stockReview?.minimum||0))}
+        {' — '}{stockReview?.ready&&realPhotoSlots.every(slot=>stockPhotos.some((p:Row)=>Number(p.slot)===slot&&p.review_status==='approved'))?t('Ready to render','렌더링 준비됨'):t('Needs assignments or review','사진 지정 및 검수 필요')}</p>
        {stockReview?.configured===false&&<p className="admin-error">{t('Some providers require API keys. Approved library photos remain selectable.','일부 소스에는 API 키가 필요하지만 이미 승인된 사진은 선택할 수 있습니다.')}</p>}
        <div className="admin-form-actions marketing-photo-render-actions">
         <button type="button" className="admin-secondary" disabled={busy||!!running||!!draft.images?.length}
           onClick={()=>void work(discoverStock)}>{t('Find photos for missing slots','빈 슬롯 사진 검색')}</button>
-        <button type="button" className="admin-primary" disabled={busy||!!running||dirty||stockReview?.ready!==true||!!draft.images?.length}
+        <button type="button" className="admin-primary" disabled={busy||!!running||dirty||stockReview?.ready!==true||realPhotoSlots.some(slot=>!stockPhotos.some((p:Row)=>Number(p.slot)===slot&&p.review_status==='approved'))||!!draft.images?.length}
           onClick={()=>void work(renderStock)}>{selectedAiSlot===null?t('Render reviewed photos','승인 실사로 렌더링'):t('Render real photos + one AI card','실사 + AI 카드 렌더링')}</button>
        </div>
        {!!draft.images?.length&&<p className="admin-help">{t('Cards are already rendered. Changing any photo or AI slot will clear the rendered set and require a fresh render.',
