@@ -1,6 +1,7 @@
 'use client';
 import {useEffect,useState} from 'react';
 import {Heading} from './heading';
+import {AdminMarketingPerformance} from './admin-marketing-performance';
 import {tr,type Locale} from '@/lib/locale';
 import type {GrowthPillar,GrowthSlot} from '@/lib/marketing-growth-planner';
 
@@ -176,5 +177,6 @@ export function AdminMarketingGrowth({locale}:{locale:Locale}){
    </li>)}</ul>:<p className="marketing-insight-empty">{t('No measured content yet. Results appear here after publishing and insight collection.','아직 수집된 성과가 없습니다. 게시 후 지표가 확보되면 표시됩니다.')}</p>}
    <p className="marketing-insight-footnote">{t('Account-level follower totals cannot identify which individual post gained a follower.','계정 전체의 팔로워 순증감만으로 개별 게시물의 기여도를 판단할 수 없습니다.')}</p>
   </section>
+  <AdminMarketingPerformance locale={locale} performance={data.performance} accountAudience={data.account_audience}/>
  </section>;
 }
