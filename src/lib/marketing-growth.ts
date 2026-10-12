@@ -25,7 +25,8 @@ export async function readGrowthEvidence(db:DB){
   const key=String(snapshot.run_id||'');
   if(!key||measured.has(key)||snapshot.source!=='insights'||snapshot.horizon_hours!==72||
     snapshot.metric_availability?.reach!==true||snapshot.metric_availability?.shares!==true||
-    snapshot.metric_availability?.saved!==true||!Number.isFinite(Number(snapshot.reach))||Number(snapshot.reach)<50)continue;
+    snapshot.metric_availability?.saved!==true||snapshot.metric_availability?.likes!==true||
+    snapshot.metric_availability?.comments!==true||!Number.isFinite(Number(snapshot.reach))||Number(snapshot.reach)<50)continue;
   measured.set(key,snapshot);
  }
  const signals:GrowthSignal[]=[];
