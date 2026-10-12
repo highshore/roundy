@@ -60,7 +60,7 @@ begin
  if not found then raise exception 'DRAFT_CHANGED_REFRESH_FIRST'; end if;
  return d;
 end;
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION public.set_marketing_draft_ai_slot(p_draft uuid, p_revision integer, p_ai_slot integer)
  RETURNS instagram_post_drafts
@@ -125,7 +125,7 @@ begin
  if not found then raise exception 'DRAFT_CHANGED_REFRESH_FIRST'; end if;
  return d;
 end;
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION public.guard_marketing_stock_photo_publication()
  RETURNS trigger
@@ -176,7 +176,7 @@ begin
   end if;
  end if;
  return new;
-end $function$
+end $function$;
 
 CREATE OR REPLACE FUNCTION roundy_private.guard_marketing_preflight_transition()
  RETURNS trigger
@@ -332,6 +332,6 @@ begin
   end if;
  end if;
  return new;
-end $function$
+end $function$;
 
 commit;
