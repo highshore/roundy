@@ -55,7 +55,7 @@ function harness({denied=false,network=false,badSources=false,duplicate=false,ph
   if(name.startsWith('./')&&fs.existsSync('src/lib/'+name.slice(2)+'.ts'))return load('src/lib/'+name.slice(2)+'.ts');return require(name);
  },fetch:async(url,init)=>{
   const body=JSON.parse(init.body);requests.push({url,body});if(network)throw new Error('timeout');
-  if(url.endsWith('images/generations'))return photo403?{ok:false,status:403,json:async()=>({error:{message:'Verify organization'}})}:{ok:true,json:async()=>({data:[0,1,2].map(()=>({b64_json:Buffer.alloc(200).toString('base64')}))})};
+  if(url.endsWith('images/generations'))return photo403?{ok:false,status:403,json:async()=>({error:{message:'Verify organization'}})}:{ok:true,json:async()=>({data:Array.from({length:Number(body.n||3)},()=>({b64_json:Buffer.alloc(200).toString('base64')}))})};
   if(url.endsWith('/responses')){
    const inputText=String(body.input||''),seoul=inputText.includes('Seoul dating-location')||inputText.includes('6–10 real candidates'),seoulTrend=inputText.includes('emerging or rising Seoul')||inputText.includes('emerging/rising Seoul');
    const notes=seoul
@@ -485,6 +485,57 @@ for(const language of ['ko','en'])for(const type of Object.keys(harness().policy
  check(()=>assert.equal(h.requests.filter(x=>x.body?.response_format?.json_schema?.name==='roundy_editorial_v2').length,2));
  check(()=>assert.equal(r.draft.content_document.editorial_critic.status,'passed'));
  check(()=>assert.equal(r.draft.content_document.editorial_critic_history.length,2));
+}
+
+
+// New magazines reserve 3/5 STORY slides and append a server-authored, independent
+// brand-only card. Every story slot must be photographed; old fixtures stay 3/5.
+for(const [ordinal,expected] of [[1,4],[2,6]]){
+ const photoConfig={carousel_min_real_photos_5:3,carousel_min_real_photos_3:2,carousel_ai_thumbnail_enabled:false};
+ const settings={carousel_mode:'alternating',carousel_default_slides:5,
+  carousel_brand_outro_enabled:true,carousel_title_font_size_px:72,carousel_body_font_size_px:36};
+ const h=harness({answerFirst:true,templateSettings:settings,photoSettings:photoConfig,
+  photoFixture:'ready',slotNumber:ordinal});
+ const r=await h.api.runGeneration(id,{...base,request_key:'manual:branded-story-'+ordinal,
+  content_mode:'growth_carousel',topic_type:'conversation_prompt',visual_source:'auto_ai'},null);
+ check(()=>assert.equal(r.job.status,'completed',JSON.stringify({error:r.error,job:r.job})));
+ check(()=>assert.equal(r.draft.carousel_slides.length,expected));
+ check(()=>assert.equal(r.draft.images.length,expected));
+ check(()=>assert.equal(r.draft.content_document.brand_outro_version,1));
+ check(()=>assert.equal(r.draft.carousel_slides.at(-1).role,'brand_outro'));
+ check(()=>assert.equal(r.draft.carousel_slides.at(-2).role,'editorial_closing'));
+ check(()=>assert.equal(r.draft.content_document.photo_sourcing.version,2));
+ check(()=>assert.equal(r.draft.content_document.photo_sourcing.min_real_photos,expected-1));
+ check(()=>assert.deepEqual(r.job.result_snapshot.stock_photo_selections.map(p=>p.slot),
+  Array.from({length:expected-1},(_,i)=>i)));
+ check(()=>assert.equal(h.requests.filter(x=>x.url.endsWith('images/generations')).length,0));
+}
+{
+ const photoConfig={carousel_min_real_photos_5:3,carousel_min_real_photos_3:2,carousel_ai_thumbnail_enabled:true};
+ const settings={carousel_mode:'fixed',carousel_default_slides:5,carousel_brand_outro_enabled:true};
+ const h=harness({answerFirst:true,templateSettings:settings,photoSettings:photoConfig,
+  photoFixture:'ready'});
+ const r=await h.api.runGeneration(id,{...base,request_key:'manual:branded-ai-cover-001',
+  content_mode:'growth_carousel',topic_type:'conversation_prompt',visual_source:'auto_ai'},null);
+ check(()=>assert.equal(r.job.status,'completed',JSON.stringify({error:r.error,job:r.job})));
+ check(()=>assert.equal(r.draft.images.length,6));
+ check(()=>assert.equal(r.draft.content_document.photo_sourcing.min_real_photos,4));
+ check(()=>assert.deepEqual(r.job.result_snapshot.stock_photo_selections.map(p=>p.slot),[1,2,3,4]));
+ const images=h.requests.filter(x=>x.url.endsWith('images/generations'));
+ check(()=>assert.equal(images.length,1));
+ check(()=>assert.equal(images[0].body.n,1));
+}
+{
+ const photoConfig={carousel_min_real_photos_5:3,carousel_min_real_photos_3:2,carousel_ai_thumbnail_enabled:false};
+ const settings={carousel_mode:'fixed',carousel_default_slides:5,carousel_brand_outro_enabled:true};
+ const h=harness({answerFirst:true,templateSettings:settings,photoSettings:photoConfig,
+  photoFixture:'pending'});
+ const r=await h.api.runGeneration(id,{...base,request_key:'manual:branded-photo-review-001',
+  content_mode:'growth_carousel',topic_type:'conversation_prompt',visual_source:'auto_ai'},null);
+ check(()=>assert.equal(r.job.status,'completed'));
+ check(()=>assert.equal(r.draft.images.length,0));
+ check(()=>assert.equal(r.job.stage,'photo_review_required'));
+ check(()=>assert.equal(h.requests.filter(x=>x.url.endsWith('images/generations')).length,0));
 }
 
 const adminMarketingSource=fs.readFileSync(new URL('../src/components/admin-marketing.tsx',import.meta.url),'utf8');
