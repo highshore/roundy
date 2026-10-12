@@ -1,3 +1,4 @@
+import {restoreSavedGenerationInput} from './marketing-generation-retry';
 import {openSavedEditorialCopy,saveEditorialFeedback} from './marketing-editorial-workspace';
 import {versionHistory,regenerateVersion,restoreVersion,finishVersionRendering,editManualMagazineSlideVersion} from './marketing-regeneration';
 import {savedCtaRecoverySource} from './marketing-output-recovery';
@@ -469,7 +470,7 @@ if(id==='uploads'&&path.length===1&&req.method==='GET'){
   if(selectedTopicKey!==undefined&&(typeof selectedTopicKey!=='string'||selectedTopicKey.length>120||!latest.request_payload?.topic_selection?.candidates?.some((c:Row)=>c.angle_key===selectedTopicKey)))return json({error:'SAVED_TOPIC_NOT_SELECTABLE'},400);
   const nextAttempt=Math.max(1,Number(latest.attempt_number||1))+1;
   try{
-   const result=await runGeneration(currentDraft.id,retryPayload,user.id,false,{threadId,attemptNumber:nextAttempt,retryOfJobId:latest.id,selectedTopicKey,workflowId:String(latest.content_workflow_id||latest.generation_thread_id||latest.id),...(recoverySourceJobId?{recoverySourceJobId}:{})});
+   const result=await runGeneration(currentDraft.id,restoreSavedGenerationInput(retryPayload),user.id,false,{threadId,attemptNumber:nextAttempt,retryOfJobId:latest.id,selectedTopicKey,workflowId:String(latest.content_workflow_id||latest.generation_thread_id||latest.id),...(recoverySourceJobId?{recoverySourceJobId}:{})});
    return json({...result,recovered_without_ai:false,recovered_saved_copy:!!recoverySourceJobId,fresh_visuals_generated:!!recoverySourceJobId,content_workflow_id:String(latest.content_workflow_id||latest.generation_thread_id||latest.id),generation_thread_id:threadId,attempt_number:nextAttempt,retry_of_job_id:latest.id},result.error?400:200);
   }catch(error){return json({error:error instanceof Error?error.message:'Recovery or retry could not start'},400);}
  }
