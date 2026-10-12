@@ -96,7 +96,7 @@ check(()=>assert.match(editorial,/EDITORIAL_INDEPENDENT_REVIEW_REJECTED/));
 check(()=>assert.match(editorial,/ONE BOUNDED EDITORIAL REWRITE/));
 check(()=>assert.match(editorial,/independent_editor_brief:editorialRevisionBrief/));
 check(()=>assert.match(editorial,/editorialReview.current.reason/));
-check(()=>assert.match(editorial,/critic:editorialReview.current\?\.status===/));
+check(()=>assert.match(editorial,/critique:editorialReview.current\?\.status===/));
 check(()=>assert.match(policy,/NARRATIVE MODE: STORY-FIRST/));
 check(()=>assert.match(policy,/magazineAnswerFirstPrompt\(plan!\.slide_count,storyFirst\)/));
 check(()=>assert.match(policy,/ONE STORY PER CAROUSEL/));
