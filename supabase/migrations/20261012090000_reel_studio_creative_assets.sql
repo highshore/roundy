@@ -118,8 +118,10 @@ begin
  cost:=case when p_kind='ai_image' then 0.15 else 0.02 end;
  select count(*) into calls_today from public.marketing_reel_ai_runs
   where created_at>=from_day and kind=p_kind;
- if calls_today>=case when p_kind='ai_image' then 2 else 8 end
-  then raise exception 'REEL_AI_DAILY_LIMIT';end if;
+ if (p_kind='ai_image' and calls_today>=2) or
+    (p_kind<>'ai_image' and calls_today>=8) then
+   raise exception 'REEL_AI_DAILY_LIMIT';
+ end if;
  select coalesce(sum(reserved_usd),0) into daily from public.marketing_generation_jobs where created_at>=from_day;
  select daily+coalesce(sum(reserved_usd),0) into daily from public.marketing_reel_ai_runs where created_at>=from_day;
  select coalesce(sum(reserved_usd),0) into monthly from public.marketing_generation_jobs where created_at>=from_month;
