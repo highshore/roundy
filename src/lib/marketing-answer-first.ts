@@ -34,7 +34,14 @@ export function threeEditorialRoles(type:string,legacy:readonly string[]):string
 export function magazineRolesForCount(count:3|5):string[]{
  return count===3?['cover','key_insight','editorial_closing']:['cover','context','insight','insight','editorial_closing'];
 }
-export function magazineAnswerFirstPrompt(count:3|5):string{
+export function magazineAnswerFirstPrompt(count:3|5,storyFirst=false):string {
+ if(storyFirst)return [
+  'STORY-FIRST (REQUIRED): This is a human-first Instagram narrative, NOT a result-first service article. The cover poses one concrete social dilemma, tension or true-to-life question. Card 2 shows a recognisable scene. Later cards reveal what changed or why it mattered. The closing offers one specific take-home line without preaching.',
+  count===3?'Three cards: compelling truthful scene on cover, specific development or example in key_insight, earned takeaway in editorial_closing.':'Five cards: hook/scene on cover, actual social context, a first revealing observation, a DIFFERENT example or consequence, and a natural useful closing. Never pad a banal tip just to reach five cards.',
+  'Return EXACTLY FIVE distinct, natural cover headlines matching this SAME story. A real question is allowed when the next slide answers the curiosity; vague clickbait, fabricated statistics and guarantees remain prohibited. Candidate 1 MUST equal slides[0].title.',
+  'No signup, links, direct brand CTA or advertorial claims on cards. The renderer adds one light Roundy brand bridge below the human takeaway. Preserve source IDs and factual qualifications if any.',
+  'Do not copy the example story or use generic claims about everyone behaving alike.'
+ ].join('\n');
  return [
   'ANSWER-FIRST (REQUIRED): SEOUL MAGAZINE EDITORIAL. Deliver a precise conclusion first, then verifiable context, one idea per slide. This is reader service journalism, not an advertising campaign.',
   count===3?'Three cards: cover with answer-first headline, key_insight with a concrete and source-grounded fact, editorial_closing with a thoughtful summary, insight or subtle brand outro.':'Five cards: cover with answer-first headline, context giving real background, two distinct insights with verifiable details, editorial_closing with a useful summary, insight or subtle brand outro.',
@@ -101,6 +108,7 @@ export function answerFirstPrompt(language:string,count:3|5=5){
 }
 export function answerFirstIssues(doc:CopyRow,language:string):string[]{
  if(doc?.answer_first!==true)return [];
+ const storyFirst=doc?.editorial_narrative_mode==='story_first';
  const issues:string[]=[];
  const add=(x:string)=>{if(!issues.includes(x))issues.push(x);};
  const slides=Array.isArray(doc.slides)?doc.slides:[];
@@ -120,7 +128,7 @@ export function answerFirstIssues(doc:CopyRow,language:string):string[]{
   if(new Set(choices.map(norm)).size!==choices.length)add('썸네일 문구 후보가 서로 달라야 합니다.');
   for(const title of choices){
    if(typeof title!=='string')continue;
-   if(/[?？]\s*$/.test(clean(title))||/^(어디서|어떻게|뭘|무엇을|왜|어떤)\b/.test(clean(title))||/^(where|how|why|what|which)\b/i.test(clean(title)))
+   if(!storyFirst&&(/[?？]\s*$/.test(clean(title))||/^(어디서|어떻게|뭘|무엇을|왜|어떤)\b/.test(clean(title))||/^(where|how|why|what|which)\b/i.test(clean(title))))
     add('썸네일은 추상적인 질문이 아닌 결과 또는 구체적인 제안으로 시작해야 합니다.');
    if(/충격|소름|역대급|100\s*%|무조건|반드시|비밀\s*공개|절대\s*실패|you won.t believe|guaranteed|must[- ]see|shocking|#1\b|best ever/i.test(title))
     add('썸네일에서 클릭베이트 또는 검증되지 않은 보장 표현을 사용할 수 없습니다.');
