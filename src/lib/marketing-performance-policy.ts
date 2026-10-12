@@ -61,7 +61,7 @@ export function normalizePostInsight(item:Record<string,any>):PerformanceRow|nul
    ?nonNegative(m.reel_total_watch_time_ms):null,
   duration_seconds:nonNegative(item.duration_seconds),
   observed:Object.fromEntries(['reach','views','shares','saves','likes','comments','follows','profile_visits',
-   'ig_reels_avg_watch_time','ig_reels_video_view_total_time'].map(k=>[k,reported[k]===true]))
+   'ig_reels_avg_watch_time','ig_reels_video_view_total_time'].map(k=>[k,reported[k==='saves'?'saved':k]===true]))
  };
 }
 function usableForLearning(p:PerformanceRow){
