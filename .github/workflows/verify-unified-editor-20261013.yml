@@ -1,0 +1,62 @@
+name: Verify unified marketing editor
+on:
+  push:
+    branches: [codex/verify-unified-editor-20261013]
+permissions:
+  contents: write
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: npm
+      - name: Apply checksum-pinned reviewed patch
+        run: |
+          curl --fail --silent --show-error --max-time 60 https://sb-2rrl5dpvwfdy.vercel.run/release/editor.patch -o /tmp/editor.patch
+          echo '9b9c806058684c3758ed7d4eb3a602e211a99a6e8f50d1c1ae9a4bd9d791efe0  /tmp/editor.patch' | sha256sum -c -
+          git apply --check /tmp/editor.patch
+          git apply /tmp/editor.patch
+          git diff --stat
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - name: Preserve verified source blobs without updating branches
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          const paths=['package.json','scripts/qa-marketing-editor/README.md','scripts/qa-marketing-editor/fixture.tsx','scripts/qa-marketing-editor/run.mjs','scripts/test-marketing-admin-workspace.mjs','scripts/test-marketing-editorial-ui.mjs','scripts/test-marketing-generator-interactions.mjs','scripts/test-marketing-preflight.mjs','src/components/admin-marketing-card-rewrite.tsx','src/components/admin-marketing-editorial-studio.css','src/components/admin-marketing-editorial-studio.tsx','src/components/admin-marketing.tsx','src/lib/marketing-preflight.ts'];
+          for(const path of paths){
+            const r=await fetch('https://api.github.com/repos/'+process.env.GITHUB_REPOSITORY+'/git/blobs',{method:'POST',headers:{Authorization:'Bearer '+process.env.GH_TOKEN,'Content-Type':'application/json',Accept:'application/vnd.github+json'},body:JSON.stringify({encoding:'utf-8',content:fs.readFileSync(path,'utf8')})});
+            if(!r.ok)throw Error('Blob write failed '+r.status);
+            console.log(JSON.stringify({path,sha:(await r.json()).sha}));
+          }
+          JS
+      - name: Retrieve synthetic sandbox browser evidence
+        run: |
+          python3 - <<'PY'
+          import json,hashlib,pathlib,urllib.request
+          base='https://sb-2rrl5dpvwfdy.vercel.run/release/'
+          manifest=urllib.request.urlopen(base+'qa-manifest.json',timeout=30).read()
+          assert hashlib.sha256(manifest).hexdigest()=='b91d2d2bac6e38456e0b9c514a7d2bb48cd8601056f97a41a25dcb808d923a1a'
+          out=pathlib.Path('quality-artifacts/unified-editor');out.mkdir(parents=True,exist_ok=True)
+          for row in json.loads(manifest):
+            name=row['name'];assert '/' not in name and name.endswith(('.png','.txt'))
+            data=urllib.request.urlopen(base+name,timeout=30).read()
+            assert hashlib.sha256(data).hexdigest()==row['sha256']
+            (out/name).write_bytes(data)
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: unified-editor-synthetic-browser-qa
+          path: |
+            quality-artifacts/unified-editor/*.png
+            quality-artifacts/unified-editor/*.txt
+          retention-days: 7
