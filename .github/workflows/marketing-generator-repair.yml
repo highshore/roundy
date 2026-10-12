@@ -23,9 +23,6 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Reproduce original generator state failure
-        continue-on-error: true
-        run: node scripts/test-marketing-generator-interactions.mjs
       - name: Apply reviewed source repair
         run: |
           python3 .automation/repair-marketing-generator.py
@@ -49,12 +46,10 @@ jobs:
           replace('        const real=realPhotoSlots.includes(index);','        const real=realPhotoSlots.includes(index);\n        if(!ai&&!real)return null;')
           replace('Number(storyCardCount||settings?.carousel_default_slides)===5&&aiImageSlot!==null;','Number(storyCardCount||settings?.carousel_default_slides)===5&&newMediaPlan.aiSlot!==null;')
           replace('?{ai_image_slot:aiImageSlot}:','?{ai_image_slot:newMediaPlan.aiSlot}:')
-          # Show the same normalized AI choice that generation will actually submit.
           start=s.index('     {manualVisualSource===\'stock\'?<div className="marketing-mix-options">');end=s.index(':manualVisualSource===\'uploaded\'?',start)
           chunk=s[start:end].replace('aiImageSlot===slot','newMediaPlan.aiSlot===slot').replace('aiImageSlot===null','newMediaPlan.aiSlot===null')
           s=s[:start]+chunk+s[end:]
           p.write_text(s)
-          # Extend the real-React interaction fixtures to exercise the stock editor.
           p=Path('scripts/test-marketing-generator-interactions.mjs');s=p.read_text()
           old="draft_role:'candidate',draft_kind:kind"
           assert s.count(old)==1;s=s.replace(old,"draft_role:'candidate',visual_source:'stock',draft_kind:kind")
@@ -79,6 +74,12 @@ jobs:
            await test('six-card all-real layout requires five approved photos',()=>assert.equal(savedDraftMediaPlan(brandedDraft(5,null)).realPhotos,5));
           '''
           s=s.replace(marker,additions+marker);p.write_text(s)
+          # The actual payload now uses the displayed, normalized selection.
+          p=Path('scripts/test-marketing-mixed-media.mjs');s=p.read_text()
+          old='assert.match(picker,/ai_image_slot:aiImageSlot/);'
+          assert s.count(old)==1
+          s=s.replace(old,r'assert.match(picker,/ai_image_slot:newMediaPlan\.aiSlot/);')
+          p.write_text(s)
           PY
       - run: npm run typecheck
       - run: npm run test:marketing-generator-ui
@@ -89,13 +90,10 @@ jobs:
         run: |
           node --input-type=module <<'JS'
           import fs from 'node:fs';
-          const paths=['src/components/admin-marketing.tsx','src/lib/marketing-generator-ui.ts','scripts/test-marketing-generator-interactions.mjs','package.json'];
+          const paths=['src/components/admin-marketing.tsx','src/lib/marketing-generator-ui.ts','scripts/test-marketing-generator-interactions.mjs','scripts/test-marketing-mixed-media.mjs','package.json'];
           for(const path of paths){
             const response=await fetch('https://api.github.com/repos/'+process.env.GITHUB_REPOSITORY+'/git/blobs',{method:'POST',headers:{Authorization:'Bearer '+process.env.GH_TOKEN,'Content-Type':'application/json',Accept:'application/vnd.github+json'},body:JSON.stringify({encoding:'utf-8',content:fs.readFileSync(path,'utf8')})});
             if(!response.ok)throw Error('Blob write failed '+response.status);
             const data=await response.json();console.log(JSON.stringify({path,sha:data.sha}));
           }
           JS
-      - name: Failure context
-        if: failure()
-        run: sed -n '700,755p' src/components/admin-marketing.tsx
