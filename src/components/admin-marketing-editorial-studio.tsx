@@ -21,6 +21,10 @@ export function AdminMarketingEditorialStudio({draft,locale,disabled,onUpdated,o
  const doc=draft.content_document||{},headlines=(Array.isArray(doc.thumbnail_candidates)?doc.thumbnail_candidates:[]) as string[];
  const scores=(Array.isArray(doc.editorial_headline_reviews)?doc.editorial_headline_reviews:[]) as Row[];
  const storyboard=doc.editorial_storyboard_review as Row|null;
+ const critic=doc.editorial_critic as Row|null;
+ const selectedTopic=doc.editorial_topic_selection?.selected as Row|undefined;
+ const topicRatings=(Array.isArray(doc.editorial_topic_reviews)?doc.editorial_topic_reviews:[]) as Row[];
+ const topicRating=topicRatings.find(r=>r.angle_key===selectedTopic?.angle_key);
  const language=draft.content_language==='en'?'en':'ko';
  const manualSupported=['stock','pexels'].includes(String(draft.visual_source));
  const chosen=Number(doc.thumbnail_selected_index??0);
@@ -119,7 +123,26 @@ export function AdminMarketingEditorialStudio({draft,locale,disabled,onUpdated,o
   {doc.editorial_engagement_policy&&<div className="roundy-editorial-section">
    <div className="roundy-editorial-section-title"><h4>{t('Reader engagement quality','독자 몰입도 검수')}</h4>
     <span>{Number(draft.quality_report?.editorial_score??0)}/100 · {draft.quality_report?.status==='passed'?t('Passed','통과'):t('Needs review','검토 필요')}</span></div>
-   <p className="admin-help">{t('Internal editorial screening, not a reach forecast. We check the cover promise, useful story flow and concrete takeaway.','조회수 예측이 아니라 편집용 점수입니다. 첫 장의 흥미, 연결되는 이야기와 구체적인 독자 가치를 확인합니다.')}</p>
+   <p className="admin-help">{critic
+    ?t('An independent AI editor scored the generated story. This is a pre-publication editorial screen, not a reach forecast.',
+      '원고 작성과 별개인 AI 편집장이 이야기 자체를 검토했습니다. 조회수 예측이 아니라 발행 전 편집 평가입니다.')
+    :t('Rule-based editing checks only. This historic or manually edited version has no independent AI review.',
+      '규칙 기반 편집 검사 결과입니다. 기존 또는 수동 수정된 원고에는 별도 AI 평가가 없을 수 있습니다.')}</p>
+   {selectedTopic&&<p className="admin-help"><strong>{t('Approved topic','선정된 주제')}: </strong>{selectedTopic.headline}
+    {topicRating&&<> · {t('Topic editor','주제 평가')} {Number(topicRating.score||0)}/100</>}</p>}
+   {critic&&<>
+    <div className="roundy-editorial-density">
+     {([
+      ['hook','Hook','첫 장의 호기심'],
+      ['scene','Relatable scene','장면의 공감도'],
+      ['originality','Original insight','새로운 관찰'],
+      ['progression','Distinct swipes','이야기 전개'],
+      ['shareability','Share value','공유 가치']
+     ] as const).map(([key,en,ko])=><span key={key}>{t(en,ko)} <strong>{Number(critic.ratings?.[key]||0)}/5</strong></span>)}
+    </div>
+    <p className="admin-help"><strong>{t('Editor notes','편집장 의견')}: </strong>{String(critic.reason||'')}</p>
+    {(doc.editorial_critic_history?.length>1)&&<p className="admin-help">{t('Reviews used','평가 횟수')}: {doc.editorial_critic_history.length} / 2</p>}
+   </>}
   </div>}
   <div className="roundy-editorial-section">
    <div className="roundy-editorial-section-title"><h4>{t('Storyboard and information density','슬라이드 구성 및 정보량')}</h4>
