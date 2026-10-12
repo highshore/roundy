@@ -3,6 +3,7 @@ import {loadEditorialAssets} from './marketing-render-assets';
 import {photoCreditCaption,configuredPhotoSourcingPolicy,savedPhotoSourcingPolicy,aiImageSlotForPolicy} from './marketing-stock-photo-policy';
 import {photoCardSourceLabel} from './marketing-photo-rights';
 import {resolveCarouselPlan,savedCarouselPlan,type CarouselPlan} from './marketing-carousel-template';
+import {brandedStoryCount} from './marketing-brand-outro';
 import {reviewMarketingDraft,mergePreflightQuality} from './marketing-preflight-service';
 import {approvedStockCardAssets,listStockSelections,pexelsConfigured,photoSelectionSnapshot,prepareStockSelections,requiredStockSlots,stockReady} from './marketing-stock-photos';
 import {CONTENT_POLICY_VERSION} from './marketing-content-policy';
@@ -25,7 +26,7 @@ type Row=Record<string,any>;
 type DB=ReturnType<typeof createServiceRoleClient>;
 type ContentLanguage='ko'|'en';
 type VisualSource='auto_ai'|'uploaded'|'none'|'pexels'|'stock';
-export type GenerationInput={carousel_plan?:CarouselPlan|null;answer_first_enabled?:boolean;ai_image_slot?:number|null;request_key:string;revision:number;mode:'text'|'image'|'both';content_mode:'prelaunch'|'live_event'|'growth_carousel';visual_mode:'cards'|'photo';visual_source?:VisualSource;topic_type?:string;instruction?:string;language?:ContentLanguage;confirm_photo?:boolean;render_only?:boolean;campaign_pattern?:'auto'|'poster'|'problem_solution'|'how_it_works'|'benefit_stack'|'countdown';campaign_tone?:'modern_premium'|'soft_romantic'|'bold_teaser';launch_date?:string;event_id?:string;event_campaign_stage?:'auto'|'launch'|'experience'|'venue'|'participants'|'momentum'|'imminent'|'last_call';event_campaign_pattern?:'auto'|'event_poster'|'experience'|'social_proof'|'offer'|'last_call'};
+export type GenerationInput={carousel_plan?:CarouselPlan|null;brand_outro_enabled?:boolean;answer_first_enabled?:boolean;ai_image_slot?:number|null;request_key:string;revision:number;mode:'text'|'image'|'both';content_mode:'prelaunch'|'live_event'|'growth_carousel';visual_mode:'cards'|'photo';visual_source?:VisualSource;topic_type?:string;instruction?:string;language?:ContentLanguage;confirm_photo?:boolean;render_only?:boolean;campaign_pattern?:'auto'|'poster'|'problem_solution'|'how_it_works'|'benefit_stack'|'countdown';campaign_tone?:'modern_premium'|'soft_romantic'|'bold_teaser';launch_date?:string;event_id?:string;event_campaign_stage?:'auto'|'launch'|'experience'|'venue'|'participants'|'momentum'|'imminent'|'last_call';event_campaign_pattern?:'auto'|'event_poster'|'experience'|'social_proof'|'offer'|'last_call'};
 const topics=['mbti','dating_archetype','book_insight','trend_research','meme_remix','dating_myth','conversation_prompt','seoul_dating','korea_life','mini_quiz'];
 const allowedTopics=[...topics,'seoul_trend'];
 const researchTopics=new Set(['book_insight','trend_research','dating_myth','seoul_dating','seoul_trend']);
@@ -188,8 +189,14 @@ async function renderCardsWithAssets(db:DB,draft:Row,job:Row,assets:Awaited<Retu
  return urls;
 }
 async function renderCards(db:DB,draft:Row,job:Row,freshPhotos:string[]){
- if(!Array.isArray(freshPhotos)||freshPhotos.length<3)throw new Error('FRESH_VISUAL_SET_REQUIRED');
- const assets=await loadEditorialAssets();assets.photo=freshPhotos[0];assets.photos=freshPhotos;assets.reusePhotos=true;
+ const storyCount=brandedStoryCount(draft.content_document);
+ const required=storyCount??3;
+ if(!Array.isArray(freshPhotos)||freshPhotos.length<required)throw new Error('FRESH_VISUAL_SET_REQUIRED');
+ const assets=await loadEditorialAssets();assets.photo=freshPhotos[0];assets.photos=freshPhotos;
+ if(storyCount!==null){
+  assets.reusePhotos=false;
+  assets.cardPhotos=Object.fromEntries(freshPhotos.slice(0,storyCount).map((photo,index)=>[index,photo]));
+ }else assets.reusePhotos=true;
  return renderCardsWithAssets(db,draft,job,assets);
 }
 function eventPhotoUrls(draft:Row){
@@ -247,6 +254,7 @@ function visualContext(draft:Row){
 async function generateVisualSet(db:DB,draft:Row,input:GenerationInput,job:Row){
  await progress(db,job,'generating_visual_set');
  const campaign=draft.content_document?.design_preset===CAMPAIGN_PRESET,eventCampaign=draft.content_document?.design_preset===EVENT_CAMPAIGN_PRESET;
+ const storyImages=brandedStoryCount(draft.content_document)??3;
  const prompt=(eventCampaign?[
   'Generate THREE distinct premium TEXT-FREE fallback lifestyle photographs for a real Roundy event campaign. These are used only when the event does not have enough real event/venue photos.',
   'The server supplies all event facts and adds all typography later. Do not render any date, price, venue name, seat count, logo, sign, watermark, text, letters, UI, ticket, poster, or branded object.',
@@ -265,7 +273,8 @@ async function generateVisualSet(db:DB,draft:Row,input:GenerationInput,job:Row){
   'Portrait 4:5 composition. Bright, natural light and room for cropping inside a separate photo frame; typography stays on ivory outside the photograph.',
   'Campaign pattern: '+String(draft.campaign_pattern||draft.content_document?.campaign_pattern||'poster')+'. Tone: '+String(draft.campaign_tone||draft.content_document?.campaign_tone||'modern_premium')+'.'
  ]:[
-  'Generate THREE distinct but visually coherent editorial lifestyle photographs for one Roundy Instagram carousel. Each returned image is a separate photograph from the same campaign, not a collage.',
+  'Generate '+storyImages+' distinct but visually coherent editorial lifestyle photographs for one Roundy Instagram carousel. Each returned image is a separate photograph from the same campaign, not a collage.',
+  'For the new story-plus-brand carousel, create exactly ONE DIFFERENT image for each story card (in card order). The brand page uses a server-owned graphic and does not need an AI photo.',
   'Roundy is a Seoul-based Rotation Dating service for Korean and international adults, including Korean-Korean meetings. The images should support the specific carousel content below instead of reusing a generic dating stock photo.',
   'Vary locations naturally across believable Seoul settings such as a neighborhood street, riverside, restaurant, lounge, rooftop, gallery-like social space, or café only when it genuinely fits. Vary framing as well: one strong cover composition with negative space, one natural conversational medium shot, and one detail/environmental lifestyle shot.',
   'People should look like real adults in a natural social moment, not posed romantic partners. Smart-casual styling, natural skin texture, imperfect gestures, genuine conversation, contemporary Seoul atmosphere.',
@@ -278,11 +287,11 @@ async function generateVisualSet(db:DB,draft:Row,input:GenerationInput,job:Row){
    ?'IMPORTANT FOR SEOUL TREND POSTS: generate an ORIGINAL Roundy editorial interpretation of the activity/culture described in the cards. Never reproduce a source article photo, social post, screenshot, creator identity, watermark, meme asset, or exact identifiable composition. Do not pretend a generated image is documentary evidence of the trend.'
    :''
  ]).concat(['Carousel context:',visualContext(draft),input.instruction||'']).filter(Boolean).join('\n');
- const result=await upstream('images/generations',{model:IMAGE_MODEL,prompt,n:3,size:'1024x1280',quality:'low',output_format:'jpeg',output_compression:85,background:'opaque'},150000);
+ const result=await upstream('images/generations',{model:IMAGE_MODEL,prompt,n:storyImages,size:'1024x1280',quality:'low',output_format:'jpeg',output_compression:85,background:'opaque'},150000);
  const encoded=(Array.isArray(result.data)?result.data:[]).map((row:Row)=>row?.b64_json).filter((value:unknown):value is string=>typeof value==='string'&&value.length>=100&&value.length<=8*1024*1024);
- if(encoded.length<3)throw new Error('INVALID_GENERATED_VISUAL_SET');
+ if(encoded.length<storyImages)throw new Error('INVALID_GENERATED_VISUAL_SET');
  await progress(db,job,'saving_visual_set');
- return encoded.slice(0,3).map(value=>'data:image/jpeg;base64,'+value);
+ return encoded.slice(0,storyImages).map(value=>'data:image/jpeg;base64,'+value);
 }
 // A single optional AI card; the three (or two) actual-photo slots are independently
 // licensed/approved Pexels assets. Never call this to compensate for missing photos.
