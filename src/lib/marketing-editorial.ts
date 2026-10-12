@@ -450,7 +450,7 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
   const editorialGate=prepared.report.issues.some((issue:string)=>issue.startsWith('에디토리얼 편집 검수:'));
   await reject(editorialGate?'EDITORIAL_ENGAGEMENT_GATE_REJECTED':'EDITORIAL_COPY_QUALITY_REJECTED',[]);
  }
- let document={
+ let document:Row={
   ...prepared.document,
   ...(topicSelection?{editorial_topic_selection:topicSelection,editorial_topic_reviews:topicReviews}:{}),
   ...(editorialReview.current?{editorial_critic:editorialReview.current,editorial_critic_history:criticHistory,
