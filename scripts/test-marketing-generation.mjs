@@ -7,9 +7,9 @@ let checks=0;const check=(f)=>{f();checks++;};
 const id='4b9066d0-e01b-4cc4-92d1-469f56317a04';
 const eventId='11111111-1111-4111-8111-111111111111';
 const base={request_key:'manual:quality-test-001',revision:1,mode:'both',content_mode:'prelaunch',language:'en',visual_mode:'cards',instruction:''};
-function harness({denied=false,network=false,badSources=false,duplicate=false,photo403=false,answerFirst=false,photoSettings=null,photoFixture='none',templateSettings=null,slotNumber=1,unsafeFallback=false,topicOutcome='pass'}={}){
+function harness({denied=false,network=false,badSources=false,duplicate=false,photo403=false,answerFirst=false,photoSettings=null,photoFixture='none',templateSettings=null,slotNumber=1,unsafeFallback=false,topicOutcome='pass',criticOutcome='pass'}={}){
  const tables={instagram_post_drafts:[{id,status:'needs_approval',revision:1,caption:'Original',cta:'Follow',images:[],carousel_slides:[],content_mode:'prelaunch'}],marketing_generation_jobs:[],marketing_ai_control:[{singleton:true,enabled:true,blocked_reason:null}],marketing_automation_settings:[{singleton:true,carousel_answer_first_enabled:answerFirst,...(photoSettings||{}),...(templateSettings||{})}],marketing_uploaded_images:[],events:[{id:eventId,slug:'fixture',title:'Fixture event',title_ko:'테스트 모임',status:'live',deleted_at:null,marketing_enabled:true,starts_at:'2099-12-01T10:00:00Z',ends_at:'2099-12-01T12:00:00Z',venue:'Fixture public venue',capacity:12,seats_remaining:12,price_ladies:29000,price_gents:49000,event_language:'either',images:[]}]};
- const requests=[],stored=[];
+ const requests=[],stored=[];let copyReviewCalls=0;
  class Q{
   constructor(t){this.rows=tables[t]||[];this.pred=[];this.patch=null;this.n=Infinity;}
   select(){return this;}update(p){this.patch=p;return this;}eq(k,v){this.pred.push(r=>r[k]===v);return this;}gt(k,v){this.pred.push(r=>r[k]>v);return this;}gte(k,v){this.pred.push(r=>r[k]>=v);return this;}is(k,v){return this.eq(k,v);}in(k,v){this.pred.push(r=>v.includes(r[k]));return this;}order(){return this;}limit(n){this.n=n;return this;}single(){return this.exec(true);}maybeSingle(){return this.exec(true);}then(a,b){return this.exec().then(a,b);}
@@ -84,8 +84,15 @@ function harness({denied=false,network=false,badSources=false,duplicate=false,ph
     usage:{input_tokens:250,output_tokens:180}})};
   }
   if(body.response_format?.json_schema?.name==='roundy_copy_critic_v1'){
-   const document={hook:5,scene:5,originality:5,progression:5,shareability:5,
-    decision:'pass',reason:'장면과 핵심 관찰이 분명하고 각 카드가 서로 다른 유용한 정보를 제공합니다.',issues:[]};
+   copyReviewCalls++;
+   const decision=criticOutcome==='reject'?'replace_topic':
+    criticOutcome==='rewrite'&&copyReviewCalls===1?'rewrite':'pass';
+   const weak=decision!=='pass';
+   const document={hook:weak?2:5,scene:weak?2:5,originality:weak?1:5,
+    progression:weak?1:5,shareability:weak?2:5,
+    decision,reason:weak?'다섯 장 내내 한 가지 뻔한 조언만 반복해 공유할 만큼 새롭지 않습니다.':
+     '장면과 핵심 관찰이 분명하고 각 카드가 서로 다른 유용한 정보를 제공합니다.',
+    issues:weak?['반복하는 조언을 버리고 실제로 일어나는 구체적인 장면과 새로운 관찰을 넣으세요.']:[]};
    return {ok:true,json:async()=>({choices:[{finish_reason:'stop',message:{content:JSON.stringify(document)}}],
     usage:{input_tokens:320,output_tokens:160}})};
   }
@@ -439,6 +446,33 @@ for(const language of ['ko','en'])for(const type of Object.keys(harness().policy
  check(()=>assert.equal(h.requests.filter(x=>x.url.endsWith('/responses')||x.url.endsWith('images/generations')).length,0));
  check(()=>assert.equal(h.tables.instagram_post_drafts[0].images.length,0));
 }
+
+// No paid images or publishing after both independently reviewed topics are weak.
+{
+ const settings={carousel_mode:'fixed',carousel_default_slides:5,carousel_title_font_size_px:72,carousel_body_font_size_px:36};
+ const h=harness({answerFirst:true,templateSettings:settings,criticOutcome:'reject'});
+ const r=await h.api.runGeneration(id,{...base,request_key:'manual:weak-editorial-stop-001',
+  content_mode:'growth_carousel',topic_type:'conversation_prompt'},null);
+ check(()=>assert.equal(r.job.status,'failed',JSON.stringify(r)));
+ check(()=>assert.match(String(r.error||r.job.error_message),/EDITORIAL_TOPIC_REJECTED/));
+ check(()=>assert.equal(h.requests.filter(x=>x.body?.response_format?.json_schema?.name==='roundy_copy_critic_v1').length,2));
+ check(()=>assert.equal(h.requests.filter(x=>x.url.endsWith('images/generations')).length,0));
+ check(()=>assert.equal(h.tables.instagram_post_drafts[0].images.length,0));
+ check(()=>assert.equal(h.tables.marketing_generation_jobs[0].quality_report.status,'rejected'));
+}
+// A fixable story gets only one rewrite followed by a second independent check.
+{
+ const settings={carousel_mode:'fixed',carousel_default_slides:5,carousel_title_font_size_px:72,carousel_body_font_size_px:36};
+ const h=harness({answerFirst:true,templateSettings:settings,criticOutcome:'rewrite'});
+ const r=await h.api.runGeneration(id,{...base,request_key:'manual:weak-editorial-repair-001',
+  content_mode:'growth_carousel',topic_type:'conversation_prompt'},null);
+ check(()=>assert.equal(r.job.status,'completed',JSON.stringify(r)));
+ check(()=>assert.equal(h.requests.filter(x=>x.body?.response_format?.json_schema?.name==='roundy_copy_critic_v1').length,2));
+ check(()=>assert.equal(h.requests.filter(x=>x.body?.response_format?.json_schema?.name==='roundy_editorial_v2').length,2));
+ check(()=>assert.equal(r.draft.content_document.editorial_critic.status,'passed'));
+ check(()=>assert.equal(r.draft.content_document.editorial_critic_history.length,2));
+}
+
 const adminMarketingSource=fs.readFileSync(new URL('../src/components/admin-marketing.tsx',import.meta.url),'utf8');
 check(()=>assert.ok(adminMarketingSource.includes("...(basis==='growth_carousel'?{topic_type:topic}:{})")));
 check(()=>assert.ok(adminMarketingSource.includes("request.content_mode==='growth_carousel'")));
