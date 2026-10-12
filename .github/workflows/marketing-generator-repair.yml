@@ -17,7 +17,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 22
           cache: npm
@@ -26,7 +26,16 @@ jobs:
         continue-on-error: true
         run: node scripts/test-marketing-generator-interactions.mjs
       - name: Apply reviewed source repair
-        run: python3 .automation/repair-marketing-generator.py
+        run: |
+          python3 .automation/repair-marketing-generator.py
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          const p='src/components/admin-marketing.tsx';
+          const s=fs.readFileSync(p,'utf8');
+          const old='localizedCheck[String(check.id)]||check.label}</p>)}</details>';
+          if(s.split(old).length!==2)throw Error('Expected disclosure target');
+          fs.writeFileSync(p,s.replace(old,old+'}'));
+          JS
       - run: npm run typecheck
       - run: npm run test:marketing-generator-ui
       - run: npm test
@@ -43,3 +52,6 @@ jobs:
             const data=await response.json();console.log(JSON.stringify({path,sha:data.sha}));
           }
           JS
+      - name: Failure context
+        if: failure()
+        run: sed -n '700,730p' src/components/admin-marketing.tsx
