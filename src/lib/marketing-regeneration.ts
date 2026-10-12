@@ -256,8 +256,8 @@ export async function regenerateVersion(id:string,value:unknown,actor:string){
   &&(!aiCover||indices.some(i=>i!==0)))
   throw new Error('AI_COVER_ONLY: 현재 실사 사진 최소 개수 정책에 따라 AI 생성은 AI 표지가 설정된 콘텐츠의 첫 번째 카드만 지원합니다.');
  if(['image','both'].includes(input.mode)){
-  // The editorial closing is text-only. Whole-post image regeneration updates
-  // every photograph but must preserve text-only cards, not reject the operation.
+  // Historic editorial closings are text-only; new branded-story closings have
+  // licensed photographs. The server-owned outro graphic is never replaced.
   const photoTargets=indices.filter(i=>photoSlots.includes(i)||(i===0&&aiCover));
   if(input.mode==='image'&&!photoTargets.length)
    throw new Error('SLIDE_HAS_NO_REPLACEABLE_IMAGE');
