@@ -55,8 +55,10 @@ export function normalizePostInsight(item:Record<string,any>):PerformanceRow|nul
   likes:value('likes'),comments:value('comments'),
   media_follows:format==='feed'?value('media_follows','follows'):null,
   media_profile_visits:format==='feed'?value('media_profile_visits','profile_visits'):null,
-  reel_avg_watch_time_ms:format==='reel'?value('reel_avg_watch_time_ms','ig_reels_avg_watch_time'):null,
-  reel_total_watch_time_ms:format==='reel'?value('reel_total_watch_time_ms','ig_reels_video_view_total_time'):null,
+  reel_avg_watch_time_ms:format==='reel'&&reported.ig_reels_avg_watch_time===true
+   ?nonNegative(m.reel_avg_watch_time_ms):null,
+  reel_total_watch_time_ms:format==='reel'&&reported.ig_reels_video_view_total_time===true
+   ?nonNegative(m.reel_total_watch_time_ms):null,
   duration_seconds:nonNegative(item.duration_seconds),
   observed:Object.fromEntries(['reach','views','shares','saves','likes','comments','follows','profile_visits',
    'ig_reels_avg_watch_time','ig_reels_video_view_total_time'].map(k=>[k,reported[k]===true]))
