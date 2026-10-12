@@ -36,8 +36,8 @@ export async function mediaPerformanceObserved(graph:GraphCall,mediaId:string,is
   source:complete?'insights':'basic',views,reach,likes,comments,saves,shares,
   total_interactions:m.total_interactions??likes+comments+saves+shares,
   performance_score:Number(score.toFixed(4)),
-  reel_avg_watch_time_ms:m.ig_reels_avg_watch_time,
-  reel_total_watch_time_ms:m.ig_reels_video_view_total_time,
+  reel_avg_watch_time_ms:m.ig_reels_avg_watch_time===null?null:Math.round(m.ig_reels_avg_watch_time),
+  reel_total_watch_time_ms:m.ig_reels_video_view_total_time===null?null:Math.round(m.ig_reels_video_view_total_time),
   media_follows:m.follows,media_profile_visits:m.profile_visits,
   metric_availability:{...available,nonfollower_reach:false,source:'official_meta_media_insights'}
  };
