@@ -1,0 +1,48 @@
+name: Verify copy-only stock import
+on:
+  push:
+    branches: [codex/verify-copy-import-20261012]
+    paths:
+      - '.automation/fix-copy-import-20261012.py'
+      - 'scripts/test-marketing-copy-import.mjs'
+      - '.github/workflows/verify-copy-import-20261012.yml'
+permissions:
+  contents: read
+concurrency:
+  group: verify-copy-import-20261012
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Reproduce duplicate stock import before repair
+        run: node scripts/test-marketing-copy-import.mjs --expect-unfixed
+      - name: Apply bounded repair
+        run: python3 .automation/fix-copy-import-20261012.py
+      - run: npm run typecheck
+      - run: npm run test:marketing-copy-import
+      - run: node scripts/test-marketing-generation.mjs
+      - run: npm test
+      - name: Store verified source blobs without updating branches
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          for(const path of ['src/lib/marketing.ts','src/lib/marketing-generation.ts','scripts/test-marketing-copy-import.mjs','scripts/test-marketing-generation.mjs','package.json']){
+            const r=await fetch('https://api.github.com/repos/'+process.env.GITHUB_REPOSITORY+'/git/blobs',{method:'POST',headers:{Authorization:'Bearer '+process.env.GH_TOKEN,'Content-Type':'application/json',Accept:'application/vnd.github+json'},body:JSON.stringify({encoding:'utf-8',content:fs.readFileSync(path,'utf8')})});
+            if(!r.ok)throw Error('Could not store verified blob: '+r.status);
+            const blob=await r.json();console.log(JSON.stringify({path,sha:blob.sha}));
+          }
+          JS
