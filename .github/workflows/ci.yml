@@ -24,6 +24,7 @@ jobs:
       - run: node scripts/test-marketing-trend-guides.mjs
       - run: node scripts/test-marketing-trend-radar.mjs
       - run: node scripts/test-marketing-growth.mjs
+      - run: node scripts/test-marketing-photo-intent.mjs
       - run: node scripts/test-marketing-reels.mjs
       - run: node scripts/test-marketing-reel-creative.mjs
       - run: node scripts/test-marketing-performance.mjs

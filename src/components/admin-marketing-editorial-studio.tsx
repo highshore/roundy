@@ -116,6 +116,11 @@ export function AdminMarketingEditorialStudio({draft,locale,disabled,onUpdated,o
     <button type="button" className="admin-primary" disabled={disabled||working} onClick={onRerenderCover}>{t('Re-render selected cover','선택한 표지 다시 렌더링')}</button>
    </div>}
   </div>}
+  {doc.editorial_engagement_policy&&<div className="roundy-editorial-section">
+   <div className="roundy-editorial-section-title"><h4>{t('Reader engagement quality','독자 몰입도 검수')}</h4>
+    <span>{Number(draft.quality_report?.editorial_score??0)}/100 · {draft.quality_report?.status==='passed'?t('Passed','통과'):t('Needs review','검토 필요')}</span></div>
+   <p className="admin-help">{t('Internal editorial screening, not a reach forecast. We check the cover promise, useful story flow and concrete takeaway.','조회수 예측이 아니라 편집용 점수입니다. 첫 장의 흥미, 연결되는 이야기와 구체적인 독자 가치를 확인합니다.')}</p>
+  </div>}
   <div className="roundy-editorial-section">
    <div className="roundy-editorial-section-title"><h4>{t('Storyboard and information density','슬라이드 구성 및 정보량')}</h4>
     <span>{storyboard?.density?t(String(storyboard.density),String(storyboard.density)==='thin'?'정보 부족':String(storyboard.density)==='dense'?'정보 풍부':'적정 정보량'):t('Saved template','저장된 템플릿')}</span></div>

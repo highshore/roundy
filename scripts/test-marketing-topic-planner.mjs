@@ -37,6 +37,11 @@ const history=p.topicHistoryFromRows([
 check(()=>assert.equal(history.length,2));
 check(()=>assert.equal(history.some(h=>h.angle_key==='first_date_interview_questions'),true));
 check(()=>assert.equal(history.some(h=>h.headline.includes('stale')),false));
+const dbShapeHistory=p.topicHistoryFromRows([
+ {id:'draft-without-created-at',updated_at:'2026-10-11T00:00:00Z',
+  carousel_slides:[{title:'실제 DB 컬럼을 쓰는 최신 초안'}]}
+],[],'',now);
+check(()=>assert.equal(dbShapeHistory.length,1));
 const inspected=p.assessTopicCandidates({candidates:ideas},history,'ko',now);
 check(()=>assert.equal(inspected.status,'selected'));
 check(()=>assert.equal(inspected.candidates.length,5));

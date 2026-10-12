@@ -4,6 +4,7 @@ import sharp from 'sharp';
 import {allSelectedPhotosApproved,requiredPhotoSlotsForRoles,savedPhotoSourcingPolicy} from './marketing-stock-photo-policy';
 import {licensedImageUrl,fullReviewPhotoUrl,validLicensedPhoto,photoRightsIssues,type PhotoProvider,PHOTO_PROVIDERS} from './marketing-photo-rights';
 import {searchLicensedPhotos,providerConfigured,trackUnsplashDownload} from './marketing-photo-providers';
+import {photoSceneIntent,approvedPhotoFitsScene} from './marketing-photo-intent';
 import type {createServiceRoleClient} from './supabase/service';
 
 type DB=ReturnType<typeof createServiceRoleClient>;
@@ -24,7 +25,7 @@ const SEARCHES:Record<string,string[]>={
   meme_remix:['friends laughing cafe candid','funny friends conversation'],
   dating_myth:['people conversing cafe table','couple conversation lifestyle'],
   conversation_prompt:['people talking coffee table','friends chatting cafe'],
-  seoul_dating:['Seoul street cafe autumn','Seoul riverside city lifestyle'],
+  seoul_dating:['Seoul people talking cafe','Seoul riverside city lifestyle'],
   seoul_trend:['Seoul city neighborhood culture','Seoul cafes street lifestyle'],
   mini_quiz:['friends having coffee and chatting','casual people talking cafe']
 };
@@ -65,6 +66,10 @@ async function usedRecently(db:DB,excludeDraftId:string){
 // Search terms combine the content pillar with each unfilled card's own subject.
 const partsForPhotoQuery=(draft:Row,slot:number)=>JSON.stringify(draft.carousel_slides?.[slot]||{});
 export function photoSearchQuery(draft:Row,topic:string,slot:number,attempt:number){
+ const scene=photoSceneIntent(draft,slot);
+ // Do not substitute a generic daytime/seasonal photo for a night exhibition.
+ // Searches only stage candidates. The existing admin license/photo gate remains.
+ if(['seoul_trend','seoul_dating'].includes(topic)&&scene.scene_ids.length)return scene.query;
  const slide=Array.isArray(draft.carousel_slides)?draft.carousel_slides[slot]||{}:{};
  const base=(SEARCHES[topic]||SEARCHES.conversation_prompt)[attempt%2];
  const korean=partsForPhotoQuery(draft,slot);
@@ -115,6 +120,9 @@ export async function prepareStockSelections(db:DB,draft:Row,opts:{replace?:bool
   if(!asset.storage_path||!validLicensedPhoto(asset)||recently.has(asset.id)||chosenIds().has(String(asset.id))
     ||(opts.replace&&previousIds.has(asset.id)))continue;
   const slot=nextUnfilled();if(slot===undefined)break;
+  // Existing broad-topic approvals do not authorize unrelated scene reuse.
+  // Previously hand-picked draft assignments are preserved above.
+  if(!approvedPhotoFitsScene(draft,slot,asset))continue;
   picked.set(slot,asset);
  }
  // Bounded provider fallback. Candidates are never used before human approval.

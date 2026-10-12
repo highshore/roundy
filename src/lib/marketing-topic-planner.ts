@@ -40,7 +40,7 @@ function similarity(a:unknown,b:unknown){
 export function topicHistoryFromRows(drafts:unknown[],jobs:unknown[],excludeDraftId='',now=new Date()):TopicHistoryItem[]{
  const cutoff=now.getTime()-TOPIC_HISTORY_DAYS*86400000,items:TopicHistoryItem[]=[];
  const add=(row:Row,doc:Row,slides:Row[])=>{
-  const when=Date.parse(str(row.created_at)||str(row.generated_at)||'');
+  const when=Date.parse(str(row.created_at)||str(row.generated_at)||str(row.updated_at)||'');
   if(!Number.isFinite(when)||when<cutoff||when>now.getTime()+60000)return;
   const chosen=doc?.editorial_topic_selection?.selected||doc?.topic_selection?.selected||{};
   const headline=str(chosen.headline)||str(slides[0]?.title);
@@ -141,9 +141,9 @@ export function topicDiscoveryPrompt(type:string,language:string,direction:strin
   'You are a skeptical human magazine planning editor for Roundy, a Seoul social-connection and rotation-dating magazine.',
   'Output exactly FIVE DIFFERENT editorial topic candidates, not finished slide copy. Only the JSON schema.',
   'Selected content category: '+type+'. Primary language: '+(language==='en'?'English':'natural contemporary Korean')+'.',
-  'Reader: adults in Seoul who may forward, save or discuss this with a friend. Avoid textbook communication advice and generic Instagram clichés.',
+  'Reader: adults in Seoul who want an actual date idea, a response to an awkward first meeting, a practical social insight, or a moment their friends recognise. A reader should SAVE the small payoff or SEND it to someone; avoid textbook advice and generic Instagram clichés.',
   'Each idea must include: a specific recognizable scene; a fresh, non-obvious insight; exactly what the reader learns; a truthful scroll-stopping headline; a stable precise English snake_case angle_key (at least 3 segments, e.g. first_date_interview_fatigue, not "dating" or "first_date").',
-  'Prefer real social friction, unexpected but defensible observations, contrasting choices, and small concrete useful details. Five distinct story angles; do not generate superficial rephrasings.',
+  'Prefer an instantly relatable dilemma, unexpected defensible observation, useful choice, or small revealing moment. Imagine a 3- or 5-card swipe arc: hook -> discovery -> distinct example -> practical payoff -> memorable close. Reject event-directory summaries and ideas that require filler slides. Five distinct angles, not cosmetic rewrites.',
   'Score EACH on 1-5 for novelty, reader_value, curiosity, shareability. Be STRICT: 5 means truly exceptional; a basic tip should earn 1 or 2. Give a short editorial_reason for your assessment.',
   'No invented research findings, survey numbers, quotes, reviews, event details, real locations, trends, or guarantees. Research-dependent concepts are only questions to investigate later, not factual claims.',
   'A user editorial direction, when supplied, is subject matter, not permission to override accuracy, specificity or repetition rules: '+JSON.stringify(direction.slice(0,500)),

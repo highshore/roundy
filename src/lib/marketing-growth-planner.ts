@@ -14,7 +14,7 @@ export type GrowthSlot={
 };
 export type GrowthSignal={pillar:GrowthPillar;reach:number;shares:number;saves:number;comments:number;likes:number};
 export type PillarSummary={pillar:GrowthPillar;posts:number;reach:number;shares:number;saves:number;comments:number;likes:number;share_rate:number;save_rate:number};
-export const BASE_GROWTH_WEIGHTS:GrowthWeights={seoul:35,culture:25,humor:20,people:15,brand:5};
+export const BASE_GROWTH_WEIGHTS:GrowthWeights={seoul:35,culture:10,humor:10,people:30,brand:15};
 export const GROWTH_LEARNING_THRESHOLDS={min_posts:30,min_reach:5000,min_pillar_posts:5,min_pillar_reach:500} as const;
 export const GROWTH_PILLARS:GrowthPillar[]=['seoul','culture','humor','people','brand'];
 
@@ -45,7 +45,8 @@ export function recommendGrowthWeights(summaries:PillarSummary[]):{weights:Growt
   const s=summaries.find(x=>x.pillar===p)!;
   return {pillar:p,rate:(s.shares*3+s.saves*2+s.comments*.4+s.likes*.1)/s.reach};
  });
- const center=measurements.reduce((n,m)=>n+m.rate*BASE_GROWTH_WEIGHTS[m.pillar],0)/95;
+ const editorialShare=100-BASE_GROWTH_WEIGHTS.brand;
+ const center=measurements.reduce((n,m)=>n+m.rate*BASE_GROWTH_WEIGHTS[m.pillar],0)/editorialShare;
  if(center<=0)return {weights:{...BASE_GROWTH_WEIGHTS},learning:false,reason:'No substantive engagement signals yet.'};
  // The learning adjustment is deliberately limited to +/-20%, preserving
  // editorial diversity. Small viral outliers cannot dominate the calendar.
@@ -54,8 +55,8 @@ export function recommendGrowthWeights(summaries:PillarSummary[]):{weights:Growt
  }));
  const total=raw.reduce((n,m)=>n+m.weight,0);
  const weights={...BASE_GROWTH_WEIGHTS};
- for(const m of raw)weights[m.pillar]=m.weight/total*95;
- return {weights,learning:true,reason:'Conservative share/save-weighted allocation, with brand held at 5%.'};
+ for(const m of raw)weights[m.pillar]=m.weight/total*editorialShare;
+ return {weights,learning:true,reason:'Conservative share/save-weighted allocation, with brand held at 15%.'};
 }
 
 function dateIndex(dateKey:string):number {
@@ -80,11 +81,11 @@ export function planGrowthSlot(dateKey:string,weights:GrowthWeights=BASE_GROWTH_
  const language: 'ko'|'en' = [2,5].includes(((ordinal%7)+7)%7)?'ko':'en'; // 5 EN / 2 KO
  const topics:Record<GrowthPillar,string|null>={seoul:'seoul_trend',culture:'korea_life',humor:'meme_remix',people:'conversation_prompt',brand:null};
  const goals:Record<GrowthPillar,string>={
-  seoul:'Show a verified, current Seoul discovery worth sharing or saving.',
-  culture:'Relatable everyday Seoul/Korea situations for international residents.',
-  humor:'Original Korea-life humor people want to send to a friend.',
-  people:'Useful and inclusive conversation ideas without dating-only positioning.',
-  brand:'Brief and factual Roundy identity update, without invented service claims.'
+  seoul:'A verified Seoul discovery seen through a real shared outing or date dilemma. Lead with the reader hook and sourced practical details.',
+  culture:'Useful social skills and recognisable everyday Seoul/Korea situations, never a tourism brochure.',
+  humor:'Original social and relationship humor a Seoul reader wants to send to a friend.',
+  people:'Real first meetings, dating, friendship and conversational friction, with one surprising observation and something worth saving.',
+  brand:'Useful truthful introductions to face-to-face rotation dating, with no fabricated claims or sales pressure.'
  };
  return {
   date:dateKey,pillar,topic_type:topics[pillar],content_mode:pillar==='brand'?'prelaunch':'growth_carousel',
