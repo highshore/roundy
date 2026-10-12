@@ -17,7 +17,7 @@ export function makeRoundyOutro(language:string):Row{
  const titleKo='소개팅, 이제는 마주 앉아서.';
  const titleEn='Meet face to face in Seoul.';
  const bodyKo='한 사람씩 직접 만나 대화하는 서울 로테이션 소개팅, Roundy.';
- const bodyEn='Rotation Dating in Seoul. One person at a time, face to face.';
+ const bodyEn='Roundy is Rotation Dating in Seoul. One person at a time, face to face.';
  return {
   role:'brand_outro',eyebrow:'ROUNDY / SEOUL',
   title:ko?titleKo:titleEn,body:ko?bodyKo:bodyEn,
