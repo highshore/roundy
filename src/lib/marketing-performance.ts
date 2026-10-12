@@ -41,6 +41,24 @@ export async function readInstagramPerformance(db:DB){
   });
   if(row)normalized.push(row);
  }
+ // Include all confirmed published runs, even when Meta insights haven't arrived
+ // yet. They appear as missing rather than disappearing from the dashboard.
+ const withObservations=new Set(normalized.map(x=>x.run_id));
+ for(const run of runs){
+  if(withObservations.has(run.id))continue;
+  const snapshot=(run.snapshot||{}) as Row,reel=reelMap.get(run.id);
+  const pending=normalizePostInsight({
+   run_id:run.id,published_at:run.finished_at,
+   metric:{horizon_hours:0,source:'pending',metric_availability:{}},
+   format:snapshot.media_kind==='reel'?'reel':'feed',
+   title:String(snapshot.title||snapshot.name||''),
+   language:snapshot.content_language||'ko',
+   topic:String(snapshot.growth_topic_type||snapshot.content_pillar||''),
+   hook_style:String(snapshot.hook_style||''),
+   duration_seconds:reel?.duration_seconds||snapshot.video_duration_seconds||null
+  });
+  if(pending)normalized.push(pending);
+ }
  return evaluatePerformanceReport(normalized);
 }
 export async function readPerformanceAccountOverview(db:DB){
