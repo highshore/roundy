@@ -1,4 +1,6 @@
 'use client';
+import {MarketingWorkflowNav,MarketingWorkflowSteps,MarketingProductionMetrics} from './marketing-workflow-nav';
+import {editorialState,EDITORIAL_STATE_LABELS,hasEditorialCopy,visibleEditorialDrafts,type EditorialState} from '@/lib/marketing-workflow';
 import {canOfferSavedCtaRecovery} from '@/lib/marketing-output-recovery';
 import { useEffect, useRef, useState } from 'react';
 import { Heading } from './heading';
@@ -35,7 +37,7 @@ const topicKo=['MBTI 연애 유형','연애 유형','책 속 공감','최신 연
 async function request(path='',body?:unknown,method='POST'){
  let response:Response;
  try{
-  response=await fetch(BASE+path,body===undefined?{cache:'no-store',signal:AbortSignal.timeout(25000)}:{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(245000)});
+  response=await fetch(BASE+path,body===undefined?{cache:'no-store',signal:AbortSignal.timeout(25000)}:{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(325000)});
  }catch(error){
   const timedOut=error instanceof Error&&['AbortError','TimeoutError'].includes(error.name);
   // A failed mutation can have an unknown outcome. Never imply a paid operation did not start.
@@ -52,7 +54,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
  const [feedAttempts,setFeedAttempts]=useState<Record<string,Row>>({});
  const [draft,setDraft]=useState<Row|null>(null),[settings,setSettings]=useState<Row|null>(null),[generation,setGeneration]=useState<Row|null>(null);
  const [channel,setChannel]=useState<'instagram'|'koreapas'>('instagram'),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[error,setError]=useState(''),[notice,setNotice]=useState('');
- const [basis,setBasis]=useState('prelaunch'),[manualVisualSource,setManualVisualSource]=useState<'auto_ai'|'uploaded'|'none'|'pexels'|'stock'>('stock'),[topic,setTopic]=useState('conversation_prompt'),[contentLanguage,setContentLanguage]=useState<'ko'|'en'>('ko'),[direction,setDirection]=useState(''),[editorialLane,setEditorialLane]=useState('auto'),[dirty,setDirty]=useState(false);
+ const [basis,setBasis]=useState('prelaunch'),[manualVisualSource,setManualVisualSource]=useState<'auto_ai'|'uploaded'|'none'|'pexels'|'stock'>('stock'),[topic,setTopic]=useState('conversation_prompt'),[contentLanguage,setContentLanguage]=useState<'ko'|'en'>('ko'),[direction,setDirection]=useState(''),[editorialLane,setEditorialLane]=useState('auto'),[storyCardCount,setStoryCardCount]=useState<3|5|0>(0),[dirty,setDirty]=useState(false);
  const [eventId,setEventId]=useState(''),[eventCampaignStage,setEventCampaignStage]=useState('auto');
  const [template,setTemplate]=useState<Row>(blank());
  const [stockPhotos,setStockPhotos]=useState<Row[]>([]),[stockReview,setStockReview]=useState<Row|null>(null);
@@ -66,8 +68,8 @@ export function AdminMarketing({locale}:{locale:Locale}){
  const [resultPreview,setResultPreview]=useState<Row|null>(null);
  const [regenerationSourceId,setRegenerationSourceId]=useState<string|null>(null);
  const [regenerationFocus,setRegenerationFocus]=useState<{index:number;nonce:number}|null>(null);
- const [activeTab,setActiveTab]=useState<'overview'|'draft'|'assets'|'queue'|'growth'|'reels'|'stories'|'generation'|'trend'|'publishing'|'automation'|'connection'>('overview');
- const [generationFilter,setGenerationFilter]=useState<'all'|'completed'|'failed'|'running'>('all');
+ const [activeTab,setActiveTab]=useState<'overview'|'draft'|'assets'|'queue'|'growth'|'reels'|'stories'|'generation'|'trend'|'publishing'|'automation'|'connection'>('draft');
+ const [generationFilter,setGenerationFilter]=useState<'all'|'completed'|'failed'|'running'|'review'>('all');
  const [trendLanguage,setTrendLanguage]=useState<'ko'|'en'>('ko');
  const [trendUsageView,setTrendUsageView]=useState<'unused'|'used'>('unused');
  const [generationVisible,setGenerationVisible]=useState(20),[publishVisible,setPublishVisible]=useState(20);
@@ -76,7 +78,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
  async function load(preferredId?:string){
   const r=await request();if(!r.ok)throw new Error(r.data.error||'Could not load marketing');if(!mounted.current)return;
   setData(r.data);setSettings(r.data.settings);setGeneration(r.data.generation);
-  if(!stockPreferredSet.current){stockPreferredSet.current=true;setManualVisualSource('stock');}if(!eventId&&r.data.live_events?.[0]?.id)setEventId(String(r.data.live_events[0].id));const rows=r.data.drafts||[];
+  if(!stockPreferredSet.current){stockPreferredSet.current=true;setManualVisualSource('stock');}if(!eventId&&r.data.live_events?.[0]?.id)setEventId(String(r.data.live_events[0].id));const rows=visibleEditorialDrafts(r.data.drafts||[]);
   selectDraft(rows.find((x:Row)=>x.id===preferredId)||rows.find((x:Row)=>x.status==='needs_approval')||rows[0]||null);
  }
  // Independent, read-only radar loading: a failure in the full marketing overview must not hide saved trends.
@@ -117,10 +119,10 @@ export function AdminMarketing({locale}:{locale:Locale}){
  },[channel,draft?.id,draft?.revision,preflightSerial]);
  // Bounded READ-ONLY polling: never calls a paid endpoint or starts generation.
  useEffect(()=>{
-  if(!busy)return;let cancelled=false,attempts=0,failures=0,timer:ReturnType<typeof setTimeout>|undefined;
-  async function poll(){if(cancelled||attempts++>=48||failures>=3)return;if(document.visibilityState==='visible')try{const r=await request('/generation');if(r.ok){if(!cancelled)setGeneration(r.data);failures=0;}else failures++;}catch{failures++;}if(!cancelled)timer=setTimeout(poll,5000);}
+  if(!busy&&!(generation?.jobs||[]).some((job:Row)=>job.status==='running'&&Date.now()-Date.parse(job.created_at)<300000))return;let cancelled=false,attempts=0,failures=0,timer:ReturnType<typeof setTimeout>|undefined;
+  async function poll(){if(cancelled||attempts++>=64||failures>=3)return;if(document.visibilityState==='visible')try{const r=await request('/generation');if(r.ok){if(!cancelled)setGeneration(r.data);failures=0;}else failures++;}catch{failures++;}if(!cancelled)timer=setTimeout(poll,5000);}
   timer=setTimeout(poll,2000);return()=>{cancelled=true;if(timer)clearTimeout(timer);};
- },[busy]);
+ },[busy,(generation?.jobs||[]).filter((job:Row)=>job.status==='running').map((job:Row)=>job.id).join(',')]);
  function friendlyError(message:string){
   const map:Record<string,[string,string]>={
    DUPLICATE_GENERATION_BLOCKED:['A matching generation is already running, completed, or has an unknown outcome. Refresh status before trying again.','같은 생성 작업이 이미 진행 중이거나 완료됐거나 결과 확인이 필요한 상태입니다. 상태를 새로고침한 뒤 확인하세요.'],
@@ -280,7 +282,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
   const savedAi=renderOnly?draft?.content_document?.photo_sourcing:null;
   const useAiCover=renderOnly
    ?(savedAi?.ai_image_slot===undefined?savedAi?.ai_thumbnail_enabled===true:savedAi?.ai_image_slot!==null)
-   :managed&&settings?.carousel_mode==='fixed'&&Number(settings?.carousel_default_slides)===5&&aiImageSlot!==null;
+   :managed&&settings?.carousel_mode==='fixed'&&Number(storyCardCount||settings?.carousel_default_slides)===5&&aiImageSlot!==null;
   const cost=managed?(useAiCover?(renderOnly?'$0.15':'$0.20'):renderOnly?'$0':research?'$0.05':'$0.02')
     :['pexels','stock'].includes(source)?(renderOnly?'$0':research?'$0.05':'$0.02')
     :renderOnly?(source==='uploaded'?'$0':eventHasEnoughPhotos?'$0':'$0.15')
@@ -298,25 +300,25 @@ export function AdminMarketing({locale}:{locale:Locale}){
   if(!window.confirm(message))return;
   await work(async()=>{
    const payload={request_key:'manual:'+crypto.randomUUID(),revision:renderOnly?draft!.revision:1,mode:today?'both':requestedMode,content_mode:basis,language:today?undefined:contentLanguage,visual_mode:'cards',visual_source:source,
-    ...(!renderOnly&&!today&&managed&&settings?.carousel_mode==='fixed'&&Number(settings?.carousel_default_slides)===5?{ai_image_slot:aiImageSlot}:{}),...(basis==='growth_carousel'?{topic_type:topic}:{}),...(basis==='live_event'?{event_id:eventId,event_campaign_stage:eventCampaignStage}:{}),instruction:(basis==='growth_carousel'?[editorialDirections[editorialLane]||'',direction.trim()].filter(Boolean).join(' '):direction.trim()).slice(0,500),confirm_photo:false,render_only:renderOnly};
+    ...(!renderOnly&&!today&&managed&&settings?.carousel_mode==='fixed'&&Number(storyCardCount||settings?.carousel_default_slides)===5?{ai_image_slot:aiImageSlot}:!renderOnly&&!today&&managed&&storyCardCount===3?{ai_image_slot:null}:{}),...(basis==='growth_carousel'?{topic_type:topic}:{}),...(basis==='live_event'?{event_id:eventId,event_campaign_stage:eventCampaignStage}:{}),instruction:direction.trim(),editorial_lane:editorialLane,...(!renderOnly&&!today&&basis==='growth_carousel'&&storyCardCount?{story_card_count:storyCardCount}:{}),confirm_photo:false,render_only:renderOnly};
    const path=renderOnly?'/draft/'+draft!.id+'/regenerate':'/draft/generate';
    const r=await request(path,payload);
    if(!r.ok||r.data.error)throw new Error(r.data.error||'Generation failed');
    if(r.data.job?.status==='running'){setNotice(t('This request already exists. Check Generation history; it was not billed again.','이미 접수된 요청입니다. 생성 기록을 확인하세요. 추가 호출하지 않았습니다.'));return;}
    if(['failed','uncertain'].includes(r.data.job?.status))throw new Error(r.data.job?.error_message||'Previous attempt stopped; no retry was sent.');
    const actuallyPexels=['pexels','stock'].includes(r.data.draft?.visual_source);
-   if(!today&&!renderOnly&&(source==='uploaded'||['pexels','stock'].includes(source)||actuallyPexels)){
+   if(!today&&!renderOnly){
     const jobId=String(r.data.job?.id||'');if(!jobId)throw new Error('RESULT_SNAPSHOT_UNAVAILABLE');
     const imported=await request('/generation/jobs/'+jobId+'/import',{confirm_import:true});
     if(!imported.ok||imported.data.error||!imported.data.draft)throw new Error(imported.data.error||'Import failed');
     const candidate=imported.data.draft as Row;
-    if(source==='uploaded'){
+    if(source==='uploaded'&&!r.data.review_required){
      try{await uploadPendingImagesToDraft(candidate,[...pendingMarketingImages]);}
      finally{clearPendingMarketingImages();}
     }
     await load(candidate.id);setActiveTab('draft');
     if(['pexels','stock'].includes(candidate.visual_source))await refreshStock(candidate.id);
-    setNotice(['pexels','stock'].includes(candidate.visual_source)
+    setNotice(r.data.review_required?t('Copy saved for editing. Sources and final publishing checks still apply.','원고를 편집 가능한 상태로 저장했습니다. 출처와 최종 발행 검사는 유지됩니다.'):source==='none'?t('Copy saved. Review the text, then add images.','원고가 저장되었습니다. 문장을 확인한 뒤 이미지를 추가하세요.'):['pexels','stock'].includes(candidate.visual_source)
      ?t('Copy saved. licensed photos remain under review until the minimum count is approved; no AI filler was created.','문구 저장 완료. 최소 실제 사진 개수 확보 및 승인 전까지 검수 대기하며 부족한 사진을 AI로 대체하지 않습니다.')
      :t('Copy, uploaded images, and final cards are ready in Drafts. No image AI was used.','문구 생성, 이미지 업로드, 카드 렌더링까지 완료했습니다. 이미지 AI는 사용하지 않았습니다.'));
    }else{
@@ -329,16 +331,16 @@ export function AdminMarketing({locale}:{locale:Locale}){
   });
  }
  function retryCost(job:Row){return job.operation==='render'?0:job.operation==='photo'?0.15:job.operation==='copy_photo'?0.20:job.operation==='research'?0.05:0.02;}
- async function retryJob(job:Row){
+ async function retryJob(job:Row,selectedTopicKey?:string){
   if(!job.request_payload)throw new Error('RETRY_PAYLOAD_UNAVAILABLE');
   const savedRecovery=canOfferSavedCtaRecovery(job),cost=savedRecovery?0.15:retryCost(job),photo=['photo','copy_photo'].includes(job.operation)||savedRecovery,budget=cost.toFixed(2)+' USD';
-  const confirmMessage=savedRecovery?t('Recover the saved copy and generate a fresh three-image visual set? This reserves '+budget+' and does not publish automatically.','저장된 문구는 재사용하고 새 이미지 3장을 생성할까요? 앱 예산 '+budget+'를 예약하며 자동 게시되지는 않습니다.'):t(
+  const confirmMessage=selectedTopicKey?t('Use this saved topic without planning it again? Copy generation still uses the displayed budget and must pass review.','저장된 이 주제를 사용해 이어서 작성할까요? 주제 기획은 다시 호출하지 않으며 원고 생성에는 표시된 예산과 품질 검사가 적용됩니다.'):savedRecovery?t('Recover the saved copy and generate a fresh three-image visual set? This reserves '+budget+' and does not publish automatically.','저장된 문구는 재사용하고 새 이미지 3장을 생성할까요? 앱 예산 '+budget+'를 예약하며 자동 게시되지는 않습니다.'):t(
    'Retry this failed generation with the same saved settings? This starts one generation attempt (research uses up to three targeted searches and one writing request, plus at most one copy-only repair when quality checks fail) and reserves '+budget+'. It will not publish automatically.',
    '이 실패 작업을 저장된 동일 설정으로 재시도할까요? 생성 시도 1회를 시작합니다. 검색형은 목적별 검색 최대 3회와 문구 작성 1회, 품질 문제 시 문구 수정 최대 1회까지 사용하며, 앱 예산 '+budget+'를 예약합니다. 자동 게시되지는 않습니다.'
   );
   if(!window.confirm(confirmMessage))return;
   await work(async()=>{
-   const r=await request('/generation/jobs/'+job.id+'/retry',{confirm_retry:true,confirm_paid_photo:photo,recover_saved_result:savedRecovery});
+   const r=await request('/generation/jobs/'+job.id+'/retry',{confirm_retry:true,confirm_paid_photo:photo,recover_saved_result:savedRecovery,...(selectedTopicKey?{selected_topic_key:selectedTopicKey}:{})});
    await load();
    if(!r.ok||r.data.error)throw new Error(r.data.error||'Retry failed');
    if(['failed','uncertain'].includes(r.data.job?.status))throw new Error(r.data.job?.error_message||'Retry stopped');
@@ -472,9 +474,10 @@ export function AdminMarketing({locale}:{locale:Locale}){
  const generationThreads=[...threadMap.entries()].map(([id,attempts])=>{
   attempts.sort((a:Row,b:Row)=>Date.parse(a.created_at)-Date.parse(b.created_at)||Number(a.attempt_number||0)-Number(b.attempt_number||0));
   const latest=attempts[attempts.length-1],root=attempts[0];
-  const status=latest.quality_report?.status==='rejected'?'failed':latest.status;
+  const state=editorialState(latest);
+  const status=state==='running'?'running':state==='system_error'?'failed':['ready','published','scheduled'].includes(state)?'completed':'review';
   const retryCount=attempts.filter((a:Row)=>Boolean(a.retry_of_job_id)).length,stepCount=Math.max(1,attempts.length-retryCount);
-  return {id,attempts,latest,root,status,retryCount,stepCount,total_reserved_usd:attempts.reduce((sum:number,a:Row)=>sum+Number(a.reserved_usd||0),0),created_at:root.created_at,updated_at:latest.updated_at||latest.created_at};
+  return {id,attempts,latest,root,status,workflow_state:state,retryCount,stepCount,total_reserved_usd:attempts.reduce((sum:number,a:Row)=>sum+Number(a.reserved_usd||0),0),created_at:root.created_at,updated_at:latest.updated_at||latest.created_at};
  }).sort((a:Row,b:Row)=>Date.parse(b.updated_at)-Date.parse(a.updated_at));
  const filteredGenerationThreads=generationThreads.filter((thread:Row)=>generationFilter==='all'||thread.status===generationFilter);
  const visibleGenerationThreads=filteredGenerationThreads.slice(0,generationVisible);
@@ -497,7 +500,11 @@ export function AdminMarketing({locale}:{locale:Locale}){
   ['automation',t('Marketing settings','마케팅 설정'),Settings2],
   ['connection',t('Connections','연결'),Link2]
  ] as const;
- const primaryMarketingTabs=new Set<string>(['overview','draft','assets','queue','stories']);
+ const editableDrafts=visibleEditorialDrafts(data.drafts||[]);
+ const selectedStoryCount=storyCardCount||Number(settings?.carousel_default_slides)||5;
+ const newBranded=basis==='growth_carousel'&&settings?.carousel_brand_outro_enabled===true;
+ const plannedPhotoCount=selectedStoryCount-(newBranded?0:1)-(aiImageSlot!==null&&selectedStoryCount===5?1:0);
+ const workflowText=(row:Row)=>t(...EDITORIAL_STATE_LABELS[editorialState(row)]);
  function statusText(status:string){const labels:Record<string,[string,string]>={completed:['Completed','완료'],failed:['Failed','실패'],running:['Running','진행 중'],uncertain:['Needs review','확인 필요'],sent:['Published','게시됨'],queued:['Scheduled','예약됨'],sending:['Publishing','게시 중'],needs_review:['Needs review','확인 필요'],scheduled:['Scheduled','예약됨']};return labels[status]?t(...labels[status]):status;}
  function operationLabel(row:Row){const labels:Record<string,[string,string]>={copy:['Copy creation','문구 생성'],research:['Research + copy','주제 조사 + 문구 생성'],render:['Card rendering','이미지 카드 렌더'],photo:['Visual generation','이미지 생성 + 렌더'],copy_photo:['Copy + visuals','문구 + 이미지 생성']};return labels[row.operation]?t(...labels[row.operation]):t('Generation step','생성 단계');}
  function contentLabel(row:Row){const request=row.request_payload||{},snapshot=row.result_snapshot||row.snapshot||row||{},growth=request.content_mode==='growth_carousel'||snapshot.draft_kind==='growth_carousel'||row.draft_kind==='growth_carousel',kind=growth?(request.topic_type||snapshot.growth_topic_type||row.growth_topic_type||'growth_carousel'):(request.content_mode||snapshot.content_mode||row.content_mode||snapshot.draft_kind||row.draft_kind||row.operation||'content');const ko:Record<string,string>={prelaunch:'오픈 전 홍보',live_event:'이벤트 모집',book_insight:'책 속 공감',trend_research:'연구로 보는 관계',mbti:'MBTI와 대화',dating_archetype:'대화 스타일',meme_remix:'공감 상황극',dating_myth:'연애 통념 점검',conversation_prompt:'첫 대화 질문',seoul_dating:'서울에서 만나기',seoul_trend:'서울 트렌드',korea_life:'한국 생활',mini_quiz:'대화 미니 퀴즈',growth_carousel:'Growth Carousel',brand:'브랜드 콘텐츠',copy:'일반 콘텐츠',research:'검색 콘텐츠'};return locale==='ko'?(ko[kind]||String(kind).replaceAll('_',' ')):String(kind).replaceAll('_',' ');}
@@ -513,8 +520,8 @@ export function AdminMarketing({locale}:{locale:Locale}){
   :draft.content_document.photo_sourcing.ai_image_slot;
  const realPhotoSlots=Array.isArray(draft?.carousel_slides)
   ?draft.carousel_slides.map((slide:Row,index:number)=>({role:String(slide.role||''),index}))
-   .filter((row:Row)=>row.role!=='cta'&&row.role!=='editorial_closing'&&row.index!==selectedAiSlot)
-   .slice(0,3).map((row:Row)=>Number(row.index)):[];
+   .filter((row:Row)=>row.role!=='brand_outro'&&row.role!=='cta'&&(draft?.content_document?.brand_outro_version===1||row.role!=='editorial_closing')&&row.index!==selectedAiSlot)
+   .map((row:Row)=>Number(row.index)):[];
  const filteredApprovedPool=approvedPool.filter((photo:Row)=>{
   const q=approvedSearch.trim().toLowerCase();
   return !q||[photo.photographer,photo.provider,photo.topic_key,photo.search_query,photo.provider_photo_id]
@@ -576,26 +583,10 @@ export function AdminMarketing({locale}:{locale:Locale}){
    <span>{error||notice}</span>
    <button type="button" aria-label={t('Dismiss message','메시지 닫기')} onClick={()=>{setError('');setNotice('');}}>×</button>
   </div>}
-  {channel==='instagram'&&<nav className="marketing-subtabs marketing-workspace-nav" aria-label={t('Marketing sections','마케팅 메뉴')}>
-   {[
-    {group:'WORKSPACE',tabs:tabItems.filter(([id])=>primaryMarketingTabs.has(id))},
-    {group:'TOOLS & OPERATIONS',tabs:tabItems.filter(([id])=>!primaryMarketingTabs.has(id))}
-   ].map(group=><div className="marketing-workspace-nav-group" key={group.group}>
-    <span className="marketing-workspace-nav-label">{group.group}</span>
-    <div className="marketing-workspace-nav-links" role="tablist" aria-label={group.group}>
-     {group.tabs.map(([value,label,Icon])=><button type="button" key={value}
-      role="tab" aria-selected={activeTab===value}
-      className={activeTab===value?'active':''} onClick={()=>setActiveTab(value)}>
-      <Icon size={16} aria-hidden="true"/><span>{label}</span>
-      {value==='generation'&&generationThreads.some((thread:Row)=>thread.status==='failed')&&
-       <span className="marketing-tab-dot" aria-label={t('Failed generation exists','실패한 생성 있음')}/>}
-     </button>)}
-    </div>
-   </div>)}
-  </nav>}
+  {channel==='instagram'&&<MarketingWorkflowNav locale={locale} activeTab={activeTab} items={tabItems} onNavigate={setActiveTab}/>}
   {channel==='instagram'&&activeTab==='overview'&&
-   <AdminMarketingOverview locale={locale} drafts={data.drafts||[]} runs={data.runs||[]} settings={settings}
-    onNavigate={tab=>setActiveTab(tab)}/>}
+   <><MarketingProductionMetrics metrics={generation?.workflow_metrics||null} locale={locale}/><AdminMarketingOverview locale={locale} drafts={data.drafts||[]} runs={data.runs||[]} settings={settings}
+    onNavigate={tab=>setActiveTab(tab)}/></>}
   {channel==='instagram'&&activeTab==='assets'&&
    <AdminMarketingAssets locale={locale} onOpenDraft={id=>{
     const related=(data.drafts||[]).find((item:Row)=>item.id===id);
@@ -610,36 +601,35 @@ export function AdminMarketing({locale}:{locale:Locale}){
   {channel==='instagram'&&activeTab==='reels'&&<AdminMarketingReels locale={locale}/>}
   {channel==='instagram'&&activeTab==='stories'&&<AdminMarketingStories locale={locale}/>}
   {channel==='instagram'&&activeTab==='draft'&&<>
-   <div className="marketing-setup"><strong>{t('API cost guard','API 비용 안전장치')}</strong><p>{t('Reserved today','오늘 예약액')} ${Number(generation?.usage?.daily_reserved_usd||0).toFixed(2)} / ${Number(generation?.usage?.daily_budget_usd??5).toFixed(2)}. {t('This month','이번 달')} ${Number(generation?.usage?.monthly_reserved_usd||0).toFixed(2)} / ${Number(generation?.usage?.monthly_budget_usd??20).toFixed(2)}. {t('Paid generation attempts','오늘 유료 생성 시도')} {generation?.usage?.daily_attempts||0}. {t('Safety-counted jobs','안전 카운트')} {generation?.usage?.daily_calls||0}/{generation?.usage?.daily_call_limit??10}.</p><p className="admin-help">{t('No automatic paid retries or fallback. With Pexels configured, automatic posts use 2–3 rights-reviewed photographs and wait for approval of new images. Without Pexels, the existing AI visual flow remains. Overall daily/monthly AI budgets and generation limits remain the safety controls. External account spending is separate.','유료 API 자동 재시도나 자동 대체는 없습니다. Pexels 설정 시 자동 콘텐츠에 검수된 사진 2~3장을 사용하며 신규 사진은 승인을 기다립니다. Pexels 미설정 시 기존 AI 이미지 흐름을 유지합니다. 전체 일/월 AI 예산과 생성 횟수 한도가 비용 안전장치로 적용됩니다. 다른 서비스의 API 사용액은 이 한도에 포함되지 않습니다.')}</p>{generation?.usage?.daily_budget_override_expires_at&&<p className="admin-help">{t('Temporary daily limit is active until midnight KST. It will automatically fall back to the normal $5.00 limit.','오늘만 임시 한도가 적용 중입니다. KST 자정이 지나면 기본 $5.00 한도로 자동 복귀합니다.')}</p>}
+   <details className="marketing-setup"><summary>{t('API cost and connection status','API 비용 및 연결 상태')}</summary><p className="admin-help">{t('App reservations and provider credits are separate. A remaining app budget does not prove the API account has credits.','앱 예약액과 외부 API 크레딧은 별개입니다. 앱 예산이 남아 있어도 API 계정의 크레딧 부족으로 중단될 수 있습니다.')}</p><p>{t('Reserved today','오늘 예약액')} ${Number(generation?.usage?.daily_reserved_usd||0).toFixed(2)} / ${Number(generation?.usage?.daily_budget_usd??5).toFixed(2)}. {t('This month','이번 달')} ${Number(generation?.usage?.monthly_reserved_usd||0).toFixed(2)} / ${Number(generation?.usage?.monthly_budget_usd??20).toFixed(2)}. {t('Paid generation attempts','오늘 유료 생성 시도')} {generation?.usage?.daily_attempts||0}. {t('Safety-counted jobs','안전 카운트')} {generation?.usage?.daily_calls||0}/{generation?.usage?.daily_call_limit??10}.</p><p className="admin-help">{t('No automatic paid retries or fallback. With Pexels configured, automatic posts use 2–3 rights-reviewed photographs and wait for approval of new images. Without Pexels, the existing AI visual flow remains. Overall daily/monthly AI budgets and generation limits remain the safety controls. External account spending is separate.','유료 API 자동 재시도나 자동 대체는 없습니다. Pexels 설정 시 자동 콘텐츠에 검수된 사진 2~3장을 사용하며 신규 사진은 승인을 기다립니다. Pexels 미설정 시 기존 AI 이미지 흐름을 유지합니다. 전체 일/월 AI 예산과 생성 횟수 한도가 비용 안전장치로 적용됩니다. 다른 서비스의 API 사용액은 이 한도에 포함되지 않습니다.')}</p>{generation?.usage?.daily_budget_override_expires_at&&<p className="admin-help">{t('Temporary daily limit is active until midnight KST. It will automatically fall back to the normal $5.00 limit.','오늘만 임시 한도가 적용 중입니다. KST 자정이 지나면 기본 $5.00 한도로 자동 복귀합니다.')}</p>}
     {!generation?.provider?.configured&&<p className="admin-error">{t('OPENAI_API_KEY is missing from this deployment. Configure Vercel Production and redeploy.','이 배포에 OPENAI_API_KEY가 없습니다. Vercel Production 설정 후 재배포가 필요합니다.')}</p>}
     {generation?.control?.blocked_reason&&<p className="admin-error" role="alert">{generation.control.blocked_reason}</p>}
     <button type="button" className="admin-secondary" onClick={()=>void (async()=>{try{const enable=blocked;if(enable&&!window.confirm(t('Resume after checking API configuration? Budgets are not reset and failed jobs are not retried.','API 설정을 확인했나요? 사용 한도를 초기화하거나 실패 작업을 재시도하지 않고 AI를 재개합니다.')))return;const r=await request('/generation/control',{enabled:enable,confirm_resume:enable},'PUT');if(!r.ok)throw new Error(r.data.error);setGeneration(r.data);}catch(e){setError(e instanceof Error?e.message:'Could not update AI control');}})()}>{blocked?t('Resume after checking configuration','설정 확인 후 AI 재개'):t('Pause paid AI','유료 AI 일시 중지')}</button>
-   </div>
+   </details>
    {running&&<div className="generation-progress active" role="status" aria-live="polite"><strong>{stage(running.stage)}</strong><p>{t('You may leave this page. Returning only reads the existing job, never restarts it.','페이지를 나가도 이미 접수된 작업은 서버에서 처리합니다. 다시 접속해도 같은 작업을 새로 시작하지 않습니다.')}</p></div>}
-   <section className="marketing-generator-card">
+   <details className="marketing-generator-card" open={!draft||undefined}><summary>{t("Create a new post","새 콘텐츠 만들기")}</summary>
     <div className="admin-section-title"><div><p className="admin-kicker">{t('Create','생성')}</p><Heading level={2}>{t('New content','새 콘텐츠 생성')}</Heading></div></div>
     <div className="admin-form">
      <div className="admin-two"><label><span>{t('Content basis','콘텐츠 기준')}</span><select value={basis} onChange={e=>setBasis(e.target.value)}><option value="prelaunch">{t('Pre-launch','오픈 전 홍보')}</option><option value="live_event">{t('Live event','정식 이벤트')}</option><option value="growth_carousel">Growth Carousel</option></select></label><label><span>{t('Manual generation method','수동 생성 방식')}</span><select value={manualVisualSource} onChange={e=>setManualVisualSource(e.target.value as 'auto_ai'|'uploaded'|'none'|'pexels'|'stock')}><option value="stock">{t('Mixed AI + reviewed real photos','AI + 승인된 실사 혼합')}</option><option value="uploaded">{t('Copy + my uploads','문구 + 직접 업로드')}</option><option value="none">{t('Copy only','문구만')}</option></select></label></div>
      <label><span>{t('Cover / headline language','표지 / 제목 언어')}</span><select value={contentLanguage} onChange={e=>setContentLanguage(e.target.value as 'ko'|'en')}><option value="ko">{t('Korean post','한국어 콘텐츠')}</option><option value="en">{t('English post','영어 콘텐츠')}</option></select></label>
      {basis==='live_event'?<div className="admin-two"><label><span>{t('Event to promote','홍보할 이벤트')}</span><select value={eventId} onChange={e=>setEventId(e.target.value)}><option value="">{t('Choose an event','이벤트 선택')}</option>{(data.live_events||[]).map((event:Row)=><option key={event.id} value={event.id}>{event.title_ko||event.title} · {new Date(event.starts_at).toLocaleDateString(locale,{timeZone:'Asia/Seoul'})}</option>)}</select></label><label><span>{t('Campaign stage','홍보 단계')}</span><select value={eventCampaignStage} onChange={e=>setEventCampaignStage(e.target.value)}><option value="auto">{t('Auto from event status','이벤트 상태로 자동 추천')}</option><option value="launch">{t('Launch','오픈')}</option><option value="experience">{t('Experience','참가 경험')}</option><option value="venue">{t('Venue','장소')}</option><option value="participants">{t('Participants','참가자 구성')}</option><option value="momentum">{t('Momentum / offer','모멘텀 / 혜택')}</option><option value="imminent">{t('Imminent','임박')}</option><option value="last_call">{t('Last call','라스트콜')}</option></select></label></div>:null}
+     {basis==='growth_carousel'&&<label><span>{t('Story length before generation','원고 작성 전 장수 선택')}</span><select value={storyCardCount} disabled={settings?.carousel_mode==='alternating'} onChange={e=>setStoryCardCount(Number(e.target.value) as 0|3|5)}><option value={0}>{t('Use current schedule','현재 발행 설정 따르기')}</option><option value={3}>{t('Short: 3 story cards','짧은 소재: 본문 3장')}{settings?.carousel_brand_outro_enabled?' + 1 Roundy':''}</option><option value={5}>{t('In-depth: 5 story cards','자료가 충분한 소재: 본문 5장')}{settings?.carousel_brand_outro_enabled?' + 1 Roundy':''}</option></select><small>{t('Choose before writing. Existing drafts and alternating reservations keep their original size.','작성 전에 선택합니다. 기존 초안과 교대 발행 예약의 장수는 유지됩니다.')}</small></label>}
      {basis==='growth_carousel'?<label><span>{t('Topic','주제')}</span><select value={topic} onChange={e=>setTopic(e.target.value)}>{topics.map((x,i)=><option key={x} value={x}>{t(x.replaceAll('_',' '),topicKo[i])}</option>)}</select></label>:null}
      {manualVisualSource==='stock'?<div className="marketing-mix-options">
        <strong>{t('Mix images per card','카드별 이미지 구성')}</strong>
-       <p className="admin-help">{t('On five-card posts: three approved real photos, one AI-generated visual, and one editorial closing. Choose the AI card below. With three-card posts, two reviewed photos and one closing are required.',
-        '5장 카드뉴스: 승인된 실사 3장 + AI 이미지 1장 + 에디토리얼 마무리 1장. AI가 들어갈 카드 위치를 선택하세요. 3장 구성은 실사 2장과 마무리 카드로 제작됩니다.')}</p>
-       {settings?.carousel_mode==='fixed'&&Number(settings?.carousel_default_slides)===5&&Number(settings?.carousel_min_real_photos_5??3)<=3
+       <p className="admin-help">{t('Story cards','본문 카드')} {selectedStoryCount}{newBranded?t(' + one standalone Roundy card',' + 독립 라운디 소개 1장'):''}. {t('Real photos needed','필요한 실사')} {Math.max(0,plannedPhotoCount)}{t('. Each story card has its own image.','. 모든 본문 카드에는 이미지가 한 장씩 들어갑니다.')}</p>
+       {settings?.carousel_mode==='fixed'&&Number(storyCardCount||settings?.carousel_default_slides)===5&&Number(settings?.carousel_min_real_photos_5??3)<=3
         ?<div className="marketing-image-choice-grid" role="group" aria-label={t('Choose AI image card','AI 이미지 카드 선택')}>
-          {([0,1,2,3] as const).map(slot=><button key={slot} type="button"
+          {(newBranded?[0]:[0,1,2,3]).map(slot=><button key={slot} type="button"
            aria-pressed={aiImageSlot===slot} onClick={()=>setAiImageSlot(slot)}
            className={aiImageSlot===slot?'selected':''}>
            <small>{String(slot+1).padStart(2,'0')}</small>
            <strong>{slot===0?t('Cover','표지'):slot===1?t('Context','배경'):t('Insight','인사이트')+' '+(slot-1)}</strong>
            <span>{aiImageSlot===slot?'AI':t('Real photo','실사')}</span>
           </button>)}
-         </div>
+         <button type="button" className={aiImageSlot===null?'selected':''} aria-pressed={aiImageSlot===null} onClick={()=>setAiImageSlot(null)}>{t('All real photos','모두 실사')}</button></div>
         :<p className="admin-help">{t('The selected 3/5-card schedule or photo minimum does not allow an AI image slot. All required visuals must be real photos.','현재 3/5장 발행 설정 또는 실사 최소 기준에서는 AI 이미지 위치를 미리 지정할 수 없습니다. 필요한 이미지에는 실사를 사용합니다.')}</p>}
-       <p className="admin-help">{t('The AI image is generated only after three real photos pass review. You can explicitly choose previously approved photos inside the draft; reuse is not random.',
-        'AI 이미지는 실사 3장 승인 완료 후 생성됩니다. 생성된 초안에서 이미 승인된 사진을 직접 검색해 선택할 수 있습니다.')}</p>
+       <p className="admin-help">{t('The optional AI cover is generated only after all required real photos are approved. Approved images can be reused deliberately.','선택한 AI 표지는 필요한 실사 사진을 모두 승인한 뒤 생성됩니다. 승인된 사진을 직접 골라 재사용할 수 있습니다.')}</p>
       </div>:manualVisualSource==='uploaded'?<div className="marketing-setup">
       <strong>{t('Add images now','이미지 바로 추가')}</strong>
       <p className="admin-help">{t('Select 1–6 images here. When you generate, Roundy will create the copy, create a Draft, upload these files, and render the final cards automatically. Image AI is not called.','여기서 이미지를 1–6장 선택하세요. 콘텐츠 생성 시 문구 생성 → 초안 생성 → 이미지 업로드 → 최종 카드 렌더까지 자동으로 이어집니다. 이미지 AI는 호출하지 않습니다.')}</p>
@@ -664,10 +654,10 @@ export function AdminMarketing({locale}:{locale:Locale}){
      <p className="admin-help">{t('Caption order: Korean → English → sources → tagline and 5 relevant tags. Tags are selected for topic relevance; live search volume is not measured.','캡션 순서: 국문 → 영어 → 출처 → 태그라인과 관련 태그 5개. 태그는 주제 관련성으로 선별하며 실시간 검색량 순위는 아닙니다.')}</p>
      <button type="button" className="admin-primary" disabled={busy||!!running||blocked||(manualVisualSource==='uploaded'&&!pendingMarketingImages.length)} onClick={()=>void generate(false)}>{manualVisualSource==='uploaded'?t('Generate with my images','내 이미지로 콘텐츠 생성'):t('Generate content','콘텐츠 생성')}</button>
     </div>
-   </section>
+   </details>
    <div className="admin-section-title"><div><p className="admin-kicker">{t('Working inbox','작업함')}</p><Heading level={2}>{t('Drafts','초안')}</Heading><p>{t('Only editable drafts appear here. Scheduled and published posts move to Publishing history.','편집 가능한 초안만 표시됩니다. 예약 또는 게시된 콘텐츠는 게시 기록으로 이동합니다.')}</p></div><button type="button" className="admin-secondary" onClick={()=>setActiveTab('generation')}>{t('Add from generated results','생성 결과에서 가져오기')}</button></div>
-   <div className="marketing-draft-inbox">{data.drafts.length?data.drafts.map((item:Row)=>{const publication=publicationInfo(item);return <article className={'marketing-draft-card '+(draft?.id===item.id?'selected':'')} key={item.id}>{item.images?.[0]?<img src={item.images[0]} alt="" />:<span className="marketing-draft-thumb placeholder"/>}<div className="marketing-draft-copy"><strong>{contentTitle(item)}</strong><p>{contentLabel(item)} · {item.content_language==='en'?'EN':'KO'} · {item.quality_report?.status==='passed'?t('Ready for review','검토 가능'):t('Needs quality review','품질 검토 필요')}</p><small><span className={'marketing-status-pill '+publication.status}>{publication.label}</span> · {new Date(item.imported_at||item.updated_at).toLocaleString(locale,{timeZone:'Asia/Seoul'})}</small></div><button type="button" className={draft?.id===item.id?'admin-primary':'admin-secondary'} disabled={busy||!!running} onClick={()=>{if(dirty&&!window.confirm(t('Discard unsaved changes?','저장하지 않은 수정을 버릴까요?')))return;selectDraft(item);}}>{draft?.id===item.id?t('Editing','편집 중'):t('Edit','편집')}</button></article>}):<div className="admin-empty"><p>{t('No editable drafts yet. Generate content, then add a completed result from Generation history.','아직 편집 가능한 초안이 없습니다. 콘텐츠를 생성한 뒤 생성 기록의 완료 결과를 초안으로 가져오세요.')}</p><button type="button" className="admin-secondary" onClick={()=>setActiveTab('generation')}>{t('Open Generation history','생성 기록 열기')}</button></div>}</div>
-   {!draft?<p className="admin-empty">{t('Select a working draft above to edit it.','위 작업함에서 편집할 초안을 선택하세요.')}</p>:<div className="marketing-layout"><div className="admin-form marketing-editor"><p>{draft.generation_reason}</p><p>{draft.draft_date} / v{draft.revision} / {draft.status} / {draft.content_language==='en'?t('English content','영어 콘텐츠'):t('Korean content','한국어 콘텐츠')}</p><p>{t('Recommended window','추천 게시 시간')}: {draft.window_start_kst?.slice(0,5)}–{draft.window_end_kst?.slice(0,5)} KST</p>
+   <div className="marketing-draft-inbox">{editableDrafts.length?editableDrafts.map((item:Row)=>{const publication=publicationInfo(item);return <article className={'marketing-draft-card '+(draft?.id===item.id?'selected':'')} key={item.id}>{item.images?.[0]?<img src={item.images[0]} alt="" />:<span className="marketing-draft-thumb placeholder"/>}<div className="marketing-draft-copy"><strong>{contentTitle(item)}</strong><p>{contentLabel(item)} · {item.content_language==='en'?'EN':'KO'} · {workflowText(item)}</p><small><span className={'marketing-status-pill '+publication.status}>{publication.label}</span> · {new Date(item.imported_at||item.updated_at).toLocaleString(locale,{timeZone:'Asia/Seoul'})}</small></div><button type="button" className={draft?.id===item.id?'admin-primary':'admin-secondary'} disabled={busy||!!running} onClick={()=>{if(dirty&&!window.confirm(t('Discard unsaved changes?','저장하지 않은 수정을 버릴까요?')))return;selectDraft(item);}}>{draft?.id===item.id?t('Editing','편집 중'):t('Edit','편집')}</button></article>}):<div className="admin-empty"><p>{t('No editable drafts yet. Generate content, then add a completed result from Generation history.','아직 편집 가능한 초안이 없습니다. 콘텐츠를 생성한 뒤 생성 기록의 완료 결과를 초안으로 가져오세요.')}</p><button type="button" className="admin-secondary" onClick={()=>setActiveTab('generation')}>{t('Open Generation history','생성 기록 열기')}</button></div>}</div>
+   {!draft?<p className="admin-empty">{t('Select a working draft above to edit it.','위 작업함에서 편집할 초안을 선택하세요.')}</p>:<div className="marketing-layout"><div className="admin-form marketing-editor"><MarketingWorkflowSteps draft={draft} locale={locale}/><p>{draft.generation_reason}</p><p>{draft.draft_date} / v{draft.revision} / {draft.status} / {draft.content_language==='en'?t('English content','영어 콘텐츠'):t('Korean content','한국어 콘텐츠')}</p><p>{t('Recommended window','추천 게시 시간')}: {draft.window_start_kst?.slice(0,5)}–{draft.window_end_kst?.slice(0,5)} KST</p>
     {!isMagazine&&draft.content_document?.answer_first===true&&Array.isArray(draft.content_document?.thumbnail_candidates)&&
      <div className="marketing-setup marketing-copy-options">
       <div className="marketing-copy-options-head"><span className="admin-kicker">COPY OPTIONS / 03</span>
@@ -763,7 +753,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
            <small>{t('Card','카드')} {index+1} / {String(slide.role||'').replaceAll('_',' ').toUpperCase()}</small>
            <strong>{String(slide.title||'').slice(0,70)}</strong>
           </div>
-          <p>{ai?t('AI image, generated after real-photo approval','실사 3장 승인 후 AI 생성'):
+          <p>{ai?t('AI image, generated after real-photo approval','필요한 실사 승인 후 AI 생성'):
            status==='approved'?t('Approved photo selected','승인된 실사 지정됨'):
            status==='pending'?t('New photo: rights review needed','신규 사진: 저작권 검수 필요'):
            t('No photo assigned yet','아직 지정된 사진 없음')}</p>
@@ -798,7 +788,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
         '이미 렌더링된 카드입니다. 이미지 배치를 변경하면 기존 결과는 무효화되며 다시 렌더링해야 합니다.')}</p>}
       </div>
      </div>}
-     {!['pexels','stock'].includes(String(draft.visual_source))&&draft.generation_source==='manual'&&draft.draft_role==='candidate'&&<div className="marketing-setup">
+     {!['pexels','stock'].includes(String(draft.visual_source))&&draft.generation_source==='manual'&&draft.draft_role==='candidate'&&<div id="roundy-marketing-photo-editor" className="marketing-setup">
      <strong>{t('Manual images','직접 이미지')}</strong>
      <p className="admin-help">{t('Upload 1–6 JPEG, PNG or WebP files (max 10 MB each). Photo source adds Roundy typography; completed card is used as-is. Uploaded rendering makes no image-AI request.','JPEG, PNG, WebP 이미지를 1–6장 업로드할 수 있습니다(장당 최대 10MB). 사진 소스는 Roundy 타이포를 합성하고, 완성 카드는 그대로 사용합니다. 업로드 렌더에서는 이미지 AI를 호출하지 않습니다.')}</p>
      <div className="admin-two"><label><span>{t('Upload type','업로드 유형')}</span><select value={uploadAssetType} onChange={e=>setUploadAssetType(e.target.value as 'photo'|'completed_card')}><option value="photo">{t('Photo source','사진 소스')}</option><option value="completed_card">{t('Completed 4:5 card','완성 4:5 카드')}</option></select></label><label><span>{t('Add images','이미지 추가')}</span><input type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={busy||!!running} onChange={e=>{const files=Array.from(e.target.files||[]);e.target.value='';void work(()=>uploadMarketingImages(files));}}/></label></div>
@@ -812,7 +802,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
     <label><span>{t('Destination','연결 주소')}</span><input value={draft.destination_url||''} disabled={busy||!!running||draft.status!=='needs_approval'} onChange={e=>changeDraft('destination_url',e.target.value)}/></label></>}
     {draft.research_status==='generated_without_sources'&&<p className="admin-error" role="alert">{t('Web Search completed, but OpenAI did not return source metadata. Fact-check this draft manually before publishing.','Web Search는 완료됐지만 OpenAI가 출처 메타데이터를 반환하지 않았습니다. 게시 전에 내용의 사실관계를 직접 확인하세요.')}</p>}
     {!!draft.research_sources?.length&&<div className="growth-sources">{draft.research_sources.map((s:Row)=><a key={s.url} href={s.url} target="_blank" rel="noreferrer">{s.publisher||s.title}</a>)}</div>}
-    {draft.status==='needs_approval'&&<div className="admin-form-actions"><button type="button" className="admin-secondary" disabled={busy||!!running||!dirty} onClick={()=>void work(async()=>{await mutate('/draft/'+draft.id,{revision:draft.revision,caption:draft.caption,cta:draft.cta,destination_url:draft.destination_url},'PUT');await load(draft.id);})}>{t('Save edits','수정 저장')}</button><button type="button" className="admin-primary" disabled={busy||!!running||dirty||!preflightReady||!draft.caption?.trim()||!draft.images?.length||draft.quality_report?.status!=='passed'||draft.quality_revision!==draft.revision||instagramNeedsReconnect} onClick={()=>{if(window.confirm(t('Approve this exact revision and schedule it for Instagram?','현재 버전의 문구와 이미지를 승인하고 Instagram 게시를 예약할까요?')))void work(async()=>{const result=await mutate('/draft/'+draft.id+'/approve',{revision:draft.revision});await load(draft.id);
+    {draft.status==='needs_approval'&&<div id="roundy-marketing-approval" className="admin-form-actions"><button type="button" className="admin-secondary" disabled={busy||!!running||!dirty} onClick={()=>void work(async()=>{await mutate('/draft/'+draft.id,{revision:draft.revision,caption:draft.caption,cta:draft.cta,destination_url:draft.destination_url},'PUT');await load(draft.id);})}>{t('Save edits','수정 저장')}</button><button type="button" className="admin-primary" disabled={busy||!!running||dirty||!preflightReady||!draft.caption?.trim()||!draft.images?.length||draft.quality_report?.status!=='passed'||draft.quality_revision!==draft.revision||instagramNeedsReconnect} onClick={()=>{if(window.confirm(t('Approve this exact revision and schedule it for Instagram?','현재 버전의 문구와 이미지를 승인하고 Instagram 게시를 예약할까요?')))void work(async()=>{const result=await mutate('/draft/'+draft.id+'/approve',{revision:draft.revision});await load(draft.id);
   const when=result.run?.scheduled_for?new Date(result.run.scheduled_for).toLocaleString(locale,{timeZone:'Asia/Seoul'}):'';
   setNotice(t('Approved and reserved for ','승인 완료, 발행 예약: ')+when+' KST');});}}>{t('Approve & schedule','승인 후 예약')}</button><button type="button" className="admin-secondary" disabled={busy||!!running||dirty||!preflightReady||!draft.caption?.trim()||!draft.images?.length||draft.quality_report?.status!=='passed'||draft.quality_revision!==draft.revision||instagramNeedsReconnect} onClick={()=>{if(window.confirm(t('Publish this exact saved revision to @roundy.meet NOW? This bypasses the recommended posting time and cannot be undone here.','현재 저장된 버전을 @roundy.meet에 지금 바로 게시할까요? 추천 게시 시간을 무시하며 여기서 게시를 되돌릴 수 없습니다.')))void work(async()=>{const result=await mutate('/draft/'+draft.id+'/publish-now',{revision:draft.revision});await load(draft.id);setNotice(result.published?t('Published to @roundy.meet.','@roundy.meet에 바로 게시했습니다.'):result.needs_review?t('Publish attempt needs review. Check Instagram before resolving it.','게시 결과 확인이 필요합니다. 처리 전에 Instagram에서 실제 게시 여부를 확인하세요.'):result.deferred?t('Daily Feed limit reached. Reserved for '+String(result.feed_date_kst)+' KST.','Feed 일일 한도를 초과해 '+String(result.feed_date_kst)+' KST로 예약했습니다.'):t('Queued for immediate publishing. Refresh status before trying again.','즉시 게시 큐에 넣었습니다. 다시 누르기 전에 상태를 새로고침하세요.'));});}}>{t('Publish now','바로 게시')}</button><button type="button" className="admin-secondary" disabled={busy||!!running} onClick={()=>{
    const target=draft;
@@ -833,19 +823,19 @@ export function AdminMarketing({locale}:{locale:Locale}){
   </>}
   {channel==='instagram'&&activeTab==='generation'&&<section className="marketing-tab-panel">
    <div className="admin-section-title"><div><p className="admin-kicker">{t('Activity','활동')}</p><Heading level={2}>{t('Generation history','생성 기록')}</Heading></div><button type="button" className="admin-secondary" disabled={busy} onClick={()=>void work(()=>load(draft?.id))}>{t('Refresh','새로고침')}</button></div>
-   <div className="marketing-filter-chips" role="group" aria-label={t('Generation status filter','생성 상태 필터')}>{([['all',t('All','전체')],['completed',t('Completed','완료')],['failed',t('Failed','실패')],['running',t('Running','진행 중')]] as const).map(([value,label])=><button type="button" key={value} aria-pressed={generationFilter===value} onClick={()=>{setGenerationFilter(value);setGenerationVisible(20);}}>{label}</button>)}</div>
+   <div className="marketing-filter-chips" role="group" aria-label={t('Generation status filter','생성 상태 필터')}>{([['all',t('All','전체')],['completed',t('Ready','최종 검토 가능')],['review',t('Next step','보완 및 다음 작업')],['failed',t('System issues','시스템 오류')],['running',t('Running','진행 중')]] as const).map(([value,label])=><button type="button" key={value} aria-pressed={generationFilter===value} onClick={()=>{setGenerationFilter(value);setGenerationVisible(20);}}>{label}</button>)}</div>
    <div className="marketing-log-list">{visibleGenerationThreads.length?visibleGenerationThreads.map((thread:Row)=>{
     const latest=thread.latest as Row,root=thread.root as Row,attempts=thread.attempts as Row[],record=contentRecordForAttempts(attempts);
-    const canRetry=thread.status==='failed'&&!latest.automatic&&!!latest.request_payload,publication=publicationInfo(record);
+    const canRetry=latest.status==='failed'&&!latest.automatic&&!!latest.request_payload,publication=publicationInfo(record);
     const language=(record?.content_language||root.request_payload?.language)==='en'?'EN':(record?.content_language||root.request_payload?.language)==='ko'?'KO':'';
     const titledAttempt=[...attempts].reverse().find((attempt:Row)=>attempt.result_snapshot)||latest;
     const topicPlan=[...attempts].reverse().map((attempt:Row)=>attempt.request_payload?.topic_selection||attempt.result_snapshot?.topic_selection||attempt.result_snapshot?.content_document?.editorial_topic_selection).find(Boolean) as Row|undefined;
     return <details className={'marketing-log-row generation-thread '+thread.status} key={thread.id}>
-     <summary><div className="marketing-log-main"><span className={'marketing-status-dot '+thread.status}/><div><strong>{contentTitle(record||titledAttempt)}</strong><small>{contentLabel(record||root)}{language?' · '+language:''} · {new Date(root.created_at).toLocaleString(locale,{timeZone:'Asia/Seoul'})} · {thread.stepCount} {t('steps','단계')}{thread.retryCount>0&&<> · {t('Retries','재시도')} {thread.retryCount}</>}</small></div></div><div className="marketing-log-end"><span className={'marketing-status-pill '+publication.status}>{publication.label}</span><span className={'marketing-status-pill '+thread.status}>{statusText(thread.status)}</span><small>{'$'+Number(thread.total_reserved_usd).toFixed(2)}</small></div></summary>
+     <summary><div className="marketing-log-main"><span className={'marketing-status-dot '+thread.status}/><div><strong>{contentTitle(record||titledAttempt)}</strong><small>{contentLabel(record||root)}{language?' · '+language:''} · {new Date(root.created_at).toLocaleString(locale,{timeZone:'Asia/Seoul'})} · {thread.stepCount} {t('steps','단계')}{thread.retryCount>0&&<> · {t('Retries','재시도')} {thread.retryCount}</>}</small></div></div><div className="marketing-log-end"><span className={'marketing-status-pill '+publication.status}>{publication.label}</span><span className={'marketing-status-pill '+thread.status}>{t(...EDITORIAL_STATE_LABELS[thread.workflow_state as EditorialState])}</span><small>{'$'+Number(thread.total_reserved_usd).toFixed(2)}</small></div></summary>
      <div className="marketing-log-detail generation-thread-detail">
       <div className="generation-attempts">{attempts.map((attempt:Row,index:number)=><div className={'generation-attempt '+attempt.status} key={attempt.id}>
        <span className={'marketing-status-dot '+attempt.status}/>
-       <div className="generation-attempt-copy"><div><strong>{operationLabel(attempt)}{attempt.retry_of_job_id&&<> · {t('Retry','재시도')} {Number(attempt.attempt_number||index+1)}</>}</strong><span className={'marketing-status-pill '+attempt.status}>{statusText(attempt.status)}</span></div><small>{new Date(attempt.created_at).toLocaleString(locale,{timeZone:'Asia/Seoul'})} · {'$'+Number(attempt.reserved_usd||0).toFixed(2)} · {Number(attempt.input_tokens||0).toLocaleString()} in / {Number(attempt.output_tokens||0).toLocaleString()} out</small>{attempt.error_message&&(()=>{const guide=failureGuide(attempt);return <div className="admin-error"><strong>{guide.title}</strong><p>{guide.cause}</p><p>{guide.action}</p>{String(attempt.error_message).length>250
+       <div className="generation-attempt-copy"><div><strong>{operationLabel(attempt)}{attempt.retry_of_job_id&&<> · {t('Retry','재시도')} {Number(attempt.attempt_number||index+1)}</>}</strong><span className={'marketing-status-pill '+attempt.status}>{workflowText(attempt)}</span></div><small>{new Date(attempt.created_at).toLocaleString(locale,{timeZone:'Asia/Seoul'})} · {'$'+Number(attempt.reserved_usd||0).toFixed(2)} · {Number(attempt.input_tokens||0).toLocaleString()} in / {Number(attempt.output_tokens||0).toLocaleString()} out</small>{attempt.error_message&&(()=>{const guide=failureGuide(attempt);return <div className="admin-error"><strong>{guide.title}</strong><p>{guide.cause}</p><p>{guide.action}</p>{String(attempt.error_message).length>250
          ?<details className="marketing-editorial-error-detail"><summary>{t('Show detailed editor feedback','검수 의견 자세히 보기')}</summary>
            <small style={{overflowWrap:'anywhere',whiteSpace:'pre-wrap'}}>{friendlyError(attempt.error_message)}</small>
           </details>
@@ -857,12 +847,13 @@ export function AdminMarketing({locale}:{locale:Locale}){
         <strong>{candidate.headline}</strong><span>{Number(candidate.score||0)}/100 · {candidate.status==='selected'?t('Selected','선정'):candidate.status==='discarded'?t('Discarded','폐기'):t('Eligible','적격')}</span>
         <small>{candidate.reader_payoff}</small>
         {!!candidate.reasons?.length&&<small>{candidate.reasons.join(' / ')}</small>}
+        {canRetry&&latest.error_code==='TOPIC_CANDIDATES_DISCARDED'&&!candidate.reasons?.some((reason:string)=>/duplicate|중복|유사|invalid/i.test(reason))&&<button type="button" className="admin-secondary" disabled={busy||!!running} onClick={()=>void retryJob(latest,candidate.angle_key)}>{t('Use this topic and continue','이 주제로 이어서 작성')}</button>}
        </li>)}</ol>
       </details>}
       <dl><div><dt>{t('Content workflow ID','콘텐츠 작업 ID')}</dt><dd>{thread.id}</dd></div><div><dt>{t('Steps','작업 단계')}</dt><dd>{thread.stepCount}</dd></div><div><dt>{t('Total reserved','총 예약액')}</dt><dd>{'$'+Number(thread.total_reserved_usd).toFixed(2)}</dd></div></dl>
       {attempts.some((a:Row)=>a.result_snapshot)&&<button type="button" className="admin-primary" onClick={e=>{e.preventDefault();openThreadResult(thread);}}>{t('View result / review notes','결과 및 검토 내용 보기')}</button>}
       {canRetry&&<button type="button" className="admin-secondary" disabled={busy||!!running} onClick={e=>{e.preventDefault();void retryJob(latest);}}>{canOfferSavedCtaRecovery(latest)?t('Recover saved result — no AI charge','저장된 결과로 무료 복구'):t('Retry same settings','같은 설정으로 재시도')}</button>}
-      {thread.status==='completed'&&<p className="marketing-thread-success">{t('This content workflow is complete. Copy, visuals, rendering, and retries stay together as one item.','이 콘텐츠 작업은 완료됐습니다. 문구, 이미지, 렌더, 재시도를 하나의 작업으로 묶어 표시합니다.')}</p>}
+      {thread.status==='completed'&&<p className="marketing-thread-success">{t('Ready for final review; publication still requires approval.','최종 검토를 진행할 수 있습니다. 발행에는 별도 승인이 필요합니다.')}</p>}
      </div>
     </details>;
    }):<p className="admin-empty">{t('No content workflows match this filter.','해당 조건의 콘텐츠 작업이 없습니다.')}</p>}</div>
@@ -1120,7 +1111,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
     <div className="marketing-result-copy"><strong>{t('Caption','캡션')}</strong><p>{resultPreview.snapshot.caption||''}</p></div>
     {!!resultPreview.snapshot.research_sources?.length&&<div className="growth-sources">{resultPreview.snapshot.research_sources.map((s:Row)=><a key={s.url} href={s.url} target="_blank" rel="noreferrer">{s.publisher||s.title||s.url}</a>)}</div>}
     {resultPreview.attempt.status==='completed'&&<button type="button" className="admin-secondary" disabled={busy} onClick={()=>{if(window.confirm(t('Reject this result for quality and enable rework in the same thread?','이 결과를 품질 불합격 처리하고 같은 스레드에서 재작업할까요?')))void work(async()=>{const r=await request('/generation/jobs/'+resultPreview.attempt.id+'/reject',{confirm_reject:true});if(!r.ok)throw new Error(r.data.error);setResultPreview(null);await load(draft?.id);setActiveTab('generation');});}}>{t('Reject quality / request rework','품질 불합격 및 재작업 요청')}</button>}
-    <div className="admin-form-actions"><button type="button" className="admin-primary" disabled={busy||resultPreview.attempt.status!=='completed'||resultPreview.attempt.quality_report?.status==='rejected'} onClick={()=>void importResultToDraft()}>{t('Add to Drafts','초안으로 가져오기')}</button><button type="button" className="admin-secondary" onClick={()=>setResultPreview(null)}>{t('Close','닫기')}</button></div>
+    <div className="admin-form-actions"><button type="button" className="admin-primary" disabled={busy||resultPreview.attempt.status!=='completed'||!hasEditorialCopy(resultPreview.attempt)} onClick={()=>void importResultToDraft()}>{t('Open saved copy — no AI charge','저장된 원고 편집 — AI 비용 없음')}</button><button type="button" className="admin-secondary" onClick={()=>setResultPreview(null)}>{t('Close','닫기')}</button></div>
    </section>
   </div>}
  </section>;

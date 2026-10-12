@@ -1,3 +1,4 @@
+import {openSavedEditorialCopy,saveEditorialFeedback} from './marketing-editorial-workspace';
 import {versionHistory,regenerateVersion,restoreVersion,finishVersionRendering,editManualMagazineSlideVersion} from './marketing-regeneration';
 import {savedCtaRecoverySource} from './marketing-output-recovery';
 import {selectAnswerFirstHeadline} from './marketing-answer-first';
@@ -56,6 +57,10 @@ async function invokeMarketingWorker(db:Client,body:Record<string,unknown>,timeo
 export async function marketingApi(req:NextRequest,db:Client,path:string[]){
  const id=path[0],service=createServiceRoleClient();
 
+ if(id==='draft'&&path.length===3&&uuid(path[1])&&path[2]==='editorial-review'&&req.method==='POST'){
+  const actor=(await db.auth.getUser()).data.user;if(!actor)return json({error:'Sign in required'},401);
+  return json({draft:await saveEditorialFeedback(service,path[1],await req.json(),actor.id)});
+ }
  // All mutations below create a separate unapproved version; they never change the published or reserved original.
 
  // Skipping is an administrative review action, not a publishing/quality-gated action.
@@ -460,9 +465,11 @@ if(id==='uploads'&&path.length===1&&req.method==='GET'){
   const recoverySourceJobId=savedCtaRecoverySource(latest);
   if(confirmation.recover_saved_result===true&&!recoverySourceJobId)return json({error:'SAVED_RESULT_RECOVERY_UNAVAILABLE'},409);
   const retryPayload={...latest.request_payload,request_key:(recoverySourceJobId?'recover:':'retry:')+randomUUID(),revision:currentDraft.revision,confirm_photo:isPhoto};
+  const selectedTopicKey=confirmation.selected_topic_key;
+  if(selectedTopicKey!==undefined&&(typeof selectedTopicKey!=='string'||selectedTopicKey.length>120||!latest.request_payload?.topic_selection?.candidates?.some((c:Row)=>c.angle_key===selectedTopicKey)))return json({error:'SAVED_TOPIC_NOT_SELECTABLE'},400);
   const nextAttempt=Math.max(1,Number(latest.attempt_number||1))+1;
   try{
-   const result=await runGeneration(currentDraft.id,retryPayload,user.id,false,{threadId,attemptNumber:nextAttempt,retryOfJobId:latest.id,workflowId:String(latest.content_workflow_id||latest.generation_thread_id||latest.id),...(recoverySourceJobId?{recoverySourceJobId}:{})});
+   const result=await runGeneration(currentDraft.id,retryPayload,user.id,false,{threadId,attemptNumber:nextAttempt,retryOfJobId:latest.id,selectedTopicKey,workflowId:String(latest.content_workflow_id||latest.generation_thread_id||latest.id),...(recoverySourceJobId?{recoverySourceJobId}:{})});
    return json({...result,recovered_without_ai:false,recovered_saved_copy:!!recoverySourceJobId,fresh_visuals_generated:!!recoverySourceJobId,content_workflow_id:String(latest.content_workflow_id||latest.generation_thread_id||latest.id),generation_thread_id:threadId,attempt_number:nextAttempt,retry_of_job_id:latest.id},result.error?400:200);
   }catch(error){return json({error:error instanceof Error?error.message:'Recovery or retry could not start'},400);}
  }
@@ -470,7 +477,8 @@ if(id==='uploads'&&path.length===1&&req.method==='GET'){
   const body=await req.json().catch(()=>({}));
   if(body.confirm_import!==true)return json({error:'IMPORT_CONFIRMATION_REQUIRED'},400);
   try{
-   let imported=checked(await service.rpc('create_marketing_candidate_from_generation',{p_job_id:path[2]}));
+   const savedCopy=await openSavedEditorialCopy(service,path[2]);
+   let imported:Row=savedCopy||checked(await service.rpc('create_marketing_candidate_from_generation',{p_job_id:path[2]}));
    if(imported.status!=='needs_approval')return json({error:'RESULT_ALREADY_USED'},409);
    const source=checked(await service.from('marketing_generation_jobs').select('draft_id,result_snapshot').eq('id',path[2]).single()),snapshot=source?.result_snapshot||{},trendId=snapshot.trend_id,campaignMeta=campaignMetaFromSnapshot(snapshot),eventMeta=eventCampaignMetaFromSnapshot(snapshot);
    const importedPatch={...(trendId?{trend_id:trendId}:{}),...(campaignMeta||{}),...(eventMeta||{}),...(['pexels','stock'].includes(String(snapshot.visual_source))?{visual_source:snapshot.visual_source}:{}),updated_at:new Date().toISOString()};
