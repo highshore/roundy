@@ -1,0 +1,62 @@
+name: Instagram audit workbench
+on:
+  push:
+    branches: [fix/instagram-workflow-audit-20261012]
+    paths:
+      - .github/workflows/instagram-audit-workbench.yml
+      - scripts/instagram-audit.patch
+permissions:
+  contents: write
+jobs:
+  validate:
+    if: github.ref == 'refs/heads/fix/instagram-workflow-audit-20261012'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: fix/instagram-workflow-audit-20261012
+      - name: Export tracked source for isolated review
+        run: |
+          git archive --format=tar HEAD src scripts supabase package.json package-lock.json tsconfig.json next-env.d.ts next.config.ts .github docs public | gzip > /tmp/roundy-audit-source.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: roundy-audit-source
+          path: /tmp/roundy-audit-source.tar.gz
+          retention-days: 1
+      - name: Apply reviewed patch
+        if: hashFiles('scripts/instagram-audit.patch') != ''
+        run: |
+          git apply --check scripts/instagram-audit.patch
+          git apply scripts/instagram-audit.patch
+      - uses: actions/setup-node@v4
+        if: hashFiles('scripts/instagram-audit.patch') != ''
+        with:
+          node-version: 22
+          cache: npm
+      - name: Verify implementation without external AI or posting
+        if: hashFiles('scripts/instagram-audit.patch') != ''
+        run: |
+          npm ci
+          npm run typecheck
+          npm test
+          for test in scripts/test-marketing-*.mjs; do node "$test"; done
+          node scripts/test-marketing-compact.mjs --render
+          npm run build
+      - name: Commit verified implementation to isolated branch
+        if: hashFiles('scripts/instagram-audit.patch') != ''
+        run: |
+          test "$(git branch --show-current)" = 'fix/instagram-workflow-audit-20261012'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src scripts docs supabase package.json package-lock.json
+          git rm scripts/instagram-audit.patch .github/workflows/instagram-audit-workbench.yml
+          git commit -m 'fix(marketing): resilient editorial workflow and focused content studio'
+          git push origin HEAD:fix/instagram-workflow-audit-20261012
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: instagram-audit-render-qa
+          path: quality-artifacts
+          if-no-files-found: ignore
+          retention-days: 3
