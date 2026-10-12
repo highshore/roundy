@@ -216,7 +216,7 @@ async function renderUploadedCards(db:DB,draft:Row,job:Row){
  const cards=draft.carousel_slides||[];if(!cards.length)throw new Error('유형별 카드 문구가 없습니다. 품질 재작업 후 렌더하세요.');
  const assets=await loadEditorialAssets();assets.reusePhotos=false;assets.cardPhotos={};
  const directCards:Record<number,Buffer>={},used=new Set<number>();
- const bodyTargets=Array.from({length:Math.max(0,cards.length-1)},(_,i)=>i+1);
+ const bodyTargets=Array.from({length:Math.max(0,(brandedStoryCount(draft.content_document)??(cards.length-1))-1)},(_,i)=>i+1);
  const nextFree=(preferBody=true)=>{
   const candidates=preferBody?bodyTargets:[0,...bodyTargets];
   const target=candidates.find(index=>!used.has(index));if(target!==undefined)used.add(target);return target;
