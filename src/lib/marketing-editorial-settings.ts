@@ -7,6 +7,7 @@ export type MarketingEditorialSettings = {
   carousel_min_real_photos_3: number;
   carousel_ai_thumbnail_enabled: boolean;
   carousel_answer_first_enabled: boolean;
+  carousel_brand_outro_enabled: boolean;
   story_preview_auto_enabled: boolean;
   carousel_title_font_size_px: number;
   carousel_body_font_size_px: number;
@@ -20,6 +21,7 @@ export const EDITORIAL_SETTINGS_DEFAULTS: MarketingEditorialSettings = {
   carousel_min_real_photos_3: 2,
   carousel_ai_thumbnail_enabled: false,
   carousel_answer_first_enabled: false,
+  carousel_brand_outro_enabled: true,
   story_preview_auto_enabled: false,
   carousel_title_font_size_px: 72,
   carousel_body_font_size_px: 36
