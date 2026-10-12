@@ -514,14 +514,14 @@ function photographicMagazineTakeaway(slide:Row,index:number,document:Row,assets
  fit:ReturnType<typeof magazineCarouselFit>){
  const language=document.content_language==='en'?'en':'ko',src=selectedPhoto(assets,index);
  if(!src)throw new Error('ROUNDY_STORY_PHOTO_MISSING:'+index);
- const bodyY=760+fit.title.height+19;
+ const bodyY=618+fit.title.height+19;
  if(bodyY+fit.body.height>1197)throw new Error('ROUNDY_STORY_TAKEAWAY_TEXT_OVERFLOW');
  return box({position:'relative',width:1080,height:1350,background:BRIGHT_EDITORIAL.paper,
   color:BRIGHT_EDITORIAL.ink,overflow:'hidden'},
   brightHeader(),brightEyebrow(language==='ko'?'EDITORIAL / 마지막 한마디':'EDITORIAL / TAKEAWAY',167),
-  box({position:'absolute',left:80,top:228,right:80,height:438,overflow:'hidden',
+  box({position:'absolute',left:80,top:208,right:80,height:378,overflow:'hidden',
    borderRadius:28},photo(src)),
-  box({position:'absolute',left:80,right:80,top:760},
+  box({position:'absolute',left:80,right:80,top:618},
    brightHeadline(fit.title.lines,fit.title.fontSize)),
   box({position:'absolute',left:80,right:80,top:bodyY},
    fittedRows(fit.body.lines,fit.body.fontSize,BRIGHT_EDITORIAL.body,500,1.28)),
