@@ -376,19 +376,19 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
  }
  // Independent human-interest editing comes AFTER evidence/role checks and BEFORE
  // any photo calls. At most two paid copy reviews, one rewrite OR topic swap.
- let critique:EditorialCopyCritique|null=null;
+ const editorialReview:{current:EditorialCopyCritique|null}={current:null};
  const criticHistory:EditorialCopyCritique[]=[];
  const reviewIfSafe=async()=>{
   const grouped=classifyQualityIssues(prepared.report.issues);
   if(grouped.critical.length)return;
   const result=await reviewCopy(prepared.document,effectiveType);
-  if(result){critique=result;criticHistory.push(result);}
+  if(result){editorialReview.current=result;criticHistory.push(result);}
  };
  const reject=async(code:string,extra:string[],severity:'critical'|'quality'='quality'):Promise<never>=>{
   const issues=[...new Set([...prepared.report.issues,...extra])];
   const rejected={...prepared.report,status:'rejected',issues,severity,
    classification:classifyQualityIssues(issues),
-   ...(critique?{editorial_critic:critique,editorial_score:critique.score,editorial_critic_policy:EDITORIAL_CRITIC_VERSION}:{})};
+   ...(editorialReview.current?{editorial_critic:editorialReview.current,editorial_score:editorialReview.current.score,editorial_critic_policy:EDITORIAL_CRITIC_VERSION}:{})};
   ok(await db.from('marketing_generation_jobs').update({
    quality_report:rejected,result_snapshot:{
     draft_id:draft.id,content_language:language,growth_topic_type:effectiveType,
@@ -403,7 +403,7 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
  await reviewIfSafe();
  // A weak premise cannot be repaired with surface copy changes. Reuse ONE
  // previously approved, independently scored non-research alternative.
- if(critique?.status==='replace_topic'&&topicSelection?.selected&&!CONTENT_PROFILES[requestedType].research&&sources.length===0){
+ if(editorialReview.current?.status==='replace_topic'&&topicSelection?.selected&&!CONTENT_PROFILES[requestedType].research&&sources.length===0){
   const scoreFor=(key:string)=>topicReviews.find(r=>r.angle_key===key)?.score||0;
   const alternate=[...topicSelection.candidates].filter(c=>c.status==='eligible')
    .sort((a,b)=>scoreFor(b.angle_key)-scoreFor(a.angle_key))[0];
@@ -418,20 +418,20 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
    ok(await db.from('marketing_generation_jobs').update({stage:'switching_weak_topic'}).eq('id',job.id));
    written=await write(effectiveType);
    prepared=prepareWithEngagementGate(written.document,effectiveType);
-   critique=null;
+   editorialReview.current=null;
    await reviewIfSafe();
   }
  }
  let grouped=classifyQualityIssues(prepared.report.issues);
  if(grouped.critical.length)await reject('EDITORIAL_CRITICAL_SOURCE_REJECTED',grouped.critical,'critical');
- if(critique?.status==='replace_topic')await reject('EDITORIAL_TOPIC_REJECTED',
-  ['독립 편집 평가: 주제 자체가 뻔하거나 카드 수를 채울 만큼 내용이 없습니다. '+critique.reason]);
- const critiqueIssues=critique?.status==='rewrite'
-  ?critique.issues.map(issue=>'독립 편집 평가: '+issue):[];
+ if(editorialReview.current?.status==='replace_topic')await reject('EDITORIAL_TOPIC_REJECTED',
+  ['독립 편집 평가: 주제 자체가 뻔하거나 카드 수를 채울 만큼 내용이 없습니다. '+editorialReview.current.reason]);
+ const critiqueIssues=editorialReview.current?.status==='rewrite'
+  ?editorialReview.current.issues.map(issue=>'독립 편집 평가: '+issue):[];
  const repairIssues=[...new Set([...grouped.quality,...grouped.formatting,...critiqueIssues])];
  if(repairIssues.length){
   // Never silently enter a third critic cycle after replacing a bad topic.
-  if(critique&&criticCalls>=EDITORIAL_CRITIC_MAX_REVIEWS)
+  if(editorialReview.current&&criticCalls>=EDITORIAL_CRITIC_MAX_REVIEWS)
    await reject('EDITORIAL_CRITIC_REVIEW_LIMIT',repairIssues);
   repairUsed=true;
   written=await write(effectiveType,{document:prepared.document,issues:repairIssues});
@@ -439,12 +439,12 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
   prepared=prepareWithEngagementGate(written.document,effectiveType);
   grouped=classifyQualityIssues(prepared.report.issues);
   if(grouped.critical.length)await reject('EDITORIAL_CRITICAL_SOURCE_REJECTED',grouped.critical,'critical');
-  if(critique){critique=null;await reviewIfSafe();}
+  if(editorialReview.current){editorialReview.current=null;await reviewIfSafe();}
  }
  // Fail closed even when the regex-based 100-point heuristic would have passed.
  // Do not pay for a cover image if the independent editor is unconvinced.
- if(critique&&critique.status!=='passed')await reject('EDITORIAL_INDEPENDENT_REVIEW_REJECTED',
-  ['독립 편집 평가: '+critique.reason,...critique.issues]);
+ if(editorialReview.current&&editorialReview.current.status!=='passed')await reject('EDITORIAL_INDEPENDENT_REVIEW_REJECTED',
+  ['독립 편집 평가: '+editorialReview.current.reason,...editorialReview.current.issues]);
  if(prepared.report.status!=='passed'){
   const editorialGate=prepared.report.issues.some((issue:string)=>issue.startsWith('에디토리얼 편집 검수:'));
   await reject(editorialGate?'EDITORIAL_ENGAGEMENT_GATE_REJECTED':'EDITORIAL_COPY_QUALITY_REJECTED',[]);
@@ -452,7 +452,7 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
  const document={
   ...prepared.document,
   ...(topicSelection?{editorial_topic_selection:topicSelection,editorial_topic_reviews:topicReviews}:{}),
-  ...(critique?{editorial_critic:critique,editorial_critic_history:criticHistory,
+  ...(editorialReview.current?{editorial_critic:editorialReview.current,editorial_critic_history:criticHistory,
    editorial_critic_policy:EDITORIAL_CRITIC_VERSION}:{})
  };
  if(facts){
@@ -463,8 +463,8 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
  const recovery={requested_type:requestedType,effective_type:effectiveType,fallback_reason:fallbackReason||null,repair_used:repairUsed,search_limit:requestedType==='book_insight'||(requestedType==='seoul_trend'&&!!trendContext)?0:CONTENT_PROFILES[requestedType].research?3:0,...(requestedType==='seoul_dating'?{seoul_format:seoulFormat,seoul_mix_policy:'70_places_30_course'}:{}),...(requestedType==='seoul_trend'&&trendContext?{trend_id:trendContext.id,trend_key:trendContext.trend_key,trend_score:trendContext.trend_score,trend_route:trendContext.route_type,radar_evidence_reused:true,fact_pack_version:trendPack?.version||null,layout:trendPack?.layout||'legacy',extra_web_search_calls:0}:{}),...(requestedType==='trend_research'?{trend_study_cooldown_days:180,trend_topic_cooldown_days:60,trend_recent_studies:trendHistory.study_titles_180d.length,trend_recent_topics:trendHistory.topic_keys_60d.length}:{}),...(requestedType==='dating_myth'?{myth_claim_cooldown_days:120,myth_topic_cooldown_days:60,myth_recent_claims:mythHistory.claims_120d.length,myth_recent_topics:mythHistory.myth_keys_60d.length,myth_alternate_used:mythAlternateUsed}:{})};
  const finalClassification=classifyQualityIssues(prepared.report.issues);
  const patch={caption:prepared.caption,cta:prepared.cta,content_document:document,quality_report:{...prepared.report,recovery,classification:finalClassification,
-  ...(critique?{editorial_heuristic_score:prepared.report.editorial_score,editorial_score:critique.score,
-   editorial_critic:critique,editorial_critic_policy:EDITORIAL_CRITIC_VERSION}:{})},carousel_slides:prepared.slides,research_sources:prepared.sources,research_status:effectiveProfile.research?'generated':input.content_mode==='growth_carousel'?'generated':'not_required',content_language:language,draft_kind:input.content_mode==='growth_carousel'?'growth_carousel':'brand',growth_topic_type:input.content_mode==='growth_carousel'?effectiveType:null,content_mode:facts?'live_event':'prelaunch',content_pillar:facts?'event':'concept',generation_reason:effectiveProfile.label+' / editorial policy v'+CONTENT_POLICY_VERSION+(requestedType==='seoul_dating'&&!fallbackReason?' / '+seoulFormat:'')+(requestedType==='seoul_trend'&&trendContext?' / radar '+trendContext.trend_key:'')+(fallbackReason?' / safe fallback from '+requestedType:''),event_id:facts?.id||null,trend_id:trendContext?.id||draft.trend_id||null,destination_url:facts?'https://roundy.team/events/'+facts.slug:'https://roundy.team'};
+  ...(editorialReview.current?{editorial_heuristic_score:prepared.report.editorial_score,editorial_score:editorialReview.current.score,
+   editorial_critic:editorialReview.current,editorial_critic_policy:EDITORIAL_CRITIC_VERSION}:{})},carousel_slides:prepared.slides,research_sources:prepared.sources,research_status:effectiveProfile.research?'generated':input.content_mode==='growth_carousel'?'generated':'not_required',content_language:language,draft_kind:input.content_mode==='growth_carousel'?'growth_carousel':'brand',growth_topic_type:input.content_mode==='growth_carousel'?effectiveType:null,content_mode:facts?'live_event':'prelaunch',content_pillar:facts?'event':'concept',generation_reason:effectiveProfile.label+' / editorial policy v'+CONTENT_POLICY_VERSION+(requestedType==='seoul_dating'&&!fallbackReason?' / '+seoulFormat:'')+(requestedType==='seoul_trend'&&trendContext?' / radar '+trendContext.trend_key:'')+(fallbackReason?' / safe fallback from '+requestedType:''),event_id:facts?.id||null,trend_id:trendContext?.id||draft.trend_id||null,destination_url:facts?'https://roundy.team/events/'+facts.slug:'https://roundy.team'};
  ok(await db.from('marketing_generation_jobs').update({quality_report:patch.quality_report,result_snapshot:{...patch,draft_id:draft.id,images:[],research_notes:notes,saved_at:new Date().toISOString(),generation_recovery:recovery}}).eq('id',job.id));
  if(prepared.report.status!=='passed')throw new Error('품질 검토 필요: '+prepared.report.issues.join(' '));
  return patch;
