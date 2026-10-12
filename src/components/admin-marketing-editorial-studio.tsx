@@ -18,6 +18,7 @@ function text(value:unknown){return typeof value==='string'?value:'';}
 export function AdminMarketingEditorialStudio({draft,locale,disabled,onUpdated,onRequestAiEdit,onRequestPhotoEdit,onRerenderCover}:Props){
  const t=(en:string,ko:string)=>tr(locale,en,ko);
  const slides=(Array.isArray(draft.carousel_slides)?draft.carousel_slides:[]) as Row[];
+ const brandIndex=draft.content_document?.brand_outro_version===1?slides.length-1:-1;
  const doc=draft.content_document||{},headlines=(Array.isArray(doc.thumbnail_candidates)?doc.thumbnail_candidates:[]) as string[];
  const scores=(Array.isArray(doc.editorial_headline_reviews)?doc.editorial_headline_reviews:[]) as Row[];
  const storyboard=doc.editorial_storyboard_review as Row|null;
@@ -35,7 +36,7 @@ export function AdminMarketingEditorialStudio({draft,locale,disabled,onUpdated,o
  const [showCaption,setShowCaption]=useState(false);
  useEffect(()=>{setEditing(null);setError('');},[draft.id,draft.revision]);
  function startEdit(index:number){
-  const slide=slides[index];if(!slide||disabled||working)return;
+  const slide=slides[index];if(!slide||index===brandIndex||disabled||working)return;
   if(!manualSupported){setError(t('This image source has no reusable verified photo archive. Keep the original and use a new upload/re-render instead.','이 이미지 유형은 검증된 원본을 다시 사용할 수 없습니다. 기존 게시물을 보존하고 새 원본을 업로드해 렌더링하세요.'));return;}
   setEditing(index);setError('');
   setFields({title:text(slide.title),body:text(slide.body),
@@ -86,7 +87,7 @@ export function AdminMarketingEditorialStudio({draft,locale,disabled,onUpdated,o
     <p>{t('One place for headlines, storyboard, rendered cards and targeted edits. Nothing publishes automatically.',
      '제목, 구성, 실제 렌더링 이미지와 카드별 수정 내용을 한곳에서 검토합니다. 자동으로 게시되지 않습니다.')}</p>
    </div>
-   <div className="roundy-editorial-layout-count">{slides.length} <small>{t('reserved cards','장 예약 구성')}</small></div>
+   <div className="roundy-editorial-layout-count">{slides.length} <small>{t('carousel cards','장 카드뉴스')}</small></div>
   </div>
   {headlines.length>=3&&<div className="roundy-editorial-section">
    <div className="roundy-editorial-section-title"><h4>{t('Cover headline candidates','표지 제목 후보')}</h4>
@@ -162,6 +163,7 @@ export function AdminMarketingEditorialStudio({draft,locale,disabled,onUpdated,o
    {!manualSupported&&<p className="admin-help">{t('Direct text-only edits require an archived approved photo source. These cards can still be reviewed; use the upload workflow for unarchived artwork.','텍스트 직접 수정에는 보존된 승인 사진 원본이 필요합니다. 원본이 없는 완성 이미지에서는 업로드 방식으로 새 버전을 제작하세요.')}</p>}
    <div className="roundy-editorial-cards">{slides.map((slide:Row,index:number)=>{
     const current=editing===index,visual=Array.isArray(draft.images)?draft.images[index]:'';
+    const brandSlide=index===brandIndex;
     const unarchivedAi=doc?.photo_sourcing?.ai_image_slot===index&&(index>0||!doc.regeneration_ai_cover_path);
     const primary=text(language==='en'?slide.body_en||slide.body:slide.body_ko||slide.body);
     return <article className={'roundy-editorial-card '+(current?'is-editing':'')} key={index}>
@@ -175,9 +177,9 @@ export function AdminMarketingEditorialStudio({draft,locale,disabled,onUpdated,o
       {!!slide.source_ids?.length&&<small>{t('Source references retained','출처 ID 유지')}: {slide.source_ids.join(', ')}</small>}
       {unarchivedAi&&<small>{t('An AI image without an archived source must be replaced through the reviewed photo workflow before text editing.','원본이 보관되지 않은 AI 이미지는 승인 사진으로 교체한 뒤 문구를 수정할 수 있습니다.')}</small>}
       <div className="roundy-editorial-card-buttons">
-       <button type="button" className="admin-secondary" disabled={disabled||working||!manualSupported||unarchivedAi} onClick={()=>current?setEditing(null):startEdit(index)}><PenLine size={13}/>{current?t('Cancel','취소'):t('Edit text','텍스트 수정')}</button>
-       <button type="button" className="admin-secondary" disabled={disabled||working||unarchivedAi} onClick={()=>onRequestAiEdit(index)}><RefreshCw size={13}/>{t('AI rewrite','AI 재작성')}</button>
-       {index<slides.length-1&&<button type="button" className="admin-secondary" disabled={disabled||working} onClick={onRequestPhotoEdit}><ImageIcon size={13}/>{t('Photos','이미지')}</button>}
+       <button type="button" className="admin-secondary" disabled={disabled||working||!manualSupported||unarchivedAi||brandSlide} onClick={()=>current?setEditing(null):startEdit(index)}><PenLine size={13}/>{current?t('Cancel','취소'):t('Edit text','텍스트 수정')}</button>
+       <button type="button" className="admin-secondary" disabled={disabled||working||unarchivedAi||brandSlide} onClick={()=>onRequestAiEdit(index)}><RefreshCw size={13}/>{t('AI rewrite','AI 재작성')}</button>
+       {!brandSlide&&index<slides.length-1&&<button type="button" className="admin-secondary" disabled={disabled||working} onClick={onRequestPhotoEdit}><ImageIcon size={13}/>{t('Photos','이미지')}</button>}
       </div>
      </div>
      {current&&<div className="roundy-editorial-manual">
