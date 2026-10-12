@@ -16,6 +16,7 @@ import {renderPrelaunchCampaign,renderLiveEventCampaign} from './marketing-visua
 import {CAMPAIGN_PRESET,EVENT_CAMPAIGN_PRESET} from './marketing-presentation';
 import {reviewMarketingDraft,mergePreflightQuality} from './marketing-preflight-service';
 import {composeManualMagazineEdit} from './marketing-manual-slide';
+import {brandedStoryCount} from './marketing-brand-outro';
 
 type DB=ReturnType<typeof createServiceRoleClient>;
 type Row=Record<string,any>;
@@ -73,7 +74,7 @@ async function insertVersion(db:DB,source:Row,sourceSnapshot:Row,photos:Row[],op
  return child;
 }
 async function copyViaModel(source:Row,request:RegenerationRequest):Promise<{rewrite:Rewrite;usage:Row}>{
- const slides=sourceSlides(source),indices=targetedSlideIndices(request,slides.length);
+ const slides=sourceSlides(source),indices=targetedSlideIndices(request,brandedStoryCount(source.content_document)??slides.length);
  const key=process.env.OPENAI_API_KEY?.trim();
  if(!key)throw new Error('OPENAI_KEY_MISSING');
  const system=[
@@ -242,7 +243,9 @@ export async function regenerateVersion(id:string,value:unknown,actor:string){
  const previous=ok(await db.from('instagram_post_drafts').select('id,imported_at,status')
   .eq('regeneration_request_key',input.request_key).maybeSingle()) as Row|null;
  if(previous)return {draft:ok(await db.from('instagram_post_drafts').select('*').eq('id',previous.id).single()),deduplicated:true};
- const indices=targetedSlideIndices(input,slides.length),oldPhotos=await listStockSelections(db,id);
+ const storyCount=brandedStoryCount(source.content_document);
+ const indices=targetedSlideIndices(input,storyCount??slides.length),oldPhotos=await listStockSelections(db,id);
+ if(storyCount!==null&&indices.some(index=>index>=storyCount))throw new Error('BRAND_OUTRO_IS_SERVER_OWNED');
  const imageSource=(value as Row)?.image_source==='ai'?'ai':'online';
  if((value as Row)?.image_source!==undefined&&!['ai','online'].includes(String((value as Row).image_source)))throw new Error('INVALID_IMAGE_SOURCE');
  const photoSlots=requiredStockSlots(source);
@@ -285,8 +288,8 @@ export async function regenerateVersion(id:string,value:unknown,actor:string){
   let nextSlides=slides.map(s=>({...s})),caption=String(source.caption||'');
   if(needsCopy){
    const {rewrite,usage}=await copyViaModel(source,input);
-   const result=applySelectiveRewrite(slides,caption,input,rewrite,source.content_language==='en'?'en':'ko');
-   nextSlides=result.slides;caption=result.caption;
+   const result=applySelectiveRewrite(storyCount===null?slides:slides.slice(0,storyCount),caption,input,rewrite,source.content_language==='en'?'en':'ko');
+   nextSlides=storyCount===null?result.slides:[...result.slides,slides[storyCount]];caption=result.caption;
    await db.from('marketing_generation_jobs').update({input_tokens:usage.prompt_tokens||0,
     output_tokens:usage.completion_tokens||0,stage:'copy_written'}).eq('id',job.id);
   }
