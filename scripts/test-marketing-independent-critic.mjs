@@ -75,7 +75,7 @@ const first=fs.readFileSync('src/lib/marketing-answer-first.ts','utf8');
 check(()=>assert.match(editorial,/const ranked=independentlyRankTopics\(/));
 check(()=>assert.match(editorial,/criticCalls>=EDITORIAL_CRITIC_MAX_REVIEWS/));
 check(()=>assert.match(editorial,/await reviewIfSafe\(\)/));
-check(()=>assert.ok(editorial.indexOf('await reviewIfSafe();')<editorial.indexOf('const document={')));
+check(()=>assert.ok(editorial.indexOf('await reviewIfSafe();')<editorial.indexOf('let document:Row={')));
 check(()=>assert.match(editorial,/switching_weak_topic/));
 check(()=>assert.match(editorial,/EDITORIAL_INDEPENDENT_REVIEW_REJECTED/));
 check(()=>assert.match(policy,/NARRATIVE MODE: STORY-FIRST/));
