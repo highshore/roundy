@@ -1,6 +1,6 @@
 'use client';
 
-import {useEffect,useState} from 'react';
+import {useEffect,useRef,useState,type ReactNode} from 'react';
 import {tr,type Locale} from '@/lib/locale';
 import {Check,PenLine,RefreshCw,Image as ImageIcon,AlertTriangle} from 'lucide-react';
 import {carouselCounts} from '@/lib/marketing-workflow-navigation';
@@ -14,9 +14,14 @@ type Props={
  onRequestAiEdit:(index:number)=>void;
  onRequestPhotoEdit:()=>void;
  onRerenderCover:()=>void;
+ onWorkingChange?:(working:boolean)=>void;
+ onUnsavedChange?:(dirty:boolean)=>void;
+ renderPhotoEditor?:(index:number)=>ReactNode;
+ renderAiEditor?:(index:number)=>ReactNode;
+ mediaActions?:ReactNode;
 };
 function text(value:unknown){return typeof value==='string'?value:'';}
-export function AdminMarketingEditorialStudio({draft,locale,disabled,onUpdated,onRequestAiEdit,onRequestPhotoEdit,onRerenderCover}:Props){
+export function AdminMarketingEditorialStudio({draft,locale,disabled,onUpdated,onRequestAiEdit,onRequestPhotoEdit,onRerenderCover,onWorkingChange,onUnsavedChange,renderPhotoEditor,renderAiEditor,mediaActions}:Props){
  const t=(en:string,ko:string)=>tr(locale,en,ko);
  const slides=(Array.isArray(draft.carousel_slides)?draft.carousel_slides:[]) as Row[];
  const counts=carouselCounts(draft),brandIndex=counts.brand?slides.length-1:-1;
@@ -37,6 +42,15 @@ export function AdminMarketingEditorialStudio({draft,locale,disabled,onUpdated,o
  const [focusedIndex,setFocusedIndex]=useState(0);
  const [feedbackNote,setFeedbackNote]=useState('');
  const busy=disabled||working;
+ const lock=useRef(false);
+ const [tool,setTool]=useState<'preview'|'text'|'image'|'ai'>('preview');
+ const original=editing===null?null:slides[editing];
+ const unsaved=!!original&&(fields.title!==text(original.title)||fields.body!==text(original.body)||fields.secondary_body!==text(original.secondary_body||(language==='en'?original.body_ko:original.body_en))||fields.highlight!==text(original.highlight));
+ useEffect(()=>{onUnsavedChange?.(unsaved);return()=>onUnsavedChange?.(false);},[unsaved,onUnsavedChange]);
+ useEffect(()=>{onWorkingChange?.(working);return()=>onWorkingChange?.(false);},[working,onWorkingChange]);
+ function leaveEditor(){return !unsaved||window.confirm(t('Discard unsaved changes to this card?','이 카드의 저장하지 않은 수정을 버릴까요?'));}
+ function selectCard(index:number){if(busy||index===focusedIndex||!leaveEditor())return;setEditing(null);setTool('preview');setFocusedIndex(index);}
+ function changeTool(next:'preview'|'text'|'image'|'ai',index:number){if(busy||!leaveEditor())return;setError('');if(next==='text'){startEdit(index);return;}setEditing(null);setTool(tool===next?'preview':next);}
  async function saveFeedback(decision:'approve'|'rework'){
   if(working||disabled)return;
   if(feedbackNote.trim().length<8){setError(t('Explain what works or needs changing (at least 8 characters).','좋은 점 또는 고칠 점을 8자 이상 적어주세요.'));return;}
@@ -47,22 +61,22 @@ export function AdminMarketingEditorialStudio({draft,locale,disabled,onUpdated,o
    setFeedbackNote('');onUpdated(result.draft);
   }catch(error){setError(error instanceof Error?error.message:String(error));}finally{setWorking(false);}
  }
- useEffect(()=>{setEditing(null);setError('');setFeedbackNote('');setFocusedIndex(0);},[draft.id]);
- useEffect(()=>{setEditing(null);setError('');setFocusedIndex(index=>Math.min(index,Math.max(0,slides.length-1)));},[draft.revision,slides.length]);
+ useEffect(()=>{setEditing(null);setTool('preview');setError('');setFeedbackNote('');},[draft.id]);
+ useEffect(()=>{setEditing(null);setTool('preview');setError('');setFocusedIndex(index=>Math.min(index,Math.max(0,slides.length-1)));},[draft.revision,slides.length]);
  function startEdit(index:number){
   const slide=slides[index];if(!slide||index===brandIndex||disabled||working)return;
   if(!manualSupported){setError(t('This image source has no reusable verified photo archive. Keep the original and use a new upload/re-render instead.','이 이미지 유형은 검증된 원본을 다시 사용할 수 없습니다. 기존 게시물을 보존하고 새 원본을 업로드해 렌더링하세요.'));return;}
-  setEditing(index);setError('');
+  setEditing(index);setTool('text');setError('');
   setFields({title:text(slide.title),body:text(slide.body),
    secondary_body:text(slide.secondary_body|| (language==='en'?slide.body_ko:slide.body_en)),
    highlight:text(slide.highlight)});
  }
  async function editOne(){
-  if(editing===null||working||disabled)return;
+  if(editing===null||working||disabled||lock.current)return;
   if(!fields.title.trim()||!fields.body.trim()){
    setError(t('Enter the headline and primary-language body. You can update the translation later.','제목과 기본 언어 본문을 입력하세요. 번역은 나중에 갱신할 수 있습니다.'));return;
   }
-  setWorking(true);setError('');
+  lock.current=true;setWorking(true);setError('');
   try{
    const response=await fetch(BASE+'/draft/'+draft.id+'/versions/manual',{
     method:'POST',credentials:'same-origin',cache:'no-store',
@@ -74,7 +88,7 @@ export function AdminMarketingEditorialStudio({draft,locale,disabled,onUpdated,o
    if(!response.ok||result.error||!result.draft?.id)throw new Error(String(result.error||'MANUAL_EDIT_FAILED'));
    onUpdated(result.draft);
   }catch(e){setError(e instanceof Error?e.message:String(e));}
-  finally{setWorking(false);}
+  finally{lock.current=false;setWorking(false);}
  }
  async function selectTitle(index:number){
   if(disabled||working||chosen===index)return;
@@ -94,8 +108,8 @@ export function AdminMarketingEditorialStudio({draft,locale,disabled,onUpdated,o
  }
  return <section id="roundy-editorial-studio" className="roundy-editorial-studio" aria-label={t('Card preview and editing','카드 미리보기 및 수정')}>
   <div className="roundy-editorial-head">
-   <div><h3>{t('Preview your cards','카드 미리보기')}</h3>
-    <p>{t('Check each card, then edit only what needs changing.','카드를 확인하고 필요한 부분만 수정하세요.')}</p>
+   <div><h3>{t('Edit cards','카드 편집')}</h3>
+    <p>{t('Select a card and edit its text or image here.','카드를 선택하고 같은 자리에서 텍스트나 이미지를 수정하세요.')}</p>
    </div>
    <span className="roundy-editorial-layout-count">{t('Total','총')} {counts.total}{t(' cards','장')}{counts.brand===1&&<small>{counts.stories}{t(' story + 1 Roundy','장 스토리 + 라운디 1장')}</small>}</span>
   </div>
@@ -107,10 +121,10 @@ export function AdminMarketingEditorialStudio({draft,locale,disabled,onUpdated,o
    <button type="button" className="admin-primary" disabled={busy} onClick={onRerenderCover}>{t('Update cover image','표지 이미지 갱신')}</button>
   </section>}
   {!!doc.translation_pending_indices?.length&&<p className="roundy-editorial-translation-notice" role="status">{t('Update translations before publishing: cards ','게시 전 번역 갱신이 필요합니다: ')}{doc.translation_pending_indices.map((i:number)=>i+1).join(', ')}{t('','번 카드')}</p>}
-  {!!doc.manual_render_issue&&<div className="roundy-editorial-pending"><div><strong>{t('Text saved; image needs attention','텍스트는 저장되었고 이미지 확인이 필요합니다')}</strong><p>{t('Check the approved photo source before rendering.','렌더링 전에 승인된 사진 원본을 확인하세요.')}</p></div><button type="button" className="admin-secondary" disabled={busy} onClick={onRequestPhotoEdit}>{t('Check photos','사진 확인')}</button></div>}
+  {!!doc.manual_render_issue&&<div className="roundy-editorial-pending"><div><strong>{t('Text saved; image needs attention','텍스트는 저장되었고 이미지 확인이 필요합니다')}</strong><p>{t('Check the approved photo source before rendering.','렌더링 전에 승인된 사진 원본을 확인하세요.')}</p></div><button type="button" className="admin-secondary" disabled={busy} onClick={()=>renderPhotoEditor?changeTool('image',focusedIndex):onRequestPhotoEdit()}>{t('Check photos','사진 확인')}</button></div>}
   <div className="roundy-editorial-section" data-editorial-preview="true">
    <div className="roundy-editorial-card-navigation" aria-label={t('Choose a card','카드 선택')}>
-    {slides.map((_:Row,index:number)=><button key={index} type="button" aria-pressed={focusedIndex===index} aria-label={index===brandIndex?t('Final Roundy card','마지막 라운디 소개 카드'):t('Card ','카드 ')+(index+1)} onClick={()=>{if(editing!==null&&index!==focusedIndex&&!window.confirm(t('Leave this card without saving the current edits?','현재 카드의 저장하지 않은 수정을 닫을까요?')))return;setEditing(null);setFocusedIndex(index);}}>{index===brandIndex?'Roundy':String(index+1).padStart(2,'0')}</button>)}
+    {slides.map((_:Row,index:number)=><button key={index} type="button" disabled={busy} aria-pressed={focusedIndex===index} aria-label={index===brandIndex?t('Final Roundy card','마지막 라운디 소개 카드'):t('Card ','카드 ')+(index+1)} onClick={()=>selectCard(index)}>{draft.images?.[index]?<img src={draft.images[index]} alt=""/>:<span className="roundy-editorial-nav-placeholder">{index+1}</span>}<span>{index===brandIndex?'Roundy':String(index+1).padStart(2,'0')}</span></button>)}
    </div>
    <div className="roundy-editorial-cards roundy-editorial-focused">{slides.map((slide:Row,index:number)=>{
     const current=editing===index,visual=Array.isArray(draft.images)?draft.images[index]:'';
@@ -125,32 +139,32 @@ export function AdminMarketingEditorialStudio({draft,locale,disabled,onUpdated,o
      </div>
      <div className="roundy-editorial-card-info">
       <small>{brandSlide?t('Final card / Roundy','마지막 장 / 라운디 소개'):index===0?t('Cover','표지'):t('Story card ','스토리 카드 ')+(index+1)}</small>
-      {manualSupported&&!brandSlide?<button type="button" className="roundy-editorial-card-copy" disabled={busy} onClick={()=>startEdit(index)}>{copy}</button>:<div className="roundy-editorial-card-copy">{copy}</div>}
-      {brandSlide?<p className="admin-help">{t('The Roundy introduction stays separate from the story.','라운디 소개는 스토리와 분리된 마지막 카드로 유지됩니다.')}</p>:<>
-       {!manualSupported&&<p className="admin-help">{t('Upload an archived photo source to enable direct text edits.','보존된 사진 원본을 업로드하면 텍스트를 직접 수정할 수 있습니다.')}</p>}
-       {unarchivedAi&&<p className="admin-help">{t('Text can be saved now. Replace the unarchived image before rendering or publishing.','문구는 지금 저장할 수 있습니다. 원본이 보관되지 않은 이미지는 렌더링 및 게시 전에 교체하세요.')}</p>}
-       <div className="roundy-editorial-card-buttons">
-        {manualSupported&&<button type="button" className="admin-secondary" disabled={busy} onClick={()=>current?setEditing(null):startEdit(index)}><PenLine size={14} aria-hidden="true"/>{current?t('Cancel','취소'):t('Edit text','텍스트 수정')}</button>}
-        <button type="button" className="admin-secondary" disabled={busy||unarchivedAi} onClick={()=>onRequestAiEdit(index)}><RefreshCw size={14} aria-hidden="true"/>{t('AI rewrite','AI 재작성')}</button>
-        {index<slides.length-1&&<button type="button" className="admin-secondary" disabled={busy} onClick={onRequestPhotoEdit}><ImageIcon size={14} aria-hidden="true"/>{t('Change image','이미지 변경')}</button>}
+      {brandSlide?<p className="admin-help">{t('This separate Roundy introduction is kept intact.','마지막 라운디 소개 카드는 독립적으로 유지됩니다.')}</p>:<>
+       <div className="roundy-editorial-card-buttons" aria-label={t('Card editing tools','카드 수정 도구')}>
+        {manualSupported&&<button type="button" aria-pressed={tool==='text'} className="admin-secondary" disabled={busy} onClick={()=>changeTool(current?'preview':'text',index)}><PenLine size={14} aria-hidden="true"/><span>{t('Edit text','텍스트 수정')}</span></button>}
+        <button type="button" aria-pressed={tool==='image'} className="admin-secondary" disabled={busy} onClick={()=>renderPhotoEditor?changeTool('image',index):onRequestPhotoEdit()}><ImageIcon size={14} aria-hidden="true"/><span>{t('Change image','이미지 변경')}</span></button>
+        <button type="button" aria-pressed={tool==='ai'} className="admin-secondary" disabled={busy||unarchivedAi} onClick={()=>renderAiEditor?changeTool('ai',index):onRequestAiEdit(index)}><RefreshCw size={14} aria-hidden="true"/><span>{t('AI rewrite','AI 재작성')}</span></button>
        </div>
+       {tool==='preview'&&<p className="roundy-editorial-tool-hint">{t('The image on the left is the saved card. Choose a tool to change this card.','표시된 이미지는 저장된 카드입니다. 위 버튼으로 이 카드만 수정하세요.')}</p>}
+       {focusedIndex===index&&tool==='image'&&renderPhotoEditor?.(index)}
+       {focusedIndex===index&&tool==='ai'&&renderAiEditor?.(index)}
+       {current&&<div className="roundy-editorial-manual">
+        <label>{t('Headline','제목')}<input autoFocus value={fields.title} maxLength={72} disabled={busy} onChange={e=>setFields(v=>({...v,title:e.target.value}))}/></label>
+        <label>{language==='en'?t('English body','영문 본문'):t('Korean body','국문 본문')}<textarea value={fields.body} rows={4} maxLength={260} disabled={busy} onChange={e=>setFields(v=>({...v,body:e.target.value}))}/></label>
+        <details open={doc.translation_pending_indices?.includes(index)||undefined}><summary>{t('Translation and highlight','번역 및 강조 문구')}</summary>
+         <label>{language==='en'?t('Korean translation','한국어 번역'):t('English translation','영어 번역')}<textarea value={fields.secondary_body} rows={3} maxLength={260} disabled={busy} onChange={e=>setFields(v=>({...v,secondary_body:e.target.value}))}/></label>
+         <label>{t('Highlighted phrase (optional)','강조 문구 (선택)')}<input value={fields.highlight} maxLength={80} disabled={busy} onChange={e=>setFields(v=>({...v,highlight:e.target.value}))}/></label>
+        </details>
+        {unarchivedAi&&<p className="admin-help">{t('Text can be saved. An archived source image is needed to render this card.','텍스트는 저장할 수 있습니다. 이미지 완성에는 보관된 원본이 필요합니다.')}</p>}
+        <p className="admin-help">{t('Saves and renders only this card in a new draft. The original is preserved.','이 카드만 새 초안으로 저장하고 렌더링합니다. 원본은 보존됩니다.')}</p>
+        <div className="roundy-editorial-save-actions"><button type="button" className="admin-primary" disabled={busy||!unsaved} onClick={()=>void editOne()}>{working?t('Saving…','저장 중…'):t('Save this card','이 카드 저장')}</button><button type="button" className="admin-secondary" disabled={busy} onClick={()=>changeTool('preview',index)}>{t('Cancel','취소')}</button></div>
+       </div>}
       </>}
      </div>
-     {current&&<div className="roundy-editorial-manual">
-      <strong>{t('Edit card ','카드 수정 ')}{index+1}</strong>
-      <label>{t('Headline','제목')}<input value={fields.title} maxLength={72} onChange={e=>setFields(v=>({...v,title:e.target.value}))}/></label>
-      <label>{language==='en'?t('English body','영문 본문'):t('Korean body','국문 본문')}
-       <textarea value={fields.body} rows={3} maxLength={260} onChange={e=>setFields(v=>({...v,body:e.target.value}))}/></label>
-      <label>{language==='en'?t('Korean translation (can update later)','한국어 번역 (나중에 갱신 가능)'):t('English translation (can update later)','영어 번역 (나중에 갱신 가능)')}
-       <textarea value={fields.secondary_body} rows={3} maxLength={260} onChange={e=>setFields(v=>({...v,secondary_body:e.target.value}))}/></label>
-      <label>{t('Highlighted phrase (optional)','강조 문구 (선택)')}<input value={fields.highlight} maxLength={80} onChange={e=>setFields(v=>({...v,highlight:e.target.value}))}/></label>
-      <p className="admin-help">{t('Saves a new unpublished version of this card. The original and its sources stay intact; publishing checks still apply.','원본과 출처를 보존하고 이 카드만 새 미게시 버전으로 저장합니다. 게시 전 검사는 그대로 적용됩니다.')}</p>
-      <button type="button" className="admin-primary" disabled={busy} onClick={()=>void editOne()}>{working?t('Saving…','저장 중…'):t('Save this card','이 카드 저장')}</button>
-     </div>}
     </article>;
    })}</div>
   </div>
-  <details className="roundy-editorial-section roundy-editorial-collapsed"><summary>{t('View caption','캡션 보기')}</summary><p className="roundy-editorial-caption">{text(draft.caption)}</p></details>
+  {mediaActions}
   {headlines.length>1&&<details className="roundy-editorial-section roundy-editorial-collapsed"><summary>{t('Other cover titles','다른 표지 제목')} <span>{headlines.length}</span></summary>
    <p className="admin-help">{t('Changing the title requires an updated cover image before publishing.','제목을 바꾸면 게시 전에 표지 이미지를 갱신해야 합니다.')}</p>
    <div className="roundy-editorial-headlines">

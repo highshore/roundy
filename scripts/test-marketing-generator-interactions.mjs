@@ -27,7 +27,7 @@ async function fakeFetch(url,init={}){
 }
 function stubModule(name){
  if(name==='./heading')return {Heading:({children,level=2})=>React.createElement('h'+level,null,children)};
- if(name==='./admin-marketing-editorial-studio')return {AdminMarketingEditorialStudio:props=>React.createElement('button',{'data-test':'saved-render',onClick:props.onRerenderCover},'Render saved draft')};
+ if(name==='./admin-marketing-editorial-studio')return {AdminMarketingEditorialStudio:props=>React.createElement(React.Fragment,null,React.createElement('button',{'data-test':'saved-render',onClick:props.onRerenderCover},'Render saved draft'),props.renderPhotoEditor&&React.createElement('div',{id:'roundy-marketing-photo-editor'},props.renderPhotoEditor(1)))};
  return new Proxy({}, {get:(_,key)=>key==='__esModule'?true:()=>null});
 }
 function load(file){

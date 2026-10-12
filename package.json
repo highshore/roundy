@@ -37,7 +37,8 @@
     "test:marketing-workflow-ui": "node scripts/test-marketing-workflow-navigation.mjs && node scripts/test-marketing-editorial-ui.mjs",
     "test:marketing-generator-ui": "node scripts/test-marketing-generator-interactions.mjs",
     "test:marketing-retry": "node scripts/test-marketing-generation-retry.mjs",
-    "test:marketing-copy-import": "node scripts/test-marketing-copy-import.mjs"
+    "test:marketing-copy-import": "node scripts/test-marketing-copy-import.mjs",
+    "qa:marketing-editor": "node scripts/qa-marketing-editor/run.mjs"
   },
   "engines": {
     "node": ">=22"
