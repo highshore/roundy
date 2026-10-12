@@ -482,6 +482,14 @@ export function draftQuality(draft:Row){
   const issues=[...bilingualCaptionIssues(String(draft.caption||'')),...(magazine?[]:captionCtaIssues(document.caption,draft.cta))];
   report.issues.push(...issues);if(issues.length)report.status='rejected';
  }
+ // Saved-card rendering and photo-only edits must retain the independently
+ // reviewed score. Never silently replace it with a weaker regex heuristic.
+ const editorialCritic=document.editorial_critic;
+ if(editorialCritic?.version===EDITORIAL_CRITIC_VERSION&&editorialCritic.status==='passed'&&
+  typeof editorialCritic.score==='number'&&Number.isFinite(editorialCritic.score))
+  return {...report,editorial_heuristic_score:report.editorial_score,
+   editorial_score:editorialCritic.score,editorial_critic:editorialCritic,
+   editorial_critic_policy:EDITORIAL_CRITIC_VERSION};
  return report;
 }
 
