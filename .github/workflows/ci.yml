@@ -27,6 +27,7 @@ jobs:
       - run: node scripts/test-marketing-reels.mjs
       - run: node scripts/test-marketing-reel-creative.mjs
       - run: node scripts/test-marketing-performance.mjs
+      - run: node scripts/test-marketing-meta-worker.mjs
       - run: node scripts/test-marketing-mobile-layout.mjs
       - run: node scripts/test-marketing-generation.mjs
       - run: node scripts/test-marketing-magazine.mjs
