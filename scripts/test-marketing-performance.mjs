@@ -64,6 +64,8 @@ check(()=>assert.equal(measured.media_follows,2));
 check(()=>assert.equal(measured.media_profile_visits,4));
 check(()=>assert.equal(measured.reach,200));
 check(()=>assert.equal(measured.shares,10));
+check(()=>assert.equal(measured.saves,8));
+check(()=>assert.equal(measured.observed.saves,true));
 check(()=>assert.equal(asPost(raw('r2','reel')).media_follows,null));
 check(()=>assert.equal(asPost(raw('r2','reel')).reel_avg_watch_time_ms,4200));
 check(()=>assert.equal(asPost(raw('r2','reel')).duration_seconds,20));
@@ -83,7 +85,7 @@ for(let i=0;i<36;i++){
  posts.push(asPost(raw('feed'+i,'feed',topic,'ko',metric,i*18)));
 }
 const report=policy.evaluatePerformanceReport(posts);
-check(()=>assert.equal(report.learning.topic.ko.active,true));
+check(()=>assert.equal(report.learning.topic.ko.active,true,JSON.stringify(report.learning.topic.ko)));
 check(()=>assert.equal(report.learning.topic.ko.winner,'conversation_prompt'));
 check(()=>assert.equal(report.learning.topic.en.active,false));
 check(()=>assert.equal(report.learning.reel_hooks.en.active,false));
