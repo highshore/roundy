@@ -1,0 +1,57 @@
+name: Verify saved marketing retry
+on:
+  push:
+    branches: [codex/verify-marketing-retry-null-20261012]
+permissions:
+  contents: read
+concurrency:
+  group: verify-marketing-retry-null
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Reproduce actual saved-request failure before repair
+        run: node scripts/test-marketing-generation-retry.mjs --expect-unfixed
+      - name: Apply isolated route repair
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          p=Path('src/lib/marketing.ts');s=p.read_text()
+          old='runGeneration(currentDraft.id,retryPayload,user.id,false,'
+          assert s.count(old)==1,'Retry route target changed'
+          s="import {restoreSavedGenerationInput} from './marketing-generation-retry';\n"+s.replace(old,'runGeneration(currentDraft.id,restoreSavedGenerationInput(retryPayload),user.id,false,')
+          p.write_text(s)
+          p=Path('package.json');data=json.loads(p.read_text())
+          data['scripts']['test:marketing-retry']='node scripts/test-marketing-generation-retry.mjs'
+          data['scripts']['test']+=' && npm run test:marketing-retry'
+          p.write_text(json.dumps(data,ensure_ascii=False,indent=2)+'\n')
+          PY
+      - run: npm run typecheck
+      - run: npm run test:marketing-retry
+      - run: node scripts/test-marketing-generation.mjs
+      - run: npm test
+      - name: Store verified blobs without changing any branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          for(const path of ['src/lib/marketing.ts','src/lib/marketing-generation-retry.ts','scripts/test-marketing-generation-retry.mjs','package.json']){
+            const response=await fetch('https://api.github.com/repos/'+process.env.GITHUB_REPOSITORY+'/git/blobs',{method:'POST',headers:{Authorization:'Bearer '+process.env.GH_TOKEN,'Content-Type':'application/json',Accept:'application/vnd.github+json'},body:JSON.stringify({encoding:'utf-8',content:fs.readFileSync(path,'utf8')})});
+            if(!response.ok)throw Error('Blob write failed '+response.status);
+            const blob=await response.json();console.log(JSON.stringify({path,sha:blob.sha}));
+          }
+          JS
