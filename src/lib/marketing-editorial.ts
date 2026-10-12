@@ -4,6 +4,7 @@ import {type CarouselPlan} from './marketing-carousel-template';
 import {selectVerifiedMarketingBook,verifiedBookEvidence} from './marketing-book-catalog';
 import {captionCtaIssues,isCompactDocument,isMagazineDocument,isImmersiveMagazineDocument,bilingualCaptionIssues,CAMPAIGN_PRESET,EVENT_CAMPAIGN_PRESET} from './marketing-presentation';
 import {EDITORIAL_ENGAGEMENT_POLICY} from './marketing-editorial-quality';
+import {EDITORIAL_CRITIC_VERSION,storyFirstPostType,topicCriticSchema,topicCriticPrompt,independentlyRankTopics,copyCriticSchema,copyCriticPrompt,assessIndependentCopyReview,type EditorialCopyCritique,type TopicCriticReview} from './marketing-editorial-critic';
 import {storyboardWritingGuide} from './marketing-editorial-storyboard';
 import {TOPIC_DISCOVERY_VERSION,TOPIC_HISTORY_DAYS,topicHistoryFromRows,assessTopicCandidates,topicCandidateSchema,topicDiscoveryPrompt,type TopicSelection} from './marketing-topic-planner';
 import {performanceEditorialHint} from './marketing-performance';
@@ -104,7 +105,15 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
   facts=ok(await q.order('starts_at').limit(1).maybeSingle());if(!facts)throw new Error('게시 가능한 정식 이벤트가 없습니다. 이벤트 모집 대신 오픈 전 홍보를 선택하세요.');
  }
  let sources:Evidence[]=[],notes='',inputTokens=0,outputTokens=0;
- let topicSelection:TopicSelection|null=null,creativeDirection=String(input.instruction||'');
+ let topicSelection:TopicSelection|null=null,topicReviews:TopicCriticReview[]=[],creativeDirection=String(input.instruction||'');
+ const directionForTopic=(chosen:NonNullable<TopicSelection['selected']>)=>[
+  'Approved topic: '+chosen.headline,
+  'Specific scene: '+chosen.scene,
+  'Reader payoff: '+chosen.reader_payoff,
+  'Distinct observation: '+chosen.core_insight,
+  input.instruction?'User direction: '+String(input.instruction):'',
+  'Do not invent studies, statistics or factual sources.'
+ ].filter(Boolean).join(' ').slice(0,500);
  const record=async(result:Row)=>{inputTokens+=Number(result.usage?.input_tokens||result.usage?.prompt_tokens||0);outputTokens+=Number(result.usage?.output_tokens||result.usage?.completion_tokens||0);ok(await db.from('marketing_generation_jobs').update({input_tokens:inputTokens,output_tokens:outputTokens}).eq('id',job.id));};
 
  // Plan reader-first, non-duplicate story angles BEFORE any source research or
@@ -136,30 +145,38 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
   },45000);
   await record(response);
   topicSelection=assessTopicCandidates(parseDocument(response).document,history,language);
+  // Independent editor gets no self-scored novelty/virality numbers.
+  if(topicSelection.selected){
+   const eligible=topicSelection.candidates.filter(c=>c.status!=='discarded');
+   ok(await db.from('marketing_generation_jobs').update({stage:'reviewing_topics'}).eq('id',job.id));
+   const judge=await call('chat/completions',{
+    model:MODEL,reasoning_effort:'none',max_completion_tokens:1600,
+    response_format:{type:'json_schema',json_schema:{name:'roundy_topic_critic_v1',strict:true,schema:topicCriticSchema()}},
+    messages:[{role:'system',content:topicCriticPrompt(language)},{role:'user',content:JSON.stringify({
+     editorial_type:requestedType,slide_count:plan.slide_count,
+     candidates:eligible.map(c=>({angle_key:c.angle_key,headline:c.headline,scene:c.scene,
+      core_insight:c.core_insight,reader_payoff:c.reader_payoff}))
+    })}]
+   },28000);
+   await record(judge);
+   const ranked=independentlyRankTopics(topicSelection,parseDocument(judge).document);
+   topicSelection=ranked.selection;topicReviews=ranked.reviews;
+  }
   const stored=ok(await db.from('marketing_generation_jobs').select('request_payload').eq('id',job.id).single());
   ok(await db.from('marketing_generation_jobs').update({
-   request_payload:{...(stored?.request_payload||{}),topic_selection:topicSelection},
+   request_payload:{...(stored?.request_payload||{}),topic_selection:topicSelection,topic_critic_reviews:topicReviews},
    stage:topicSelection.status==='selected'?'topic_selected':'topics_discarded',
-   result_snapshot:{draft_id:draft.id,topic_selection:topicSelection,images:[],carousel_slides:[]}
+   result_snapshot:{draft_id:draft.id,topic_selection:topicSelection,topic_critic_reviews:topicReviews,images:[],carousel_slides:[]}
   }).eq('id',job.id));
   if(!topicSelection.selected){
    const rejected={version:TOPIC_DISCOVERY_VERSION,status:'rejected',review_required:true,
-    issues:['주제 후보 5개가 모두 중복 또는 콘텐츠 가치 미달로 폐기됐습니다. 새로운 주제나 접근법으로 다시 생성하세요.'],
-    topic_selection:topicSelection,severity:'quality'};
+    issues:['후보 주제가 중복되거나 독립 편집 평가에서 독자 가치가 부족하다고 판단됐습니다. 다른 접근법으로 다시 생성하세요.'],
+    topic_selection:topicSelection,topic_critic_reviews:topicReviews,severity:'quality'};
    ok(await db.from('marketing_generation_jobs').update({quality_report:rejected,result_snapshot:{
-    draft_id:draft.id,quality_report:rejected,topic_selection:topicSelection,images:[],carousel_slides:[]}}).eq('id',job.id));
-   throw new Error('TOPIC_CANDIDATES_DISCARDED: 주제 후보가 모두 기존 콘텐츠와 유사하거나 품질 기준에 못 미쳤습니다.');
+    draft_id:draft.id,quality_report:rejected,topic_selection:topicSelection,topic_critic_reviews:topicReviews,images:[],carousel_slides:[]}}).eq('id',job.id));
+   throw new Error('TOPIC_CANDIDATES_DISCARDED: 독립 평가를 통과한 새로운 주제가 없습니다.');
   }
-  // A selected angle is editorial direction, NEVER verified factual evidence.
-  const chosen=topicSelection.selected;
-  creativeDirection=[
-   'Approved topic: '+chosen.headline,
-   'Specific scene: '+chosen.scene,
-   'Reader payoff: '+chosen.reader_payoff,
-   'Distinct observation: '+chosen.core_insight,
-   creativeDirection?'User direction: '+creativeDirection:'',
-   'Do not invent studies, statistics or factual sources.'
-  ].filter(Boolean).join(' ').slice(0,500);
+  creativeDirection=directionForTopic(topicSelection.selected);
  }
 
 
