@@ -5,6 +5,7 @@ alter table public.instagram_reel_drafts
  add column if not exists version_root_id uuid references public.instagram_reel_drafts(id) on delete restrict,
  add column if not exists version_parent_id uuid references public.instagram_reel_drafts(id) on delete restrict,
  add column if not exists version_number integer not null default 1 check (version_number >= 1),
+ add column if not exists creative_request_key text unique,
  add column if not exists rendered_plan_hash text check (rendered_plan_hash is null or length(rendered_plan_hash) = 64);
 create unique index if not exists instagram_reel_version_once
  on public.instagram_reel_drafts(version_root_id,version_number) where version_root_id is not null;
