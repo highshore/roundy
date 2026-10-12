@@ -27,7 +27,7 @@ export function configuredPhotoSourcingPolicy(settings:Record<string,unknown>|nu
   &&roles[Number(desiredSlot)]!=='brand_outro';
  if(aiSlotOverride!==undefined&&aiSlotOverride!==null&&!useAi)throw new Error('AI_IMAGE_SLOT_NOT_AVAILABLE');
  return {
-  version:v2?2:1,slide_count:count,
+  version:v2?2:1,slide_count:count as 3|4|5|6,
   min_real_photos:v2?storyCount-(useAi?1:0):minimum,
   ai_thumbnail_enabled:useAi&&desiredSlot===0,
   requested_ai_thumbnail:useAi&&desiredSlot===0,ai_image_slot:useAi?Number(desiredSlot):null
