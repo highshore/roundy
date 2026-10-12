@@ -2,6 +2,7 @@ name: Marketing generator repair verification
 on:
   push:
     branches: [codex/marketing-generator-repair-run-20261012]
+    paths: [.github/workflows/marketing-generator-repair.yml]
 permissions:
   contents: read
 concurrency:
@@ -28,14 +29,57 @@ jobs:
       - name: Apply reviewed source repair
         run: |
           python3 .automation/repair-marketing-generator.py
-          node --input-type=module <<'JS'
-          import fs from 'node:fs';
-          const p='src/components/admin-marketing.tsx';
-          const s=fs.readFileSync(p,'utf8');
-          const old='localizedCheck[String(check.id)]||check.label}</p>)}</details>';
-          if(s.split(old).length!==2)throw Error('Expected disclosure target');
-          fs.writeFileSync(p,s.replace(old,old+'}'));
-          JS
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('src/components/admin-marketing.tsx');s=p.read_text()
+          def replace(old,new):
+            global s
+            assert s.count(old)==1,(old[:100],s.count(old))
+            s=s.replace(old,new)
+          old='localizedCheck[String(check.id)]||check.label}</p>)}</details>'
+          replace(old,old+'}')
+          start=s.index(' const realPhotoSlots=');end=s.index('\n const filteredApprovedPool=',start)
+          s=s[:start]+' const draftMediaPlan=savedDraftMediaPlan(draft);\n const realPhotoSlots=draftMediaPlan.realSlots;'+s[end:]
+          replace('<option value="none" disabled={(draft.carousel_slides||[]).length===5}>{t(\'No AI image (3-card only)\',\'AI 사용 안 함 (3장 콘텐츠 전용)\')}</option>', '<option value="none">{t(\'All real photos\',\'모두 실사\')}</option>')
+          replace('{(draft.carousel_slides||[]).length===5&&([0,1,2,3] as const).map(slot=>','{draftMediaPlan.aiChoices.map(slot=>')
+          replace('        </select>\n       </label>\n       <small>{t(\'Five-card posts need at least three real photos. The closing card remains typography-only.\',\'5장 콘텐츠는 실사 최소 3장이 필수이며, 마지막 장은 텍스트 전용입니다.\')}</small>', '''         {selectedAiSlot!==null&&!draftMediaPlan.aiChoices.includes(selectedAiSlot)&&<option value={selectedAiSlot} disabled>{t('Saved AI card','저장된 AI 카드')} {selectedAiSlot+1}</option>}
+                  </select>
+                 </label>
+                 <small>{t('Required real photos','필요한 실사')}: {draftMediaPlan.realPhotos}{draftMediaPlan.brand?t('. The final Roundy introduction is a separate card.','. 마지막 라운디 소개는 독립 카드입니다.'):t('. This saved legacy layout is preserved.','. 기존 저장 형식을 유지합니다.')}</small>''')
+          replace('        const real=realPhotoSlots.includes(index);','        const real=realPhotoSlots.includes(index);\n        if(!ai&&!real)return null;')
+          replace('Number(storyCardCount||settings?.carousel_default_slides)===5&&aiImageSlot!==null;','Number(storyCardCount||settings?.carousel_default_slides)===5&&newMediaPlan.aiSlot!==null;')
+          replace('?{ai_image_slot:aiImageSlot}:','?{ai_image_slot:newMediaPlan.aiSlot}:')
+          # Show the same normalized AI choice that generation will actually submit.
+          start=s.index('     {manualVisualSource===\'stock\'?<div className="marketing-mix-options">');end=s.index(':manualVisualSource===\'uploaded\'?',start)
+          chunk=s[start:end].replace('aiImageSlot===slot','newMediaPlan.aiSlot===slot').replace('aiImageSlot===null','newMediaPlan.aiSlot===null')
+          s=s[:start]+chunk+s[end:]
+          p.write_text(s)
+          # Extend the real-React interaction fixtures to exercise the stock editor.
+          p=Path('scripts/test-marketing-generator-interactions.mjs');s=p.read_text()
+          old="draft_role:'candidate',draft_kind:kind"
+          assert s.count(old)==1;s=s.replace(old,"draft_role:'candidate',visual_source:'stock',draft_kind:kind")
+          old='photo_sourcing:{ai_image_slot:0}'
+          assert s.count(old)==1;s=s.replace(old,'photo_sourcing:{version:1,slide_count:5,min_real_photos:3,ai_thumbnail_enabled:true,requested_ai_thumbnail:true,ai_image_slot:0}')
+          old='const {generatorSelection,generatorMediaPlan,savedRenderContent}=load('
+          assert s.count(old)==1;s=s.replace(old,'const {generatorSelection,generatorMediaPlan,savedRenderContent,savedDraftMediaPlan}=load(')
+          marker=" console.log('PASS '+checks+"
+          assert s.count(marker)==1
+          additions='''
+           const brandedDraft=(stories,aiSlot)=>({...makeDraft('44444444-4444-4444-8444-444444444444','growth_carousel','ko'),images:[],carousel_slides:[...Array.from({length:stories},(_,index)=>({role:index===0?'cover':index===stories-1?'editorial_closing':'insight',title:'Card '+index,body:'Saved body'})),{role:'brand_outro',title:'Roundy',body:'Brand introduction'}],content_document:{design_preset:'roundy_magazine_editorial_v2',brand_outro_version:1,photo_sourcing:{version:2,slide_count:stories+1,min_real_photos:stories-(aiSlot===null?0:1),ai_thumbnail_enabled:aiSlot===0,requested_ai_thumbnail:aiSlot===0,ai_image_slot:aiSlot}}});
+           for(const stories of [3,5])for(const locale of ['ko','en']){
+            drafts=[brandedDraft(stories,stories===5?0:null)];
+            await act(async()=>{renderer=create(React.createElement(AdminMarketing,{locale}));await tick();});
+            const editor=renderer.root.findByProps({id:'roundy-marketing-photo-editor'});
+            const options=editor.findAllByType('select')[0].findAllByType('option');
+            await test(locale+' branded '+(stories+1)+'-card editor displays saved AI value',()=>{assert.ok(options.some(o=>String(o.props.value)===String(stories===5?0:'none')));assert.equal(options.find(o=>o.props.value==='none').props.disabled,undefined);assert.equal(options.filter(o=>o.props.value!=='none').length,stories===5?4:0);});
+            await test(locale+' branded real-photo count follows shared policy',()=>{const plan=savedDraftMediaPlan(drafts[0]);assert.equal(plan.realPhotos,stories===5?4:3);assert.equal(plan.realSlots.includes(stories),false);});
+            await act(async()=>renderer.unmount());renderer=null;
+           }
+           await test('legacy no-AI layout keeps exact three-photo cap',()=>{const d=makeDraft('legacy');d.content_document.photo_sourcing={version:1,slide_count:5,min_real_photos:3,ai_thumbnail_enabled:false,requested_ai_thumbnail:false,ai_image_slot:null};const plan=savedDraftMediaPlan(d);assert.equal(plan.realPhotos,3);assert.equal(plan.realSlots.length,3);assert.equal(generatorMediaPlan(settings,'prelaunch',5,null).realPhotos,3);});
+           await test('six-card all-real layout requires five approved photos',()=>assert.equal(savedDraftMediaPlan(brandedDraft(5,null)).realPhotos,5));
+          '''
+          s=s.replace(marker,additions+marker);p.write_text(s)
+          PY
       - run: npm run typecheck
       - run: npm run test:marketing-generator-ui
       - run: npm test
@@ -54,4 +98,4 @@ jobs:
           JS
       - name: Failure context
         if: failure()
-        run: sed -n '700,730p' src/components/admin-marketing.tsx
+        run: sed -n '700,755p' src/components/admin-marketing.tsx
