@@ -205,12 +205,11 @@ export async function reelCreativeApi(req:NextRequest,actor:string,path:string[]
   if(bytes.length<300||bytes.length>10*1024*1024)throw new Error('REEL_PHOTO_IMAGE_SIZE_INVALID');
   const meta=await sharp(Buffer.from(bytes)).metadata();
   if(!meta.width||!meta.height)throw new Error('REEL_PHOTO_IMAGE_INVALID');
-  const archive=actor+'/'+randomUUID()+'.jpg';
-  checked(await db.storage.from(REEL_ASSET_BUCKET).upload(archive,await sharp(Buffer.from(bytes)).jpeg({quality:88}).toBuffer(),
-   {contentType:'image/jpeg',upsert:false}));
+  const archive=actor+'/'+randomUUID()+'.jpg',archived=await sharp(Buffer.from(bytes)).jpeg({quality:88}).toBuffer();
+  checked(await db.storage.from(REEL_ASSET_BUCKET).upload(archive,archived,{contentType:'image/jpeg',upsert:false}));
   const asset=checked(await db.from('marketing_reel_assets').insert({
    kind:'approved_photo',storage_path:archive,content_type:'image/jpeg',
-   file_size:bytes.length,width:meta.width,height:meta.height,creator:String(photo.photographer),
+   file_size:archived.length,width:meta.width,height:meta.height,creator:String(photo.photographer),
    source_url:String(photo.source_url||''),license_url:String(photo.license_url||''),
    license_note:'Imported from pre-approved Roundy photo library. Source: '+String(photo.provider||'stock'),
    original_owned:false,commercial_use_allowed:true,modifications_allowed:true,
