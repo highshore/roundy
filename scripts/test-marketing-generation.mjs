@@ -3,6 +3,8 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import {createRequire} from 'node:module';
 const require=createRequire(import.meta.url),ts=require('typescript'),{fixture}=require('./marketing-fixtures.cjs');
+const compiledSources=new Map();
+function compiled(file){if(!compiledSources.has(file))compiledSources.set(file,ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText);return compiledSources.get(file);}
 let checks=0;const check=(f)=>{f();checks++;};
 const id='4b9066d0-e01b-4cc4-92d1-469f56317a04';
 const eventId='11111111-1111-4111-8111-111111111111';
@@ -279,7 +281,7 @@ function harness({denied=false,network=false,badSources=false,duplicate=false,ph
   if(duplicate)c.slides=c.slides.map(s=>({...s,title:c.slides[0].title,body:c.slides[0].body}));
   return {ok:true,json:async()=>({choices:[{finish_reason:'stop',message:{content:JSON.stringify(c)}}],usage:{prompt_tokens:400,completion_tokens:600}})};
  }};
- const source=fs.readFileSync(file,'utf8');vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText,context);cache[file]=context.exports;return context.exports;}
+ vm.runInNewContext(compiled(file),context);cache[file]=context.exports;return context.exports;}
  return {api:load('src/lib/marketing-generation.ts'),policy:load('src/lib/marketing-content-policy.ts'),editorial:load('src/lib/marketing-editorial.ts'),tables,requests,stored};
 }
 for(const language of ['en','ko'])for(const type of Object.keys(harness().policy.CONTENT_PROFILES)){
@@ -299,7 +301,7 @@ for(const language of ['en','ko'])for(const type of Object.keys(harness().policy
  if(type==='dating_myth'){check(()=>assert.match(String(h.requests[0].body.input),/6[–-]10 concise myth claims|6–10 plausible myth claims/i));check(()=>assert.match(String(h.requests[0].body.input),/PRIMARY MYTH/));check(()=>assert.match(String(h.requests[0].body.input),/BACKUP MYTH/));}
  const dup=await h.api.runGeneration(id,input,null);check(()=>assert.equal(dup.deduplicated,true));
 }
-{const h=harness({duplicate:true});const r=await h.api.runGeneration(id,{...base,content_mode:'growth_carousel',topic_type:'book_insight'},null);check(()=>assert.equal(r.job.status,'failed'));check(()=>assert.ok(h.tables.marketing_generation_jobs[0].quality_report.issues.some(x=>x.includes('중복'))));check(()=>assert.equal(h.stored.length,0));check(()=>assert.equal(h.tables.instagram_post_drafts[0].caption,'Original'));check(()=>assert.ok(h.tables.marketing_generation_jobs[0].result_snapshot));}
+{const h=harness({duplicate:true});const r=await h.api.runGeneration(id,{...base,content_mode:'growth_carousel',topic_type:'book_insight'},null);check(()=>assert.equal(r.job.status,'completed'));check(()=>assert.equal(r.job.stage,'editorial_review_required'));check(()=>assert.equal(r.job.quality_report.status,'rejected'));check(()=>assert.ok(r.job.result_snapshot.carousel_slides.length));check(()=>assert.ok(h.tables.marketing_generation_jobs[0].quality_report.issues.some(x=>x.includes('중복'))));check(()=>assert.equal(h.stored.length,0));check(()=>assert.equal(h.tables.instagram_post_drafts[0].caption,'Original'));check(()=>assert.ok(h.tables.marketing_generation_jobs[0].result_snapshot));}
 {const h=harness(),input={...base,request_key:'manual:mixed-state-fix',topic_type:'dating_archetype'};check(()=>assert.equal(h.api.validateGenerationInput(input).topic_type,undefined));const r=await h.api.runGeneration(id,input,null);check(()=>assert.equal(r.job.status,'completed',JSON.stringify(r)));check(()=>assert.equal(h.tables.marketing_generation_jobs[0].request_payload.topic_type,null));const p=h.policy,d=fixture('prelaunch','en',p.CONTENT_PROFILES),preset=p.contentSchema('prelaunch','en').properties.design_preset.enum[0];d.design_preset=preset;d.caption_en='One conversation at a time\nCrowded rooms can make it harder to follow one person closely.\nA slower format can leave more room for the answer.';d.caption_ko='한 번에 한 대화\n큰 모임에서는 한 사람의 이야기를 끝까지 따라가기 어려울 수 있어요.\n조금 느린 방식이 답에 더 머물 여유를 줄 수 있습니다.';d.caption=d.caption_en;d.tagline='One person at a time';d.hashtags=[];d.slides=d.slides.map((s,i)=>({...s,secondary_body:i===0?'여러 대화가 겹치면 한 사람의 말을 듣기 어려울 수 있어요.':i===1?'한 사람씩 마주 앉아 대화에 집중해보세요.':'서울에서 한 사람씩 만나보세요.'}));d.slides[0].body='A loud group can make it hard to hear one person clearly, especially when several conversations compete for attention at the same time.';d.slides[d.slides.length-1].role='concept';const prepared=p.prepareContent(d,'prelaunch','en',[]);check(()=>assert.ok(d.slides[0].body.length>110));check(()=>assert.equal(prepared.report.status,'passed',JSON.stringify(prepared.report)));check(()=>assert.equal(prepared.document.slides.at(-1).role,'cta'));}
 {const h=harness({badSources:true});const r=await h.api.runGeneration(id,{...base,content_mode:'growth_carousel',topic_type:'dating_myth'},null);check(()=>assert.equal(r.job.status,'completed',JSON.stringify(r)));check(()=>assert.equal(h.requests.length,3));check(()=>assert.equal(r.draft.growth_topic_type,'conversation_prompt'));check(()=>assert.match(r.draft.generation_reason,/safe fallback/));check(()=>assert.equal(r.job.result_snapshot.generation_recovery.effective_type,'conversation_prompt'));}
 {const h=harness({badSources:true});const r=await h.api.runGeneration(id,{
@@ -453,7 +455,7 @@ for(const language of ['ko','en'])for(const type of Object.keys(harness().policy
  const request={...base,request_key:'manual:discard-topics-001',content_mode:'growth_carousel',topic_type:'conversation_prompt'};
  const r=await h.api.runGeneration(id,request,null);
  check(()=>assert.equal(r.job.status,'failed'));
- check(()=>assert.match(r.error||'',/TOPIC_CANDIDATES_DISCARDED/));
+ check(()=>assert.equal(r.job.error_code,'TOPIC_CANDIDATES_DISCARDED'));
  check(()=>assert.equal(h.tables.marketing_generation_jobs[0].request_payload.topic_selection.status,'discarded'));
  check(()=>assert.equal(h.tables.marketing_generation_jobs[0].quality_report.status,'rejected'));
  check(()=>assert.equal(h.requests.filter(x=>x.url.endsWith('chat/completions')).length,1));
@@ -467,8 +469,12 @@ for(const language of ['ko','en'])for(const type of Object.keys(harness().policy
  const h=harness({answerFirst:true,templateSettings:settings,criticOutcome:'reject'});
  const r=await h.api.runGeneration(id,{...base,request_key:'manual:weak-editorial-stop-001',
   content_mode:'growth_carousel',topic_type:'conversation_prompt'},null);
- check(()=>assert.equal(r.job.status,'failed',JSON.stringify(r)));
- check(()=>assert.match(String(r.error||r.job.error_message),/EDITORIAL_TOPIC_REJECTED/));
+ check(()=>assert.equal(r.job.status,'completed',JSON.stringify(r)));
+ check(()=>assert.equal(r.job.stage,'editorial_review_required'));
+ check(()=>assert.equal(r.review_required,true));
+ check(()=>assert.equal(r.draft.caption,'Original','Rejected edits do not overwrite the source draft'));
+ check(()=>assert.ok(r.job.result_snapshot.carousel_slides.length));
+ check(()=>assert.equal(r.job.error_code,'EDITORIAL_TOPIC_REJECTED'));
  check(()=>assert.equal(h.requests.filter(x=>x.body?.response_format?.json_schema?.name==='roundy_copy_critic_v1').length,2));
  check(()=>assert.equal(h.requests.filter(x=>x.url.endsWith('images/generations')).length,0));
  check(()=>assert.equal(h.tables.instagram_post_drafts[0].images.length,0));
@@ -561,3 +567,24 @@ check(()=>assert.ok(visualSource.includes('OFFICIAL_ROUNDY_PATHS')));
 check(()=>assert.ok(visualSource.includes('roundy.team')||visualSource.includes('BRAND.website')));
 check(()=>assert.ok(editorialSource.includes('renderCompactEditorial')));
 console.log('PASS '+checks+' editorial/runtime assertions; zero live API calls.');
+// Audit regressions: preserve the entire admin direction; research starts from evidence.
+{
+ const settings={carousel_mode:'fixed',carousel_default_slides:5,carousel_brand_outro_enabled:true};
+ const h=harness({answerFirst:true,templateSettings:settings});
+ const direction='Keep natural Korean and distinct scenes. '.repeat(10)+'LAST ADMIN INSTRUCTION';
+ const r=await h.api.runGeneration(id,{...base,request_key:'manual:direction-full-001',content_mode:'growth_carousel',topic_type:'conversation_prompt',instruction:direction,story_card_count:3},null);
+ const writes=h.requests.filter(x=>x.body?.response_format?.json_schema?.name==='roundy_editorial_v2');
+ const messages=h.requests.filter(x=>x.body?.messages).flatMap(x=>x.body.messages).map(x=>x.content).join('\n');
+ assert.ok(messages.includes('LAST ADMIN INSTRUCTION'));
+ assert.equal(h.tables.marketing_generation_jobs[0].request_payload.story_card_count,3);
+ const snapshot=r.job.result_snapshot||{};
+ assert.equal((snapshot.content_document||r.draft.content_document)?.carousel_template?.slide_count,3);
+ assert.equal((snapshot.carousel_slides||r.draft.carousel_slides).length,4);
+}
+{
+ const h=harness({answerFirst:true,templateSettings:{carousel_mode:'fixed',carousel_default_slides:5}});
+ await h.api.runGeneration(id,{...base,request_key:'manual:evidence-before-angle',content_mode:'growth_carousel',topic_type:'trend_research'},null);
+ assert.ok(h.requests[0].url.endsWith('/responses'),'source research precedes any scene/appeal scoring');
+ assert.equal(h.requests.some(x=>x.body?.response_format?.json_schema?.name==='roundy_topic_candidates_v1'),false);
+}
+console.log('PASS: full admin directions, evidence-first research and explicit 3+1 story format.');

@@ -1,6 +1,7 @@
 // Explicit manual edits to one Magazine Editorial card.
 // Returns a new immutable copy: role, source IDs, photo assignments and other
 // slides are never accepted from the browser or rewritten by this helper.
+import {translationPendingAfterEdit} from './marketing-editorial-brief';
 import {magazineCarouselFit,savedCarouselPlan} from './marketing-carousel-template';
 import {EDITORIAL_AD_CTA} from './marketing-presentation';
 import {evaluateHeadlineOptions,reviewMagazineStoryboard} from './marketing-editorial-storyboard';
@@ -26,12 +27,13 @@ export function composeManualMagazineEdit(source:Row,value:unknown):ManualEditRe
   throw new Error('INVALID_MANUAL_EDIT_KEY');
  if(!Number.isInteger(v.index)||v.index<0||v.index>=slides.length||(branded&&v.index===storyCount))
   throw new Error('INVALID_MANUAL_SLIDE_INDEX');
- if(!isText(v.title,72)||!isText(v.body,260)||!isText(v.secondary_body,260))
+ if(!isText(v.title,72)||!isText(v.body,260)||(v.secondary_body!==undefined&&v.secondary_body!==''&&!isText(v.secondary_body,260)))
   throw new Error('MANUAL_TEXT_LENGTH_INVALID');
  if(v.highlight!==undefined&&(typeof v.highlight!=='string'||v.highlight.length>80))
   throw new Error('MANUAL_HIGHLIGHT_INVALID');
  const index=v.index,sourceSlide=slides[index],language=source.content_language==='en'?'en':'ko';
- const title=v.title.trim(),body=v.body.trim(),secondary=v.secondary_body.trim();
+ const title=v.title.trim(),body=v.body.trim(),oldSecondary=String(sourceSlide.secondary_body||(language==='ko'?sourceSlide.body_en:sourceSlide.body_ko)||''),secondary=String(v.secondary_body||oldSecondary).trim();
+ const pending=translationPendingAfterEdit(original,index,body!==sourceSlide.body,v.secondary_body,oldSecondary);
  const highlight=String(v.highlight??sourceSlide.highlight??'').trim();
  if(EDITORIAL_AD_CTA.test([title,body,secondary,highlight].join(' ')))
   throw new Error('FEED_AD_CTA_NOT_ALLOWED');
@@ -42,7 +44,7 @@ export function composeManualMagazineEdit(source:Row,value:unknown):ManualEditRe
  // Never accept role/source_ids/closing_type/options/metadata/photo URLs from the browser.
  magazineCarouselFit(changed,plan,index,language);
  const nextSlides=slides.map((slide:Row,i:number)=>i===index?changed:{...slide});
- let nextDoc={...original,slides:nextSlides,thumbnail_render_pending:index===0,
+ let nextDoc={...original,slides:nextSlides,thumbnail_render_pending:index===0,translation_pending_indices:pending,editorial_human_approval:null,
   editorial_critic:null,editorial_critic_history:[],editorial_critic_policy:null};
  if(index===0&&original.thumbnail_candidates){
   const choices=[...original.thumbnail_candidates],selected=Number(original.thumbnail_selected_index??0);

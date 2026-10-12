@@ -27,13 +27,25 @@ export function AdminMarketingEditorialStudio({draft,locale,disabled,onUpdated,o
  const topicRatings=(Array.isArray(doc.editorial_topic_reviews)?doc.editorial_topic_reviews:[]) as Row[];
  const topicRating=topicRatings.find(r=>r.angle_key===selectedTopic?.angle_key);
  const language=draft.content_language==='en'?'en':'ko';
- const manualSupported=['stock','pexels'].includes(String(draft.visual_source));
+ const manualSupported=doc.design_preset==='roundy_magazine_editorial_v2';
  const chosen=Number(doc.thumbnail_selected_index??0);
  const [editing,setEditing]=useState<number|null>(null);
  const [working,setWorking]=useState(false);
  const [error,setError]=useState('');
  const [fields,setFields]=useState({title:'',body:'',secondary_body:'',highlight:''});
  const [showCaption,setShowCaption]=useState(false);
+ const [focusedIndex,setFocusedIndex]=useState(0);
+ const [feedbackNote,setFeedbackNote]=useState('');
+ async function saveFeedback(decision:'approve'|'rework'){
+  if(working||disabled)return;
+  if(feedbackNote.trim().length<8){setError(t('Explain what works or needs changing (at least 8 characters).','좋은 점 또는 고칠 점을 8자 이상 적어주세요.'));return;}
+  setWorking(true);setError('');
+  try{
+   const response=await fetch(BASE+'/draft/'+draft.id+'/editorial-review',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({revision:draft.revision,decision,note:feedbackNote})});
+   const result=await response.json();if(!response.ok||!result.draft)throw new Error(result.error||'EDITORIAL_REVIEW_FAILED');
+   setFeedbackNote('');onUpdated(result.draft);
+  }catch(error){setError(error instanceof Error?error.message:String(error));}finally{setWorking(false);}
+ }
  useEffect(()=>{setEditing(null);setError('');},[draft.id,draft.revision]);
  function startEdit(index:number){
   const slide=slides[index];if(!slide||index===brandIndex||disabled||working)return;
@@ -45,11 +57,9 @@ export function AdminMarketingEditorialStudio({draft,locale,disabled,onUpdated,o
  }
  async function editOne(){
   if(editing===null||working||disabled)return;
-  if(!fields.title.trim()||!fields.body.trim()||!fields.secondary_body.trim()){
-   setError(t('Enter both language versions and a headline.','제목과 두 언어의 본문을 모두 입력하세요.'));return;
+  if(!fields.title.trim()||!fields.body.trim()){
+   setError(t('Enter the headline and primary-language body. You can update the translation later.','제목과 기본 언어 본문을 입력하세요. 번역은 나중에 갱신할 수 있습니다.'));return;
   }
-  if(!window.confirm(t('Create a new unapproved version of this single card? Existing drafts, approved images, scheduled posts and sources stay untouched.',
-   '이 카드만 수정한 새 미승인 초안을 만들까요? 기존 초안, 승인 사진, 예약 게시물과 출처는 변경하지 않습니다.')))return;
   setWorking(true);setError('');
   try{
    const response=await fetch(BASE+'/draft/'+draft.id+'/versions/manual',{
@@ -80,7 +90,7 @@ export function AdminMarketingEditorialStudio({draft,locale,disabled,onUpdated,o
   }catch(e){setError(e instanceof Error?e.message:String(e));}
   finally{setWorking(false);}
  }
- return <section className="roundy-editorial-studio" aria-label={t('Integrated editorial review','통합 에디토리얼 검수')}>
+ return <section id="roundy-editorial-studio" className="roundy-editorial-studio" aria-label={t('Integrated editorial review','통합 에디토리얼 검수')}>
   <div className="roundy-editorial-head">
    <div><span className="admin-kicker">ROUNDY / EDITORIAL STUDIO</span>
     <h3>{t('Review the story before publishing','발행 전 콘텐츠 편집')}</h3>
@@ -89,7 +99,7 @@ export function AdminMarketingEditorialStudio({draft,locale,disabled,onUpdated,o
    </div>
    <div className="roundy-editorial-layout-count">{slides.length} <small>{t('carousel cards','장 카드뉴스')}</small></div>
   </div>
-  {headlines.length>=3&&<div className="roundy-editorial-section">
+  {headlines.length>=3&&<details className="roundy-editorial-section roundy-editorial-collapsed"><summary>{t("Other cover headlines","다른 표지 제목 보기")}</summary>
    <div className="roundy-editorial-section-title"><h4>{t('Cover headline candidates','표지 제목 후보')}</h4>
     <span>{headlines.length} {t('options','개 후보')}</span></div>
    <p className="admin-help">{t('Scores are editorial heuristics, not reach predictions. Selecting a different headline invalidates the old rendered cover until you re-render it.',
@@ -120,8 +130,8 @@ export function AdminMarketingEditorialStudio({draft,locale,disabled,onUpdated,o
     '선택한 제목으로 표지를 다시 렌더링해야 게시할 수 있습니다.')}</p>
     <button type="button" className="admin-primary" disabled={disabled||working} onClick={onRerenderCover}>{t('Re-render selected cover','선택한 표지 다시 렌더링')}</button>
    </div>}
-  </div>}
-  {doc.editorial_engagement_policy&&<div className="roundy-editorial-section">
+  </details>}
+  {doc.editorial_engagement_policy&&<details className="roundy-editorial-section roundy-editorial-collapsed"><summary>{t("Editorial evaluation details","편집 평가 자세히 보기")}</summary>
    <div className="roundy-editorial-section-title"><h4>{t('Reader engagement quality','독자 몰입도 검수')}</h4>
     <span>{Number(draft.quality_report?.editorial_score??0)}/100 · {draft.quality_report?.status==='passed'?t('Passed','통과'):t('Needs review','검토 필요')}</span></div>
    <p className="admin-help">{critic
@@ -144,7 +154,7 @@ export function AdminMarketingEditorialStudio({draft,locale,disabled,onUpdated,o
     <p className="admin-help"><strong>{t('Editor notes','편집장 의견')}: </strong>{String(critic.reason||'')}</p>
     {(doc.editorial_critic_history?.length>1)&&<p className="admin-help">{t('Reviews used','평가 횟수')}: {doc.editorial_critic_history.length} / 2</p>}
    </>}
-  </div>}
+  </details>}
   <div className="roundy-editorial-section">
    <div className="roundy-editorial-section-title"><h4>{t('Storyboard and information density','슬라이드 구성 및 정보량')}</h4>
     <span>{storyboard?.density?t(String(storyboard.density),String(storyboard.density)==='thin'?'정보 부족':String(storyboard.density)==='dense'?'정보 풍부':'적정 정보량'):t('Saved template','저장된 템플릿')}</span></div>
@@ -161,23 +171,28 @@ export function AdminMarketingEditorialStudio({draft,locale,disabled,onUpdated,o
   <div className="roundy-editorial-section">
    <div className="roundy-editorial-section-title"><h4>{t('Card-by-card preview and edits','카드별 미리보기 및 수정')}</h4><span>{slides.length} {t('cards','장')}</span></div>
    {!manualSupported&&<p className="admin-help">{t('Direct text-only edits require an archived approved photo source. These cards can still be reviewed; use the upload workflow for unarchived artwork.','텍스트 직접 수정에는 보존된 승인 사진 원본이 필요합니다. 원본이 없는 완성 이미지에서는 업로드 방식으로 새 버전을 제작하세요.')}</p>}
-   <div className="roundy-editorial-cards">{slides.map((slide:Row,index:number)=>{
+   {!!doc.translation_pending_indices?.length&&<p className="roundy-editorial-translation-notice">{t('Primary copy saved. Update translations before publishing: cards ','기본 언어는 저장되었습니다. 발행 전 번역을 갱신하세요: 카드 ')}{doc.translation_pending_indices.map((i:number)=>i+1).join(', ')}</p>}
+   {!!doc.manual_render_issue&&<p className="admin-help">{t('Text is saved. The edited image still needs an approved source and rendering.','텍스트는 저장되었습니다. 수정된 이미지의 승인 원본과 렌더링을 확인하세요.')}</p>}
+   <div className="roundy-editorial-card-navigation" aria-label={t('Choose a card','카드 선택')}>
+    {slides.map((_:Row,index:number)=><button key={index} type="button" aria-pressed={focusedIndex===index} onClick={()=>{if(editing!==null&&index!==focusedIndex&&!window.confirm(t('Leave this card without saving the current edits?','현재 카드의 저장하지 않은 수정을 닫을까요?')))return;setEditing(null);setFocusedIndex(index);}}>{index===brandIndex?'Roundy':String(index+1).padStart(2,'0')}</button>)}
+   </div>
+   <div className="roundy-editorial-cards roundy-editorial-focused">{slides.map((slide:Row,index:number)=>{
     const current=editing===index,visual=Array.isArray(draft.images)?draft.images[index]:'';
     const brandSlide=index===brandIndex;
     const unarchivedAi=doc?.photo_sourcing?.ai_image_slot===index&&(index>0||!doc.regeneration_ai_cover_path);
     const primary=text(language==='en'?slide.body_en||slide.body:slide.body_ko||slide.body);
-    return <article className={'roundy-editorial-card '+(current?'is-editing':'')} key={index}>
+    return <article className={'roundy-editorial-card '+(current?'is-editing':'')} key={index} hidden={focusedIndex!==index}>
      <div className="roundy-editorial-card-media">
       {visual?<img src={visual} alt={t('Actual saved card ','저장된 카드 이미지 ')+(index+1)}/>:<div className="roundy-editorial-card-placeholder"><small>ROUNDY / {String(slide.role||'').toUpperCase()}</small><strong>{slide.title}</strong><p>{primary}</p></div>}
       <span className="roundy-editorial-card-index">{String(index+1).padStart(2,'0')}</span>
      </div>
      <div className="roundy-editorial-card-info">
       <small>{String(slide.role||'').replaceAll('_',' ').toUpperCase()}</small>
-      <strong>{slide.title}</strong><p>{primary}</p>
+      <button type="button" className="roundy-editorial-card-copy" disabled={disabled||working||brandSlide} onClick={()=>startEdit(index)}><strong>{slide.title}</strong><p>{primary}</p></button>
       {!!slide.source_ids?.length&&<small>{t('Source references retained','출처 ID 유지')}: {slide.source_ids.join(', ')}</small>}
-      {unarchivedAi&&<small>{t('An AI image without an archived source must be replaced through the reviewed photo workflow before text editing.','원본이 보관되지 않은 AI 이미지는 승인 사진으로 교체한 뒤 문구를 수정할 수 있습니다.')}</small>}
+      {unarchivedAi&&<small>{t('Text can be saved now. Replace the unarchived image before rendering or publishing.','문구는 지금 저장할 수 있습니다. 원본이 보관되지 않은 이미지는 렌더링 및 발행 전에 교체하세요.')}</small>}
       <div className="roundy-editorial-card-buttons">
-       <button type="button" className="admin-secondary" disabled={disabled||working||!manualSupported||unarchivedAi||brandSlide} onClick={()=>current?setEditing(null):startEdit(index)}><PenLine size={13}/>{current?t('Cancel','취소'):t('Edit text','텍스트 수정')}</button>
+       <button type="button" className="admin-secondary" disabled={disabled||working||!manualSupported||brandSlide} onClick={()=>current?setEditing(null):startEdit(index)}><PenLine size={13}/>{current?t('Cancel','취소'):t('Edit text','텍스트 수정')}</button>
        <button type="button" className="admin-secondary" disabled={disabled||working||unarchivedAi||brandSlide} onClick={()=>onRequestAiEdit(index)}><RefreshCw size={13}/>{t('AI rewrite','AI 재작성')}</button>
        {!brandSlide&&index<slides.length-1&&<button type="button" className="admin-secondary" disabled={disabled||working} onClick={onRequestPhotoEdit}><ImageIcon size={13}/>{t('Photos','이미지')}</button>}
       </div>
@@ -187,12 +202,12 @@ export function AdminMarketingEditorialStudio({draft,locale,disabled,onUpdated,o
       <label>{t('Headline','제목')}<input value={fields.title} maxLength={72} onChange={e=>setFields(v=>({...v,title:e.target.value}))}/></label>
       <label>{language==='en'?t('English body','영문 본문'):t('Korean body','국문 본문')}
        <textarea value={fields.body} rows={3} maxLength={260} onChange={e=>setFields(v=>({...v,body:e.target.value}))}/></label>
-      <label>{language==='en'?t('Korean translation','한국어 번역'):t('English translation','영어 번역')}
+      <label>{language==='en'?t('Korean translation (can update later)','한국어 번역 (나중에 갱신 가능)'):t('English translation (can update later)','영어 번역 (나중에 갱신 가능)')}
        <textarea value={fields.secondary_body} rows={3} maxLength={260} onChange={e=>setFields(v=>({...v,secondary_body:e.target.value}))}/></label>
       <label>{t('Optional highlighted phrase','강조 문구 (선택)')}<input value={fields.highlight} maxLength={80} onChange={e=>setFields(v=>({...v,highlight:e.target.value}))}/></label>
       <p className="admin-help">{t('Only this card changes. The original keeps its images and references; the new version is unpublished and must pass all quality and photo-rights checks.',
        '이 카드만 새 미승인 버전으로 수정됩니다. 기존 이미지와 출처는 원본에 그대로 유지되며 품질 검사와 사진 권한 검사를 다시 통과해야 합니다.')}</p>
-      <button type="button" className="admin-primary" disabled={disabled||working} onClick={()=>void editOne()}>{working?t('Saving…','저장 중…'):t('Save as new draft','새 초안으로 저장')}</button>
+      <button type="button" className="admin-primary" disabled={disabled||working} onClick={()=>void editOne()}>{working?t('Saving…','저장 중…'):t('Save this card','이 카드 저장')}</button>
      </div>}
     </article>;
    })}</div>
@@ -201,6 +216,12 @@ export function AdminMarketingEditorialStudio({draft,locale,disabled,onUpdated,o
    <button type="button" className="admin-secondary" aria-expanded={showCaption} onClick={()=>setShowCaption(v=>!v)}>{showCaption?t('Hide caption preview','캡션 미리보기 닫기'):t('Preview complete Instagram caption','Instagram 캡션 전체 미리보기')}</button>
    {showCaption&&<p className="roundy-editorial-caption">{text(draft.caption)}</p>}
   </div>
+  <section className="roundy-editorial-section roundy-editorial-feedback">
+   <h4>{t('Teach the next draft what to keep or change','다음 원고에 반영할 편집 의견')}</h4>
+   <p className="admin-help">{t('Explicit feedback becomes a style reference for future copy. Accepting copy does not approve images, sources or publication.','직접 남긴 의견만 다음 생성의 문체 예시로 사용합니다. 원고 확인은 이미지나 출처, 발행 승인이 아닙니다.')}</p>
+   <textarea value={feedbackNote} maxLength={500} placeholder={t('For example: Keep the concrete scene, but remove the repeated advice on card 3.','예: 구체적인 장면은 좋지만 3번 카드에서 같은 조언을 반복하지 않기.')} onChange={e=>setFeedbackNote(e.target.value)}/>
+   <div className="admin-form-actions"><button type="button" className="admin-secondary" disabled={working||disabled} onClick={()=>void saveFeedback('rework')}>{t('Save changes needed','수정 의견 저장')}</button><button type="button" className="admin-secondary" disabled={working||disabled||doc.source_review_required} onClick={()=>void saveFeedback('approve')}>{t('Accept copy only','원고 확인 완료')}</button></div>
+  </section>
   {error&&<p role="alert" className="admin-error">{error}</p>}
  </section>;
 }
