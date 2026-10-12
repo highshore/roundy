@@ -591,3 +591,28 @@ console.log('PASS '+checks+' editorial/runtime assertions; zero live API calls.'
  assert.equal(h.requests.some(x=>x.body?.response_format?.json_schema?.name==='roundy_topic_candidates_v1'),false);
 }
 console.log('PASS: full admin directions, evidence-first research and explicit 3+1 story format.');
+
+// A rejected copy is saved before stock discovery; the result contract must
+// expose an empty photo selection, never borrow photographs from the old draft.
+for(const language of ['ko','en'])for(const source of ['stock','none']){
+ const h=harness({answerFirst:true,criticOutcome:'reject',
+  templateSettings:{carousel_mode:'fixed',carousel_default_slides:5,carousel_brand_outro_enabled:true},
+  photoSettings:{carousel_min_real_photos_5:3,carousel_min_real_photos_3:2,carousel_ai_thumbnail_enabled:true}});
+ const original=JSON.stringify(h.tables.instagram_post_drafts[0]);
+ const result=await h.api.runGeneration(id,{...base,request_key:'manual:pre-photo-review-'+language+'-'+source,
+  mode:source==='stock'?'both':'text',content_mode:'growth_carousel',topic_type:'conversation_prompt',
+  visual_source:source,language},null);
+ assert.equal(result.job.stage,'editorial_review_required',JSON.stringify(result));
+ const saved=result.job.result_snapshot;
+ assert.equal(saved.editorial_review_required,true);
+ assert.ok(Array.isArray(saved.stock_photo_selections));
+ assert.equal(saved.stock_photo_selections.length,0);
+ assert.equal(saved.images.length,0);
+ assert.equal(saved.photos_pending_review,source==='stock');
+ assert.equal(saved.real_photos_required,source==='stock'?4:null);
+ assert.equal(saved.real_photos_selected,0);assert.equal(saved.real_photos_approved,0);
+ assert.equal(saved.photo_review_reason,source==='stock'?'EDITORIAL_REVIEW_BEFORE_PHOTO_SOURCING':null);
+ assert.equal(h.requests.filter(x=>x.url.endsWith('images/generations')).length,0);
+ assert.equal(JSON.stringify(h.tables.instagram_post_drafts[0]),original);
+}
+console.log('PASS 4 KO/EN pre-photo editorial-review snapshot scenarios; no real AI or photo requests.');
