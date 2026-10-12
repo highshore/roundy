@@ -63,7 +63,7 @@ for(const count of [3,5])for(const language of ['ko','en']){
  }));
  const policySnapshot=stock.configuredPhotoSourcingPolicy(settings,roles);
  assert.equal(policySnapshot.min_real_photos,count===5?3:2);
- assert.deepEqual(Array.from(stock.requiredPhotoSlotsForRoles(roles,policySnapshot)),count===5?[0,1,2]:[0,1]);
+ assert.deepEqual(Array.from(stock.requiredPhotoSlotsForRoles(roles,policySnapshot)),count===5?[0,1,2,3]:[0,1]);
  const approved=stock.requiredPhotoSlotsForRoles(roles,policySnapshot).map(slot=>({slot,review_status:'approved',storage_path:'qa-only/'+slot+'.jpg'}));
  assert.equal(stock.allSelectedPhotosApproved(roles,approved,policySnapshot),true);
  const doc={design_preset:MAGAZINE_EDITORIAL_PRESET,carousel_template:plan,content_language:language,
