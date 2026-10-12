@@ -545,7 +545,10 @@ for(const [ordinal,expected] of [[1,4],[2,6]]){
 }
 
 const adminMarketingSource=fs.readFileSync(new URL('../src/components/admin-marketing.tsx',import.meta.url),'utf8');
-check(()=>assert.ok(adminMarketingSource.includes("...(basis==='growth_carousel'?{topic_type:topic}:{})")));
+// New-post topic is conditional; existing renders exclusively use saved draft fields.
+check(()=>assert.ok(adminMarketingSource.includes("topic_type:basis==='growth_carousel'?topic:undefined")));
+check(()=>assert.ok(adminMarketingSource.includes("renderOnly?savedRenderContent(draft!)")));
+check(()=>assert.ok(adminMarketingSource.includes("...contentInput,language:today?undefined:contentInput.language")));
 check(()=>assert.ok(adminMarketingSource.includes("request.content_mode==='growth_carousel'")));
 check(()=>assert.ok(adminMarketingSource.includes("message==='INVALID_QUALITY_REPORT'")));
 const campaignSource=fs.readFileSync(new URL('../src/lib/marketing-campaign.ts',import.meta.url),'utf8');
