@@ -54,7 +54,7 @@ assert.match(generation,/photoReviewRequired=true/);
 assert.doesNotMatch(generation.split('}else if(stockVisuals){')[1]?.split('const coverStillPending=')[0]||'',/generateVisualSet\(/);
 assert.match(picker,/marketing-approved-picker/);
 assert.match(picker,/showApprovedPhotoPicker\(index\)/);
-assert.match(picker,/ai_image_slot:aiImageSlot/);
+assert.match(picker,/ai_image_slot:newMediaPlan\.aiSlot/);
 assert.match(stock,/const picked=new Map<number,Row>/);
 assert.match(stock,/picked\.set\(Number\(asset\.slot\),asset\)/);
 assert.match(ddl,/security definer set search_path=''/);
