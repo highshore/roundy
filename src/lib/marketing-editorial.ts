@@ -2,7 +2,7 @@ import {buildMarketingResearchTask,RESEARCH_TASK_VERSION,type SeoulDatingFormat,
 import {applyAnswerFirstDocument} from './marketing-answer-first';
 import {type CarouselPlan} from './marketing-carousel-template';
 import {selectVerifiedMarketingBook,verifiedBookEvidence} from './marketing-book-catalog';
-import {captionCtaIssues,isCompactDocument,isMagazineDocument,isImmersiveMagazineDocument,bilingualCaptionIssues,CAMPAIGN_PRESET,EVENT_CAMPAIGN_PRESET} from './marketing-presentation';
+import {captionCtaIssues,isCompactDocument,isMagazineDocument,bilingualCaptionIssues,CAMPAIGN_PRESET,EVENT_CAMPAIGN_PRESET} from './marketing-presentation';
 import {EDITORIAL_ENGAGEMENT_POLICY} from './marketing-editorial-quality';
 import {EDITORIAL_CRITIC_VERSION,EDITORIAL_CRITIC_MAX_REVIEWS,storyFirstPostType,topicCriticSchema,topicCriticPrompt,independentlyRankTopics,copyCriticSchema,copyCriticPrompt,assessIndependentCopyReview,type EditorialCopyCritique,type TopicCriticReview} from './marketing-editorial-critic';
 import {storyboardWritingGuide} from './marketing-editorial-storyboard';
@@ -239,19 +239,19 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
  // New immersive editorial only: old drafts retain their original review contract.
  // A copy failing this gate is repaired once, before any paid photo generation begins.
  const prepareWithEngagementGate=(value:Row,type:PostType)=>{
-  const shaped=plan&&isImmersiveMagazineDocument(value)
+  const shaped=plan&&isMagazineDocument(value)
    ?{...value,editorial_narrative_mode:storyFirstPostType(type)?'story_first':'answer_first'}:value;
   const applied=applyAnswerFirstDocument(shaped,answerFirst,plan);
   // All NEW immersive Growth Carousel types, including sourced Seoul guides,
   // share the reader-engagement gate; historical brand/event snapshots stay unchanged.
-  const gated=isImmersiveMagazineDocument(applied)&&input.content_mode==='growth_carousel'
+  const gated=isMagazineDocument(applied)&&input.content_mode==='growth_carousel'
    ?{...applied,editorial_engagement_policy:EDITORIAL_ENGAGEMENT_POLICY}:applied;
   return prepareContent(gated,type,language,sources);
  };
 
  let criticCalls=0;
  const reviewCopy=async(document:Row,type:PostType):Promise<EditorialCopyCritique|null>=>{
-  if(!plan||input.content_mode!=='growth_carousel'||!isImmersiveMagazineDocument(document))return null;
+  if(!plan||input.content_mode!=='growth_carousel'||!isMagazineDocument(document))return null;
   if(criticCalls>=EDITORIAL_CRITIC_MAX_REVIEWS)throw new Error('EDITORIAL_CRITIC_CALL_LIMIT');
   criticCalls++;
   const mode=storyFirstPostType(type)?'story_first':'answer_first';
