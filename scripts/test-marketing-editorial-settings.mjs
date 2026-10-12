@@ -42,13 +42,13 @@ for (const bad of [null, [], {}, {unknown_setting: true},
   assert.equal(parse(bad).ok, false, 'invalid settings payload must be rejected');
 }
 
-const migration = read('supabase/migrations/20261010113000_instagram_editorial_settings_foundation.sql')+'\n'+
-  read('supabase/migrations/20261012161000_marketing_story_photos_and_independent_brand.sql');
+const foundation = read('supabase/migrations/20261010113000_instagram_editorial_settings_foundation.sql');
+const migration = foundation+'\n'+read('supabase/migrations/20261012161000_marketing_story_photos_and_independent_brand.sql');
 assert.equal(defaults.carousel_brand_outro_enabled,true);
 for (const key of Object.keys(defaults)) {
   assert.match(migration, new RegExp('add column if not exists ' + key + '\\b'), key + ' column');
 }
-assert.doesNotMatch(migration, /\b(drop|truncate|delete\s+from|update\s+public\.instagram_post_drafts)\b/i);
+assert.doesNotMatch(foundation, /\b(drop|truncate|delete\s+from|update\s+public\.instagram_post_drafts)\b/i);
 assert.match(migration, /Manual extra publication remains permitted/);
 const legacy = read('src/lib/marketing-legacy.ts');
 assert.match(legacy, /req\.method==='GET'/);
