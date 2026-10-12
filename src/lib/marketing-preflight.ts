@@ -1,5 +1,6 @@
 import {answerFirstIssues} from './marketing-answer-first';
 import {mobileCarouselFit,magazineCarouselFit,savedCarouselPlan,resolveCarouselPlan} from './marketing-carousel-template';
+import {BRAND_OUTRO_VERSION,brandedStoryCount} from './marketing-brand-outro';
 import {requiredPhotoSlotsForRoles,savedPhotoSourcingPolicy,aiImageSlotForPolicy} from './marketing-stock-photo-policy';
 import {photoRightsIssues,captionHasRequiredCredits} from './marketing-photo-rights';
 import {isMagazineDocument,EDITORIAL_AD_CTA} from './marketing-presentation';
@@ -50,9 +51,12 @@ export function evaluateMarketingPreflight(draft:Record<string,any>,settings:Rec
  };
  // Count and style remain frozen on a generated reservation; never reinterpret an existing
  // alternating draft after a configuration change.
- const intended=plan?.slide_count??(settings?.carousel_mode==='fixed'?5:null);
+ const branded=doc.brand_outro_version===BRAND_OUTRO_VERSION;
+ const storyCount=branded?brandedStoryCount(doc):null;
+ const intended=plan?(branded?plan.slide_count+1:plan.slide_count):(settings?.carousel_mode==='fixed'?5:null);
  const countErr:string[]=[];
  if(!intended)countErr.push('카드 수 예약 정보가 없습니다. Fixed 5장 또는 Alternating 예약 순번으로 재생성하세요.');
+ if(branded&&storyCount===null)countErr.push('독립 Roundy 브랜드 카드가 누락되었거나 위치가 잘못됐습니다.');
  if(intended&&slides.length!==intended)countErr.push('카드뉴스 '+intended+'장이 필요하지만 문구는 '+slides.length+'장입니다.');
  if(intended&&images.length!==intended)countErr.push('완성 이미지 '+intended+'장이 필요하지만 현재 '+images.length+'장입니다.');
  if(intended&&Array.isArray(doc.slides)&&doc.slides.length!==intended)countErr.push('문구 원본과 카드 장수가 일치하지 않습니다.');
@@ -61,8 +65,8 @@ export function evaluateMarketingPreflight(draft:Record<string,any>,settings:Rec
  add('slide_count',countErr,intended+'장 카드뉴스 및 이미지 개수가 일치합니다.');
 
  const photoPolicy=savedPhotoSourcingPolicy(doc.photo_sourcing);
- const currentMin=intended===3?numeric(settings?.carousel_min_real_photos_3,2):numeric(settings?.carousel_min_real_photos_5,3);
- const minimum=Math.max(2,currentMin,photoPolicy?.min_real_photos||0);
+ const currentMin=(plan?.slide_count??intended)===3?numeric(settings?.carousel_min_real_photos_3,2):numeric(settings?.carousel_min_real_photos_5,3);
+ const minimum=photoPolicy?.version===2?photoPolicy.min_real_photos:Math.max(2,currentMin,photoPolicy?.min_real_photos||0);
  const roles=slides.map((s:Record<string,any>)=>str(s?.role));
  let requiredSlots:number[]=[];
  const realIssues:string[]=[];
@@ -71,9 +75,15 @@ export function evaluateMarketingPreflight(draft:Record<string,any>,settings:Rec
  try{requiredSlots=requiredPhotoSlotsForRoles(roles,photoPolicy);}catch{
   realIssues.push('실제 사진 배치 정보가 카드 수와 일치하지 않습니다. 사진을 다시 검색하고 배치하세요.');
  }
- if(minimum>3)realIssues.push('설정한 실제 사진 최소 '+minimum+'장은 현재 3장까지 지원하는 사진 배치 정책을 초과합니다. 설정을 조정하거나 사진 배치 기능을 확장하세요.');
+ if(minimum>3&&photoPolicy?.version!==2)realIssues.push('설정한 실제 사진 최소 '+minimum+'장은 기존 최대 3장 배치 정책을 초과합니다.');
  if(photos.length<minimum)realIssues.push('실제 사진이 '+photos.length+'장입니다. 최소 '+minimum+'장을 확보하세요.');
  if(requiredSlots.length&&photos.some(p=>!requiredSlots.includes(Number(p.slot))))realIssues.push('지정되지 않은 카드 위치에 실제 사진이 배치되어 있습니다.');
+ if(photoPolicy?.version===2){
+  if(photos.length!==requiredSlots.length||requiredSlots.some(slot=>!photos.some(p=>Number(p.slot)===slot)))
+   realIssues.push('모든 스토리 카드에 서로 다른 승인 실사 사진이 하나씩 필요합니다.');
+  if(photoPolicy.slide_count!==intended||roles.at(-1)!=='brand_outro')
+   realIssues.push('실사 사진 배치와 독립 브랜드 카드 개수가 일치하지 않습니다.');
+ }
  const aiSlot=aiImageSlotForPolicy(photoPolicy);
  if(aiSlot!==null&&photos.some(p=>Number(p.slot)===aiSlot))realIssues.push('AI 이미지로 지정한 카드와 승인 실사 사진이 같은 위치에 배치됐습니다.');
  if(!['pexels','stock'].includes(String(draft.visual_source)))realIssues.push('실제 사진 원본 및 승인 기록이 연결되지 않았습니다. 승인된 사진 자산을 사용하세요.');
@@ -111,17 +121,23 @@ export function evaluateMarketingPreflight(draft:Record<string,any>,settings:Rec
 
  const ctaIssues:string[]=[],last=slides.at(-1);
  if(magazine){
-  const expected=intended===3?['cover','key_insight','editorial_closing']:['cover','context','insight','insight','editorial_closing'];
+  const storyRoles=(plan?.slide_count===3)?['cover','key_insight','editorial_closing']:
+   ['cover','context','insight','insight','editorial_closing'];
+  const expected=branded?[...storyRoles,'brand_outro']:storyRoles;
   if(slides.some((slide:Record<string,any>,index:number)=>str(slide.role)!==expected[index]))
    ctaIssues.push('Magazine Editorial 슬라이드 역할과 순서를 확인하세요.');
-  if(last?.role!=='editorial_closing'||!['summary','insight','brand_outro'].includes(str(last?.closing_type)))
-   ctaIssues.push('마지막 카드는 Summary, Insight 또는 Brand Outro 에디토리얼 마무리여야 합니다.');
-  if(!str(last?.title)||!str(last?.body))ctaIssues.push('마지막 장은 내용 있는 제목과 설명이 필요합니다.');
+  const editorialClosing=branded?slides.at(-2):last;
+  if(editorialClosing?.role!=='editorial_closing'||!['summary','insight','brand_outro'].includes(str(editorialClosing?.closing_type)))
+   ctaIssues.push('스토리 마지막 장은 독자에게 유용한 결론으로 마무리해야 합니다.');
+  if(!str(editorialClosing?.title)||!str(editorialClosing?.body))ctaIssues.push('스토리 마지막 장에 제목과 설명이 필요합니다.');
+  if(branded&&(!last||last.role!=='brand_outro'||doc.brand_outro_version!==BRAND_OUTRO_VERSION||
+   !/roundy|라운디/i.test([last.title,last.body].map(str).join(' '))))
+   ctaIssues.push('독립적인 Roundy 소개 카드가 마지막에 있어야 합니다.');
   if(slides.some((s:Record<string,any>)=>EDITORIAL_AD_CTA.test([s.title,s.body,s.highlight].map(str).join(' '))))
-   ctaIssues.push('에디토리얼 피드 이미지에는 광고형 CTA나 가짜 버튼 문구를 포함할 수 없습니다.');
+   ctaIssues.push('피드 이미지에 직접 가입/구매 유도 문구를 포함할 수 없습니다.');
   if(EDITORIAL_AD_CTA.test(str(draft.caption)))ctaIssues.push('에디토리얼 캡션에는 광고형 CTA를 넣을 수 없습니다.');
   if(!str(draft.caption).includes('@roundy.meet'))ctaIssues.push('캡션에 발행 계정 정보가 필요합니다.');
-  add('editorial_closing',ctaIssues,'에디토리얼 마무리와 비광고형 캡션이 확인되었습니다.');
+  add('editorial_closing',ctaIssues,'독립 브랜드 소개와 스토리 마무리 및 캡션이 확인됐습니다.');
  }else{
  if(last?.role!=='cta')ctaIssues.push('마지막 카드가 CTA 역할이 아닙니다.');
  if(!str(last?.title)||!str(last?.body))ctaIssues.push('마지막 카드에 제목과 자연스러운 행동 안내가 필요합니다.');
@@ -146,6 +162,10 @@ export function evaluateMarketingPreflight(draft:Record<string,any>,settings:Rec
  if(plan&&plan.slide_count!==slides.length)mobileIssues.push('렌더링 템플릿 장수와 실제 카드 수가 다릅니다.');
  if(plan){
   slides.forEach((slide:Record<string,any>,i:number)=>{
+   if(branded&&i===storyCount){
+    if(!str(slide.title)||!str(slide.body))mobileIssues.push('Roundy 브랜드 카드 문구가 없습니다.');
+    return;
+   }
    const shownBody=draft.content_language==='en'?slide.body_en:slide.body_ko;
    if(str(slide.body)&&str(shownBody)&&str(slide.body)!==str(shownBody))
     mobileIssues.push((i+1)+'장: 원본 카드 본문과 실제 렌더링 본문이 다릅니다. 다시 생성하세요.');
