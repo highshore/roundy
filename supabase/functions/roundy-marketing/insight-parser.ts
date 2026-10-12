@@ -6,15 +6,19 @@ export const OBSERVED_METRIC_KEYS=[
  'reach','views','likes','comments','saved','shares','total_interactions',
  'follows','profile_visits','ig_reels_avg_watch_time','ig_reels_video_view_total_time'
 ] as const;
-const safeNumber=(v:unknown):ObservedMetric=>
- (typeof v==='number'||typeof v==='string'&&v.trim()!=='')&&Number.isFinite(Number(v))&&
- Number.isSafeInteger(Number(v))&&Number(v)>=0&&Number(v)<=2147483647?Number(v):null;
+const safeNumber=(v:unknown,allowFraction=false):ObservedMetric=>{
+ if((typeof v!=='number'&&!(typeof v==='string'&&v.trim()!==''))||
+   !Number.isFinite(Number(v))||Number(v)<0)return null;
+ const num=Number(v);
+ if(allowFraction)return num<=Number.MAX_SAFE_INTEGER?num:null;
+ return Number.isSafeInteger(num)&&num<=2147483647?num:null;
+};
 export function readMediaMetric(response:unknown,metric:string):ObservedMetric{
  const data=(response as Row)?.data;
  const rows=Array.isArray(data)?data:[];
  const item=rows.find((r:Row)=>r?.name===metric);
  const raw=item?.value??item?.total_value?.value??item?.values?.[0]?.value;
- return safeNumber(raw);
+ return safeNumber(raw,metric.startsWith('ig_reels_'));
 }
 export function parseMediaSignals(primary:unknown,optional:unknown,watch:unknown,isReel:boolean){
  const values:Record<string,number|null>={};
