@@ -167,5 +167,6 @@ export function selectAnswerFirstHeadline(doc:CopyRow,index:number,hasRenderedIm
  const slides=Array.isArray(doc.slides)?doc.slides:[];
  if(!slides.length)throw new Error('THUMBNAIL_CHOICES_UNAVAILABLE');
  return {...doc,thumbnail_selected_index:index,thumbnail_render_pending:hasRenderedImages,
+  editorial_critic:null,editorial_critic_history:[],editorial_critic_policy:null,
   slides:slides.map((slide:CopyRow,i:number)=>i===0?{...slide,title}:slide)};
 }
