@@ -4,6 +4,7 @@
 import {magazineCarouselFit,savedCarouselPlan} from './marketing-carousel-template';
 import {EDITORIAL_AD_CTA} from './marketing-presentation';
 import {evaluateHeadlineOptions,reviewMagazineStoryboard} from './marketing-editorial-storyboard';
+import {brandedStoryCount,storyOnlyDocument} from './marketing-brand-outro';
 
 type Row=Record<string,any>;
 const isText=(v:unknown,max:number)=>typeof v==='string'&&v.trim().length>0&&v.trim().length<=max;
@@ -13,14 +14,17 @@ export type ManualEditResult={
 export function composeManualMagazineEdit(source:Row,value:unknown):ManualEditResult {
  const v=(value&&typeof value==='object'&&!Array.isArray(value)?value:{}) as Row;
  const slides=source?.carousel_slides as Row[]||[],original=source?.content_document||{};
- if(original.design_preset!=='roundy_magazine_editorial_v2'||!Array.isArray(slides)||![3,5].includes(slides.length))
+ if(original.design_preset!=='roundy_magazine_editorial_v2'||!Array.isArray(slides)||![3,4,5,6].includes(slides.length))
   throw new Error('MAGAZINE_SLIDES_REQUIRED');
  const plan=savedCarouselPlan(original);
- if(!plan||plan.slide_count!==slides.length)throw new Error('CAROUSEL_RESERVATION_MISMATCH');
+ const branded=original.brand_outro_version===1;
+ const storyCount=branded?brandedStoryCount(original):null;
+ if(!plan||slides.length!==(plan.slide_count+(branded?1:0))||(branded&&storyCount===null))
+  throw new Error('CAROUSEL_RESERVATION_MISMATCH');
  if(!Number.isInteger(v.revision)||v.revision!==source.revision)throw new Error('DRAFT_CHANGED_REFRESH_FIRST');
  if(typeof v.request_key!=='string'||!/^manual:[a-zA-Z0-9-]{8,100}$/.test(v.request_key))
   throw new Error('INVALID_MANUAL_EDIT_KEY');
- if(!Number.isInteger(v.index)||v.index<0||v.index>=slides.length)
+ if(!Number.isInteger(v.index)||v.index<0||v.index>=slides.length||(branded&&v.index===storyCount))
   throw new Error('INVALID_MANUAL_SLIDE_INDEX');
  if(!isText(v.title,72)||!isText(v.body,260)||!isText(v.secondary_body,260))
   throw new Error('MANUAL_TEXT_LENGTH_INVALID');
@@ -48,7 +52,7 @@ export function composeManualMagazineEdit(source:Row,value:unknown):ManualEditRe
    throw new Error('DUPLICATE_THUMBNAIL_COPY');
   nextDoc={...nextDoc,thumbnail_candidates:choices};
  }
- const storyboard=reviewMagazineStoryboard(nextDoc,language);
+ const storyboard=reviewMagazineStoryboard(storyOnlyDocument(nextDoc),language);
  nextDoc={...nextDoc,
   ...(original.editorial_storyboard_version?{
    editorial_headline_reviews:evaluateHeadlineOptions(nextDoc,language),
