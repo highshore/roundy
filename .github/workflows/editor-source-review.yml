@@ -1,0 +1,30 @@
+name: Editor source review
+on:
+  push:
+    branches: [codex/single-card-editor-work-20261013]
+    paths: [.github/workflows/editor-source-review.yml]
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Package source and development dependencies only
+        run: |
+          mkdir -p review-export
+          git archive HEAD > review-export/source.tar
+          tar -czf review-export/dependencies.tar.gz node_modules
+      - uses: actions/upload-artifact@v4
+        with:
+          name: editor-source-review
+          path: review-export
+          retention-days: 1
