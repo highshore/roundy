@@ -50,10 +50,19 @@ const weakEnglish={slides:[
 assert.ok(evaluateEditorialEngagement(weakEnglish,'en').score<EDITORIAL_ENGAGEMENT_THRESHOLD);
 assert.equal(evaluateEditorialEngagement({slides:[{title:'Only a cover'}]},'ko').score,0);
 
+const dullSeoul={slides:[
+ {role:'cover',title:'빛조각 보며 취향 얘기',body:'당현천 무료 야간 전시'},
+ {role:'context',title:'물길 따라 이어지는 전시',body:'야간 전시에서 조형물을 구경하며 산책할 수 있어요.'},
+ {role:'insight',title:'작품 앞에서 취향이 갈린다',body:'서로 마음에 드는 조형물을 골라보고 감상을 말해보세요.'},
+ {role:'insight',title:'전시와 도슨트는 따로',body:'무료 관람과 도슨트 투어는 따로 예약이 필요합니다.'},
+ {role:'editorial_closing',title:'작품 하나, 질문 하나면 충분',body:'전시를 보며 마음에 드는 조각을 서로 고르면 좋아요.'}
+]};
+assert.ok(evaluateEditorialEngagement(dullSeoul,'ko').score<EDITORIAL_ENGAGEMENT_THRESHOLD,'event summary cannot replace a story');
 const policy=fs.readFileSync('src/lib/marketing-content-policy.ts','utf8');
 const editorial=fs.readFileSync('src/lib/marketing-editorial.ts','utf8');
 assert.match(policy,/editorial_engagement_policy===EDITORIAL_ENGAGEMENT_POLICY/);
 assert.match(editorial,/isImmersiveMagazineDocument\(applied\)/);
+assert.match(editorial,/input\.content_mode==='growth_carousel'/);
 assert.match(editorial,/EDITORIAL_ENGAGEMENT_GATE_REJECTED/);
 assert.match(editorial,/repairUsed=true/);
 console.log('PASS editorial engagement gate: weak KO/EN copy rejected, distinctive copy accepted, legacy opt-in, single repair and stop-before-images wired.');

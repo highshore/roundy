@@ -24,6 +24,13 @@ type Row=Record<string,any>;
 type PendingMarketingImage={id:string;file:File;preview:string;asset_type:'photo'|'completed_card';width:number;height:number};
 const BASE='/api/admin/marketing';
 const topics=['mbti','dating_archetype','book_insight','trend_research','meme_remix','dating_myth','conversation_prompt','seoul_dating','seoul_trend','korea_life','mini_quiz'];
+const editorialDirections:Record<string,string>={
+ auto:'',
+ seoul:'Lead with a relatable shared Seoul outing or first-date dilemma and verify every practical detail. Make the place or exhibition a natural conversation starter; do not invent dates or depict stock as event photography.',
+ relationship:'Start with a recognisable dating or friendship friction, reveal one defensible insight, and close with a practical takeaway a friend would want to save.',
+ social:'Show one useful social-intelligence micro-skill through an authentic scene and real dialogue. Empathy, humor, reciprocity, courtesy and tone are possible angles; avoid generic advice.',
+ brand:'Explain the real face-to-face rotation dating experience and a useful social insight; only verified product details, no hard-sell.'
+};
 const topicKo=['MBTI 연애 유형','연애 유형','책 속 공감','최신 연구','밈 재해석','연애 통념','첫 대화 질문','서울 데이팅','서울 트렌드','한국 생활과 문화','미니 퀴즈'];
 async function request(path='',body?:unknown,method='POST'){
  let response:Response;
@@ -45,7 +52,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
  const [feedAttempts,setFeedAttempts]=useState<Record<string,Row>>({});
  const [draft,setDraft]=useState<Row|null>(null),[settings,setSettings]=useState<Row|null>(null),[generation,setGeneration]=useState<Row|null>(null);
  const [channel,setChannel]=useState<'instagram'|'koreapas'>('instagram'),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[error,setError]=useState(''),[notice,setNotice]=useState('');
- const [basis,setBasis]=useState('prelaunch'),[manualVisualSource,setManualVisualSource]=useState<'auto_ai'|'uploaded'|'none'|'pexels'|'stock'>('stock'),[topic,setTopic]=useState('conversation_prompt'),[contentLanguage,setContentLanguage]=useState<'ko'|'en'>('ko'),[direction,setDirection]=useState(''),[dirty,setDirty]=useState(false);
+ const [basis,setBasis]=useState('prelaunch'),[manualVisualSource,setManualVisualSource]=useState<'auto_ai'|'uploaded'|'none'|'pexels'|'stock'>('stock'),[topic,setTopic]=useState('conversation_prompt'),[contentLanguage,setContentLanguage]=useState<'ko'|'en'>('ko'),[direction,setDirection]=useState(''),[editorialLane,setEditorialLane]=useState('auto'),[dirty,setDirty]=useState(false);
  const [eventId,setEventId]=useState(''),[eventCampaignStage,setEventCampaignStage]=useState('auto');
  const [template,setTemplate]=useState<Row>(blank());
  const [stockPhotos,setStockPhotos]=useState<Row[]>([]),[stockReview,setStockReview]=useState<Row|null>(null);
@@ -286,7 +293,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
   if(!window.confirm(message))return;
   await work(async()=>{
    const payload={request_key:'manual:'+crypto.randomUUID(),revision:renderOnly?draft!.revision:1,mode:today?'both':requestedMode,content_mode:basis,language:today?undefined:contentLanguage,visual_mode:'cards',visual_source:source,
-    ...(!renderOnly&&!today&&managed&&settings?.carousel_mode==='fixed'&&Number(settings?.carousel_default_slides)===5?{ai_image_slot:aiImageSlot}:{}),...(basis==='growth_carousel'?{topic_type:topic}:{}),...(basis==='live_event'?{event_id:eventId,event_campaign_stage:eventCampaignStage}:{}),instruction:direction.trim(),confirm_photo:false,render_only:renderOnly};
+    ...(!renderOnly&&!today&&managed&&settings?.carousel_mode==='fixed'&&Number(settings?.carousel_default_slides)===5?{ai_image_slot:aiImageSlot}:{}),...(basis==='growth_carousel'?{topic_type:topic}:{}),...(basis==='live_event'?{event_id:eventId,event_campaign_stage:eventCampaignStage}:{}),instruction:(basis==='growth_carousel'?[editorialDirections[editorialLane]||'',direction.trim()].filter(Boolean).join(' '):direction.trim()).slice(0,500),confirm_photo:false,render_only:renderOnly};
    const path=renderOnly?'/draft/'+draft!.id+'/regenerate':'/draft/generate';
    const r=await request(path,payload);
    if(!r.ok||r.data.error)throw new Error(r.data.error||'Generation failed');
@@ -635,6 +642,16 @@ export function AdminMarketing({locale}:{locale:Locale}){
       <div className="marketing-draft-inbox">{pendingMarketingImages.map((item,index)=><article className="marketing-draft-card" key={item.id}><img src={item.preview} alt={item.file.name}/><div className="marketing-draft-copy"><strong>{index+1}. {item.file.name}</strong><small>{Math.round(item.file.size/1024)} KB · {item.width}×{item.height}</small><select value={item.asset_type} onChange={e=>updatePendingMarketingImageType(item.id,e.target.value as 'photo'|'completed_card')}><option value="photo">{t('Photo source','사진 소스')}</option><option value="completed_card">{t('Completed 4:5 card','완성 4:5 카드')}</option></select></div><div className="admin-form-actions"><button type="button" className="admin-secondary" disabled={busy||index===0} onClick={()=>movePendingMarketingImage(index,-1)}>↑</button><button type="button" className="admin-secondary" disabled={busy||index===pendingMarketingImages.length-1} onClick={()=>movePendingMarketingImage(index,1)}>↓</button><button type="button" className="admin-secondary" disabled={busy} onClick={()=>removePendingMarketingImage(item.id)}>{t('Remove','제거')}</button></div></article>)}</div>
       {!pendingMarketingImages.length&&<p className="admin-help">{t('No images selected yet. JPEG, PNG or WebP, max 10 MB each.','아직 선택한 이미지가 없습니다. JPEG, PNG, WebP, 장당 최대 10MB입니다.')}</p>}
      </div>:<p className="admin-help">{t('Copy only: no images are generated. You can add visuals later.','문구만: 이미지를 생성하지 않습니다. 나중에 비주얼을 추가할 수 있습니다.')}</p>}
+     {basis==='growth_carousel'&&<label><span>{t('Reader-first content direction','독자 중심 콘텐츠 방향')}</span>
+      <select value={editorialLane} onChange={e=>setEditorialLane(e.target.value)}>
+       <option value="auto">{t('Automatic editorial choice','자동 기획')}</option>
+       <option value="seoul">{t('Dates & Seoul discoveries','데이트 및 서울의 발견')}</option>
+       <option value="relationship">{t('Dating & relationships','연애와 인간관계')}</option>
+       <option value="social">{t('Practical social skills','실용적인 소셜 팁')}</option>
+       <option value="brand">{t('Roundy & meeting culture','Roundy와 만남 문화')}</option>
+      </select>
+      <small>{t('Guides the angle; the selected content category, source evidence and manual approval still apply.','접근 방식만 지정하며 선택된 주제 유형, 출처 검증과 수동 승인은 그대로 유지됩니다.')}</small>
+     </label>}
      <label><span>{t('Creative direction','커스텀 지시문')}</span><textarea value={direction} maxLength={500} rows={4} onChange={e=>setDirection(e.target.value)}/><small>{direction.length}/500</small></label>
      <p className="admin-help">{t('Roundy logo, coral accents and typography are composed server-side for photo-source cards. Completed 4:5 cards are used without additional design overlays.','사진 소스 카드는 Roundy 로고, 코랄 강조와 타이포를 서버에서 합성합니다. 완성된 4:5 카드는 추가 디자인 합성 없이 그대로 사용합니다.')}</p>
      {basis==='growth_carousel'&&<p className="admin-help">{CONTENT_PROFILES[postType({content_mode:basis,topic_type:topic})].label}: {CONTENT_PROFILES[postType({content_mode:basis,topic_type:topic})].roles.join(' → ')}</p>}

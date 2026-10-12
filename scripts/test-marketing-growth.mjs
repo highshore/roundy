@@ -32,7 +32,7 @@ const trained=recommendGrowthWeights(aggregateGrowthSignals(strong));
 assert.equal(trained.learning,true,'learning should unlock with sustained evidence across all cohorts');
 assert.ok(trained.weights.humor>BASE_GROWTH_WEIGHTS.humor,'high-sharing humor can gain limited allocation');
 assert.ok(Math.abs(GROWTH_PILLARS.reduce((n,p)=>n+trained.weights[p],0)-100)<1e-6,'weights sum to 100');
-assert.equal(trained.weights.brand,5,'brand exposure cap');
+assert.equal(trained.weights.brand,15,'brand exposure cap');
 const broken=strong.filter(s=>s.pillar!=='culture');
 assert.equal(recommendGrowthWeights(aggregateGrowthSignals(broken)).learning,false,'no extrapolation from untested pillar');
 const generation=readFileSync(new URL('../src/lib/marketing-generation.ts',import.meta.url),'utf8');

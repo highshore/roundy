@@ -223,7 +223,9 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
  // A copy failing this gate is repaired once, before any paid photo generation begins.
  const prepareWithEngagementGate=(value:Row,type:PostType)=>{
   const applied=applyAnswerFirstDocument(value,answerFirst,plan);
-  const gated=isImmersiveMagazineDocument(applied)&&['conversation_prompt','korea_life'].includes(type)
+  // All NEW immersive Growth Carousel types, including sourced Seoul guides,
+  // share the reader-engagement gate; historical brand/event snapshots stay unchanged.
+  const gated=isImmersiveMagazineDocument(applied)&&input.content_mode==='growth_carousel'
    ?{...applied,editorial_engagement_policy:EDITORIAL_ENGAGEMENT_POLICY}:applied;
   return prepareContent(gated,type,language,sources);
  };

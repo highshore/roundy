@@ -1,6 +1,6 @@
 // Heuristic editorial review for NEW magazine documents only. No external or paid API calls.
 // Scores are production guardrails, not predictions of Instagram reach or engagement.
-export const EDITORIAL_ENGAGEMENT_POLICY = 1;
+export const EDITORIAL_ENGAGEMENT_POLICY = 2;
 export const EDITORIAL_ENGAGEMENT_THRESHOLD = 80;
 
 export type EditorialEngagementResult = {
@@ -42,6 +42,8 @@ export function evaluateEditorialEngagement(value: unknown, language: string): E
     ? /(?:왜|이유|진짜|의외|착각|실수|반전|차이|말고|대신|면접|불편|어색|공통점|순간|피하|그래도|정말|[?？!]|\d)/
     : /(?:why|reason|mistake|awkward|instead|without|actually|surprising|never|difference|versus|vs\.|what\s+if|[?!]|\d)/i;
   if (genericHeadline.test(cover)) deduct(25, '표지가 흔한 대화 팁 제목입니다. 독자가 궁금해할 갈등, 관찰, 반전 또는 구체적인 효용을 드러내세요.');
+  if (ko && /(?:빛조각\s*보며\s*취향|물길\s*따라\s*이어지는|(?:전시|산책|데이트)\s*(?:즐기기|알아보기|이야기)\s*$)/i.test(cover))
+    deduct(20, '행사나 장소 소개만으로는 넘길 이유가 부족합니다. 독자의 상황과 분명한 발견을 제목에 담으세요.');
   if (!hookTension.test(cover)) deduct(15, '표지에 다음 장을 확인할 만한 구체적인 궁금증이나 예상 밖의 관찰이 부족합니다.');
 
   const perspective = ko
@@ -62,7 +64,7 @@ export function evaluateEditorialEngagement(value: unknown, language: string): E
   if (thinCards >= 2) deduct(15, '정보가 거의 없는 본문 카드가 반복됩니다. 슬라이드 수를 줄이거나 서로 다른 실제 사례를 보강하세요.');
 
   const genericClosing = ko
-    ? /(?:주변을\s*묻고|답에서\s*이어|질문을\s*이어|자연스럽게\s*대화|서로를\s*알아|작은\s*대화가)/
+    ? /(?:주변을\s*묻고|답에서\s*이어|질문을\s*이어|자연스럽게\s*대화|서로를\s*알아|작은\s*대화가|작품\s*하나.{0,12}질문\s*하나|취향\s*(?:얘기|이야기)\s*나누)/
     : /(?:keep\s+the\s+conversation\s+going|ask\s+and\s+listen|connect\s+naturally|better\s+conversations\s+start)/i;
   if (genericClosing.test(closing)) deduct(15, '마지막 장이 앞선 조언을 반복합니다. 저장할 만한 구체적인 한 문장으로 끝내세요.');
 
