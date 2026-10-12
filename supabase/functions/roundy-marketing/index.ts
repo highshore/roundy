@@ -190,18 +190,66 @@ function validate(t:Template){
 }
 
 // Final fail-closed check before creating Instagram media containers.
+// Keep the publishing worker in sync with approved story + independent brand
+// layouts. Legacy Feed cards retain their historic 2–3-photo policy.
+function stockPublishPhotoSlots(draft:Record<string,any>):number[]|null{
+ const policy=draft.content_document?.photo_sourcing;
+ const slides=Array.isArray(draft.carousel_slides)?draft.carousel_slides:[];
+ const roles=slides.map((slide:Record<string,any>)=>String(slide?.role||''));
+ if(policy?.version!==2){
+  if(roles.at(-1)==='brand_outro')throw new Error('STOCK_PHOTO_POLICY_REQUIRED');
+  return null;
+ }
+ const count=policy.slide_count,storyCount=count-1;
+ if(![4,6].includes(count)||roles.length!==count||
+    roles.at(-1)!=='brand_outro'||!Array.isArray(draft.images)||
+    draft.images.length!==count)throw new Error('STOCK_PHOTO_LAYOUT_CHANGED');
+ const ai=policy.ai_image_slot===undefined?(policy.ai_thumbnail_enabled===true?0:null):policy.ai_image_slot;
+ if(ai!==null&&(!Number.isInteger(ai)||count!==6||ai<0||ai>=storyCount||
+    ['brand_outro','cta','editorial_closing'].includes(roles[ai])))
+  throw new Error('STOCK_PHOTO_AI_SLOT_INVALID');
+ if(policy.ai_thumbnail_enabled!==(ai===0)||
+    typeof policy.requested_ai_thumbnail!=='boolean')throw new Error('STOCK_PHOTO_POLICY_INVALID');
+ const required=roles.map((role:string,slot:number)=>({role,slot}))
+  .filter((item:{role:string;slot:number})=>item.slot<storyCount&&
+     item.role!=='cta'&&item.slot!==ai).map((item:{slot:number})=>item.slot);
+ if(required.length!==policy.min_real_photos||required.length<3||required.length>5)
+  throw new Error('STOCK_PHOTO_POLICY_INVALID');
+ const pf=draft.quality_report?.preflight;
+ if(draft.quality_report?.status!=='passed'||pf?.status!=='passed'||
+    pf.revision!==draft.revision||draft.quality_revision!==draft.revision)
+  throw new Error('STOCK_PHOTO_PREFLIGHT_STALE');
+ return required;
+}
 // A scheduled draft may have had its approved asset revoked after scheduling.
 async function validateReviewedStockDraft(t:Template){
  if(t.channel!=='instagram'||t.media_kind==='reel'||!t.draft_id)return;
  const {data:draft,error:draftError}=await service.from('instagram_post_drafts')
-  .select('id,visual_source,images,approved_at,approved_by,caption').eq('id',t.draft_id).single();
+  .select('id,visual_source,images,approved_at,approved_by,caption,carousel_slides,content_document,quality_report,quality_revision,revision').eq('id',t.draft_id).single();
  if(draftError||!draft)throw new Error('MARKETING_DRAFT_NOT_FOUND');
  if(!['pexels','stock'].includes(draft.visual_source))return;
  if(!draft.approved_at||!draft.approved_by)throw new Error('STOCK_DRAFT_APPROVAL_REQUIRED');
  const {data:rows,error}=await service.from('marketing_draft_photos')
-  .select('asset_id,marketing_photo_assets(provider,review_status,storage_path,reviewed_at,reviewed_by,license_checked_at,license_name,license_url,license_evidence_url,source_url,commercial_use_allowed,modifications_allowed,attribution_required,photographer)')
+  .select('slot,asset_id,marketing_photo_assets(provider,review_status,storage_path,content_sha256,reviewed_at,reviewed_by,license_checked_at,license_name,license_url,license_evidence_url,source_url,commercial_use_allowed,modifications_allowed,attribution_required,photographer)')
   .eq('draft_id',t.draft_id);
- if(error||!rows||rows.length<2||rows.length>3)throw new Error('STOCK_PHOTO_REVIEW_REQUIRED');
+ const required=stockPublishPhotoSlots(draft);
+ if(error||!rows||(required?rows.length!==required.length:rows.length<2||rows.length>3))
+  throw new Error('STOCK_PHOTO_REVIEW_REQUIRED');
+ if(required){
+  const slots=new Set<number>(),assetIds=new Set<string>();
+  const manifest=draft.quality_report?.preflight?.photo_manifest;
+  if(!Array.isArray(manifest)||manifest.length!==required.length)
+   throw new Error('STOCK_PHOTO_PREFLIGHT_STALE');
+  for(const row of rows as Record<string,any>[]){
+   const slot=Number(row.slot),assetId=String(row.asset_id||'');
+   const asset=Array.isArray(row.marketing_photo_assets)?row.marketing_photo_assets[0]:row.marketing_photo_assets;
+   const previous=manifest.find((item:Record<string,any>)=>item.slot===slot);
+   if(!required.includes(slot)||slots.has(slot)||!assetId||assetIds.has(assetId)||
+      !previous||previous.asset_id!==assetId||previous.sha256!==asset?.content_sha256)
+    throw new Error('STOCK_PHOTO_APPROVED_MANIFEST_CHANGED');
+   slots.add(slot);assetIds.add(assetId);
+  }
+ }
  for(const row of rows as Record<string,any>[]){
   const p=Array.isArray(row.marketing_photo_assets)?row.marketing_photo_assets[0]:row.marketing_photo_assets;
   if(!p||p.review_status!=='approved'||!p.storage_path||!p.reviewed_by||!p.reviewed_at||
