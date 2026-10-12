@@ -38,7 +38,8 @@ export function composeManualMagazineEdit(source:Row,value:unknown):ManualEditRe
  // Never accept role/source_ids/closing_type/options/metadata/photo URLs from the browser.
  magazineCarouselFit(changed,plan,index,language);
  const nextSlides=slides.map((slide:Row,i:number)=>i===index?changed:{...slide});
- let nextDoc={...original,slides:nextSlides,thumbnail_render_pending:index===0};
+ let nextDoc={...original,slides:nextSlides,thumbnail_render_pending:index===0,
+  editorial_critic:null,editorial_critic_history:[],editorial_critic_policy:null};
  if(index===0&&original.thumbnail_candidates){
   const choices=[...original.thumbnail_candidates],selected=Number(original.thumbnail_selected_index??0);
   if(!Number.isInteger(selected)||selected<0||selected>=choices.length)throw new Error('INVALID_THUMBNAIL_CHOICE');
