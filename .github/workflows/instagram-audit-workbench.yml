@@ -2,9 +2,7 @@ name: Instagram audit workbench
 on:
   push:
     branches: [fix/instagram-workflow-audit-20261012]
-    paths:
-      - .github/workflows/instagram-audit-workbench.yml
-      - scripts/instagram-audit.patch
+    paths: [.github/workflows/instagram-audit-workbench.yml, scripts/instagram-audit.patch, scripts/instagram-audit-followup.py]
 permissions:
   contents: write
 concurrency:
@@ -19,13 +17,18 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: fix/instagram-workflow-audit-20261012
-      - name: Apply exact reviewed edits, verifying old and new hashes
-        if: hashFiles('scripts/instagram-audit.patch') != ''
+      - name: Apply exact reviewed edits, verifying transport and source hashes
         run: |
           python - <<'PY'
           import base64,gzip,json,hashlib,pathlib
-          payload=''.join(pathlib.Path(p).read_text().strip() for p in ['scripts/instagram-audit.part1','scripts/instagram-audit.part2','scripts/instagram-audit.patch'])
-          edits=json.loads(gzip.decompress(base64.b64decode(payload)))
+          a=pathlib.Path('scripts/instagram-audit.part1').read_text().strip()
+          a=a.replace('ian513+9UvGrjRY5vNRzLsWuQ','ian513+9UvGrgRY5vNRzLsWuQ').replace('4jUrR0fbcPCuAo03v7kLzCLoAV','4jUrR0fbcPCu03v7kLzCLoAV').replace('2X4IBLaNOnexZZlaqIK66peVL','2X4IBLaNOnexZlaqIK66peVL')
+          b=pathlib.Path('scripts/instagram-audit.part2').read_text().strip()
+          b=b.replace('fRmC+3s47fO/c4+YD1/GY8NVlBQY','fRmC+3s47fO/vHD/GY8NVlBQY').replace('TO3sd++c/e0XsdjL1BnrufQT','TO3sd++c/e0XMsjL1BnrufQT')
+          c=pathlib.Path('scripts/instagram-audit.patch').read_text().strip()
+          for part,checksum in [(a,'2cf846e2c8a6ed13ce5a75b1bbbde721bc004ef50655506847684828840c9cb6'),(b,'87c3a06e2e474f421d7c543fc828591b4df88b880ab343b25271c23b3fd90ebd'),(c,'1cebc4998cbef3a3532d683a140a001fa8033ac3b906bbdc6515414bec547871')]:
+            assert hashlib.sha256(part.encode()).hexdigest()==checksum
+          edits=json.loads(gzip.decompress(base64.b64decode(a+b+c)))
           for item in edits:
             p=pathlib.Path(item['path'])
             assert not p.is_absolute() and '..' not in p.parts
@@ -33,27 +36,25 @@ jobs:
             old=p.read_text() if p.exists() else ''
             assert (hashlib.sha256(old.encode()).hexdigest() if p.exists() else None)==item['before'], str(p)
             result=old
-            for a,b,text in reversed(item['edits']):
-              assert 0<=a<=b<=len(old)
-              result=result[:a]+text+result[b:]
+            for start,end,text in reversed(item['edits']):
+              assert 0<=start<=end<=len(old)
+              result=result[:start]+text+result[end:]
             assert hashlib.sha256(result.encode()).hexdigest()==item['after'], str(p)
             p.parent.mkdir(parents=True,exist_ok=True)
             p.write_text(result)
           PY
+          if test -f scripts/instagram-audit-followup.py; then python scripts/instagram-audit-followup.py; fi
       - uses: actions/setup-node@v4
-        if: hashFiles('scripts/instagram-audit.patch') != ''
         with:
           node-version: 22
           cache: npm
       - name: Install locked dependencies and generate forward-only migration
-        if: hashFiles('scripts/instagram-audit.patch') != ''
         run: |
           npm ci
           npx --no-install supabase migration new --help
           npx --no-install supabase migration new instagram_editorial_workflow
           cp scripts/marketing-workflow-schema.sql "$(ls -t supabase/migrations/*_instagram_editorial_workflow.sql | head -1)"
       - name: Typecheck, regressions and rendering without live AI or posting
-        if: hashFiles('scripts/instagram-audit.patch') != ''
         run: |
           npm run typecheck
           npm test
@@ -61,23 +62,19 @@ jobs:
           node scripts/test-marketing-compact.mjs --render
           npm run build
       - name: Commit verified implementation to isolated branch
-        if: hashFiles('scripts/instagram-audit.patch') != ''
         run: |
           test "$(git branch --show-current)" = 'fix/instagram-workflow-audit-20261012'
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add src scripts docs supabase package.json package-lock.json
           git rm scripts/instagram-audit.part1 scripts/instagram-audit.part2 scripts/instagram-audit.patch .github/workflows/instagram-audit-workbench.yml
+          if test -f scripts/instagram-audit-followup.py; then git rm scripts/instagram-audit-followup.py; fi
           git commit -m 'fix(marketing): resilient editorial workflow and focused content studio'
           git push origin HEAD:fix/instagram-workflow-audit-20261012
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: instagram-audit-render-qa
-          path: |
-            quality-artifacts
-            scripts/instagram-audit.part1
-            scripts/instagram-audit.part2
-            scripts/instagram-audit.patch
+          path: quality-artifacts
           if-no-files-found: ignore
-          retention-days: 1
+          retention-days: 3
