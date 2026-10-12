@@ -479,7 +479,11 @@ if(id==='uploads'&&path.length===1&&req.method==='GET'){
   if(body.confirm_import!==true)return json({error:'IMPORT_CONFIRMATION_REQUIRED'},400);
   try{
    const savedCopy=await openSavedEditorialCopy(service,path[2]);
-   let imported:Row=savedCopy||checked(await service.rpc('create_marketing_candidate_from_generation',{p_job_id:path[2]}));
+   // The workspace helper already restores photos for review-only copy and
+   // returns existing imported drafts unchanged. Do not import them twice or
+   // overwrite subsequent admin edits with the original generation snapshot.
+   if(savedCopy)return json({draft:savedCopy});
+   let imported:Row=checked(await service.rpc('create_marketing_candidate_from_generation',{p_job_id:path[2]}));
    if(imported.status!=='needs_approval')return json({error:'RESULT_ALREADY_USED'},409);
    const source=checked(await service.from('marketing_generation_jobs').select('draft_id,result_snapshot').eq('id',path[2]).single()),snapshot=source?.result_snapshot||{},trendId=snapshot.trend_id,campaignMeta=campaignMetaFromSnapshot(snapshot),eventMeta=eventCampaignMetaFromSnapshot(snapshot);
    const importedPatch={...(trendId?{trend_id:trendId}:{}),...(campaignMeta||{}),...(eventMeta||{}),...(['pexels','stock'].includes(String(snapshot.visual_source))?{visual_source:snapshot.visual_source}:{}),updated_at:new Date().toISOString()};

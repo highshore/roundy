@@ -537,7 +537,13 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
    const snapshot={...error.patch,content_document:doc,draft_id:draft.id,draft_date:draft.draft_date,
     images:[],generation_source:automatic?'automation':'manual',visual_source:visualSource,
     render_style:isMagazineReview(doc)?'editorial':draft.render_style,
-    saved_at:new Date().toISOString(),editorial_review_required:true};
+    saved_at:new Date().toISOString(),editorial_review_required:true,
+    // Copy review happens before photo discovery. An empty selection is valid,
+    // not a missing asset error; photos still require separate review/rendering.
+    stock_photo_selections:[],photos_pending_review:!!policy,
+    real_photos_required:policy?.min_real_photos||null,
+    real_photos_selected:0,real_photos_approved:0,
+    photo_review_reason:policy?'EDITORIAL_REVIEW_BEFORE_PHOTO_SOURCING':null};
    const reviewedJob={...job,status:'completed',stage:'editorial_review_required',error_code:error.code,
     error_message:safeError(error),quality_report:error.patch.quality_report,result_snapshot:snapshot,result_revision:draft.revision};
    checked(await db.from('marketing_generation_jobs').update({status:reviewedJob.status,stage:reviewedJob.stage,
