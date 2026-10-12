@@ -97,8 +97,13 @@ export function copyCriticPrompt(language:string,mode:'story_first'|'answer_firs
    'The narrative should pay off the cover promise through tangible dialogue, reactions or changing choices, not just generic questions.'
   ]),
   'A single banal suggestion split across multiple cards MUST fail, even when it contains the words "instead", "but", or "why".',
-  'BAD example: 언제 한번 대신 날짜 두 개 -> 첫 장도 뒤의 네 장도 날짜 두 개를 고르라는 조언의 반복. It is not publishable.',
-  'GOOD structure: atmosphere was good on a first date, but a second meeting never happened -> real goodbye dialogue -> why the vague promise fizzles -> one usable concrete line -> humane closing.',
+  ...(mode==='story_first'?[
+   'BAD example: 언제 한번 대신 날짜 두 개 -> 첫 장도 뒤의 네 장도 날짜 두 개를 고르라는 조언의 반복. It is not publishable.',
+   'GOOD structure: atmosphere was good on a first date, but a second meeting never happened -> real goodbye dialogue -> why the vague promise fizzles -> one usable concrete line -> humane closing.'
+  ]:[
+   'BAD fact-first example: an arts festival list -> one generic question about feelings -> a bare program count -> another generic question. Verified facts and conversation tips do not automatically form a story.',
+   'GOOD fact-first structure: a concrete choice that readers face -> source-grounded options and differences -> what to pay attention to -> a distinct practical constraint -> an earned decision or reflection.'
+  ]),
   'The examples teach DIFFERENCE in narrative depth, not text to reproduce. Reject near-copies of either example.',
   '1=generic filler, 3=acceptable prose but not compelling, 5=original, natural, specific and shareable.',
   'If copy is fixable without changing its core subject, choose rewrite with exact defects. If the core idea is banal or cannot support '+count+' distinct cards, choose replace_topic.',
