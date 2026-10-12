@@ -4,6 +4,7 @@ import {type CarouselPlan} from './marketing-carousel-template';
 import {selectVerifiedMarketingBook,verifiedBookEvidence} from './marketing-book-catalog';
 import {captionCtaIssues,isCompactDocument,isMagazineDocument,bilingualCaptionIssues,CAMPAIGN_PRESET,EVENT_CAMPAIGN_PRESET} from './marketing-presentation';
 import {EDITORIAL_ENGAGEMENT_POLICY} from './marketing-editorial-quality';
+import {appendRoundyOutro,storyOnlyDocument,brandedStoryCount,BRAND_OUTRO_VERSION} from './marketing-brand-outro';
 import {EDITORIAL_CRITIC_VERSION,EDITORIAL_CRITIC_MAX_REVIEWS,storyFirstPostType,topicCriticSchema,topicCriticPrompt,independentlyRankTopics,copyCriticSchema,copyCriticPrompt,assessIndependentCopyReview,type EditorialCopyCritique,type TopicCriticReview} from './marketing-editorial-critic';
 import {storyboardWritingGuide} from './marketing-editorial-storyboard';
 import {TOPIC_DISCOVERY_VERSION,TOPIC_HISTORY_DAYS,topicHistoryFromRows,assessTopicCandidates,topicCandidateSchema,topicDiscoveryPrompt,type TopicSelection} from './marketing-topic-planner';
@@ -449,7 +450,7 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
   const editorialGate=prepared.report.issues.some((issue:string)=>issue.startsWith('에디토리얼 편집 검수:'));
   await reject(editorialGate?'EDITORIAL_ENGAGEMENT_GATE_REJECTED':'EDITORIAL_COPY_QUALITY_REJECTED',[]);
  }
- const document={
+ let document={
   ...prepared.document,
   ...(topicSelection?{editorial_topic_selection:topicSelection,editorial_topic_reviews:topicReviews}:{}),
   ...(editorialReview.current?{editorial_critic:editorialReview.current,editorial_critic_history:criticHistory,
@@ -459,12 +460,17 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
   const eventCard=prepared.slides.find((s:Row)=>s.role==='event');
   if(eventCard){const factsText=[facts.title,new Date(facts.starts_at).toLocaleString(language==='ko'?'ko-KR':'en-GB',{timeZone:'Asia/Seoul'})+' KST',facts.venue||facts.neighborhood].filter(Boolean).join('\n');eventCard.body=factsText;eventCard.body_ko=[facts.title,new Date(facts.starts_at).toLocaleString('ko-KR',{timeZone:'Asia/Seoul'})+' KST',facts.venue||facts.neighborhood].filter(Boolean).join('\n');eventCard.body_en=[new Date(facts.starts_at).toLocaleString('en-GB',{timeZone:'Asia/Seoul'})+' KST',facts.venue||facts.neighborhood].filter(Boolean).join('\n');eventCard.source_label='Roundy에 등록된 행사 정보 / Published event';}
  }
+ let finalSlides=prepared.slides;
+ if(plan&&input.brand_outro_enabled===true&&input.content_mode==='growth_carousel'&&isMagazineDocument(document)){
+  const completed=appendRoundyOutro(document,finalSlides,language,plan);
+  document=completed.document;finalSlides=completed.slides;
+ }
  const effectiveProfile=CONTENT_PROFILES[effectiveType];
  const recovery={requested_type:requestedType,effective_type:effectiveType,fallback_reason:fallbackReason||null,repair_used:repairUsed,search_limit:requestedType==='book_insight'||(requestedType==='seoul_trend'&&!!trendContext)?0:CONTENT_PROFILES[requestedType].research?3:0,...(requestedType==='seoul_dating'?{seoul_format:seoulFormat,seoul_mix_policy:'70_places_30_course'}:{}),...(requestedType==='seoul_trend'&&trendContext?{trend_id:trendContext.id,trend_key:trendContext.trend_key,trend_score:trendContext.trend_score,trend_route:trendContext.route_type,radar_evidence_reused:true,fact_pack_version:trendPack?.version||null,layout:trendPack?.layout||'legacy',extra_web_search_calls:0}:{}),...(requestedType==='trend_research'?{trend_study_cooldown_days:180,trend_topic_cooldown_days:60,trend_recent_studies:trendHistory.study_titles_180d.length,trend_recent_topics:trendHistory.topic_keys_60d.length}:{}),...(requestedType==='dating_myth'?{myth_claim_cooldown_days:120,myth_topic_cooldown_days:60,myth_recent_claims:mythHistory.claims_120d.length,myth_recent_topics:mythHistory.myth_keys_60d.length,myth_alternate_used:mythAlternateUsed}:{})};
  const finalClassification=classifyQualityIssues(prepared.report.issues);
  const patch={caption:prepared.caption,cta:prepared.cta,content_document:document,quality_report:{...prepared.report,recovery,classification:finalClassification,
   ...(editorialReview.current?{editorial_heuristic_score:prepared.report.editorial_score,editorial_score:editorialReview.current.score,
-   editorial_critic:editorialReview.current,editorial_critic_policy:EDITORIAL_CRITIC_VERSION}:{})},carousel_slides:prepared.slides,research_sources:prepared.sources,research_status:effectiveProfile.research?'generated':input.content_mode==='growth_carousel'?'generated':'not_required',content_language:language,draft_kind:input.content_mode==='growth_carousel'?'growth_carousel':'brand',growth_topic_type:input.content_mode==='growth_carousel'?effectiveType:null,content_mode:facts?'live_event':'prelaunch',content_pillar:facts?'event':'concept',generation_reason:effectiveProfile.label+' / editorial policy v'+CONTENT_POLICY_VERSION+(requestedType==='seoul_dating'&&!fallbackReason?' / '+seoulFormat:'')+(requestedType==='seoul_trend'&&trendContext?' / radar '+trendContext.trend_key:'')+(fallbackReason?' / safe fallback from '+requestedType:''),event_id:facts?.id||null,trend_id:trendContext?.id||draft.trend_id||null,destination_url:facts?'https://roundy.team/events/'+facts.slug:'https://roundy.team'};
+   editorial_critic:editorialReview.current,editorial_critic_policy:EDITORIAL_CRITIC_VERSION}:{})},carousel_slides:finalSlides,research_sources:prepared.sources,research_status:effectiveProfile.research?'generated':input.content_mode==='growth_carousel'?'generated':'not_required',content_language:language,draft_kind:input.content_mode==='growth_carousel'?'growth_carousel':'brand',growth_topic_type:input.content_mode==='growth_carousel'?effectiveType:null,content_mode:facts?'live_event':'prelaunch',content_pillar:facts?'event':'concept',generation_reason:effectiveProfile.label+' / editorial policy v'+CONTENT_POLICY_VERSION+(requestedType==='seoul_dating'&&!fallbackReason?' / '+seoulFormat:'')+(requestedType==='seoul_trend'&&trendContext?' / radar '+trendContext.trend_key:'')+(fallbackReason?' / safe fallback from '+requestedType:''),event_id:facts?.id||null,trend_id:trendContext?.id||draft.trend_id||null,destination_url:facts?'https://roundy.team/events/'+facts.slug:'https://roundy.team'};
  ok(await db.from('marketing_generation_jobs').update({quality_report:patch.quality_report,result_snapshot:{...patch,draft_id:draft.id,images:[],research_notes:notes,saved_at:new Date().toISOString(),generation_recovery:recovery}}).eq('id',job.id));
  if(prepared.report.status!=='passed')throw new Error('품질 검토 필요: '+prepared.report.issues.join(' '));
  return patch;
@@ -477,7 +483,10 @@ export function draftQuality(draft:Row){
  const type=postType(input),document=draft.content_document;
  if(!document)return {version:3,status:'rejected' as const,issues:['이전 생성본에는 유형별 콘텐츠 구조가 없습니다. 같은 스레드에서 품질 재작업하세요.'],review_required:true};
  const magazine=isMagazineDocument(document);
- const report=evaluateContent({...document,caption:isCompactDocument(document)?document.caption:draft.caption,cta:draft.cta},type,draft.content_language||'ko',draft.research_sources||[]);
+ if(document.brand_outro_version===BRAND_OUTRO_VERSION&&brandedStoryCount(document)===null)
+  return {version:3,status:'rejected' as const,issues:['독립 Roundy 브랜드 카드 구성이 올바르지 않습니다.'],review_required:true};
+ const story=storyOnlyDocument(document);
+ const report=evaluateContent({...story,caption:isCompactDocument(document)?document.caption:draft.caption,cta:draft.cta},type,draft.content_language||'ko',draft.research_sources||[]);
  if(isCompactDocument(document)){
   const issues=[...bilingualCaptionIssues(String(draft.caption||'')),...(magazine?[]:captionCtaIssues(document.caption,draft.cta))];
   report.issues.push(...issues);if(issues.length)report.status='rejected';
