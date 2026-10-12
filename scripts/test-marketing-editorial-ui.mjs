@@ -11,7 +11,7 @@ function load(file){
  const context={exports:{},console,Date,window:{confirm:()=>true},fetch:()=>{requests++;throw Error('Unexpected request');},require:name=>{
   if(name.endsWith('.css'))return {};
   if(name==='react/jsx-runtime')return {jsx,jsxs:jsx,Fragment:'fragment'};
-  if(name==='react')return {useState:value=>[typeof value==='function'?value():value,()=>{}],useEffect:()=>{}};
+  if(name==='react')return {useState:value=>[typeof value==='function'?value():value,()=>{}],useEffect:()=>{},useRef:value=>({current:value})};
   if(name==='lucide-react')return Object.fromEntries(['Check','PenLine','RefreshCw','Image','AlertTriangle'].map(icon=>[icon,icon]));
   if(name==='@/lib/locale')return {tr:(locale,en,ko)=>locale==='ko'?ko:en};
   if(name.startsWith('@/lib/'))return load('src/lib/'+name.slice(6)+'.ts');

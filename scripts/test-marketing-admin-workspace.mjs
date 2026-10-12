@@ -60,7 +60,7 @@ for(const expression of [
  /const \[activeTab,setActiveTab\]/,/setActiveTab\('draft'\)/,
  /['"]\/draft\/['"]\+draft\.id\+['"]\/approve['"]/,/['"]\/draft\/['"]\+draft\.id\+['"]\/publish-now['"]/,
  /['"]\/draft\/['"]\+draft\.id\+['"]\/thumbnail['"]/,/setMarketingSettings|\/settings/,
- /importResultToDraft/,/reviewStock\(/,/recheckForPublishing|quality\/recheck/,
+ /importResultToDraft/,/reviewStock\(/,/recheckForPublishing|quality\/preflight/,
  /generation\/jobs/,/activeTab==='growth'/,/activeTab==='reels'/,
  /activeTab==='stories'/,/activeTab==='trend'/,/activeTab==='publishing'/,
  /activeTab==='connection'/,/channel==='koreapas'/

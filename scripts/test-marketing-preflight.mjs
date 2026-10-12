@@ -105,3 +105,35 @@ assert.match(route,/path\[1\]==='preflight'/);
 assert.match(route,/recheckForPublishing\(current\)/);
 assert.match(route,/MARKETING_PREFLIGHT_FAILED/);
 console.log('PASS marketing preflight: seven checks, source/provenance, human approval, 3/5 photos, Answer-First, CTA, no-clipping, idempotent DB guards');
+
+// Production regression: a 5-story + 1-brand card was rejected as an invalid
+// five-card Answer-First post even though its images and rights were complete.
+const {appendRoundyOutro}=load('marketing-brand-outro');
+const {magazineRolesForCount,answerFirstIssues}=load('marketing-answer-first');
+let brandedChecks=0;
+for(const n of [3,5])for(const language of ['ko','en'])for(const ai of n===5?[false,true]:[false]){
+ const base=fixture(n),plan=base.content_document.carousel_template;
+ const roles=magazineRolesForCount(n);
+ const title=language==='ko'?'조언보다 먼저 듣는 대화':'Listen before offering advice';
+ const body=language==='ko'?'상대의 설명을 듣고 필요한 반응을 물어보세요.':'Ask what kind of response would help.';
+ const story=roles.map((role,i)=>({role,title:i?language==='ko'?'대화의 다음 장면':'The next moment':title,body,body_ko:language==='ko'?body:'필요한 반응을 물어보세요.',body_en:language==='en'?body:'Ask what kind of response would help.',secondary_body:language==='ko'?'Ask what kind of response would help.':'필요한 반응을 물어보세요.',highlight:'',source_ids:[],options:[],closing_type:i===n-1?'insight':'none'}));
+ const choices=language==='ko'?[title,'필요한 반응부터 물어보기','질문을 한 번 더 건네보기','설명을 끝까지 듣는 연습','조언의 타이밍을 맞추기']:[title,'Ask what response would help','Offer one more thoughtful question','Let the explanation finish','Find the right time for advice'];
+ const {document,slides}=appendRoundyOutro({...base.content_document,design_preset:'roundy_magazine_editorial_v2',cover_editorial_version:1,editorial_narrative_mode:'story_first',slides:story,thumbnail_candidates:choices},story,language,plan);
+ document.photo_sourcing={version:2,slide_count:n+1,min_real_photos:n-(ai?1:0),ai_thumbnail_enabled:ai,requested_ai_thumbnail:ai,ai_image_slot:ai?0:null};
+ const assets=Array.from({length:n},(_,i)=>i).filter(i=>!ai||i!==0).map(goodPhoto);
+ const draft={...base,content_language:language,visual_source:'stock',cta:'',content_document:document,carousel_slides:slides,images:slides.map((_,i)=>'https://static.roundy.team/'+i+'.jpg'),caption:photoCreditCaption('@roundy.meet | roundy.team',assets)};
+ const before=JSON.stringify(draft),report=evaluate(draft,assets);
+ assert.ok(answerFirstIssues(document,language).some(x=>x.includes('장 구성')),'unscoped old call reproduces mismatch');
+ assert.equal(report.status,'passed',language+' '+n+' '+JSON.stringify(report.issues));
+ assert.equal(report.checks.filter(c=>c.passed).length,7);
+ assert.equal(JSON.stringify(draft),before,'preflight must not mutate saved content');
+ const broken=structuredClone(draft);broken.content_document.slides.pop();broken.carousel_slides.pop();broken.images.pop();
+ fail(broken,assets,'slide_count');
+ const changedTitle=structuredClone(draft);changedTitle.carousel_slides[0].title='Changed headline';fail(changedTitle,assets,'answer_first');
+ const badOrder=structuredClone(draft);badOrder.content_document.slides[1].role='wrong';fail(badOrder,assets,'answer_first');
+ fail({...draft,content_document:{...document,thumbnail_render_pending:true}},assets,'answer_first');
+ fail(draft,assets.map((p,i)=>i? p:{...p,review_status:'pending'}),'photo_approval');
+ fail(draft,assets.slice(0,-1),'real_photos');
+ brandedChecks+=10;
+}
+console.log('PASS '+brandedChecks+' branded preflight assertions: 3+1, 5+1, KO/EN, AI/all-real, and unchanged negative publishing gates.');
