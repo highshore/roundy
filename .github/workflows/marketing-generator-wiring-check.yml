@@ -1,0 +1,61 @@
+name: Marketing generator wiring verification
+on:
+  push:
+    branches: [codex/marketing-generator-repair-run-20261012]
+    paths: [.github/workflows/marketing-generator-wiring-check.yml]
+permissions:
+  contents: read
+concurrency:
+  group: marketing-generator-wiring-verification
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: f2441672f11ee93b181d35e3851683f875f59d81
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Update structural assertion for tested payload separation
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path=Path('scripts/test-marketing-generation.mjs')
+          source=path.read_text()
+          old='check(()=>assert.ok(adminMarketingSource.includes("...(basis===\'growth_carousel\'?{topic_type:topic}:{})")));'
+          assert source.count(old)==1, 'Expected one old payload-wiring assertion'
+          new='''// New-post topic is conditional; existing renders exclusively use saved draft fields.
+          check(()=>assert.ok(adminMarketingSource.includes("topic_type:basis==='growth_carousel'?topic:undefined")));
+          check(()=>assert.ok(adminMarketingSource.includes("renderOnly?savedRenderContent(draft!)")));
+          check(()=>assert.ok(adminMarketingSource.includes("...contentInput,language:today?undefined:contentInput.language")));'''
+          path.write_text(source.replace(old,new))
+          PY
+      - run: npm run typecheck
+      - run: node scripts/test-marketing-generation.mjs
+      - run: npm test
+      - run: node scripts/test-marketing-compact.mjs
+      - run: node scripts/test-marketing-compact-runtime.mjs
+      - run: node scripts/test-marketing-output-recovery.mjs
+      - run: node scripts/test-marketing-renderer.mjs
+      - run: node scripts/test-marketing-draft-inbox.mjs
+      - run: node scripts/test-rotation-dating-copy.mjs
+      - run: node scripts/test-marketing-compact.mjs --render
+      - name: Store verified test blob without updating any branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          const path='scripts/test-marketing-generation.mjs';
+          const response=await fetch('https://api.github.com/repos/'+process.env.GITHUB_REPOSITORY+'/git/blobs',{method:'POST',headers:{Authorization:'Bearer '+process.env.GH_TOKEN,'Content-Type':'application/json',Accept:'application/vnd.github+json'},body:JSON.stringify({encoding:'utf-8',content:fs.readFileSync(path,'utf8')})});
+          if(!response.ok)throw Error('Blob write failed '+response.status);
+          const data=await response.json();console.log(JSON.stringify({path,sha:data.sha}));
+          JS
