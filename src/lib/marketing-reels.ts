@@ -9,6 +9,7 @@ import {
 import {inspectReelMp4} from './marketing-reel-mp4';
 import {planGrowthSlot} from './marketing-growth-planner';
 import {factPackReady} from './marketing-trend-guide';
+import {readInstagramPerformance} from './marketing-performance';
 import {reelCreativeApi,assertReadyReelPlan} from './marketing-reel-creative-service';
 import {reelPlanHash} from './marketing-reel-creative';
 
@@ -34,16 +35,19 @@ async function getReelStats(service:ReturnType<typeof createServiceRoleClient>,d
  const ids=all.map(d=>String(d.marketing_run_id||'')).filter(uuid);
  if(!ids.length)return {summary:evaluateReelCohorts([]),posts:[],insight_horizons:[24,72]};
  const insights=checked(await service.from('instagram_post_insights')
-  .select('run_id,horizon_hours,reach,views,likes,comments,saves,shares,reel_avg_watch_time_ms,reel_total_watch_time_ms,captured_at')
+  .select('run_id,horizon_hours,source,reach,views,likes,comments,saves,shares,reel_avg_watch_time_ms,reel_total_watch_time_ms,metric_availability,captured_at')
   .in('run_id',ids).order('horizon_hours',{ascending:false}).limit(500)) as Row[];
  const latest=new Map<string,Row>();
- for(const s of insights)if(!latest.has(s.run_id))latest.set(s.run_id,s);
+ for(const s of insights)if(!latest.has(s.run_id)&&s.horizon_hours===72&&s.source==='insights'&&
+  s.metric_availability?.reach===true&&s.metric_availability?.shares===true&&
+  s.metric_availability?.saved===true)latest.set(s.run_id,s);
  const posts=all.filter(d=>d.marketing_run_id&&latest.has(d.marketing_run_id)).map(d=>{
   const insight=latest.get(d.marketing_run_id)!;
   return {id:d.id,title:d.title,status:d.status,pillar:d.pillar,hook_style:d.hook_style,language:d.language,
    published_at:d.published_at,horizon_hours:insight.horizon_hours,reach:insight.reach,views:insight.views,
    shares:insight.shares,saves:insight.saves,likes:insight.likes,comments:insight.comments,
-   avg_watch_ms:insight.reel_avg_watch_time_ms,total_watch_ms:insight.reel_total_watch_time_ms,
+   avg_watch_ms:insight.metric_availability?.ig_reels_avg_watch_time===true?insight.reel_avg_watch_time_ms:null,
+   total_watch_ms:insight.metric_availability?.ig_reels_video_view_total_time===true?insight.reel_total_watch_time_ms:null,
    duration_seconds:d.duration_seconds};
  });
  const eligible:ReelMetric[]=posts.filter(row=>Number(row.reach)>0).map(row=>({
@@ -52,7 +56,13 @@ async function getReelStats(service:ReturnType<typeof createServiceRoleClient>,d
   avg_watch_ms:row.avg_watch_ms===null?null:Number(row.avg_watch_ms),
   duration_seconds:Number(row.duration_seconds||0)
  }));
- return {summary:evaluateReelCohorts(eligible),posts,insight_horizons:[24,72]};
+ const base=evaluateReelCohorts(eligible);
+ const evidence=await readInstagramPerformance(service).catch(()=>null);
+ const ko=evidence?.learning.reel_hooks.ko,en=evidence?.learning.reel_hooks.en;
+ const winner=ko?.active?ko:en?.active?en:null;
+ return {summary:{...base,learning_ready:Boolean(winner),recommended_hook:winner?.winner||null},
+  posts,insight_horizons:[24,72],
+  learning_reason:winner?.reason||'Insufficient complete, stable 72-hour published Reel cohorts.'};
 }
 function seededIdea(pillar:string,language:'ko'|'en',suggestion?:Row){
  if(pillar==='seoul'&&suggestion){
