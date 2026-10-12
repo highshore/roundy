@@ -51,7 +51,7 @@ export function normalizePostInsight(item:Record<string,any>):PerformanceRow|nul
   language:item.language==='ko'?'ko':'en',
   hook_style:hooks.includes(item.hook_style)?item.hook_style:'',
   published_at:published,horizon_hours:Number(m.horizon_hours||0),source:String(m.source||''),
-  reach,views:value('views'),shares:value('shares'),saves:value('saves'),
+  reach,views:value('views'),shares:value('shares'),saves:value('saves','saved'),
   likes:value('likes'),comments:value('comments'),
   media_follows:format==='feed'?value('media_follows','follows'):null,
   media_profile_visits:format==='feed'?value('media_profile_visits','profile_visits'):null,
