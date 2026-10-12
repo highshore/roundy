@@ -6,6 +6,7 @@ import {captionCtaIssues,isCompactDocument,isMagazineDocument,isImmersiveMagazin
 import {EDITORIAL_ENGAGEMENT_POLICY} from './marketing-editorial-quality';
 import {storyboardWritingGuide} from './marketing-editorial-storyboard';
 import {TOPIC_DISCOVERY_VERSION,TOPIC_HISTORY_DAYS,topicHistoryFromRows,assessTopicCandidates,topicCandidateSchema,topicDiscoveryPrompt,type TopicSelection} from './marketing-topic-planner';
+import {performanceEditorialHint} from './marketing-performance';
 import {campaignDraftQuality} from './marketing-campaign';
 import {eventCampaignDraftQuality} from './marketing-event-campaign';
 import {renderCompactEditorial,type EditorialAssets} from './marketing-visuals';
@@ -121,7 +122,11 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
     .order('created_at',{ascending:false}).limit(120)
   ]);
   const history=topicHistoryFromRows(ok(draftRows)||[],ok(jobRows)||[],String(draft.id));
-  const instructions=topicDiscoveryPrompt(requestedType,language,creativeDirection,history);
+  // Only statistically stable, real published Meta observations can suggest a
+  // style. No performance data may ever be treated as external factual evidence.
+  const learned=await performanceEditorialHint(db,'feed',language).catch(()=> '');
+  const instructions=topicDiscoveryPrompt(requestedType,language,creativeDirection,history)+
+   (learned?'\n'+learned:'');
   if(Buffer.byteLength(instructions,'utf8')>14000)throw new Error('TOPIC_PLANNING_PROMPT_TOO_LONG');
   ok(await db.from('marketing_generation_jobs').update({stage:'planning_topics'}).eq('id',job.id));
   const response=await call('chat/completions',{
