@@ -5,6 +5,7 @@ import {Heading} from './heading';
 import {tr,type Locale} from '@/lib/locale';
 import {createStoryReel,mp4RecorderMime} from '@/lib/marketing-reel-renderer';
 import {assertMp4File,REEL_BUCKET,REEL_MAX_BYTES} from '@/lib/marketing-reel-policy';
+import {AdminMarketingReelCreative} from './admin-marketing-reel-creative';
 
 type Row=Record<string,any>;
 type StudioCopy={title:string;hook_text:string;caption:string;language:'ko'|'en';pillar:string;hook_style:string};
@@ -154,6 +155,7 @@ export function AdminMarketingReels({locale}:{locale:Locale}){
   rejected:['Rejected','반려']
  };
  const canEdit=!selected||['draft','needs_review'].includes(selected.status);
+ const legacyCopyEdit=canEdit&&selected?.creative_plan?.version!==1;
  const changed=selected&&(['title','hook_text','caption','language','pillar','hook_style'] as const)
   .some(key=>copy[key]!==selected[key]);
  if(loading)return <section className="marketing-tab-panel marketing-reel-studio"><p role="status">{t('Loading Reel Studio…','릴스 스튜디오를 불러오는 중…')}</p></section>;
@@ -181,25 +183,28 @@ export function AdminMarketingReels({locale}:{locale:Locale}){
    {selected&&<p className="admin-help">{t('Status','상태')}: {t(...(statusLabels[selected.status]||['Unknown','알 수 없음']))} · {t('Revision','수정 버전')} {selected.revision}</p>}
    <div className="admin-form">
     <div className="admin-two">
-     <label><span>{t('Content pillar','콘텐츠 유형')}</span><select disabled={!canEdit||busy} value={copy.pillar} onChange={e=>updateCopy('pillar',e.target.value)}>
+     <label><span>{t('Content pillar','콘텐츠 유형')}</span><select disabled={!legacyCopyEdit||busy} value={copy.pillar} onChange={e=>updateCopy('pillar',e.target.value)}>
       {Object.entries(pillarLabels).map(([id,names])=><option key={id} value={id}>{t(...names)}</option>)}
      </select></label>
-     <label><span>{t('Hook type','첫 2초 훅 전략')}</span><select disabled={!canEdit||busy} value={copy.hook_style} onChange={e=>updateCopy('hook_style',e.target.value)}>
+     <label><span>{t('Hook type','첫 2초 훅 전략')}</span><select disabled={!legacyCopyEdit||busy} value={copy.hook_style} onChange={e=>updateCopy('hook_style',e.target.value)}>
       <option value="curiosity">{t('Curiosity','궁금증 유발')}</option><option value="practical">{t('Practical tip','실용 정보')}</option><option value="humor">{t('Relatable humor','공감형 유머')}</option>
      </select></label>
-     <label><span>{t('Language','언어')}</span><select disabled={!canEdit||busy} value={copy.language} onChange={e=>updateCopy('language',e.target.value)}>
+     <label><span>{t('Language','언어')}</span><select disabled={!legacyCopyEdit||busy} value={copy.language} onChange={e=>updateCopy('language',e.target.value)}>
       <option value="en">English</option><option value="ko">한국어</option>
      </select></label>
     </div>
-    <label><span>{t('Editorial title','콘텐츠 제목')}</span><input disabled={!canEdit||busy} maxLength={100} value={copy.title} onChange={e=>updateCopy('title',e.target.value)}/></label>
-    <label><span>{t('First two seconds hook','첫 2초 훅 문구')}</span><input disabled={!canEdit||busy} maxLength={110} value={copy.hook_text} onChange={e=>updateCopy('hook_text',e.target.value)}/></label>
-    <label><span>{t('Instagram caption','인스타그램 캡션')}</span><textarea disabled={!canEdit||busy} rows={4} maxLength={2000} value={copy.caption} onChange={e=>updateCopy('caption',e.target.value)}/></label>
-    {canEdit&&<div className="admin-form-actions">
+    <label><span>{t('Editorial title','콘텐츠 제목')}</span><input disabled={!legacyCopyEdit||busy} maxLength={100} value={copy.title} onChange={e=>updateCopy('title',e.target.value)}/></label>
+    <label><span>{t('Opening hook','첫 2초 훅 문구')}</span><input disabled={!legacyCopyEdit||busy} maxLength={110} value={copy.hook_text} onChange={e=>updateCopy('hook_text',e.target.value)}/></label>
+    <label><span>{t('Instagram caption','인스타그램 캡션')}</span><textarea disabled={!legacyCopyEdit||busy} rows={4} maxLength={2000} value={copy.caption} onChange={e=>updateCopy('caption',e.target.value)}/></label>
+    {legacyCopyEdit&&<div className="admin-form-actions">
      <button type="button" disabled={busy} className="admin-secondary" onClick={()=>void work(idea)}>{t('Suggest an editorial idea (free)','콘텐츠 기획안 추천 (무료)')}</button>
      <button type="button" disabled={busy||Boolean(selected&&!changed)} className="admin-primary" onClick={()=>void work(save)}>{selected?t('Save changes','변경 사항 저장'):t('Create draft','초안 생성')}</button>
     </div>}
-    {canEdit&&<div className="marketing-settings-card">
-     <Heading level={3}>{t('Create a 9:16 MP4 storyboard','9:16 MP4 스토리보드 제작')}</Heading>
+    <AdminMarketingReelCreative locale={locale} draft={selected} pillar={copy.pillar} language={copy.language} busy={busy}
+     onDraftCreated={next=>{select(next);void load(next.id).catch(e=>setError(String(e?.message||e)));}}
+     onVideoReady={mp4=>{replaceLocalVideo(mp4);setSourceKind('storyboard');setRights(false);setCopyReviewed(false);setVideoReviewed(false);}}/>
+    {legacyCopyEdit&&<div className="marketing-settings-card">
+     <Heading level={3}>{t('Quick 9-second storyboard (legacy)','빠른 9초 스토리보드 (기존 기능)')}</Heading>
      <p className="admin-help">{t('Three original scenes, three seconds each. Optional licensed photos. This creates a real silent MP4 locally in browsers supporting H.264 MP4 MediaRecorder. If unavailable, upload a finished MP4.','직접 만든 3개 장면을 각 3초씩 구성합니다. 저작권을 확인한 사진을 사용할 수 있습니다. H.264 MP4 녹화를 지원하는 브라우저에서는 실제 무음 MP4를 생성합니다. 미지원 브라우저에서는 완성된 MP4를 업로드하세요.')}</p>
      {story.map((value,i)=><label key={i}><span>{t('Scene','장면')} {i+1}</span>
       <input maxLength={110} disabled={busy} value={value} onChange={e=>setStory(current=>current.map((v,j)=>j===i?e.target.value:v) as [string,string,string])}/>

@@ -9,6 +9,8 @@ import {
 import {inspectReelMp4} from './marketing-reel-mp4';
 import {planGrowthSlot} from './marketing-growth-planner';
 import {factPackReady} from './marketing-trend-guide';
+import {reelCreativeApi,assertReadyReelPlan} from './marketing-reel-creative-service';
+import {reelPlanHash} from './marketing-reel-creative';
 
 type Client=Awaited<ReturnType<typeof createClient>>;
 type Row=Record<string,any>;
@@ -73,6 +75,11 @@ export async function reelsApi(req:NextRequest,db:Client,path:string[]){
  const service=createServiceRoleClient(),user=(await db.auth.getUser()).data.user;
  if(!user)return json({error:'Sign in required'},401);
  const id=path[0];
+ // New creative endpoints remain inside the existing admin-authenticated origin
+ // check. Legacy Reel Studio routes and publisher continue unchanged.
+ if(id==='ai'||id==='assets'||(uuid(id)&&(
+    path[1]==='ai'||path[1]==='storyboard'||path[1]==='assets')))
+  return reelCreativeApi(req,user.id,path);
  if(!id&&req.method==='GET'){
   const rows=checked(await service.from('instagram_reel_drafts').select('*').order('created_at',{ascending:false}).limit(100)) as Row[];
   const previews=await Promise.all(rows.map(row=>reelPreview(service,row)));
@@ -108,6 +115,7 @@ export async function reelsApi(req:NextRequest,db:Client,path:string[]){
  if(path.length===1&&req.method==='PATCH'){
   const body=await req.json().catch(()=>({})),copy=parseReelCopy(body),row=await readReel(service,id);
   if(!['draft','needs_review'].includes(row.status))return json({error:'REEL_LOCKED_AFTER_APPROVAL'},409);
+  if(row.creative_plan?.version===1)return json({error:'REEL_STORYBOARD_VERSION_REQUIRED'},409);
   if(!Number.isInteger(body.revision)||body.revision!==row.revision)return json({error:'REEL_DRAFT_CHANGED_REFRESH_FIRST'},409);
   const updated=checked(await service.from('instagram_reel_drafts')
    .update({...copy,revision:row.revision+1,rights_attested:false,status:row.video_storage_path?'needs_review':'draft',updated_at:new Date().toISOString()})
@@ -129,9 +137,12 @@ export async function reelsApi(req:NextRequest,db:Client,path:string[]){
   if(actual.duration_seconds!==null&&Math.abs(actual.duration_seconds-videoMeta.duration_seconds)>1.5)
    throw new Error('REEL_VIDEO_DURATION_MISMATCH');
   const duration=actual.duration_seconds??videoMeta.duration_seconds;
+  const plan=await assertReadyReelPlan(service,row,false);
+  if(plan&&Math.abs(duration-plan.duration_seconds)>2)throw new Error('REEL_STORYBOARD_DURATION_MISMATCH');
   const updated=checked(await service.from('instagram_reel_drafts').update({
    video_storage_path:storagePath,source_kind:videoMeta.source_kind,
    width:actual.width,height:actual.height,duration_seconds:duration,file_size:actual.bytes,
+   rendered_plan_hash:plan?reelPlanHash(plan):null,
    rights_attested:false,status:'needs_review',revision:row.revision+1,updated_at:new Date().toISOString()
   }).eq('id',id).eq('revision',row.revision).in('status',['draft','needs_review']).select('*').maybeSingle());
   if(!updated)return json({error:'REEL_DRAFT_CHANGED_REFRESH_FIRST'},409);
@@ -149,6 +160,7 @@ export async function reelsApi(req:NextRequest,db:Client,path:string[]){
    return json({error:'REEL_DRAFT_CHANGED_REFRESH_FIRST'},409);
   if(!row.video_storage_path||!row.duration_seconds||!row.caption||!row.title||!row.hook_text)
    return json({error:'REEL_VIDEO_AND_COPY_REQUIRED'},400);
+  await assertReadyReelPlan(service,row);
   const updated=checked(await service.from('instagram_reel_drafts').update({
    status:'needs_review',rights_attested:true,revision:row.revision+1,updated_at:new Date().toISOString()
   }).eq('id',id).eq('revision',row.revision).in('status',['draft','needs_review']).select('*').maybeSingle());
@@ -160,6 +172,7 @@ export async function reelsApi(req:NextRequest,db:Client,path:string[]){
   if(body.confirm_publish!==true||body.confirm_final_preview!==true)return json({error:'REEL_PUBLISH_CONFIRMATION_REQUIRED'},400);
   if(row.status!=='needs_review'||row.rights_attested!==true||row.revision!==body.revision)
    return json({error:'REEL_REVIEW_REQUIRED_OR_DRAFT_CHANGED'},409);
+  await assertReadyReelPlan(service,row);
   const when=body.scheduled_for===null||body.scheduled_for===''?null:typeof body.scheduled_for==='string'&&
     Number.isFinite(Date.parse(body.scheduled_for))?body.scheduled_for:undefined;
   if(when===undefined)return json({error:'INVALID_REEL_SCHEDULE'},400);
