@@ -102,11 +102,25 @@ function harness({denied=false,network=false,badSources=false,duplicate=false,ph
     ?['소개팅이 면접처럼 느껴지는 이유','카톡에선 웃긴데 만나면 어색한 이유','첫 만남 직후 떠오르는 기억','주말 약속이 자꾸 미뤄지는 순간','시끄러운 카페에서 대화가 끊기는 이유']
     :['Why first dates can feel like interviews','Why texting feels easier than meeting','The first detail you remember after a date','Why weekend plans take so long','When a busy cafe makes talking difficult'];
    const concepts=['first_date_interview_questions','texting_versus_meeting_context','after_date_first_memory','weekend_social_planning_friction','loud_cafe_conversation_cost'];
+   const insightsKo=[
+    '질문을 연속해서 던지는 대신 자신의 작은 경험을 나누면 상대도 마음을 열 가능성이 생긴다.',
+    '카톡에서 답을 편집하는 시간과 얼굴을 보고 침묵을 경험하는 시간은 다르게 느껴질 수 있다.',
+    '헤어진 뒤 처음 떠오르는 장면이 직업이나 취미가 아니라 둘 사이의 느낌일 때가 있다.',
+    '선택지가 너무 많아서 일정이 미뤄지면 장소보다 먼저 시간을 확정하는 방법이 있다.',
+    '카페가 너무 시끄러우면 말의 내용보다 소음에 에너지를 써서 대화가 어려워질 수 있다.'
+   ];
+   const insightsEn=[
+    'Sharing a small personal experience can open up a conversation better than firing several questions.',
+    'A text message can be edited before sending, while a pause together face to face cannot be edited out.',
+    'After a first meeting, people may remember a particular shared feeling before a list of job titles.',
+    'Too many choices can delay weekend plans even when choosing a time first would make a real difference.',
+    'Background noise in a cafe can consume attention that two people would rather give to their conversation.'
+   ];
    const candidates=heads.map((headline,i)=>({
     headline,angle_key:concepts[i],
     reader_payoff:ko?'독자가 첫 만남에서 자주 생기는 어색함을 다르게 해석하고 실천할 만한 관찰을 얻습니다.':'Readers will gain a concrete and realistic way to understand a familiar social moment.',
     scene:ko?'첫 만남에서 질문은 많지만 대화가 이어지지 않는 현실적인 카페의 장면.':'Two adults meet at a cafe and notice a small but very familiar social friction.',
-    core_insight:ko?'질문을 늘리는 것보다 서로 자신의 경험을 조금씩 나누는 편이 대화를 만드는 데 도움이 될 수도 있습니다.':'Sharing a small personal observation can invite an exchange that does not feel like an interview.',
+    core_insight:ko?insightsKo[i]:insightsEn[i],
     novelty:topicOutcome==='reject'?1:5,reader_value:topicOutcome==='reject'?1:5,curiosity:topicOutcome==='reject'?1:5,shareability:topicOutcome==='reject'?1:5,
     editorial_reason:'Distinct realistic perspective with a specific reader payoff.'
    }));
