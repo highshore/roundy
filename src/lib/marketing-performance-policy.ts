@@ -35,9 +35,14 @@ export function observedNumber(value:unknown,observed:unknown):number|null{
 export function normalizePostInsight(item:Record<string,any>):PerformanceRow|null{
  const m=item.metric||{},reported=m.metric_availability||{};
  const format:Format=item.format==='reel'?'reel':'feed';
- const reach=observedNumber(m.reach,reported.reach);
- // A genuine 0 is meaningful only if official Meta response included it.
- const value=(name:string,flag=name)=>observedNumber(m[name],reported[flag]);
+ // Legacy rich observations stored reach/views as null when Meta omitted them.
+ // Restore DISPLAY of those genuine recorded numbers, but keep observed flags
+ // false so they can NEVER teach the AI without the new availability metadata.
+ const legacy=m.source==='insights';
+ const reach=observedNumber(m.reach,reported.reach)??(legacy?integer(m.reach):null);
+ // A genuine zero for shares/saves is meaningful ONLY with explicit flags.
+ const value=(name:string,flag=name)=>observedNumber(m[name],reported[flag])??
+  (legacy&&['views','reach'].includes(name)?integer(m[name]):null);
  const published=String(item.published_at||'');
  if(!item.run_id||!Number.isFinite(Date.parse(published)))return null;
  return {
