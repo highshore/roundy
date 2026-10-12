@@ -16,6 +16,7 @@ import {renderPrelaunchCampaign,renderLiveEventCampaign} from './marketing-visua
 import {CAMPAIGN_PRESET,EVENT_CAMPAIGN_PRESET} from './marketing-presentation';
 import {reviewMarketingDraft,mergePreflightQuality} from './marketing-preflight-service';
 import {composeManualMagazineEdit} from './marketing-manual-slide';
+import {brandedStoryCount} from './marketing-brand-outro';
 
 type DB=ReturnType<typeof createServiceRoleClient>;
 type Row=Record<string,any>;
@@ -73,7 +74,7 @@ async function insertVersion(db:DB,source:Row,sourceSnapshot:Row,photos:Row[],op
  return child;
 }
 async function copyViaModel(source:Row,request:RegenerationRequest):Promise<{rewrite:Rewrite;usage:Row}>{
- const slides=sourceSlides(source),indices=targetedSlideIndices(request,slides.length);
+ const slides=sourceSlides(source),indices=targetedSlideIndices(request,brandedStoryCount(source.content_document)??slides.length);
  const key=process.env.OPENAI_API_KEY?.trim();
  if(!key)throw new Error('OPENAI_KEY_MISSING');
  const system=[
@@ -242,7 +243,9 @@ export async function regenerateVersion(id:string,value:unknown,actor:string){
  const previous=ok(await db.from('instagram_post_drafts').select('id,imported_at,status')
   .eq('regeneration_request_key',input.request_key).maybeSingle()) as Row|null;
  if(previous)return {draft:ok(await db.from('instagram_post_drafts').select('*').eq('id',previous.id).single()),deduplicated:true};
- const indices=targetedSlideIndices(input,slides.length),oldPhotos=await listStockSelections(db,id);
+ const storyCount=brandedStoryCount(source.content_document);
+ const indices=targetedSlideIndices(input,storyCount??slides.length),oldPhotos=await listStockSelections(db,id);
+ if(storyCount!==null&&indices.some(index=>index>=storyCount))throw new Error('BRAND_OUTRO_IS_SERVER_OWNED');
  const imageSource=(value as Row)?.image_source==='ai'?'ai':'online';
  if((value as Row)?.image_source!==undefined&&!['ai','online'].includes(String((value as Row).image_source)))throw new Error('INVALID_IMAGE_SOURCE');
  const photoSlots=requiredStockSlots(source);
@@ -253,8 +256,8 @@ export async function regenerateVersion(id:string,value:unknown,actor:string){
   &&(!aiCover||indices.some(i=>i!==0)))
   throw new Error('AI_COVER_ONLY: 현재 실사 사진 최소 개수 정책에 따라 AI 생성은 AI 표지가 설정된 콘텐츠의 첫 번째 카드만 지원합니다.');
  if(['image','both'].includes(input.mode)){
-  // The editorial closing is text-only. Whole-post image regeneration updates
-  // every photograph but must preserve text-only cards, not reject the operation.
+  // Historic editorial closings are text-only; new branded-story closings have
+  // licensed photographs. The server-owned outro graphic is never replaced.
   const photoTargets=indices.filter(i=>photoSlots.includes(i)||(i===0&&aiCover));
   if(input.mode==='image'&&!photoTargets.length)
    throw new Error('SLIDE_HAS_NO_REPLACEABLE_IMAGE');
@@ -285,8 +288,8 @@ export async function regenerateVersion(id:string,value:unknown,actor:string){
   let nextSlides=slides.map(s=>({...s})),caption=String(source.caption||'');
   if(needsCopy){
    const {rewrite,usage}=await copyViaModel(source,input);
-   const result=applySelectiveRewrite(slides,caption,input,rewrite,source.content_language==='en'?'en':'ko');
-   nextSlides=result.slides;caption=result.caption;
+   const result=applySelectiveRewrite(storyCount===null?slides:slides.slice(0,storyCount),caption,input,rewrite,source.content_language==='en'?'en':'ko');
+   nextSlides=storyCount===null?result.slides:[...result.slides,slides[storyCount]];caption=result.caption;
    await db.from('marketing_generation_jobs').update({input_tokens:usage.prompt_tokens||0,
     output_tokens:usage.completion_tokens||0,stage:'copy_written'}).eq('id',job.id);
   }
@@ -298,7 +301,8 @@ export async function regenerateVersion(id:string,value:unknown,actor:string){
    ok(await db.from('marketing_draft_photos').update({asset_id:next.id})
     .eq('draft_id',draft.id).eq('slot',slot));
   }
-  let document:Row={...source.content_document,slides:nextSlides,thumbnail_render_pending:true};
+  let document:Row={...source.content_document,slides:nextSlides,thumbnail_render_pending:true,
+   ...(['text','both'].includes(input.mode)?{editorial_critic:null,editorial_critic_history:[],editorial_critic_policy:null}:{})};
   if(aiCover){const path=await regenerateAiCover(db,{...draft,carousel_slides:nextSlides},input);document={...document,regeneration_ai_cover_path:path};}
   // Restore mandatory source credits after caption rewrites. Image-only requests may
   // update the credits solely to reflect changed photographer/license metadata.

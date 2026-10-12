@@ -46,3 +46,38 @@ increase or publishing gate relaxation is introduced.
   preserves statistical thresholds and capped feedback.
 - Existing marketing rights, preflight, source provenance and authorization
   suites remain the release blockers.
+
+
+## Independent editor & story-first mode (proposed release)
+
+- Generate up to five topic angles with historical duplicate screening. The writer's
+  self-ratings are not passed to the independent topic critic. The critic scores
+  curiosity, scene, originality, usefulness, and shareability; all reviewed keys
+  must match eligible topic candidates exactly. Low-quality ideas fail closed.
+- New non-research human/social Growth Carousel topics (conversation prompts,
+  archetypes, MBTI, original relatable humor, Seoul/Korea daily life, mini quizzes)
+  use **story-first** writing. Research, verified venue, book, trend, and event
+  content retain answer-first/source-first constraints. Story-first permits an
+  honest question as a cover but never clickbait, fake anecdotes, or invented facts.
+- After ordinary research/format checks, a **second independently prompted AI
+  editor** reviews the actual slide texts. Its weighted rating is computed by
+  the server, not accepted from the writer. Required: >=80 overall and >=4/5
+  on hook, originality and progress across slides.
+- A weak **premise** may swap once to the next independently approved,
+  source-free idea; a fixable **draft** may get one quality-targeted rewrite.
+  There are at most **two** copy-critic calls per job. No automatic retry is
+  performed after invalid responses, exhausted alternatives or review failure.
+  All source/rights, copy-length, duplicate, card-count and manual approval
+  gates remain in force.
+- Keep the existing 3/5 reservation immutable. A thin five-card premise is
+  rejected or replaced, never shortened after reservation or padded with filler.
+- Critic scores and remarks are stored on **newly generated** content and
+  surfaced in the Admin Editorial Studio. Human changes require the existing
+  manual review workflow. Existing content remains intact.
+- The additional short critique calls use the existing request-token accounting
+  and job budget reservation (which is an estimate, not provider billing).
+  Make NO extra paid photo request until the editorial copy is accepted.
+- CI runs a **mocked, offline** regression test covering weak-vs-strong review,
+  independent re-ranking, malformed model output, language-mode selection
+  and the fail-closed review/repair wiring. Real provider costs, judgments,
+  runtime limits and final image quality still need a bounded smoke test.

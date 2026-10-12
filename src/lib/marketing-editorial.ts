@@ -2,8 +2,10 @@ import {buildMarketingResearchTask,RESEARCH_TASK_VERSION,type SeoulDatingFormat,
 import {applyAnswerFirstDocument} from './marketing-answer-first';
 import {type CarouselPlan} from './marketing-carousel-template';
 import {selectVerifiedMarketingBook,verifiedBookEvidence} from './marketing-book-catalog';
-import {captionCtaIssues,isCompactDocument,isMagazineDocument,isImmersiveMagazineDocument,bilingualCaptionIssues,CAMPAIGN_PRESET,EVENT_CAMPAIGN_PRESET} from './marketing-presentation';
+import {captionCtaIssues,isCompactDocument,isMagazineDocument,bilingualCaptionIssues,CAMPAIGN_PRESET,EVENT_CAMPAIGN_PRESET} from './marketing-presentation';
 import {EDITORIAL_ENGAGEMENT_POLICY} from './marketing-editorial-quality';
+import {appendRoundyOutro,storyOnlyDocument,brandedStoryCount,BRAND_OUTRO_VERSION} from './marketing-brand-outro';
+import {EDITORIAL_CRITIC_VERSION,EDITORIAL_CRITIC_MAX_REVIEWS,storyFirstPostType,topicCriticSchema,topicCriticPrompt,independentlyRankTopics,copyCriticSchema,copyCriticPrompt,assessIndependentCopyReview,type EditorialCopyCritique,type TopicCriticReview} from './marketing-editorial-critic';
 import {storyboardWritingGuide} from './marketing-editorial-storyboard';
 import {TOPIC_DISCOVERY_VERSION,TOPIC_HISTORY_DAYS,topicHistoryFromRows,assessTopicCandidates,topicCandidateSchema,topicDiscoveryPrompt,type TopicSelection} from './marketing-topic-planner';
 import {performanceEditorialHint} from './marketing-performance';
@@ -104,7 +106,15 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
   facts=ok(await q.order('starts_at').limit(1).maybeSingle());if(!facts)throw new Error('게시 가능한 정식 이벤트가 없습니다. 이벤트 모집 대신 오픈 전 홍보를 선택하세요.');
  }
  let sources:Evidence[]=[],notes='',inputTokens=0,outputTokens=0;
- let topicSelection:TopicSelection|null=null,creativeDirection=String(input.instruction||'');
+ let topicSelection:TopicSelection|null=null,topicReviews:TopicCriticReview[]=[],creativeDirection=String(input.instruction||'');
+ const directionForTopic=(chosen:NonNullable<TopicSelection['selected']>)=>[
+  'Approved topic: '+chosen.headline,
+  'Specific scene: '+chosen.scene,
+  'Reader payoff: '+chosen.reader_payoff,
+  'Distinct observation: '+chosen.core_insight,
+  input.instruction?'User direction: '+String(input.instruction):'',
+  'Do not invent studies, statistics or factual sources.'
+ ].filter(Boolean).join(' ').slice(0,500);
  const record=async(result:Row)=>{inputTokens+=Number(result.usage?.input_tokens||result.usage?.prompt_tokens||0);outputTokens+=Number(result.usage?.output_tokens||result.usage?.completion_tokens||0);ok(await db.from('marketing_generation_jobs').update({input_tokens:inputTokens,output_tokens:outputTokens}).eq('id',job.id));};
 
  // Plan reader-first, non-duplicate story angles BEFORE any source research or
@@ -136,30 +146,38 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
   },45000);
   await record(response);
   topicSelection=assessTopicCandidates(parseDocument(response).document,history,language);
+  // Independent editor gets no self-scored novelty/virality numbers.
+  if(topicSelection.selected){
+   const eligible=topicSelection.candidates.filter(c=>c.status!=='discarded');
+   ok(await db.from('marketing_generation_jobs').update({stage:'reviewing_topics'}).eq('id',job.id));
+   const judge=await call('chat/completions',{
+    model:MODEL,reasoning_effort:'none',max_completion_tokens:1600,
+    response_format:{type:'json_schema',json_schema:{name:'roundy_topic_critic_v1',strict:true,schema:topicCriticSchema()}},
+    messages:[{role:'system',content:topicCriticPrompt(language)},{role:'user',content:JSON.stringify({
+     editorial_type:requestedType,slide_count:plan.slide_count,
+     candidates:eligible.map(c=>({angle_key:c.angle_key,headline:c.headline,scene:c.scene,
+      core_insight:c.core_insight,reader_payoff:c.reader_payoff}))
+    })}]
+   },28000);
+   await record(judge);
+   const ranked=independentlyRankTopics(topicSelection,parseDocument(judge).document);
+   topicSelection=ranked.selection;topicReviews=ranked.reviews;
+  }
   const stored=ok(await db.from('marketing_generation_jobs').select('request_payload').eq('id',job.id).single());
   ok(await db.from('marketing_generation_jobs').update({
-   request_payload:{...(stored?.request_payload||{}),topic_selection:topicSelection},
+   request_payload:{...(stored?.request_payload||{}),topic_selection:topicSelection,topic_critic_reviews:topicReviews},
    stage:topicSelection.status==='selected'?'topic_selected':'topics_discarded',
-   result_snapshot:{draft_id:draft.id,topic_selection:topicSelection,images:[],carousel_slides:[]}
+   result_snapshot:{draft_id:draft.id,topic_selection:topicSelection,topic_critic_reviews:topicReviews,images:[],carousel_slides:[]}
   }).eq('id',job.id));
   if(!topicSelection.selected){
    const rejected={version:TOPIC_DISCOVERY_VERSION,status:'rejected',review_required:true,
-    issues:['주제 후보 5개가 모두 중복 또는 콘텐츠 가치 미달로 폐기됐습니다. 새로운 주제나 접근법으로 다시 생성하세요.'],
-    topic_selection:topicSelection,severity:'quality'};
+    issues:['후보 주제가 중복되거나 독립 편집 평가에서 독자 가치가 부족하다고 판단됐습니다. 다른 접근법으로 다시 생성하세요.'],
+    topic_selection:topicSelection,topic_critic_reviews:topicReviews,severity:'quality'};
    ok(await db.from('marketing_generation_jobs').update({quality_report:rejected,result_snapshot:{
-    draft_id:draft.id,quality_report:rejected,topic_selection:topicSelection,images:[],carousel_slides:[]}}).eq('id',job.id));
-   throw new Error('TOPIC_CANDIDATES_DISCARDED: 주제 후보가 모두 기존 콘텐츠와 유사하거나 품질 기준에 못 미쳤습니다.');
+    draft_id:draft.id,quality_report:rejected,topic_selection:topicSelection,topic_critic_reviews:topicReviews,images:[],carousel_slides:[]}}).eq('id',job.id));
+   throw new Error('TOPIC_CANDIDATES_DISCARDED: 독립 평가를 통과한 새로운 주제가 없습니다.');
   }
-  // A selected angle is editorial direction, NEVER verified factual evidence.
-  const chosen=topicSelection.selected;
-  creativeDirection=[
-   'Approved topic: '+chosen.headline,
-   'Specific scene: '+chosen.scene,
-   'Reader payoff: '+chosen.reader_payoff,
-   'Distinct observation: '+chosen.core_insight,
-   creativeDirection?'User direction: '+creativeDirection:'',
-   'Do not invent studies, statistics or factual sources.'
-  ].filter(Boolean).join(' ').slice(0,500);
+  creativeDirection=directionForTopic(topicSelection.selected);
  }
 
 
@@ -222,12 +240,34 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
  // New immersive editorial only: old drafts retain their original review contract.
  // A copy failing this gate is repaired once, before any paid photo generation begins.
  const prepareWithEngagementGate=(value:Row,type:PostType)=>{
-  const applied=applyAnswerFirstDocument(value,answerFirst,plan);
+  const shaped=plan&&isMagazineDocument(value)
+   ?{...value,editorial_narrative_mode:storyFirstPostType(type)?'story_first':'answer_first'}:value;
+  const applied=applyAnswerFirstDocument(shaped,answerFirst,plan);
   // All NEW immersive Growth Carousel types, including sourced Seoul guides,
   // share the reader-engagement gate; historical brand/event snapshots stay unchanged.
-  const gated=isImmersiveMagazineDocument(applied)&&input.content_mode==='growth_carousel'
+  const gated=isMagazineDocument(applied)&&input.content_mode==='growth_carousel'
    ?{...applied,editorial_engagement_policy:EDITORIAL_ENGAGEMENT_POLICY}:applied;
   return prepareContent(gated,type,language,sources);
+ };
+
+ let criticCalls=0;
+ const reviewCopy=async(document:Row,type:PostType):Promise<EditorialCopyCritique|null>=>{
+  if(!plan||input.content_mode!=='growth_carousel'||!isMagazineDocument(document))return null;
+  if(criticCalls>=EDITORIAL_CRITIC_MAX_REVIEWS)throw new Error('EDITORIAL_CRITIC_CALL_LIMIT');
+  criticCalls++;
+  const mode=storyFirstPostType(type)?'story_first':'answer_first';
+  const slides=Array.isArray(document.slides)?document.slides.map((slide:Row)=>({
+   role:slide.role,title:slide.title,body:slide.body,highlight:slide.highlight
+  })):[];
+  ok(await db.from('marketing_generation_jobs').update({stage:'reviewing_editorial_copy'}).eq('id',job.id));
+  const result=await call('chat/completions',{
+   model:MODEL,reasoning_effort:'none',max_completion_tokens:1100,
+   response_format:{type:'json_schema',json_schema:{name:'roundy_copy_critic_v1',strict:true,schema:copyCriticSchema()}},
+   messages:[{role:'system',content:copyCriticPrompt(language,mode,plan.slide_count)},
+    {role:'user',content:JSON.stringify({post_type:type,language,slide_count:plan.slide_count,slides})}]
+  },28000);
+  await record(result);
+  return assessIndependentCopyReview(parseDocument(result).document);
  };
 
  const lockVerifiedBook=(document:Row)=>{
@@ -335,42 +375,102 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
    }
   }
  }
- if(prepared.report.status!=='passed'){
+ // Independent human-interest editing comes AFTER evidence/role checks and BEFORE
+ // any photo calls. At most two paid copy reviews, one rewrite OR topic swap.
+ const editorialReview:{current:EditorialCopyCritique|null}={current:null};
+ const criticHistory:EditorialCopyCritique[]=[];
+ const reviewIfSafe=async()=>{
   const grouped=classifyQualityIssues(prepared.report.issues);
-  if(grouped.critical.length){
-   const rejected={...prepared.report,severity:'critical',classification:grouped};
-   ok(await db.from('marketing_generation_jobs').update({quality_report:rejected,result_snapshot:{draft_id:draft.id,content_language:language,growth_topic_type:effectiveType,raw_content:written.raw.slice(0,24000),research_sources:sources,images:[],carousel_slides:[],caption:'',quality_report:rejected,generation_recovery:{fallback_reason:fallbackReason||null,repair_used:false}}}).eq('id',job.id));
-   throw new Error('품질 검토 필요: '+grouped.critical.join(' '));
-  }
-  const repairIssues=[...grouped.quality,...grouped.formatting];
-  if(repairIssues.length){
-   repairUsed=true;
-   written=await write(effectiveType,{document:prepared.document,issues:repairIssues});
-   written.document=lockTrendGrounding(lockSeoulGrounding(lockVerifiedBook(lockMythGrounding(written.document))));
-   prepared=prepareWithEngagementGate(written.document,effectiveType);
-  }
- }
- // Stop before charging for images when a second copy fails the new editorial gate.
- if(prepared.report.status==='rejected'&&prepared.report.issues.some((issue:string)=>issue.startsWith('에디토리얼 편집 검수:'))){
-  const rejected={...prepared.report,severity:'quality',classification:classifyQualityIssues(prepared.report.issues)};
+  if(grouped.critical.length)return;
+  const result=await reviewCopy(prepared.document,effectiveType);
+  if(result){editorialReview.current=result;criticHistory.push(result);}
+ };
+ const reject=async(code:string,extra:string[],severity:'critical'|'quality'='quality'):Promise<never>=>{
+  const issues=[...new Set([...prepared.report.issues,...extra])];
+  const rejected={...prepared.report,status:'rejected',issues,severity,
+   classification:classifyQualityIssues(issues),
+   ...(editorialReview.current?{editorial_critic:editorialReview.current,editorial_score:editorialReview.current.score,editorial_critic_policy:EDITORIAL_CRITIC_VERSION}:{})};
   ok(await db.from('marketing_generation_jobs').update({
-   quality_report:rejected,
-   result_snapshot:{draft_id:draft.id,content_language:language,growth_topic_type:effectiveType,
-    raw_content:written.raw.slice(0,24000),research_sources:sources,images:[],carousel_slides:[],
-    caption:'',quality_report:rejected,generation_recovery:{fallback_reason:fallbackReason||null,repair_used:repairUsed}}
+   quality_report:rejected,result_snapshot:{
+    draft_id:draft.id,content_language:language,growth_topic_type:effectiveType,
+    raw_content:written.raw.slice(0,24000),research_sources:sources,
+    topic_selection:topicSelection,topic_critic_reviews:topicReviews,editorial_critic_history:criticHistory,
+    images:[],carousel_slides:[],caption:'',quality_report:rejected,
+    generation_recovery:{fallback_reason:fallbackReason||null,repair_used:repairUsed}
+   }
   }).eq('id',job.id));
-  throw new Error('EDITORIAL_ENGAGEMENT_GATE_REJECTED: '+prepared.report.issues.filter((issue:string)=>issue.startsWith('에디토리얼 편집 검수:')).join(' '));
+  throw new Error(code+': '+issues.join(' ').slice(0,650));
+ };
+ await reviewIfSafe();
+ // A weak premise cannot be repaired with surface copy changes. Reuse ONE
+ // previously approved, independently scored non-research alternative.
+ if(editorialReview.current?.status==='replace_topic'&&topicSelection?.selected&&!CONTENT_PROFILES[requestedType].research&&sources.length===0){
+  const scoreFor=(key:string)=>topicReviews.find(r=>r.angle_key===key)?.score||0;
+  const alternate=[...topicSelection.candidates].filter(c=>c.status==='eligible')
+   .sort((a,b)=>scoreFor(b.angle_key)-scoreFor(a.angle_key))[0];
+  if(alternate){
+   const candidates=topicSelection.candidates.map(c=>({
+    ...c,status:(c.angle_key===alternate.angle_key?'selected':c.status==='selected'?'discarded':c.status) as typeof c.status
+   }));
+   topicSelection={...topicSelection,selected:candidates.find(c=>c.status==='selected')||null,candidates};
+   if(!topicSelection.selected)throw new Error('EDITORIAL_ALTERNATE_TOPIC_INVALID');
+   creativeDirection=directionForTopic(topicSelection.selected);
+   fallbackReason=(fallbackReason?fallbackReason+';':'')+'editorial_weak_topic_swapped_once';
+   ok(await db.from('marketing_generation_jobs').update({stage:'switching_weak_topic'}).eq('id',job.id));
+   written=await write(effectiveType);
+   prepared=prepareWithEngagementGate(written.document,effectiveType);
+   editorialReview.current=null;
+   await reviewIfSafe();
+  }
  }
- const document=topicSelection?{...prepared.document,editorial_topic_selection:topicSelection}:prepared.document;
-
+ let grouped=classifyQualityIssues(prepared.report.issues);
+ if(grouped.critical.length)await reject('EDITORIAL_CRITICAL_SOURCE_REJECTED',grouped.critical,'critical');
+ if(editorialReview.current?.status==='replace_topic')await reject('EDITORIAL_TOPIC_REJECTED',
+  ['독립 편집 평가: 주제 자체가 뻔하거나 카드 수를 채울 만큼 내용이 없습니다. '+editorialReview.current.reason]);
+ const critiqueIssues=editorialReview.current?.status==='rewrite'
+  ?editorialReview.current.issues.map(issue=>'독립 편집 평가: '+issue):[];
+ const repairIssues=[...new Set([...grouped.quality,...grouped.formatting,...critiqueIssues])];
+ if(repairIssues.length){
+  // Never silently enter a third critic cycle after replacing a bad topic.
+  if(editorialReview.current&&criticCalls>=EDITORIAL_CRITIC_MAX_REVIEWS)
+   await reject('EDITORIAL_CRITIC_REVIEW_LIMIT',repairIssues);
+  repairUsed=true;
+  written=await write(effectiveType,{document:prepared.document,issues:repairIssues});
+  written.document=lockTrendGrounding(lockSeoulGrounding(lockVerifiedBook(lockMythGrounding(written.document))));
+  prepared=prepareWithEngagementGate(written.document,effectiveType);
+  grouped=classifyQualityIssues(prepared.report.issues);
+  if(grouped.critical.length)await reject('EDITORIAL_CRITICAL_SOURCE_REJECTED',grouped.critical,'critical');
+  if(editorialReview.current){editorialReview.current=null;await reviewIfSafe();}
+ }
+ // Fail closed even when the regex-based 100-point heuristic would have passed.
+ // Do not pay for a cover image if the independent editor is unconvinced.
+ if(editorialReview.current&&editorialReview.current.status!=='passed')await reject('EDITORIAL_INDEPENDENT_REVIEW_REJECTED',
+  ['독립 편집 평가: '+editorialReview.current.reason,...editorialReview.current.issues]);
+ if(prepared.report.status!=='passed'){
+  const editorialGate=prepared.report.issues.some((issue:string)=>issue.startsWith('에디토리얼 편집 검수:'));
+  await reject(editorialGate?'EDITORIAL_ENGAGEMENT_GATE_REJECTED':'EDITORIAL_COPY_QUALITY_REJECTED',[]);
+ }
+ let document:Row={
+  ...prepared.document,
+  ...(topicSelection?{editorial_topic_selection:topicSelection,editorial_topic_reviews:topicReviews}:{}),
+  ...(editorialReview.current?{editorial_critic:editorialReview.current,editorial_critic_history:criticHistory,
+   editorial_critic_policy:EDITORIAL_CRITIC_VERSION}:{})
+ };
  if(facts){
   const eventCard=prepared.slides.find((s:Row)=>s.role==='event');
   if(eventCard){const factsText=[facts.title,new Date(facts.starts_at).toLocaleString(language==='ko'?'ko-KR':'en-GB',{timeZone:'Asia/Seoul'})+' KST',facts.venue||facts.neighborhood].filter(Boolean).join('\n');eventCard.body=factsText;eventCard.body_ko=[facts.title,new Date(facts.starts_at).toLocaleString('ko-KR',{timeZone:'Asia/Seoul'})+' KST',facts.venue||facts.neighborhood].filter(Boolean).join('\n');eventCard.body_en=[new Date(facts.starts_at).toLocaleString('en-GB',{timeZone:'Asia/Seoul'})+' KST',facts.venue||facts.neighborhood].filter(Boolean).join('\n');eventCard.source_label='Roundy에 등록된 행사 정보 / Published event';}
  }
+ let finalSlides=prepared.slides;
+ if(plan&&input.brand_outro_enabled===true&&input.content_mode==='growth_carousel'&&isMagazineDocument(document)){
+  const completed=appendRoundyOutro(document,finalSlides,language,plan);
+  document=completed.document;finalSlides=completed.slides;
+ }
  const effectiveProfile=CONTENT_PROFILES[effectiveType];
  const recovery={requested_type:requestedType,effective_type:effectiveType,fallback_reason:fallbackReason||null,repair_used:repairUsed,search_limit:requestedType==='book_insight'||(requestedType==='seoul_trend'&&!!trendContext)?0:CONTENT_PROFILES[requestedType].research?3:0,...(requestedType==='seoul_dating'?{seoul_format:seoulFormat,seoul_mix_policy:'70_places_30_course'}:{}),...(requestedType==='seoul_trend'&&trendContext?{trend_id:trendContext.id,trend_key:trendContext.trend_key,trend_score:trendContext.trend_score,trend_route:trendContext.route_type,radar_evidence_reused:true,fact_pack_version:trendPack?.version||null,layout:trendPack?.layout||'legacy',extra_web_search_calls:0}:{}),...(requestedType==='trend_research'?{trend_study_cooldown_days:180,trend_topic_cooldown_days:60,trend_recent_studies:trendHistory.study_titles_180d.length,trend_recent_topics:trendHistory.topic_keys_60d.length}:{}),...(requestedType==='dating_myth'?{myth_claim_cooldown_days:120,myth_topic_cooldown_days:60,myth_recent_claims:mythHistory.claims_120d.length,myth_recent_topics:mythHistory.myth_keys_60d.length,myth_alternate_used:mythAlternateUsed}:{})};
  const finalClassification=classifyQualityIssues(prepared.report.issues);
- const patch={caption:prepared.caption,cta:prepared.cta,content_document:document,quality_report:{...prepared.report,recovery,classification:finalClassification},carousel_slides:prepared.slides,research_sources:prepared.sources,research_status:effectiveProfile.research?'generated':input.content_mode==='growth_carousel'?'generated':'not_required',content_language:language,draft_kind:input.content_mode==='growth_carousel'?'growth_carousel':'brand',growth_topic_type:input.content_mode==='growth_carousel'?effectiveType:null,content_mode:facts?'live_event':'prelaunch',content_pillar:facts?'event':'concept',generation_reason:effectiveProfile.label+' / editorial policy v'+CONTENT_POLICY_VERSION+(requestedType==='seoul_dating'&&!fallbackReason?' / '+seoulFormat:'')+(requestedType==='seoul_trend'&&trendContext?' / radar '+trendContext.trend_key:'')+(fallbackReason?' / safe fallback from '+requestedType:''),event_id:facts?.id||null,trend_id:trendContext?.id||draft.trend_id||null,destination_url:facts?'https://roundy.team/events/'+facts.slug:'https://roundy.team'};
+ const patch={caption:prepared.caption,cta:prepared.cta,content_document:document,quality_report:{...prepared.report,recovery,classification:finalClassification,
+  ...(editorialReview.current?{editorial_heuristic_score:prepared.report.editorial_score,editorial_score:editorialReview.current.score,
+   editorial_critic:editorialReview.current,editorial_critic_policy:EDITORIAL_CRITIC_VERSION}:{})},carousel_slides:finalSlides,research_sources:prepared.sources,research_status:effectiveProfile.research?'generated':input.content_mode==='growth_carousel'?'generated':'not_required',content_language:language,draft_kind:input.content_mode==='growth_carousel'?'growth_carousel':'brand',growth_topic_type:input.content_mode==='growth_carousel'?effectiveType:null,content_mode:facts?'live_event':'prelaunch',content_pillar:facts?'event':'concept',generation_reason:effectiveProfile.label+' / editorial policy v'+CONTENT_POLICY_VERSION+(requestedType==='seoul_dating'&&!fallbackReason?' / '+seoulFormat:'')+(requestedType==='seoul_trend'&&trendContext?' / radar '+trendContext.trend_key:'')+(fallbackReason?' / safe fallback from '+requestedType:''),event_id:facts?.id||null,trend_id:trendContext?.id||draft.trend_id||null,destination_url:facts?'https://roundy.team/events/'+facts.slug:'https://roundy.team'};
  ok(await db.from('marketing_generation_jobs').update({quality_report:patch.quality_report,result_snapshot:{...patch,draft_id:draft.id,images:[],research_notes:notes,saved_at:new Date().toISOString(),generation_recovery:recovery}}).eq('id',job.id));
  if(prepared.report.status!=='passed')throw new Error('품질 검토 필요: '+prepared.report.issues.join(' '));
  return patch;
@@ -383,11 +483,22 @@ export function draftQuality(draft:Row){
  const type=postType(input),document=draft.content_document;
  if(!document)return {version:3,status:'rejected' as const,issues:['이전 생성본에는 유형별 콘텐츠 구조가 없습니다. 같은 스레드에서 품질 재작업하세요.'],review_required:true};
  const magazine=isMagazineDocument(document);
- const report=evaluateContent({...document,caption:isCompactDocument(document)?document.caption:draft.caption,cta:draft.cta},type,draft.content_language||'ko',draft.research_sources||[]);
+ if(document.brand_outro_version===BRAND_OUTRO_VERSION&&brandedStoryCount(document)===null)
+  return {version:3,status:'rejected' as const,issues:['독립 Roundy 브랜드 카드 구성이 올바르지 않습니다.'],review_required:true};
+ const story=storyOnlyDocument(document);
+ const report=evaluateContent({...story,caption:isCompactDocument(document)?document.caption:draft.caption,cta:draft.cta},type,draft.content_language||'ko',draft.research_sources||[]);
  if(isCompactDocument(document)){
   const issues=[...bilingualCaptionIssues(String(draft.caption||'')),...(magazine?[]:captionCtaIssues(document.caption,draft.cta))];
   report.issues.push(...issues);if(issues.length)report.status='rejected';
  }
+ // Saved-card rendering and photo-only edits must retain the independently
+ // reviewed score. Never silently replace it with a weaker regex heuristic.
+ const editorialCritic=document.editorial_critic;
+ if(editorialCritic?.version===EDITORIAL_CRITIC_VERSION&&editorialCritic.status==='passed'&&
+  typeof editorialCritic.score==='number'&&Number.isFinite(editorialCritic.score))
+  return {...report,editorial_heuristic_score:report.editorial_score,
+   editorial_score:editorialCritic.score,editorial_critic:editorialCritic,
+   editorial_critic_policy:EDITORIAL_CRITIC_VERSION};
  return report;
 }
 

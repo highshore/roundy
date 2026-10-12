@@ -3,6 +3,7 @@ import {ImageResponse} from 'next/og';
 import {readTrendFactPack,selectGuideFacts,factLabel} from './marketing-trend-guide';
 import {ROUNDY_IDENTITY as BRAND, EDITORIAL_PRESET, MAGAZINE_EDITORIAL_PRESET, isMagazineDocument, isImmersiveMagazineDocument, editorialBrandBridge, CAMPAIGN_PRESET, EVENT_CAMPAIGN_PRESET, type PresentationRow as Row} from './marketing-presentation';
 import {savedCarouselPlan,mobileCarouselFit,magazineCarouselFit,wrapCarouselCopy,carouselNarrative,CAROUSEL_CANVAS} from './marketing-carousel-template';
+import {brandedStoryCount} from './marketing-brand-outro';
 
 export type EditorialAssets = {
  photo?: string|null;
@@ -476,19 +477,79 @@ function magazineClosing(slide:Row,document:Row,fit:ReturnType<typeof magazineCa
     language==='ko'?'ROUNDY / 서울 라이프스타일 에디토리얼':'ROUNDY / SEOUL LIFESTYLE EDITORIAL',
     26,{fontWeight:650,color:BRIGHT_EDITORIAL.muted,letterSpacing:.2})));
 }
-export function magazineCarouselTree(slide:Row,index:number,total:number,document:Row,assets:EditorialAssets={}){
- const plan=savedCarouselPlan(document);
- if(!isMagazineDocument(document)||!plan||total!==plan.slide_count||index<0||index>=total)
-  throw new Error('MAGAZINE_TEMPLATE_MISMATCH');
- const role=slide.role,expected=total===3?['cover','key_insight','editorial_closing']:
-  ['cover','context','insight','insight','editorial_closing'];
- if(role!==expected[index])throw new Error('MAGAZINE_SLIDE_ROLE_MISMATCH');
+// Server-owned dedicated brand page: an actual independent carousel card, not
+// a small footer in the last story. Large official vector mark is the visual.
+function standaloneRoundyBrand(slide:Row,document:Row){
  const language=document.content_language==='en'?'en':'ko';
- const fit=magazineCarouselFit(slide,plan,index,language);
+ const heading=String(slide.title||'').slice(0,72);
+ const description=selectedBody(slide,language).slice(0,240);
+ const headline=wrapCarouselCopy(heading,language==='ko'?16:22);
+ const supporting=wrapCarouselCopy(description,language==='ko'?25:34);
+ if(headline.length>3||supporting.length>4)throw new Error('ROUNDY_BRAND_OUTRO_OVERFLOW');
+ return box({position:'relative',width:1080,height:1350,background:BRAND.ink,
+  color:BRAND.paper,flexDirection:'column',alignItems:'center',overflow:'hidden'},
+  box({position:'absolute',top:90,right:100,width:220,height:220,border:'2px solid #565952',
+   borderRadius:220,opacity:.5}),
+  box({position:'absolute',top:170,left:-130,width:360,height:360,border:'2px solid #565952',
+   borderRadius:360,opacity:.35}),
+  box({position:'absolute',top:235,left:0,right:0,alignItems:'center',justifyContent:'center'},
+   officialRoundyLogo(true,125)),
+  box({position:'absolute',top:503,left:115,right:115,alignItems:'center',
+   flexDirection:'column',gap:24},
+   ...headline.map(line=>text(line,72,{fontWeight:900,color:BRAND.paper,
+    lineHeight:1.16,textAlign:'center',justifyContent:'center'})),
+   box({height:9,width:105,background:BRAND.accent,borderRadius:10,marginTop:25}),
+   ...supporting.map(line=>text(line,38,{fontWeight:500,color:'#f4f0e9',
+    textAlign:'center',justifyContent:'center',lineHeight:1.35}))
+  ),
+  box({position:'absolute',left:80,right:80,bottom:83,alignItems:'center',
+   justifyContent:'space-between',borderTop:'2px solid #535651',paddingTop:32},
+   text('@roundy.meet',25,{color:'#f4f0e9',fontWeight:650}),
+   text('roundy.team',29,{color:BRAND.accent,fontWeight:850}))
+ );
+}
+// The editorial takeaway is a STORY card with its own photograph. Roundy
+// promotion is intentionally absent: it appears in the next brand-only card.
+function photographicMagazineTakeaway(slide:Row,index:number,document:Row,assets:EditorialAssets,
+ fit:ReturnType<typeof magazineCarouselFit>){
+ const language=document.content_language==='en'?'en':'ko',src=selectedPhoto(assets,index);
+ if(!src)throw new Error('ROUNDY_STORY_PHOTO_MISSING:'+index);
+ const bodyY=618+fit.title.height+19;
+ if(bodyY+fit.body.height>1197)throw new Error('ROUNDY_STORY_TAKEAWAY_TEXT_OVERFLOW');
+ return box({position:'relative',width:1080,height:1350,background:BRIGHT_EDITORIAL.paper,
+  color:BRIGHT_EDITORIAL.ink,overflow:'hidden'},
+  brightHeader(),brightEyebrow(language==='ko'?'EDITORIAL / 마지막 한마디':'EDITORIAL / TAKEAWAY',167),
+  box({position:'absolute',left:80,top:208,right:80,height:378,overflow:'hidden',
+   borderRadius:28},photo(src)),
+  box({position:'absolute',left:80,right:80,top:618},
+   brightHeadline(fit.title.lines,fit.title.fontSize)),
+  box({position:'absolute',left:80,right:80,top:bodyY},
+   fittedRows(fit.body.lines,fit.body.fontSize,BRIGHT_EDITORIAL.body,500,1.28)),
+  brightPhotoCredit(String(assets.cardCredits?.[index]||''),index)
+ );
+}
+export function magazineCarouselTree(slide:Row,index:number,total:number,document:Row,assets:EditorialAssets={}){
+ const plan=savedCarouselPlan(document),storyCount=brandedStoryCount(document);
+ const expectedTotal=storyCount===null?plan?.slide_count:storyCount+1;
+ if(!isMagazineDocument(document)||!plan||total!==expectedTotal||index<0||index>=total)
+  throw new Error('MAGAZINE_TEMPLATE_MISMATCH');
+ const storyRoles=plan.slide_count===3?['cover','key_insight','editorial_closing']:
+  ['cover','context','insight','insight','editorial_closing'];
+ const expected=storyCount===null?storyRoles:[...storyRoles,'brand_outro'];
+ if(slide.role!==expected[index])throw new Error('MAGAZINE_SLIDE_ROLE_MISMATCH');
+ const language=document.content_language==='en'?'en':'ko';
  const fontFamily=language==='ko'?(assets.fonts?.length?'Noto Sans KR, sans-serif':'sans-serif'):
   (assets.fonts?.length?'DM Sans, sans-serif':'sans-serif');
+ if(storyCount!==null&&index===storyCount)
+  return box({width:1080,height:1350,fontFamily,background:BRAND.ink},
+   standaloneRoundyBrand(slide,document));
+ const fit=magazineCarouselFit(slide,plan,index,language);
+ if(storyCount!==null&&!selectedPhoto(assets,index,index===0))
+  throw new Error('ROUNDY_STORY_PHOTO_MISSING:'+index);
  const immersive=isImmersiveMagazineDocument(document);
- const card=index===0?(immersive?immersiveMagazineCover(slide,document,assets,fit):magazineCover(slide,document,assets,fit)):
+ const card=storyCount!==null&&index===storyCount-1
+  ?photographicMagazineTakeaway(slide,index,document,assets,fit):
+  index===0?(immersive?immersiveMagazineCover(slide,document,assets,fit):magazineCover(slide,document,assets,fit)):
   index===total-1?(immersive?immersiveMagazineClosing(slide,document,fit):magazineClosing(slide,document,fit)):
   magazineInformation(slide,index,document,assets,fit);
  return box({width:1080,height:1350,fontFamily,background:BRIGHT_EDITORIAL.paper},card);

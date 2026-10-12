@@ -7,9 +7,9 @@ let checks=0;const check=(f)=>{f();checks++;};
 const id='4b9066d0-e01b-4cc4-92d1-469f56317a04';
 const eventId='11111111-1111-4111-8111-111111111111';
 const base={request_key:'manual:quality-test-001',revision:1,mode:'both',content_mode:'prelaunch',language:'en',visual_mode:'cards',instruction:''};
-function harness({denied=false,network=false,badSources=false,duplicate=false,photo403=false,answerFirst=false,photoSettings=null,photoFixture='none',templateSettings=null,slotNumber=1,unsafeFallback=false,topicOutcome='pass'}={}){
+function harness({denied=false,network=false,badSources=false,duplicate=false,photo403=false,answerFirst=false,photoSettings=null,photoFixture='none',templateSettings=null,slotNumber=1,unsafeFallback=false,topicOutcome='pass',criticOutcome='pass'}={}){
  const tables={instagram_post_drafts:[{id,status:'needs_approval',revision:1,caption:'Original',cta:'Follow',images:[],carousel_slides:[],content_mode:'prelaunch'}],marketing_generation_jobs:[],marketing_ai_control:[{singleton:true,enabled:true,blocked_reason:null}],marketing_automation_settings:[{singleton:true,carousel_answer_first_enabled:answerFirst,...(photoSettings||{}),...(templateSettings||{})}],marketing_uploaded_images:[],events:[{id:eventId,slug:'fixture',title:'Fixture event',title_ko:'테스트 모임',status:'live',deleted_at:null,marketing_enabled:true,starts_at:'2099-12-01T10:00:00Z',ends_at:'2099-12-01T12:00:00Z',venue:'Fixture public venue',capacity:12,seats_remaining:12,price_ladies:29000,price_gents:49000,event_language:'either',images:[]}]};
- const requests=[],stored=[];
+ const requests=[],stored=[];let copyReviewCalls=0;
  class Q{
   constructor(t){this.rows=tables[t]||[];this.pred=[];this.patch=null;this.n=Infinity;}
   select(){return this;}update(p){this.patch=p;return this;}eq(k,v){this.pred.push(r=>r[k]===v);return this;}gt(k,v){this.pred.push(r=>r[k]>v);return this;}gte(k,v){this.pred.push(r=>r[k]>=v);return this;}is(k,v){return this.eq(k,v);}in(k,v){this.pred.push(r=>v.includes(r[k]));return this;}order(){return this;}limit(n){this.n=n;return this;}single(){return this.exec(true);}maybeSingle(){return this.exec(true);}then(a,b){return this.exec().then(a,b);}
@@ -55,7 +55,7 @@ function harness({denied=false,network=false,badSources=false,duplicate=false,ph
   if(name.startsWith('./')&&fs.existsSync('src/lib/'+name.slice(2)+'.ts'))return load('src/lib/'+name.slice(2)+'.ts');return require(name);
  },fetch:async(url,init)=>{
   const body=JSON.parse(init.body);requests.push({url,body});if(network)throw new Error('timeout');
-  if(url.endsWith('images/generations'))return photo403?{ok:false,status:403,json:async()=>({error:{message:'Verify organization'}})}:{ok:true,json:async()=>({data:[0,1,2].map(()=>({b64_json:Buffer.alloc(200).toString('base64')}))})};
+  if(url.endsWith('images/generations'))return photo403?{ok:false,status:403,json:async()=>({error:{message:'Verify organization'}})}:{ok:true,json:async()=>({data:Array.from({length:Number(body.n||3)},()=>({b64_json:Buffer.alloc(200).toString('base64')}))})};
   if(url.endsWith('/responses')){
    const inputText=String(body.input||''),seoul=inputText.includes('Seoul dating-location')||inputText.includes('6–10 real candidates'),seoulTrend=inputText.includes('emerging or rising Seoul')||inputText.includes('emerging/rising Seoul');
    const notes=seoul
@@ -73,17 +73,54 @@ function harness({denied=false,network=false,badSources=false,duplicate=false,ph
    ]:[{type:'url_citation',url:'https://doi.org/10.1234/attentive.2024',title:'Attentive Conversation Study (2024)',start_index:0,end_index:notes.length}];
    return {ok:true,json:async()=>({status:'completed',output:[{type:'web_search_call',status:'completed',action:{sources:[{url:'https://unrelated.example/english-school'}]}},{type:'message',content:[{type:'output_text',text:notes,annotations}]}],usage:{input_tokens:800,output_tokens:180}})};
   }
+  if(body.response_format?.json_schema?.name==='roundy_topic_critic_v1'){
+   // The independent critic receives NO writer self-scores, only eligible topics.
+   const data=JSON.parse(body.messages[1].content);
+   const reviews=data.candidates.map(c=>({
+    angle_key:c.angle_key,hook:5,scene:5,originality:5,usefulness:5,shareability:5,
+    decision:'approve',reason:'이 장면에는 구체적인 갈등과 서로 다른 관점이 충분히 담겨 있습니다.'
+   }));
+   return {ok:true,json:async()=>({choices:[{finish_reason:'stop',message:{content:JSON.stringify({reviews})}}],
+    usage:{input_tokens:250,output_tokens:180}})};
+  }
+  if(body.response_format?.json_schema?.name==='roundy_copy_critic_v1'){
+   copyReviewCalls++;
+   const decision=criticOutcome==='reject'?'replace_topic':
+    criticOutcome==='rewrite'&&copyReviewCalls===1?'rewrite':'pass';
+   const weak=decision!=='pass';
+   const document={hook:weak?2:5,scene:weak?2:5,originality:weak?1:5,
+    progression:weak?1:5,shareability:weak?2:5,
+    decision,reason:weak?'다섯 장 내내 한 가지 뻔한 조언만 반복해 공유할 만큼 새롭지 않습니다.':
+     '장면과 핵심 관찰이 분명하고 각 카드가 서로 다른 유용한 정보를 제공합니다.',
+    issues:weak?['반복하는 조언을 버리고 실제로 일어나는 구체적인 장면과 새로운 관찰을 넣으세요.']:[]};
+   return {ok:true,json:async()=>({choices:[{finish_reason:'stop',message:{content:JSON.stringify(document)}}],
+    usage:{input_tokens:320,output_tokens:160}})};
+  }
   if(body.response_format?.json_schema?.name==='roundy_topic_candidates_v1'){
    const ko=String(body.messages[0].content).includes('natural contemporary Korean');
    const heads=ko
     ?['소개팅이 면접처럼 느껴지는 이유','카톡에선 웃긴데 만나면 어색한 이유','첫 만남 직후 떠오르는 기억','주말 약속이 자꾸 미뤄지는 순간','시끄러운 카페에서 대화가 끊기는 이유']
     :['Why first dates can feel like interviews','Why texting feels easier than meeting','The first detail you remember after a date','Why weekend plans take so long','When a busy cafe makes talking difficult'];
    const concepts=['first_date_interview_questions','texting_versus_meeting_context','after_date_first_memory','weekend_social_planning_friction','loud_cafe_conversation_cost'];
+   const insightsKo=[
+    '질문을 연속해서 던지는 대신 자신의 작은 경험을 나누면 상대도 마음을 열 가능성이 생긴다.',
+    '카톡에서 답을 편집하는 시간과 얼굴을 보고 침묵을 경험하는 시간은 다르게 느껴질 수 있다.',
+    '헤어진 뒤 처음 떠오르는 장면이 직업이나 취미가 아니라 둘 사이의 느낌일 때가 있다.',
+    '선택지가 너무 많아서 일정이 미뤄지면 장소보다 먼저 시간을 확정하는 방법이 있다.',
+    '카페가 너무 시끄러우면 말의 내용보다 소음에 에너지를 써서 대화가 어려워질 수 있다.'
+   ];
+   const insightsEn=[
+    'Sharing a small personal experience can open up a conversation better than firing several questions.',
+    'A text message can be edited before sending, while a pause together face to face cannot be edited out.',
+    'After a first meeting, people may remember a particular shared feeling before a list of job titles.',
+    'Too many choices can delay weekend plans even when choosing a time first would make a real difference.',
+    'Background noise in a cafe can consume attention that two people would rather give to their conversation.'
+   ];
    const candidates=heads.map((headline,i)=>({
     headline,angle_key:concepts[i],
     reader_payoff:ko?'독자가 첫 만남에서 자주 생기는 어색함을 다르게 해석하고 실천할 만한 관찰을 얻습니다.':'Readers will gain a concrete and realistic way to understand a familiar social moment.',
     scene:ko?'첫 만남에서 질문은 많지만 대화가 이어지지 않는 현실적인 카페의 장면.':'Two adults meet at a cafe and notice a small but very familiar social friction.',
-    core_insight:ko?'질문을 늘리는 것보다 서로 자신의 경험을 조금씩 나누는 편이 대화를 만드는 데 도움이 될 수도 있습니다.':'Sharing a small personal observation can invite an exchange that does not feel like an interview.',
+    core_insight:ko?insightsKo[i]:insightsEn[i],
     novelty:topicOutcome==='reject'?1:5,reader_value:topicOutcome==='reject'?1:5,curiosity:topicOutcome==='reject'?1:5,shareability:topicOutcome==='reject'?1:5,
     editorial_reason:'Distinct realistic perspective with a specific reader payoff.'
    }));
@@ -423,6 +460,84 @@ for(const language of ['ko','en'])for(const type of Object.keys(harness().policy
  check(()=>assert.equal(h.requests.filter(x=>x.url.endsWith('/responses')||x.url.endsWith('images/generations')).length,0));
  check(()=>assert.equal(h.tables.instagram_post_drafts[0].images.length,0));
 }
+
+// No paid images or publishing after both independently reviewed topics are weak.
+{
+ const settings={carousel_mode:'fixed',carousel_default_slides:5,carousel_title_font_size_px:72,carousel_body_font_size_px:36};
+ const h=harness({answerFirst:true,templateSettings:settings,criticOutcome:'reject'});
+ const r=await h.api.runGeneration(id,{...base,request_key:'manual:weak-editorial-stop-001',
+  content_mode:'growth_carousel',topic_type:'conversation_prompt'},null);
+ check(()=>assert.equal(r.job.status,'failed',JSON.stringify(r)));
+ check(()=>assert.match(String(r.error||r.job.error_message),/EDITORIAL_TOPIC_REJECTED/));
+ check(()=>assert.equal(h.requests.filter(x=>x.body?.response_format?.json_schema?.name==='roundy_copy_critic_v1').length,2));
+ check(()=>assert.equal(h.requests.filter(x=>x.url.endsWith('images/generations')).length,0));
+ check(()=>assert.equal(h.tables.instagram_post_drafts[0].images.length,0));
+ check(()=>assert.equal(h.tables.marketing_generation_jobs[0].quality_report.status,'rejected'));
+}
+// A fixable story gets only one rewrite followed by a second independent check.
+{
+ const settings={carousel_mode:'fixed',carousel_default_slides:5,carousel_title_font_size_px:72,carousel_body_font_size_px:36};
+ const h=harness({answerFirst:true,templateSettings:settings,criticOutcome:'rewrite'});
+ const r=await h.api.runGeneration(id,{...base,request_key:'manual:weak-editorial-repair-001',
+  content_mode:'growth_carousel',topic_type:'conversation_prompt'},null);
+ check(()=>assert.equal(r.job.status,'completed',JSON.stringify(r)));
+ check(()=>assert.equal(h.requests.filter(x=>x.body?.response_format?.json_schema?.name==='roundy_copy_critic_v1').length,2));
+ check(()=>assert.equal(h.requests.filter(x=>x.body?.response_format?.json_schema?.name==='roundy_editorial_v2').length,2));
+ check(()=>assert.equal(r.draft.content_document.editorial_critic.status,'passed'));
+ check(()=>assert.equal(r.draft.content_document.editorial_critic_history.length,2));
+}
+
+
+// New magazines reserve 3/5 STORY slides and append a server-authored, independent
+// brand-only card. Every story slot must be photographed; old fixtures stay 3/5.
+for(const [ordinal,expected] of [[1,4],[2,6]]){
+ const photoConfig={carousel_min_real_photos_5:3,carousel_min_real_photos_3:2,carousel_ai_thumbnail_enabled:false};
+ const settings={carousel_mode:'alternating',carousel_default_slides:5,
+  carousel_brand_outro_enabled:true,carousel_title_font_size_px:72,carousel_body_font_size_px:36};
+ const h=harness({answerFirst:true,templateSettings:settings,photoSettings:photoConfig,
+  photoFixture:'ready',slotNumber:ordinal});
+ const r=await h.api.runGeneration(id,{...base,request_key:'manual:branded-story-'+ordinal,
+  content_mode:'growth_carousel',topic_type:'conversation_prompt',visual_source:'auto_ai'},null);
+ check(()=>assert.equal(r.job.status,'completed',JSON.stringify({error:r.error,job:r.job})));
+ check(()=>assert.equal(r.draft.carousel_slides.length,expected));
+ check(()=>assert.equal(r.draft.images.length,expected));
+ check(()=>assert.equal(r.draft.content_document.brand_outro_version,1));
+ check(()=>assert.equal(r.draft.carousel_slides.at(-1).role,'brand_outro'));
+ check(()=>assert.equal(r.draft.carousel_slides.at(-2).role,'editorial_closing'));
+ check(()=>assert.equal(r.draft.content_document.photo_sourcing.version,2));
+ check(()=>assert.equal(r.draft.content_document.photo_sourcing.min_real_photos,expected-1));
+ check(()=>assert.deepEqual(r.job.result_snapshot.stock_photo_selections.map(p=>p.slot),
+  Array.from({length:expected-1},(_,i)=>i)));
+ check(()=>assert.equal(h.requests.filter(x=>x.url.endsWith('images/generations')).length,0));
+}
+{
+ const photoConfig={carousel_min_real_photos_5:3,carousel_min_real_photos_3:2,carousel_ai_thumbnail_enabled:true};
+ const settings={carousel_mode:'fixed',carousel_default_slides:5,carousel_brand_outro_enabled:true};
+ const h=harness({answerFirst:true,templateSettings:settings,photoSettings:photoConfig,
+  photoFixture:'ready'});
+ const r=await h.api.runGeneration(id,{...base,request_key:'manual:branded-ai-cover-001',
+  content_mode:'growth_carousel',topic_type:'conversation_prompt',visual_source:'auto_ai'},null);
+ check(()=>assert.equal(r.job.status,'completed',JSON.stringify({error:r.error,job:r.job})));
+ check(()=>assert.equal(r.draft.images.length,6));
+ check(()=>assert.equal(r.draft.content_document.photo_sourcing.min_real_photos,4));
+ check(()=>assert.deepEqual(r.job.result_snapshot.stock_photo_selections.map(p=>p.slot),[1,2,3,4]));
+ const images=h.requests.filter(x=>x.url.endsWith('images/generations'));
+ check(()=>assert.equal(images.length,1));
+ check(()=>assert.equal(images[0].body.n,1));
+}
+{
+ const photoConfig={carousel_min_real_photos_5:3,carousel_min_real_photos_3:2,carousel_ai_thumbnail_enabled:false};
+ const settings={carousel_mode:'fixed',carousel_default_slides:5,carousel_brand_outro_enabled:true};
+ const h=harness({answerFirst:true,templateSettings:settings,photoSettings:photoConfig,
+  photoFixture:'pending'});
+ const r=await h.api.runGeneration(id,{...base,request_key:'manual:branded-photo-review-001',
+  content_mode:'growth_carousel',topic_type:'conversation_prompt',visual_source:'auto_ai'},null);
+ check(()=>assert.equal(r.job.status,'completed'));
+ check(()=>assert.equal(r.draft.images.length,0));
+ check(()=>assert.equal(r.job.stage,'photo_review_required'));
+ check(()=>assert.equal(h.requests.filter(x=>x.url.endsWith('images/generations')).length,0));
+}
+
 const adminMarketingSource=fs.readFileSync(new URL('../src/components/admin-marketing.tsx',import.meta.url),'utf8');
 check(()=>assert.ok(adminMarketingSource.includes("...(basis==='growth_carousel'?{topic_type:topic}:{})")));
 check(()=>assert.ok(adminMarketingSource.includes("request.content_mode==='growth_carousel'")));
