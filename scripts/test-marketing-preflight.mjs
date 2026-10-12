@@ -49,7 +49,7 @@ function fixture(count=5){
  const titles=['성수 첫 데이트 산책 코스','서울숲을 중심으로 한 산책','서울에서 함께 걷는 첫 만남'];
  return {id:'11111111-1111-4111-8111-111111111111',revision:7,
   visual_source:'pexels',content_language:'ko',draft_kind:'growth_carousel',images:slides.map((_,i)=>'https://static.roundy.team/'+i+'.jpg'),
-  caption:photoCreditCaption('성수에서 시작하는 데이트 코스\n라운디가 전하는 장소 팁\n\n@roundy.meet | roundy.team',(count===3?[0,1]:[0,1,2]).map(goodPhoto)),
+  caption:photoCreditCaption('성수에서 시작하는 데이트 코스\n라운디가 전하는 장소 팁\n\n@roundy.meet | roundy.team',(count===3?[0,1]:[0,1,2,3]).map(goodPhoto)),
   cta:'Roundy 둘러보기',destination_url:'https://roundy.team',
   carousel_slides:slides,content_document:{schema_version:2,post_type:'seoul_dating',answer_first:true,
    thumbnail_render_pending:false,thumbnail_candidates:titles,thumbnail_selected_index:0,
@@ -57,19 +57,20 @@ function fixture(count=5){
 }
 const evaluate=(draft,photos,settings=validSettings)=>evaluateMarketingPreflight(draft,settings,photos);
 for(const n of [3,5]){
- const d=fixture(n),p=(n===3?[0,1]:[0,1,2]).map(goodPhoto);
+ const d=fixture(n),p=(n===3?[0,1]:[0,1,2,3]).map(goodPhoto);
  const report=evaluate(d,p);
  assert.equal(report.status,'passed',JSON.stringify(report.issues));
  assert.equal(report.checks.length,7);
- assert.equal(report.min_real_photos,n===3?2:3);
- assert.equal(report.photo_manifest.length,n===3?2:3);
+ assert.equal(report.min_real_photos,n===3?2:4);
+ assert.equal(report.photo_manifest.length,n===3?2:4);
  assert.deepEqual(Array.from(report.checks.filter(x=>!x.passed)),[]);
 }
-const d=fixture(),photos=[0,1,2].map(goodPhoto);
+const d=fixture(),photos=[0,1,2,3].map(goodPhoto);
 const fail=(draft,assets,checkId)=>{const p=evaluate(draft,assets);assert.equal(p.status,'rejected',checkId);
  assert.ok(p.checks.find(c=>c.id===checkId&&!c.passed),checkId+': '+JSON.stringify(p.issues));return p;};
 fail({...d,images:d.images.slice(0,3)},photos,'slide_count');
 fail(d,photos.slice(0,2),'real_photos');
+fail(d,photos.slice(0,3),'real_photos'); // three photos cannot complete four non-AI visual cards
 fail(d,photos.map((p,i)=>i===1?{...p,license_url:'https://another.example'}:p),'photo_sources');
 fail({...d,caption:d.caption.replace(photos[0].source_url,'')},photos,'photo_sources');
 fail(d,photos.map((p,i)=>i===2?{...p,review_status:'pending',reviewed_at:null}:p),'photo_approval');
@@ -81,7 +82,7 @@ fail({...d,carousel_slides:d.carousel_slides.map((p,i)=>i===1?{...p,body:'길고
 fail({...d,content_document:{...d.content_document,thumbnail_render_pending:true}},photos,'answer_first');
 assert.notDeepEqual(photoReviewManifest(photos),photoReviewManifest(photos.map((p,i)=>i===0?{...p,review_status:'pending'}:p)));
 const rejected=fail({...d,visual_source:'uploaded'},photos,'real_photos');
-assert.equal(rejected.min_real_photos,3,'uploads without a source-verification flow cannot bypass reviewed Pexels requirement');
+assert.equal(rejected.min_real_photos,4,'uploads without a source-verification flow cannot bypass reviewed Pexels requirement');
 const good=evaluate(d,photos),copy={version:2,status:'passed',issues:[],review_required:true};
 assert.equal(mergePreflightQuality(copy,good).status,'passed');
 assert.equal(mergePreflightQuality(copy,rejected).status,'rejected');

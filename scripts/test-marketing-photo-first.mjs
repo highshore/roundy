@@ -25,7 +25,7 @@ const five=configuredPhotoSourcingPolicy(settings,roles5);
 assert.equal(five.slide_count,5);
 assert.equal(five.min_real_photos,3);
 assert.equal(five.ai_thumbnail_enabled,false);
-assert.deepEqual(Array.from(requiredPhotoSlotsForRoles(roles5,five)),[0,1,2]);
+assert.deepEqual(Array.from(requiredPhotoSlotsForRoles(roles5,five)),[0,1,2,3]);
 const withAi=configuredPhotoSourcingPolicy({...settings,carousel_ai_thumbnail_enabled:true},roles5);
 assert.equal(withAi.ai_thumbnail_enabled,true);
 assert.deepEqual(Array.from(requiredPhotoSlotsForRoles(roles5,withAi)),[1,2,3],
@@ -49,8 +49,8 @@ assert.equal(savedPhotoSourcingPolicy(null),null);
 const strict={...settings,carousel_min_real_photos_5:4,carousel_ai_thumbnail_enabled:true};
 const strictPolicy=configuredPhotoSourcingPolicy(strict,roles5);
 assert.equal(strictPolicy.ai_thumbnail_enabled,false,'higher photo minimum disables AI cover');
-assert.equal(allSelectedPhotosApproved(roles5,approved(requiredPhotoSlotsForRoles(roles5,strictPolicy)),strictPolicy),false,
- 'existing publisher photo-count guard must not be bypassed by an impossible higher setting');
+assert.equal(allSelectedPhotosApproved(roles5,approved(requiredPhotoSlotsForRoles(roles5,strictPolicy)),strictPolicy),true,
+ 'four fully approved real photos are supported when AI is disabled');
 
 // Existing source table owns licensing evidence. No new asset DB schema or renderer changes.
 const stock=source('src/lib/marketing-stock-photos.ts');

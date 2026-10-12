@@ -240,7 +240,7 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
   const displayPhotos=photos.map(photo=>({...photo,preview_url:archivedPreview.get(String(photo.asset_id))||photo.preview_url}));
   const policy=draft.content_document?.photo_sourcing||null;
   const required=requiredStockSlots(draft).length;
-  const minimum=Number(policy?.min_real_photos||required);
+  const minimum=Math.max(required,Number(policy?.min_real_photos||0));
   const approved=photos.filter((photo:Row)=>photo.review_status==='approved'&&!!photo.storage_path).length;
   return json({photos:displayPhotos,ready:stockReady(draft,photos),required,minimum,approved,
    awaiting_review:!stockReady(draft,photos),
@@ -282,8 +282,6 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
   const draft=checked(await service.from('instagram_post_drafts').select('id,revision,images,carousel_slides').eq('id',path[1]).maybeSingle());
   if(!draft)return json({error:'DRAFT_NOT_FOUND'},404);
   if(draft.revision!==body.revision)return json({error:'DRAFT_CHANGED_REFRESH_FIRST'},409);
-  if(body.ai_image_slot===null&&Array.isArray(draft.carousel_slides)&&draft.carousel_slides.length===5)
-   return json({error:'FIVE_CARD_NEEDS_THREE_REAL_AND_ONE_AI_IMAGE'},400);
   if((draft.images||[]).length&&!body.confirm_replace)
    return json({error:'CONFIRM_REPLACE_RENDERED_IMAGES'},409);
   try{

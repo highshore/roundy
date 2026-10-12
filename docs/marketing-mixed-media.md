@@ -2,7 +2,7 @@
 
 ## Editorial media contract
 
-New 5-card Magazine Editorial carousels can explicitly choose which visual card is AI-generated (cover, context or one of the two insights). The remaining three visual cards use real licensed photographs. The fifth Editorial Closing stays text-only. A 3-card carousel retains two real-photo visual cards and a text-only closing; it cannot quietly lower the real-photo minimum to insert AI. Cards are 1080×1350 (4:5).
+New 5-card Magazine Editorial carousels can explicitly choose which visual card is AI-generated (cover, context or one of the two insights). The remaining three visual cards use real licensed photographs. Selecting no AI instead requires **four** reviewed photographs (cover, context and two insight cards). The fifth Editorial Closing stays text-only. A 3-card carousel retains two real-photo visual cards and a text-only closing; it cannot quietly lower the real-photo minimum to insert AI. Cards are 1080×1350 (4:5).
 
 This is one carousel containing both media types. The editor no longer requires choosing either real photos or AI for the entire carousel. The AI image is an editorial illustration, never factual evidence of a specific real venue or event. The caption records the AI card number and full original real-photo credits.
 
@@ -20,5 +20,5 @@ Changing the AI card or assigned photo on an unapproved draft clears previously 
 - No changes are made to the original images in Instagram, to approved image archives, or to already scheduled publications.
 - The photo library provides archived, time-limited preview URLs for previously approved assets. Failed preview signing does not disable browsing.
 - Existing 90-day automatic reuse cooldown remains in effect for unattended search. Intentional admin reuses bypass automatic selection rules but never rights checks.
-- The default uses no new image AI until all three real photos are approved. One AI call is explicitly budgeted for the selected card.
+- The default uses no new image AI. Mixed posts require three approved photos before generating their one selected AI card; photo-only five-card posts require four approved photos and do not call image AI.
 - Tests: `npm test` (mixed-media policies, source preservation, UI regression), `npm run typecheck`, `npm run build`.
