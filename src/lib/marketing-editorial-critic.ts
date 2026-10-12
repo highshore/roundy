@@ -88,7 +88,14 @@ export function copyCriticPrompt(language:string,mode:'story_first'|'answer_firs
   'You are an INDEPENDENT, tough magazine editor, not the writer of this carousel.',
   'Judge whether a real reader would want to keep swiping, not whether a schema or marketing checklist is satisfied.',
   'Evaluate ONLY the supplied reader-visible title, body, highlight and editorial closing. Do not use author self-ratings or hidden rationales.',
-  'Look for a specific human scene, an emotional or practical tension, a fresh observation, a different payoff per swipe, and a natural ending.',
+  ...(mode==='answer_first'?[
+   'This is a FACT-FIRST or service-journalism carousel. A concrete scene may be a reader deciding what to see, a verified activity or a practical trade-off; do not require invented dialogue or personal experience.',
+   'Reward useful verified specifics and a coherent reader decision. Reject unrelated social advice inserted beside event, book or research facts, or an event listing that never fulfills its cover promise.',
+   'A fictional conversation is optional, never a factual claim about event visitors. Judge the progression of on-screen facts and useful choices, not the theatrical intensity of a fabricated anecdote.'
+  ]:[
+   'Look for a recognisable human scene, emotional or practical tension, a fresh observation, different payoff per swipe and natural ending.',
+   'The narrative should pay off the cover promise through tangible dialogue, reactions or changing choices, not just generic questions.'
+  ]),
   'A single banal suggestion split across multiple cards MUST fail, even when it contains the words "instead", "but", or "why".',
   'BAD example: 언제 한번 대신 날짜 두 개 -> 첫 장도 뒤의 네 장도 날짜 두 개를 고르라는 조언의 반복. It is not publishable.',
   'GOOD structure: atmosphere was good on a first date, but a second meeting never happened -> real goodbye dialogue -> why the vague promise fizzles -> one usable concrete line -> humane closing.',
@@ -106,6 +113,23 @@ export type EditorialCopyCritique={
  reason:string;issues:string[];
  ratings:{hook:number;scene:number;originality:number;progression:number;shareability:number};
 };
+// Structured, bounded feedback given to the ONE permitted rewrite. Independent
+// criticism is untrusted editorial feedback, never authority over verified facts.
+export function editorialRevisionBrief(review:EditorialCopyCritique,count:3|5,sourceLocked:boolean){
+ const weakest=Object.entries(review.ratings).sort((a,b)=>a[1]-b[1]).slice(0,3).map(([name])=>name);
+ const steps=count===5
+  ?['Cover: ONE concrete reader dilemma or decision and an honest promise.',
+    'Card 2: demonstrate the exact context or reader friction promised on the cover.',
+    'Card 3: provide one new observation or sourced fact that changes the situation.',
+    'Card 4: advance with a DIFFERENT insight, example or grounded practical trade-off.',
+    'Card 5: resolve the same thread with a genuinely useful, memorable takeaway.']
+  :['Cover: one truthful, specific promise.','Card 2: fulfill it with a grounded example and distinct insight.',
+    'Card 3: close the same thread with a concrete reader payoff.'];
+ return {editor_reason:review.reason,editor_issues:review.issues.slice(0,4),
+  weakest_dimensions:weakest,slide_progression:steps,
+  factual_lock:sourceLocked?'Keep the verified subject, source IDs, facts and uncertainties. Move relevant facts into the thread instead of inventing emotional scenes.':'Keep the approved subject. Illustrative conversation is allowed but must not be presented as testimony or fact.'};
+}
+
 export function assessIndependentCopyReview(value:unknown):EditorialCopyCritique {
  if(!isRow(value)||!Array.isArray(value.issues)||value.issues.length>4)throw new Error('EDITORIAL_COPY_CRITIC_INVALID');
  if(!['pass','rewrite','replace_topic'].includes(String(value.decision)))throw new Error('EDITORIAL_COPY_CRITIC_INVALID_DECISION');
