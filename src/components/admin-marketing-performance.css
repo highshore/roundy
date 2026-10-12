@@ -1,0 +1,46 @@
+.marketing-performance-stage5{min-width:0;margin-top:32px;display:flex;flex-direction:column;gap:23px;border-top:1px solid #dde4dc;padding-top:28px}
+.marketing-performance-head h3{font-size:clamp(1.1rem,2.1vw,1.6rem);line-height:1.3;margin:7px 0;color:#19372a}
+.marketing-performance-head p{max-width:73ch;font-size:.88rem;line-height:1.6;color:#617266;margin:0}
+.marketing-performance-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}
+.marketing-performance-stats>div{padding:14px;border:1px solid #e0e6df;border-radius:13px;background:#fff;min-width:0}
+.marketing-performance-stats small,.marketing-performance-audience-stats small{display:block;color:#68766c;font-size:.74rem;line-height:1.4;min-height:2.5em}
+.marketing-performance-stats strong,.marketing-performance-audience-stats strong{display:block;font-size:clamp(1.2rem,2.5vw,1.7rem);color:#294c38;line-height:1.4}
+.marketing-performance-stage5 h4{font-size:1.04rem;letter-spacing:-.02em;margin:0 0 8px}
+.marketing-performance-audience{padding:17px;border:1px solid #e1e7df;border-radius:14px;background:#fafcf9}
+.marketing-performance-audience p{font-size:.82rem;color:#69776b;line-height:1.5;margin:6px 0 14px}
+.marketing-performance-audience>div>small{font-size:.73rem;color:#68756b;display:block;margin-top:13px}
+.marketing-performance-audience-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.marketing-performance-audience-stats span{background:#fff;border-radius:11px;border:1px solid #e6ebe4;padding:12px;min-width:0}
+.marketing-performance-learn-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.marketing-performance-learn-grid article{display:flex;flex-direction:column;gap:9px;padding:14px;border:1px solid #dee6de;border-radius:13px;background:white;min-width:0}
+.marketing-performance-learn-grid article>div{display:flex;justify-content:space-between;align-items:start;gap:8px;flex-wrap:wrap}
+.marketing-performance-learn-grid article>div>strong{font-size:.84rem}
+.marketing-performance-learn-grid article>div>span{font-size:.7rem;padding:4px 8px;border-radius:30px;background:#f1f4f0;color:#5b695e}
+.marketing-performance-learn-grid article>div>span.enabled{background:#e5f2e8;color:#155832}
+.marketing-performance-learn-grid article p{font-size:.78rem;color:#5b6b5f;line-height:1.5;margin:0}
+.marketing-performance-learn-grid article small{font-size:.7rem;color:#758077}
+.marketing-performance-winner{font-size:.78rem;color:#24583a}
+.marketing-performance-scroll{border:1px solid #dbe4d9;background:#fff;border-radius:12px;overflow-x:auto;max-width:100%;scrollbar-width:thin}
+.marketing-performance-scroll table{width:100%;min-width:980px;border-collapse:collapse;text-align:left;table-layout:auto}
+.marketing-performance-scroll th{font-size:.72rem;white-space:nowrap;color:#546556;font-weight:700;background:#f6faf6;padding:12px 10px}
+.marketing-performance-scroll td{font-size:.77rem;white-space:nowrap;padding:12px 10px;vertical-align:top;border-top:1px solid #edf0eb;color:#37483b;font-variant-numeric:tabular-nums}
+.marketing-performance-content{min-width:210px;max-width:310px}
+.marketing-performance-content strong{white-space:normal;display:block;line-height:1.4;font-size:.78rem;overflow-wrap:anywhere}
+.marketing-performance-content small{display:block;font-size:.67rem;color:#829082;margin-top:3px;white-space:normal}
+.marketing-performance-footnote{font-size:.75rem;line-height:1.6;color:#68756b;margin:7px 0 0}
+@media(max-width:780px){
+ .marketing-performance-stage5{gap:17px;margin-top:22px;padding-top:21px}
+ .marketing-performance-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .marketing-performance-learn-grid{grid-template-columns:1fr}
+ .marketing-performance-audience-stats{gap:6px}
+ .marketing-performance-audience-stats span{padding:8px}
+ .marketing-performance-audience-stats small{font-size:.68rem}
+}
+@media(max-width:420px){
+ .marketing-performance-audience-stats{grid-template-columns:1fr}
+ .marketing-performance-audience-stats span{display:flex;align-items:center;justify-content:space-between;gap:10px}
+ .marketing-performance-audience-stats small{min-height:0}
+ .marketing-performance-audience-stats strong{font-size:1.15rem}
+ .marketing-performance-stats>div{padding:11px}
+ .marketing-performance-scroll th,.marketing-performance-scroll td{padding:9px 8px}
+}

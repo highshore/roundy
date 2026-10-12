@@ -1,5 +1,6 @@
 import 'server-only';
 import {createServiceRoleClient} from './supabase/service';
+import {readInstagramPerformance,readPerformanceAccountOverview} from './marketing-performance';
 import {
  aggregateGrowthSignals,BASE_GROWTH_WEIGHTS,GROWTH_LEARNING_THRESHOLDS,
  growthPillarForTopic,growthWeekPlan,recommendGrowthWeights,
@@ -15,14 +16,17 @@ export async function readGrowthEvidence(db:DB){
  const cutoff=new Date(Date.now()-90*86400000).toISOString();
  const [draftResult,insightResult]=await Promise.all([
   db.from('instagram_post_drafts').select('id,marketing_run_id,draft_kind,growth_topic_type,content_language,draft_date,published_at').eq('status','published').gte('published_at',cutoff).order('published_at',{ascending:false}).limit(300),
-  db.from('instagram_post_insights').select('run_id,horizon_hours,source,reach,views,likes,comments,saves,shares,captured_at').gte('captured_at',cutoff).order('horizon_hours',{ascending:false}).limit(650)
+  db.from('instagram_post_insights').select('run_id,horizon_hours,source,reach,views,likes,comments,saves,shares,metric_availability,captured_at').gte('captured_at',cutoff).order('horizon_hours',{ascending:false}).limit(650)
  ]);
  const drafts=(checked(draftResult).data||[]) as Row[],insights=(checked(insightResult).data||[]) as Row[];
  // A 72-hour reading replaces a 24-hour reading; both must never be added together.
  const measured=new Map<string,Row>();
  for(const snapshot of insights){
   const key=String(snapshot.run_id||'');
-  if(!key||measured.has(key)||snapshot.source!=='insights'||!(Number(snapshot.reach)>0))continue;
+  if(!key||measured.has(key)||snapshot.source!=='insights'||snapshot.horizon_hours!==72||
+    snapshot.metric_availability?.reach!==true||snapshot.metric_availability?.shares!==true||
+    snapshot.metric_availability?.saved!==true||snapshot.metric_availability?.likes!==true||
+    snapshot.metric_availability?.comments!==true||!Number.isFinite(Number(snapshot.reach))||Number(snapshot.reach)<50)continue;
   measured.set(key,snapshot);
  }
  const signals:GrowthSignal[]=[];
@@ -52,11 +56,12 @@ export async function growthLearningWeights(db:DB):Promise<GrowthWeights>{
 }
 export async function growthOverview(){
  const db=createServiceRoleClient();
- const [settings,evidence,followerRows,attemptRows]=await Promise.all([
+ const [settings,evidence,followerRows,attemptRows,performance,accountAudience]=await Promise.all([
   db.from('marketing_automation_settings').select('growth_mode_enabled,trend_radar_enabled,daily_instagram_enabled').eq('singleton',true).single(),
   readGrowthEvidence(db),
   db.from('instagram_follower_snapshots').select('snapshot_date,followers_count,captured_at').order('snapshot_date',{ascending:false}).limit(90),
-  db.from('instagram_follower_snapshot_attempts').select('snapshot_date,status,error_code').order('snapshot_date',{ascending:false}).limit(7)
+  db.from('instagram_follower_snapshot_attempts').select('snapshot_date,status,error_code').order('snapshot_date',{ascending:false}).limit(7),
+  readInstagramPerformance(db),readPerformanceAccountOverview(db)
  ]);
  const config=checked(settings).data as Row;
  const followerHistory=(checked(followerRows).data||[]) as Row[];
@@ -78,9 +83,10 @@ export async function growthOverview(){
   change_7d:followerChange(7),change_30d:followerChange(30),
   snapshots:followerHistory.slice().reverse().map(row=>({date:row.snapshot_date,count:row.followers_count}))
  };
- return {...evidence,followers,enabled:config.growth_mode_enabled===true,automation_enabled:config.daily_instagram_enabled===true,
+ return {...evidence,followers,performance,account_audience:accountAudience,
+  enabled:config.growth_mode_enabled===true,automation_enabled:config.daily_instagram_enabled===true,
   trend_radar_enabled:config.trend_radar_enabled===true,
   week_plan:growthWeekPlan(todayKst(),evidence.weights),
   manual_reels_note:'Reel candidates are editorial recommendations only. Existing Instagram publisher currently uploads JPEG posts/carousels; video production and publishing require a separate reviewed workflow.',
-  metrics_note:'Follower totals are captured once daily when the Instagram profile API permits. Profile-to-follow conversion and post-level acquisition attribution remain unavailable; do not interpret share/save rates as new followers.'};
+  metrics_note:'Media follows/profile visits are optional for eligible Feed posts; Reel follows remain unknown if unsupported. Account followers and non-follower reach are not attributable to one post. Learning requires fully observed 72h insights.'};
 }

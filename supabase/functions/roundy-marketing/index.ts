@@ -1,5 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.117.0';
 import { hasAdvertOnGopasFirstPage, publishToKoreapas } from './koreapas.ts';
+import {mediaPerformanceObserved,captureAccountAudienceReach} from './insights-worker.ts';
 
 const url=Deno.env.get('SUPABASE_URL')!;
 const service=createClient(url,Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,{auth:{persistSession:false}});
@@ -615,34 +616,7 @@ async function regenerateDraft(draftId:string){
  }).eq('id',draftId).select('*').single();
  if(error)throw error;return data;
 }
-const insightMetric=(data:any,name:string)=>{
- const item=Array.isArray(data?.data)?data.data.find((entry:any)=>entry?.name===name):null;
- const value=item?.value??item?.values?.[0]?.value??item?.total_value?.value;
- return value===null||value===undefined||value===''?null:Number.isFinite(Number(value))?Number(value):null;
-};
-async function mediaPerformance(mediaId:string,isReel=false){
- const basic=await graph(mediaId+'?fields=like_count,comments_count').catch(()=>({}));
- const attempts=['views,reach,likes,comments,saved,shares,total_interactions','reach,likes,comments,saved,shares,total_interactions'];
- let rich:any=null;
- for(const metric of attempts){rich=await graph(mediaId+'/insights?metric='+metric).catch(()=>null);if(rich)break;}
- const likes=insightMetric(rich,'likes')??Number(basic.like_count??0);
- const comments=insightMetric(rich,'comments')??Number(basic.comments_count??0);
- const saves=insightMetric(rich,'saved')??0,shares=insightMetric(rich,'shares')??0;
- const reach=insightMetric(rich,'reach'),views=insightMetric(rich,'views'),total=insightMetric(rich,'total_interactions')??(likes+comments+saves+shares);
- let reelAvgWatch:number|null=null,reelTotalWatch:number|null=null;
- if(isReel){
-  // Optional Reel-specific metrics. Meta may restrict or rename these fields.
-  const watch=await graph(mediaId+'/insights?metric=ig_reels_avg_watch_time,ig_reels_video_view_total_time')
-   .catch(()=>null);
-  if(watch){
-   reelAvgWatch=insightMetric(watch,'ig_reels_avg_watch_time');
-   reelTotalWatch=insightMetric(watch,'ig_reels_video_view_total_time');
-  }
- }
- const denominator=Math.max(1,reach??views??(likes+comments+1));
- const score=((likes+comments*2+saves*3+shares*4)/denominator)*1000+Math.log10(denominator+1)*10;
- return {source:rich?'insights':'basic',views,reach,likes,comments,saves,shares,total_interactions:total,performance_score:Number(score.toFixed(4)),reel_avg_watch_time_ms:reelAvgWatch,reel_total_watch_time_ms:reelTotalWatch};
-}
+const mediaPerformance=(mediaId:string,isReel=false)=>mediaPerformanceObserved(graph,mediaId,isReel);
 async function captureFollowerSnapshot(){
  // One daily account-level observation; never attribute it to an individual post.
  if(!connection().instagram||!userId())return false;
@@ -697,6 +671,8 @@ async function captureDueInsights(){
     run_id:run.id,horizon_hours:horizon,source:performance.source,published_dow:published.dow,published_minute:minute,
     views:performance.views,reach:performance.reach,likes:performance.likes,comments:performance.comments,saves:performance.saves,
     shares:performance.shares,total_interactions:performance.total_interactions,performance_score:performance.performance_score,
+    media_follows:performance.media_follows,media_profile_visits:performance.media_profile_visits,
+    metric_availability:performance.metric_availability,
      reel_avg_watch_time_ms:performance.reel_avg_watch_time_ms,reel_total_watch_time_ms:performance.reel_total_watch_time_ms
    },{onConflict:'run_id,horizon_hours'});
    if(insertError)throw insertError;changed=true;
@@ -781,6 +757,7 @@ Deno.serve(async req=>{
   if(schedulerKey){
    // Optional metrics must never block the established publisher or insights worker.
    await captureFollowerSnapshot().catch(error=>console.warn('Instagram daily follower snapshot unavailable:',error instanceof Error?error.message:'Unknown error'));
+   await captureAccountAudienceReach(service,graph,String(userId()||''),kstNow().date).catch(error=>console.warn('Meta audience breakdown unavailable:',error instanceof Error?error.message:'Unknown error'));
    const insightsChanged=await captureDueInsights();
    if(insightsChanged)await refreshTimeRecommendations();
   }

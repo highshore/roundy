@@ -5,6 +5,7 @@ import type {NextRequest} from 'next/server';
 import {NextResponse} from 'next/server';
 import {createServiceRoleClient} from './supabase/service';
 import {inspectReelMp4} from './marketing-reel-mp4';
+import {performanceEditorialHint} from './marketing-performance';
 import {REEL_PILLARS} from './marketing-reel-policy';
 import {
  evaluateReelIdeas,validateReelPlan,reelPlanHash,videoSourceRights,
@@ -140,7 +141,10 @@ export async function reelCreativeApi(req:NextRequest,actor:string,path:string[]
   const recent=checked(await db.from('instagram_reel_drafts').select('title')
    .gte('created_at',new Date(Date.now()-60*86400000).toISOString())
    .order('created_at',{ascending:false}).limit(30)) as Row[];
-  const input=reelAiIdeasPrompt(language,pillar,recent.map(x=>String(x.title||''))),runKey=String(body.request_key||'');
+  const learned=await performanceEditorialHint(db,'reel',language).catch(()=> ''),
+   input=reelAiIdeasPrompt(language,pillar,recent.map(x=>String(x.title||'')))+
+    (learned?'\n'+learned:''),
+   runKey=String(body.request_key||'');
   const generated=await paid(db,actor,'ideas',runKey,null,async()=>{
    const out=await callAi('chat/completions',{model:MODEL,reasoning_effort:'none',max_completion_tokens:2600,
     response_format:{type:'json_schema',json_schema:{name:'roundy_reel_ideas_v1',strict:true,schema:reelIdeasJsonSchema()}},
