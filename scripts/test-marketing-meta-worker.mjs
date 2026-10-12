@@ -38,7 +38,7 @@ const reel=await worker.mediaPerformanceObserved(async path=>{
 },'17890000045678',true);
 check(()=>assert.equal(reel.media_follows,null));
 check(()=>assert.equal(reel.metric_availability.follows,false));
-check(()=>assert.equal(reel.reel_avg_watch_time_ms,5500.5));
+check(()=>assert.equal(reel.reel_avg_watch_time_ms,5501));
 check(()=>assert.equal(reel.reel_total_watch_time_ms,1200000));
 const missing=await worker.mediaPerformanceObserved(async path=>{
  if(path.includes('fields='))return {like_count:3,comments_count:1};
