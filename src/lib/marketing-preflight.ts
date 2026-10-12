@@ -159,7 +159,7 @@ export function evaluateMarketingPreflight(draft:Record<string,any>,settings:Rec
 
  const mobileIssues:string[]=[];
  if(!plan)mobileIssues.push('표준 1080×1350 템플릿 정보가 없습니다. 새 템플릿으로 재생성하세요.');
- if(plan&&plan.slide_count!==slides.length)mobileIssues.push('렌더링 템플릿 장수와 실제 카드 수가 다릅니다.');
+ if(plan&&intended!==slides.length)mobileIssues.push('렌더링 템플릿 장수와 실제 카드 수가 다릅니다.');
  if(plan){
   slides.forEach((slide:Record<string,any>,i:number)=>{
    if(branded&&i===storyCount){
