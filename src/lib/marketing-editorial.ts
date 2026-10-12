@@ -114,9 +114,9 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
   const since=new Date(Date.now()-TOPIC_HISTORY_DAYS*86400000).toISOString();
   const [draftRows,jobRows]=await Promise.all([
    db.from('instagram_post_drafts')
-    .select('id,created_at,content_document,carousel_slides,content_language,status')
-    .gte('created_at',since).in('status',['needs_approval','approved','scheduled','published'])
-    .order('created_at',{ascending:false}).limit(120),
+    .select('id,generated_at,updated_at,content_document,carousel_slides,content_language,status')
+    .gte('updated_at',since).in('status',['needs_approval','approved','scheduled','published'])
+    .order('updated_at',{ascending:false}).limit(120),
    db.from('marketing_generation_jobs').select('id,draft_id,created_at,result_snapshot')
     .eq('status','completed').gte('created_at',since)
     .order('created_at',{ascending:false}).limit(120)

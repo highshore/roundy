@@ -40,7 +40,7 @@ function similarity(a:unknown,b:unknown){
 export function topicHistoryFromRows(drafts:unknown[],jobs:unknown[],excludeDraftId='',now=new Date()):TopicHistoryItem[]{
  const cutoff=now.getTime()-TOPIC_HISTORY_DAYS*86400000,items:TopicHistoryItem[]=[];
  const add=(row:Row,doc:Row,slides:Row[])=>{
-  const when=Date.parse(str(row.created_at)||str(row.generated_at)||'');
+  const when=Date.parse(str(row.created_at)||str(row.generated_at)||str(row.updated_at)||'');
   if(!Number.isFinite(when)||when<cutoff||when>now.getTime()+60000)return;
   const chosen=doc?.editorial_topic_selection?.selected||doc?.topic_selection?.selected||{};
   const headline=str(chosen.headline)||str(slides[0]?.title);
