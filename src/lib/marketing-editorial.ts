@@ -4,7 +4,7 @@ import {type CarouselPlan} from './marketing-carousel-template';
 import {selectVerifiedMarketingBook,verifiedBookEvidence} from './marketing-book-catalog';
 import {captionCtaIssues,isCompactDocument,isMagazineDocument,isImmersiveMagazineDocument,bilingualCaptionIssues,CAMPAIGN_PRESET,EVENT_CAMPAIGN_PRESET} from './marketing-presentation';
 import {EDITORIAL_ENGAGEMENT_POLICY} from './marketing-editorial-quality';
-import {EDITORIAL_CRITIC_VERSION,storyFirstPostType,topicCriticSchema,topicCriticPrompt,independentlyRankTopics,copyCriticSchema,copyCriticPrompt,assessIndependentCopyReview,type EditorialCopyCritique,type TopicCriticReview} from './marketing-editorial-critic';
+import {EDITORIAL_CRITIC_VERSION,EDITORIAL_CRITIC_MAX_REVIEWS,storyFirstPostType,topicCriticSchema,topicCriticPrompt,independentlyRankTopics,copyCriticSchema,copyCriticPrompt,assessIndependentCopyReview,type EditorialCopyCritique,type TopicCriticReview} from './marketing-editorial-critic';
 import {storyboardWritingGuide} from './marketing-editorial-storyboard';
 import {TOPIC_DISCOVERY_VERSION,TOPIC_HISTORY_DAYS,topicHistoryFromRows,assessTopicCandidates,topicCandidateSchema,topicDiscoveryPrompt,type TopicSelection} from './marketing-topic-planner';
 import {performanceEditorialHint} from './marketing-performance';
@@ -239,12 +239,34 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
  // New immersive editorial only: old drafts retain their original review contract.
  // A copy failing this gate is repaired once, before any paid photo generation begins.
  const prepareWithEngagementGate=(value:Row,type:PostType)=>{
-  const applied=applyAnswerFirstDocument(value,answerFirst,plan);
+  const shaped=plan&&isImmersiveMagazineDocument(value)
+   ?{...value,editorial_narrative_mode:storyFirstPostType(type)?'story_first':'answer_first'}:value;
+  const applied=applyAnswerFirstDocument(shaped,answerFirst,plan);
   // All NEW immersive Growth Carousel types, including sourced Seoul guides,
   // share the reader-engagement gate; historical brand/event snapshots stay unchanged.
   const gated=isImmersiveMagazineDocument(applied)&&input.content_mode==='growth_carousel'
    ?{...applied,editorial_engagement_policy:EDITORIAL_ENGAGEMENT_POLICY}:applied;
   return prepareContent(gated,type,language,sources);
+ };
+
+ let criticCalls=0;
+ const reviewCopy=async(document:Row,type:PostType):Promise<EditorialCopyCritique|null>=>{
+  if(!plan||input.content_mode!=='growth_carousel'||!isImmersiveMagazineDocument(document))return null;
+  if(criticCalls>=EDITORIAL_CRITIC_MAX_REVIEWS)throw new Error('EDITORIAL_CRITIC_CALL_LIMIT');
+  criticCalls++;
+  const mode=storyFirstPostType(type)?'story_first':'answer_first';
+  const slides=Array.isArray(document.slides)?document.slides.map((slide:Row)=>({
+   role:slide.role,title:slide.title,body:slide.body,highlight:slide.highlight
+  })):[];
+  ok(await db.from('marketing_generation_jobs').update({stage:'reviewing_editorial_copy'}).eq('id',job.id));
+  const result=await call('chat/completions',{
+   model:MODEL,reasoning_effort:'none',max_completion_tokens:1100,
+   response_format:{type:'json_schema',json_schema:{name:'roundy_copy_critic_v1',strict:true,schema:copyCriticSchema()}},
+   messages:[{role:'system',content:copyCriticPrompt(language,mode,plan.slide_count)},
+    {role:'user',content:JSON.stringify({post_type:type,language,slide_count:plan.slide_count,slides})}]
+  },28000);
+  await record(result);
+  return assessIndependentCopyReview(parseDocument(result).document);
  };
 
  const lockVerifiedBook=(document:Row)=>{
