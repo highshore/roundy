@@ -341,7 +341,7 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
   if(q.status!=='passed')throw new Error('품질 검토 필요: '+q.issues.join(' '));
  }
  const preference=checked(await db.from('marketing_automation_settings')
-  .select('carousel_mode,carousel_default_slides,carousel_title_font_size_px,carousel_body_font_size_px,carousel_answer_first_enabled,carousel_min_real_photos_5,carousel_min_real_photos_3,carousel_ai_thumbnail_enabled')
+  .select('carousel_mode,carousel_default_slides,carousel_title_font_size_px,carousel_body_font_size_px,carousel_answer_first_enabled,carousel_brand_outro_enabled,carousel_min_real_photos_5,carousel_min_real_photos_3,carousel_ai_thumbnail_enabled')
   .eq('singleton',true).maybeSingle()).data as Row|null;
  input.answer_first_enabled=input.mode!=='image'&&(preference?.carousel_answer_first_enabled===true||draft.content_document?.answer_first===true||input.answer_first_enabled===true);
  const existingPlan=savedCarouselPlan(draft.content_document);
@@ -354,6 +354,8 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
  }
  // A template's size is frozen at the initial content reservation, including retries.
  input.carousel_plan=plan;
+ // Existing 3/5 story reservations are immutable; opt-in adds one server-owned brand card.
+ input.brand_outro_enabled=Boolean(plan&&input.mode!=='image'&&preference?.carousel_brand_outro_enabled===true);
  // Every newly generated feed editorial story is answer-first; legacy image-only
  // regenerations retain their saved document and campaign/Story code is unchanged.
  if(input.mode!=='image'&&plan)input.answer_first_enabled=true;
@@ -388,12 +390,12 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
     ?(input.mode==='image'||input.render_only?'render':research?'research':'copy')
     :(input.mode==='image'||input.render_only||recoveryPatch?'photo':'copy_photo'))
   :uploadedVisuals?'render':research?'research':'copy';
- const fingerprint=createHash('sha256').update(JSON.stringify({id:draftId,revision:input.revision,mode:input.mode,content:input.content_mode,language:input.language,visual:input.visual_mode,visual_source:visualSource,topic:input.topic_type||'',instruction:input.instruction,campaign_pattern:input.campaign_pattern||null,campaign_tone:input.campaign_tone||null,launch_date:input.launch_date||null,event_id:input.event_id||draft.event_id||null,event_campaign_stage:input.event_campaign_stage||null,event_campaign_pattern:input.event_campaign_pattern||null,render:!!input.render_only,carousel_slot:plan?.reservation_number||null,carousel_count:plan?.slide_count||null,answer_first_enabled:input.answer_first_enabled===true,photo_first:managedPhotoSourcing,ai_image_slot:selectedAiSlot,saved_recovery_of:thread?.recoverySourceJobId||null})).digest('hex');
+ const fingerprint=createHash('sha256').update(JSON.stringify({id:draftId,revision:input.revision,mode:input.mode,content:input.content_mode,language:input.language,visual:input.visual_mode,visual_source:visualSource,topic:input.topic_type||'',instruction:input.instruction,campaign_pattern:input.campaign_pattern||null,campaign_tone:input.campaign_tone||null,launch_date:input.launch_date||null,event_id:input.event_id||draft.event_id||null,event_campaign_stage:input.event_campaign_stage||null,event_campaign_pattern:input.event_campaign_pattern||null,render:!!input.render_only,carousel_slot:plan?.reservation_number||null,carousel_count:plan?.slide_count||null,brand_outro_enabled:input.brand_outro_enabled===true,answer_first_enabled:input.answer_first_enabled===true,photo_first:managedPhotoSourcing,ai_image_slot:selectedAiSlot,saved_recovery_of:thread?.recoverySourceJobId||null})).digest('hex');
  const reservation=checked(await db.rpc('reserve_marketing_generation',{p_key:input.request_key,p_fingerprint:fingerprint,p_draft:draftId,p_revision:input.revision,p_operation:operation,p_actor:actor,p_automatic:automatic})).data as Row,job=reservation.job as Row;
  if(!reservation.accepted)return {draft,job,deduplicated:true};
  let contentQuality:Row|null=null;
  try{
-  const requestPayload={carousel_plan:plan,answer_first_enabled:input.answer_first_enabled===true,photo_first:managedPhotoSourcing,ai_image_slot:selectedAiSlot,mode:input.mode,content_mode:input.content_mode,language:input.language,visual_mode:input.visual_mode,visual_source:visualSource,topic_type:input.topic_type||null,trend_id:draft.trend_id||null,instruction:input.instruction||'',campaign_pattern:input.campaign_pattern||null,campaign_tone:input.campaign_tone||null,launch_date:input.launch_date||null,event_id:input.event_id||draft.event_id||null,event_campaign_stage:input.event_campaign_stage||null,event_campaign_pattern:input.event_campaign_pattern||null,confirm_photo:input.confirm_photo===true,render_only:input.render_only===true,...(recoverySource?{saved_recovery_of:recoverySource.id}: {})};
+  const requestPayload={carousel_plan:plan,brand_outro_enabled:input.brand_outro_enabled===true,answer_first_enabled:input.answer_first_enabled===true,photo_first:managedPhotoSourcing,ai_image_slot:selectedAiSlot,mode:input.mode,content_mode:input.content_mode,language:input.language,visual_mode:input.visual_mode,visual_source:visualSource,topic_type:input.topic_type||null,trend_id:draft.trend_id||null,instruction:input.instruction||'',campaign_pattern:input.campaign_pattern||null,campaign_tone:input.campaign_tone||null,launch_date:input.launch_date||null,event_id:input.event_id||draft.event_id||null,event_campaign_stage:input.event_campaign_stage||null,event_campaign_pattern:input.event_campaign_pattern||null,confirm_photo:input.confirm_photo===true,render_only:input.render_only===true,...(recoverySource?{saved_recovery_of:recoverySource.id}: {})};
   const threadId=thread?.threadId||job.id,attemptNumber=thread?.attemptNumber||1,workflowId=await resolveContentWorkflowId(db,draft,job,thread);
   checked(await db.from('marketing_generation_jobs').update({
    request_payload:requestPayload,
