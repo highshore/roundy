@@ -61,7 +61,7 @@ assert.ok(evaluateEditorialEngagement(dullSeoul,'ko').score<EDITORIAL_ENGAGEMENT
 const policy=fs.readFileSync('src/lib/marketing-content-policy.ts','utf8');
 const editorial=fs.readFileSync('src/lib/marketing-editorial.ts','utf8');
 assert.match(policy,/editorial_engagement_policy===EDITORIAL_ENGAGEMENT_POLICY/);
-assert.match(editorial,/isImmersiveMagazineDocument\(applied\)/);
+assert.match(editorial,/isMagazineDocument\(applied\)/);
 assert.match(editorial,/input\.content_mode==='growth_carousel'/);
 assert.match(editorial,/EDITORIAL_ENGAGEMENT_GATE_REJECTED/);
 assert.match(editorial,/repairUsed=true/);
