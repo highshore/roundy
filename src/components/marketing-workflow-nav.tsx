@@ -1,6 +1,8 @@
 'use client';
+import {useEffect,useState} from 'react';
 import {tr,type Locale} from '@/lib/locale';
-import {editorialState,EDITORIAL_STATE_LABELS} from '@/lib/marketing-workflow';
+import {EDITORIAL_STATE_LABELS} from '@/lib/marketing-workflow';
+import {workflowNavigation,carouselCounts,focusWorkflowTarget} from '@/lib/marketing-workflow-navigation';
 import './marketing-workflow-nav.css';
 type Row=Record<string,any>;
 const groups=[
@@ -13,21 +15,27 @@ export function MarketingWorkflowNav({locale,activeTab,items,onNavigate}:{locale
  const t=(en:string,ko:string)=>tr(locale,en,ko),current=groups.find(g=>g.tabs.includes(activeTab))||groups[0];
  return <nav className="marketing-workflow-nav" aria-label={t('Instagram workspace','인스타그램 작업 메뉴')}>
   <div className="marketing-workflow-groups">{groups.map(g=><button type="button" key={g.id} aria-pressed={current.id===g.id} onClick={()=>onNavigate(g.tabs[0])}>{t(g.en,g.ko)}</button>)}</div>
-  <div className="marketing-workflow-tools" role="tablist" aria-label={t(current.en,current.ko)}>{current.tabs.map(id=>{
+  <div className="marketing-workflow-tools" aria-label={t(current.en,current.ko)}>{current.tabs.map(id=>{
    const item=items.find(x=>x[0]===id);if(!item)return null;const Icon=item[2];
-   return <button type="button" role="tab" key={id} aria-selected={activeTab===id} onClick={()=>onNavigate(id)}><Icon size={15}/>{item[1]}</button>;
+   return <button type="button" key={id} aria-current={activeTab===id?'page':undefined} onClick={()=>onNavigate(id)}><Icon size={15} aria-hidden="true"/>{item[1]}</button>;
   })}</div>
  </nav>;
 }
 export function MarketingWorkflowSteps({draft,locale}:{draft:Row;locale:Locale}){
- const t=(en:string,ko:string)=>tr(locale,en,ko),state=editorialState(draft);
- const step=['empty','topic_review'].includes(state)?0:['copy_review','source_review','translation_review'].includes(state)?1:['photo_review','render_review'].includes(state)?2:3;
- const target=step<2?'roundy-editorial-studio':step===2?'roundy-marketing-photo-editor':'roundy-marketing-approval';
- const total=draft.carousel_slides?.length||0,stories=draft.content_document?.brand_outro_version===1?total-1:total;
- return <section className="marketing-workflow-steps" aria-label={t('Next step','다음 작업')}>
-  <ol>{[['Topic','주제'],['Copy','원고'],['Images','이미지'],['Approval','승인']].map(([en,ko],index)=><li key={en} aria-current={step===index?'step':undefined}><span>{index+1}</span>{t(en,ko)}</li>)}</ol>
-  <div><p><strong>{t(...EDITORIAL_STATE_LABELS[state])}</strong><small>{stories} {t('story cards','장 본문')}{stories!==total?' + 1 '+t('Roundy card','라운디 소개'):''} / {t('Total','총')} {total}{t(' cards','장')}</small></p>
-   <button type="button" className="admin-secondary" onClick={()=>document.getElementById(target)?.scrollIntoView({behavior:'smooth',block:'start'})}>{t('Continue editing','이어서 작업')}</button></div>
+ const t=(en:string,ko:string)=>tr(locale,en,ko),next=workflowNavigation(draft),counts=carouselCounts(draft);
+ const [navigationIssue,setNavigationIssue]=useState('');
+ useEffect(()=>setNavigationIssue(''),[draft.id,draft.revision,next.state]);
+ const finished=next.state==='published'||next.state==='scheduled';
+ return <section className="marketing-workflow-steps" aria-label={t('Content to publication','콘텐츠 제작 및 게시 순서')}>
+  <ol>{[['Create content','콘텐츠 만들기'],['Finish images','이미지 완성'],['Review and publish','검토 후 게시']].map(([en,ko],index)=><li key={en} aria-current={!finished&&next.phase===index?'step':undefined} data-complete={finished||next.phase!==null&&index<next.phase}><span>{index+1}</span>{t(en,ko)}</li>)}</ol>
+  <div><p><strong>{t(...EDITORIAL_STATE_LABELS[next.state])}</strong>
+   {counts.total>0&&<small>{counts.stories} {t('story cards','장 스토리')}{counts.brand?' + 1 '+t('Roundy card','장 라운디 소개'):''} / {t('Total','총')} {counts.total}{t(' cards','장')}</small>}
+   {next.state==='running'&&<small>{t('The current request is still running. Do not start the same operation again.','현재 작업이 진행 중입니다. 같은 작업을 다시 시작하지 마세요.')}</small>}
+   {next.state==='system_error'&&<small>{t('Check the latest generation log before retrying. No automatic retry or publication.','재시도 전에 생성 기록의 마지막 결과를 확인하세요. 자동 재시도나 게시는 하지 않습니다.')}</small>}
+  </p>
+   {next.action&&<button type="button" className="admin-secondary" onClick={()=>setNavigationIssue(focusWorkflowTarget(next.targets)?'':t('The editing section is not available for this draft. Open the draft from the content list.','이 초안의 작업 구역을 찾지 못했습니다. 콘텐츠 목록에서 초안을 다시 열어주세요.'))}>{t(...next.action)}</button>}
+  </div>
+  {navigationIssue&&<p role="status" className="admin-help">{navigationIssue}</p>}
  </section>;
 }
 export function MarketingProductionMetrics({metrics,locale}:{metrics:Row|null;locale:Locale}){
