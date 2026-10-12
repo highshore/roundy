@@ -24,7 +24,8 @@ jobs:
         run: |
           python - <<'PY'
           import base64,gzip,json,hashlib,pathlib
-          edits=json.loads(gzip.decompress(base64.b64decode(pathlib.Path('scripts/instagram-audit.patch').read_text())))
+          payload=''.join(pathlib.Path(p).read_text().strip() for p in ['scripts/instagram-audit.part1','scripts/instagram-audit.part2','scripts/instagram-audit.patch'])
+          edits=json.loads(gzip.decompress(base64.b64decode(payload)))
           for item in edits:
             p=pathlib.Path(item['path'])
             assert not p.is_absolute() and '..' not in p.parts
@@ -66,7 +67,7 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add src scripts docs supabase package.json package-lock.json
-          git rm scripts/instagram-audit.patch .github/workflows/instagram-audit-workbench.yml
+          git rm scripts/instagram-audit.part1 scripts/instagram-audit.part2 scripts/instagram-audit.patch .github/workflows/instagram-audit-workbench.yml
           git commit -m 'fix(marketing): resilient editorial workflow and focused content studio'
           git push origin HEAD:fix/instagram-workflow-audit-20261012
       - uses: actions/upload-artifact@v4
