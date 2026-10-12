@@ -106,7 +106,7 @@ async function callAi(endpoint:'chat/completions'|'images/generations',body:Row,
 async function paid<T>(db:DB,actor:string,kind:'ideas'|'script'|'ai_image',key:string,reelId:string|null,action:()=>Promise<{result:T;usage?:Row}>){
  const reserved=await reserve(db,actor,kind,key,reelId||undefined),job=reserved.job;
  if(!reserved.accepted){
-  if(job.status==='completed'&&job.result)return {result:job.result as T,deduplicated:true};
+  if(job.status==='completed'&&job.result)return {result:job.result as T,deduplicated:true,job_id:job.id};
   throw new Error('REEL_AI_REQUEST_ALREADY_RECORDED_'+String(job.status).toUpperCase());
  }
  try{
@@ -115,7 +115,7 @@ async function paid<T>(db:DB,actor:string,kind:'ideas'|'script'|'ai_image',key:s
    status:'completed',result:response.result,input_tokens:Number(response.usage?.prompt_tokens||response.usage?.input_tokens||0),
    output_tokens:Number(response.usage?.completion_tokens||response.usage?.output_tokens||0),updated_at:new Date().toISOString()
   }).eq('id',job.id).eq('status','running'));
-  return {result:response.result,deduplicated:false};
+  return {result:response.result,deduplicated:false,job_id:job.id};
  }catch(error){
   const unknown=error instanceof Error&&error.message==='UPSTREAM_OUTCOME_UNKNOWN';
   await db.from('marketing_reel_ai_runs').update({
@@ -147,7 +147,7 @@ export async function reelCreativeApi(req:NextRequest,actor:string,path:string[]
     messages:[{role:'system',content:input},{role:'user',content:'Generate five distinct truthful Reel concepts.'}]});
    return {result:{candidates:evaluateReelIdeas(parseMessage(out),language,recent.map(x=>x.title)),pillar,language},usage:out.usage};
   });
-  return json({...generated.result,deduplicated:generated.deduplicated});
+  return json({...generated.result,run_id:generated.job_id,deduplicated:generated.deduplicated});
  }
  if(id==='ai'&&route==='history'&&req.method==='GET'){
   const jobs=checked(await db.from('marketing_reel_ai_runs').select('id,kind,status,result,created_at')
@@ -190,6 +190,34 @@ export async function reelCreativeApi(req:NextRequest,actor:string,path:string[]
    created_by:actor,review_status:'pending'
   }).select('*').single()) as Row;
   return json({asset:(await assetsWithPreview(db,[asset]))[0]},201);
+ }
+ if(id==='assets'&&route==='import-photo'&&req.method==='POST'){
+  const body=await req.json().catch(()=>({})),photoId=String(body.photo_id||'');
+  if(!uuid(photoId)||body.confirm_import!==true)throw new Error('REEL_PHOTO_IMPORT_REQUIRED');
+  const photo=checked(await db.from('marketing_photo_assets').select('*')
+   .eq('id',photoId).eq('review_status','approved').maybeSingle()) as Row|null;
+  if(!photo||!photo.storage_path||photo.commercial_use_allowed!==true||
+    photo.modifications_allowed!==true||!photo.license_checked_at||!photo.photographer)
+   throw new Error('REEL_PHOTO_SOURCE_NOT_APPROVED');
+  const data=await db.storage.from('marketing-images').download(String(photo.storage_path));
+  if(data.error||!data.data)throw new Error('REEL_PHOTO_ARCHIVE_UNAVAILABLE');
+  const bytes=new Uint8Array(await data.data.arrayBuffer());
+  if(bytes.length<300||bytes.length>10*1024*1024)throw new Error('REEL_PHOTO_IMAGE_SIZE_INVALID');
+  const meta=await sharp(Buffer.from(bytes)).metadata();
+  if(!meta.width||!meta.height)throw new Error('REEL_PHOTO_IMAGE_INVALID');
+  const archive=actor+'/'+randomUUID()+'.jpg';
+  checked(await db.storage.from(REEL_ASSET_BUCKET).upload(archive,await sharp(Buffer.from(bytes)).jpeg({quality:88}).toBuffer(),
+   {contentType:'image/jpeg',upsert:false}));
+  const asset=checked(await db.from('marketing_reel_assets').insert({
+   kind:'approved_photo',storage_path:archive,content_type:'image/jpeg',
+   file_size:bytes.length,width:meta.width,height:meta.height,creator:String(photo.photographer),
+   source_url:String(photo.source_url||''),license_url:String(photo.license_url||''),
+   license_note:'Imported from pre-approved Roundy photo library. Source: '+String(photo.provider||'stock'),
+   original_owned:false,commercial_use_allowed:true,modifications_allowed:true,
+   rights_attested:true,review_status:'approved',reviewed_by:actor,reviewed_at:new Date().toISOString(),
+   created_by:actor
+  }).select('*').single()) as Row;
+  return json({asset:(await assetsWithPreview(db,[asset]))[0],imported:true});
  }
  if(id==='assets'&&route==='ai-image'&&req.method==='POST'){
   const b=await req.json().catch(()=>({})),prompt=String(b.prompt||'').trim();
