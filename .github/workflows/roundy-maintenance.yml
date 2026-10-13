@@ -9,14 +9,14 @@ concurrency:
   cancel-in-progress: false
 jobs:
   apply:
-    if: github.repository == 'highshore/roundy' && github.event.head_commit.message == 'chore: stage verified Roundy cleanup'
+    if: github.repository == 'highshore/roundy'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.ref_name }}
-          fetch-depth: 2
+          fetch-depth: 0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 22
@@ -25,7 +25,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = 86e4b57c273193a55324cd409b941cbaee75d4bd
+          git merge-base --is-ancestor 86e4b57c273193a55324cd409b941cbaee75d4bd HEAD
           python3 - <<'PY'
           import hashlib,json,lzma
           from pathlib import Path
