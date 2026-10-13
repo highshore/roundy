@@ -124,3 +124,12 @@ button.roundy-editorial-card-copy{cursor:text}
  .roundy-editorial-manual input,.roundy-editorial-manual textarea,.marketing-inline-rewrite textarea,.marketing-inline-photo select{font-size:16px}
 }
 @media(max-width:375px){.roundy-editorial-card-buttons button{gap:3px;font-size:11px}.roundy-editorial-card-info{padding:10px}}
+
+/* Cover title repair belongs to the existing editorial review, not a second editor. */
+.roundy-editorial-headline-warning{margin:10px 0;padding:10px 12px;border:1px solid #edc0b7;border-radius:10px;background:#fff7f5;color:#92372b;font-size:13px;line-height:1.55}
+.roundy-editorial-headline-tools{margin-top:12px;padding-top:12px;border-top:1px solid #e6e7e3}
+.roundy-editorial-headline-form{display:grid;gap:12px;min-width:0}
+.roundy-editorial-headline-form label{display:grid;gap:5px;font-size:13px;line-height:1.5;color:#464c46}
+.roundy-editorial-headline-form label span{font-weight:600}
+.roundy-editorial-headline-form input{display:block;box-sizing:border-box;width:100%;min-width:0;border:1px solid #d8dcd6;border-radius:9px;padding:10px 12px;background:#fff;color:#20211f;font:inherit;font-size:16px;line-height:1.45}
+.roundy-editorial-headline-form input:focus-visible{outline:2px solid #e76f62;outline-offset:2px}
