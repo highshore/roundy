@@ -551,7 +551,7 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
     result_snapshot:snapshot,result_revision:draft.revision,updated_at:new Date().toISOString()}).eq('id',job.id).eq('status','running'));
    return {draft,job:reviewedJob,deduplicated:false,review_required:true};
   }
-  const message=safeError(error),code=error instanceof GenerationError||error instanceof EditorialReviewRequired?error.code:'GENERATION_FAILED',unknown=code==='UPSTREAM_OUTCOME_UNKNOWN';
+  const message=safeError(error),code=error instanceof GenerationError||error instanceof EditorialReviewRequired?error.code:message==='PROMPT_SIZE_LIMIT'?'PROMPT_SIZE_LIMIT':'GENERATION_FAILED',unknown=code==='UPSTREAM_OUTCOME_UNKNOWN';
   await db.from('marketing_generation_jobs').update({status:unknown?'uncertain':'failed',stage:error instanceof EditorialReviewRequired?'topic_review_required':'stopped',error_code:code,error_message:message,updated_at:new Date().toISOString()}).eq('id',job.id).eq('status','running');
   if(error instanceof GenerationError&&error.block)await db.from('marketing_ai_control').update({blocked_reason:message,updated_at:new Date().toISOString()}).eq('singleton',true);
   // Only upstream/configuration errors and unknown network outcomes trip the circuit breaker.
