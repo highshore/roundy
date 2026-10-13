@@ -1,0 +1,56 @@
+name: Asset metadata verification
+on:
+  push:
+    branches: [codex/roundy-backend-resilience-20261013]
+    paths: ['.github/workflows/asset-metadata-verification.yml']
+permissions:
+  contents: write
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: codex/roundy-backend-resilience-20261013
+      - name: Apply reviewed optimistic metadata write
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('src/lib/marketing-generation.ts');s=p.read_text()
+          old=""" Object.assign(draft,await savePartial(db,draft,{content_document:{...draft.content_document,
+           generated_ai_assets:{...draft.content_document?.generated_ai_assets,[assetKey]:saved.asset}},quality_revision:null}));"""
+          new=""" // Private cache bookkeeping is not a new content version. Keep the same
+           // optimistic revision check, without consuming the finite content revision budget.
+           const cachedDraft=checked(await db.from('instagram_post_drafts').update({
+            content_document:{...draft.content_document,
+             generated_ai_assets:{...draft.content_document?.generated_ai_assets,[assetKey]:saved.asset}},quality_revision:null
+           }).eq('id',draft.id).eq('status','needs_approval').eq('revision',draft.revision).select('*').maybeSingle()).data;
+           if(!cachedDraft)throw new Error('DRAFT_CHANGED_DURING_GENERATION');
+           Object.assign(draft,cachedDraft);"""
+          if s.count(old)!=1:raise RuntimeError('Unexpected metadata patch target')
+          p.write_text(s.replace(old,new,1))
+          p=Path('scripts/test-marketing-generated-assets.mjs');s=p.read_text()
+          old="assert.equal(Object.keys(draft.content_document.generated_ai_assets).length,1);"
+          if s.count(old)!=1:raise RuntimeError('Unexpected regression patch target')
+          s=s.replace(old,"assert.equal(draft.revision,2,'private cache metadata must not consume another content revision');\n"+old,1)
+          p.write_text(s)
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/lib/marketing-generation.ts scripts/test-marketing-generated-assets.mjs
+          git rm .github/workflows/asset-metadata-verification.yml
+          git commit -m 'fix(marketing): preserve content revisions when saving private AI cache metadata'
+          git push origin HEAD:codex/roundy-backend-resilience-20261013
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npm test
+      - run: node scripts/test-marketing-generation.mjs
+      - run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
+      - run: node scripts/test-marketing-runtime-assets.mjs
