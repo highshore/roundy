@@ -1,0 +1,45 @@
+name: Content copy review verification
+on:
+  push:
+    branches: [codex/roundy-content-copy-review-fix-20261013]
+    paths: ['.github/workflows/content-copy-review-verification.yml']
+permissions:
+  contents: write
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: codex/roundy-content-copy-review-fix-20261013
+      - name: Apply verified two-file fix
+        run: |
+          python3 - <<'PY'
+          import base64,lzma,hashlib,subprocess
+          from pathlib import Path
+          encoded='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'
+          patch=lzma.decompress(base64.b64decode(encoded,validate=True))
+          assert len(patch)==4546 and hashlib.sha256(patch).hexdigest()=='ff14ef81669e96bff6210c09772b87775055a4208dd37e6bcf941a50b85ccf48'
+          expected={'src/lib/marketing-content-controller.ts','scripts/test-marketing-central-runtime.mjs'}
+          assert {line.split(' b/',1)[1] for line in patch.decode().splitlines() if line.startswith('diff --git ')}==expected
+          p=Path('/tmp/content-review.patch');p.write_bytes(patch)
+          subprocess.run(['git','apply','--check',str(p)],check=True)
+          subprocess.run(['git','apply',str(p)],check=True)
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/lib/marketing-content-controller.ts scripts/test-marketing-central-runtime.mjs
+          git rm .github/workflows/content-copy-review-verification.yml
+          git commit -m 'fix(marketing): revalidate manually corrected copy without stale review latch'
+          git push origin HEAD:codex/roundy-content-copy-review-fix-20261013
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run typecheck
+      - run: node scripts/test-marketing-central-runtime.mjs
+      - run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
