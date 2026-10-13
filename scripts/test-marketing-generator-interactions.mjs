@@ -118,9 +118,11 @@ try{
    assert.ok(btn,'Selection exists for story card '+index);
    await act(async()=>{btn.props.onClick();await tick();});
    const gallery=renderer.root.findByProps({'data-testid':'marketing-approved-photo-grid'});
-   const use=gallery.findAllByType('button').filter(b=>text(b)===(locale==='ko'?'이 사진 선택':'Use photo'));
+   const actions=gallery.findAllByProps({className:'marketing-approved-picker-actions'});
+   const use=actions.map(section=>section.findByType('button'));
    assert.equal(use.length,2);
-   assert.equal(use[0].props.disabled,assetIndex===1,'Selected image cannot be duplicated on a different card');
+   assert.equal(Boolean(use[0].props.disabled),assetIndex===1,'Selected image cannot be duplicated on a different card');
+   assert.equal(Boolean(use[assetIndex].props.disabled),false,'The intended photo remains selectable');
    await act(async()=>{use[assetIndex].props.onClick();await tick();});
   };
   await selectPhoto(1,0);
