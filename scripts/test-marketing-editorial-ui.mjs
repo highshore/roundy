@@ -51,8 +51,7 @@ check('duplicate cover choices show an actionable editor, not selection of ident
  assert.ok(all.some(x=>x.node.props['data-testid']==='headline-edit-tools'));
  const editor=all.find(x=>x.node.type==='button'&&label(x.node)==='표지 제목 후보 전체 수정');
  assert.ok(editor);assert.equal(editor.node.props.disabled,false);
- assert.ok(all.filter(x=>String(x.node.props.className||'').includes('roundy-editorial-headline')).some(x=>
-  x.node.props.className==='roundy-editorial-headline'&&nodes(x.node).some(b=>b.node.type==='button'&&b.node.props.disabled)));
+ assert.ok(all.some(x=>x.node.type==='button'&&label(x.node)==='중복 수정 필요'&&x.node.props.disabled));
 });
 check('render blocker visible without title candidates',()=>{
  const tree=AdminMarketingEditorialStudio({...props,draft:{...draft,content_document:{...draft.content_document,thumbnail_candidates:[],thumbnail_render_pending:true}}});
