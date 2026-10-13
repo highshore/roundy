@@ -1,6 +1,7 @@
 import {EditorialReviewRequired} from './marketing-workflow';
 import {makeEditorialBrief,editorialWritingGuide} from './marketing-editorial-brief';
 import {editorialReferenceSamples,hasHumanCopyApproval} from './marketing-editorial-feedback';
+import {fitEditorialWritingRequest} from './marketing-prompt-budget';
 import {buildMarketingResearchTask,RESEARCH_TASK_VERSION,type SeoulDatingFormat,type TrendResearchHistory,type DatingMythHistory} from './marketing-research-task';
 import {applyAnswerFirstDocument} from './marketing-answer-first';
 import {type CarouselPlan} from './marketing-carousel-template';
@@ -253,12 +254,12 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
   const payload={editorial_type:type,language,direction:sourceFreeSeoulFallback?'':String(input.instruction||''),editorial_brief:makeEditorialBrief(topicSelection?.selected||null,String(input.instruction||''),String(input.editorial_lane||'auto')),human_style_references:referenceSamples,evidence:sources,event:facts,...(type==='seoul_dating'?{seoul_format:seoulFormat}:{}),...(type==='seoul_trend'&&trendContext?{trend_context:{id:trendContext.id,trend_key:trendContext.trend_key,display_name:trendContext.display_name,category:trendContext.category,status:trendContext.status,observed_at:trendContext.observed_at,summary:trendContext.summary,content_angle:trendContext.content_angle,source_ids:sources.map(x=>x.id)},...(trendPack?{fact_pack:trendPackForModel(trendPack),fact_pack_layout:trendPack.layout,fact_pack_origin:trendPack.origin,no_additional_web_search:true}: {})}:{}),...(type==='trend_research'?{current_year:new Date().getUTCFullYear(),recent_history:trendHistory}:{}),...(type==='dating_myth'?{myth_candidate:candidateVariant==='backup'?'backup':'primary',recent_history:mythHistory}:{}),...(repair?{original_document:repair.document,quality_issues:repair.issues,
    ...(repair.critique?{independent_editor_brief:editorialRevisionBrief(repair.critique,plan?.slide_count||5,
     Boolean(sources.length||trendContext||facts||selectedBook))}:{})}:{})};
-  if(Buffer.byteLength(instructions+JSON.stringify(payload)+JSON.stringify(contentSchema(type,language,writingVariant,answerFirst,plan)),'utf8')>30000)payload.human_style_references=[];
-  if(Buffer.byteLength(instructions+JSON.stringify(payload)+JSON.stringify(contentSchema(type,language,writingVariant,answerFirst,plan)),'utf8')>30000)throw new Error('PROMPT_SIZE_LIMIT');
+  const schema=contentSchema(type,language,writingVariant,answerFirst,plan);
+  const fittedPayload=fitEditorialWritingRequest(instructions,schema,payload);
   const control=ok(await db.from('marketing_ai_control').select('enabled,blocked_reason').eq('singleton',true).single());
   if(!control.enabled||control.blocked_reason)throw new Error('AI_PAUSED');
   ok(await db.from('marketing_generation_jobs').update({stage:repair?'repairing_copy':candidateVariant==='backup'?'writing_alternate_myth':'writing'}).eq('id',job.id));
-  const result=await call('chat/completions',{model:MODEL,reasoning_effort:'none',max_completion_tokens:4096,response_format:{type:'json_schema',json_schema:{name:'roundy_editorial_v2',strict:true,schema:contentSchema(type,language,writingVariant,answerFirst,plan)}},messages:[{role:'system',content:instructions},{role:'user',content:JSON.stringify(payload)}]},55000);
+  const result=await call('chat/completions',{model:MODEL,reasoning_effort:'none',max_completion_tokens:4096,response_format:{type:'json_schema',json_schema:{name:'roundy_editorial_v2',strict:true,schema}},messages:[{role:'system',content:instructions},{role:'user',content:JSON.stringify(fittedPayload)}]},55000);
   await record(result);return {...parseDocument(result),result};
  };
 
