@@ -47,7 +47,7 @@ export function composeManualMagazineEdit(source:Row,value:unknown):ManualEditRe
  // Never accept role/source_ids/closing_type/options/metadata/photo URLs from the browser.
  magazineCarouselFit(changed,plan,index,language);
  const nextSlides=slides.map((slide:Row,i:number)=>i===index?changed:{...slide});
- const visibleCopyChanged=['title','body','secondary_body','highlight'].some(field=>
+ const visibleCopyChanged=(['title','body','secondary_body','highlight'] as const).some(field=>
   String(sourceSlide[field]??'').trim()!==String(changed[field]??'').trim());
  let nextDoc={...original,slides:nextSlides,
   thumbnail_render_pending:original.thumbnail_render_pending===true||(index===0&&visibleCopyChanged),
