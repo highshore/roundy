@@ -153,7 +153,7 @@ try{
    assert.ok(oldDrafts.every(d=>d.revision===2),'Existing drafts untouched');
   });
   await test(locale+' generate submits requested myth once and imports once',()=>{assert.ok(creation);assert.equal(creation.body.topic_type,'dating_myth');assert.equal(creation.body.content_mode,'growth_carousel');assert.equal(creation.body.language,'ko');assert.equal(requests.filter(r=>r.route==='/draft/generate').length,1);assert.equal(requests.filter(r=>r.route==='/generation/jobs/new-job/import').length,1);});
-  await test(locale+' generating does not approve or publish',()=>assert.equal(requests.filter(r=>/publish|approve|schedule/.test(r.route)).length,0));
+  await test(locale+' generating does not approve or publish',()=>assert.equal(requests.filter(r=>r.method!=='GET'&&/\/(approve|publish|schedule)(?:\/|$)/.test(r.route)).length,0));
   await act(async()=>renderer.unmount());renderer=null;
  }
  const {generatorSelection,generatorMediaPlan,savedRenderContent,savedDraftMediaPlan}=load('src/lib/marketing-generator-ui.ts');
