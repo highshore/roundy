@@ -45,6 +45,7 @@ const input={...fixtureContext.exports.base,request_key:'manual:durable-ai-befor
 const first=await h.api.runGeneration(fixtureContext.exports.id,input,null);
 assert.equal(first.job.status,'failed');assert.match(first.job.error_message,/INJECTED_RENDER_SAVE_FAILURE/);
 const draft=h.tables.instagram_post_drafts[0];
+assert.equal(draft.revision,2,'private cache metadata must not consume another content revision');
 assert.equal(Object.keys(draft.content_document.generated_ai_assets).length,1);
 assert.equal(h.stored.filter(x=>x.bucket==='marketing-images').length,1);
 assert.equal(h.requests.filter(x=>x.url.endsWith('images/generations')).length,1);

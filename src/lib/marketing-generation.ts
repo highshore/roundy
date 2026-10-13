@@ -325,8 +325,14 @@ async function generateAiCard(db:DB,draft:Row,job:Row,slot:number):Promise<strin
   throw new Error('INVALID_GENERATED_AI_THUMBNAIL');
  const saved=await persistGeneratedAsset(db,job.id,assetKey,encoded);
  // Persist the private raw image before rendering. A render failure must not buy it again.
- Object.assign(draft,await savePartial(db,draft,{content_document:{...draft.content_document,
-  generated_ai_assets:{...draft.content_document?.generated_ai_assets,[assetKey]:saved.asset}},quality_revision:null}));
+ // Private cache bookkeeping is not a new content version. Keep the same
+ // optimistic revision check, without consuming the finite content revision budget.
+ const cachedDraft=checked(await db.from('instagram_post_drafts').update({
+  content_document:{...draft.content_document,
+   generated_ai_assets:{...draft.content_document?.generated_ai_assets,[assetKey]:saved.asset}},quality_revision:null
+ }).eq('id',draft.id).eq('status','needs_approval').eq('revision',draft.revision).select('*').maybeSingle()).data;
+ if(!cachedDraft)throw new Error('DRAFT_CHANGED_DURING_GENERATION');
+ Object.assign(draft,cachedDraft);
  await progress(db,job,'thumbnail_ready');
  return saved.image;
 }
