@@ -61,6 +61,9 @@ export function AdminMarketing({locale}:{locale:Locale}){
  const [stockPhotos,setStockPhotos]=useState<Row[]>([]),[stockReview,setStockReview]=useState<Row|null>(null);
  const [aiImageSlot,setAiImageSlot]=useState<number|null>(0);
  const [approvedPickerSlot,setApprovedPickerSlot]=useState<number|null>(null);
+ const [photoPickerTarget,setPhotoPickerTarget]=useState<'draft'|'new'>('draft');
+ // These selections stay local until the text draft exists. No background writes or paid requests.
+ const [plannedApprovedPhotos,setPlannedApprovedPhotos]=useState<Record<number,Row>>({});
  const [approvedPool,setApprovedPool]=useState<Row[]>([]),[approvedSearch,setApprovedSearch]=useState('');
  const [approvedPreviewAsset,setApprovedPreviewAsset]=useState<Row|null>(null);
  const [preflightState,setPreflightState]=useState<Row|null>(null),[preflightSerial,setPreflightSerial]=useState(0);
@@ -70,7 +73,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
  const [regenerationSourceId,setRegenerationSourceId]=useState<string|null>(null);
  const [regenerationFocus,setRegenerationFocus]=useState<{index:number;nonce:number}|null>(null);
  const [activeTab,setActiveTab]=useState<'overview'|'draft'|'assets'|'queue'|'growth'|'reels'|'stories'|'generation'|'trend'|'publishing'|'automation'|'connection'>('draft');
- const [generatorOpen,setGeneratorOpen]=useState(false);
+ const [generatorOpen,setGeneratorOpen]=useState(true);
  const [editorBusy,setEditorBusy]=useState(false),[advancedRegenOpen,setAdvancedRegenOpen]=useState(false);
  const [editorDirty,setEditorDirty]=useState(false);
  const busy=requestBusy||editorBusy,dirty=captionDirty||editorDirty;
@@ -328,15 +331,44 @@ export function AdminMarketing({locale}:{locale:Locale}){
     const imported=await request('/generation/jobs/'+jobId+'/import',{confirm_import:true});
     if(!imported.ok||imported.data.error||!imported.data.draft)throw new Error(imported.data.error||'Import failed');
     const candidate=imported.data.draft as Row;
+    let assignedBeforeReview=0,unassignedPhotoCards:number[]=[];
+    if(source==='stock'&&Object.keys(plannedApprovedPhotos).length>0){
+     let latest=candidate;
+     const allowed=new Set(savedDraftMediaPlan(candidate).realSlots);
+     const picks=Object.entries(plannedApprovedPhotos).sort(([a],[b])=>Number(a)-Number(b));
+     if(candidate.status==='needs_approval'&&!candidate.images?.length){
+      for(const [key,photo] of picks){
+       const slot=Number(key);
+       if(!allowed.has(slot)){unassignedPhotoCards.push(slot+1);continue;}
+       try{
+        const assigned=await mutate('/draft/'+candidate.id+'/assign-stock',{
+         revision:latest.revision,slot,asset_id:photo.id,confirm_replace:false
+        });
+        if(!assigned.draft||!Number.isInteger(assigned.draft.revision))throw new Error('PHOTO_ASSIGNMENT_RESULT_MISSING');
+        latest=assigned.draft;assignedBeforeReview++;
+       }catch{
+        // An unknown update outcome is never repeated automatically. Keep the draft
+        // and let the administrator confirm remaining photos in the visible editor.
+        unassignedPhotoCards.push(...picks.filter(([k])=>Number(k)>=slot).map(([k])=>Number(k)+1));
+        break;
+       }
+      }
+     }else unassignedPhotoCards=picks.map(([key])=>Number(key)+1);
+    }
     if(source==='uploaded'&&!r.data.review_required){
      try{await uploadPendingImagesToDraft(candidate,[...pendingMarketingImages]);}
      finally{clearPendingMarketingImages();}
     }
     await load(candidate.id);setActiveTab('draft');
     if(['pexels','stock'].includes(candidate.visual_source))await refreshStock(candidate.id);
-    setNotice(r.data.review_required?t('Copy saved for editing. Sources and final publishing checks still apply.','원고를 편집 가능한 상태로 저장했습니다. 출처와 최종 발행 검사는 유지됩니다.'):source==='none'?t('Copy saved. Review the text, then add images.','원고가 저장되었습니다. 문장을 확인한 뒤 이미지를 추가하세요.'):['pexels','stock'].includes(candidate.visual_source)
+    if(source==='stock'&&!unassignedPhotoCards.length)setPlannedApprovedPhotos({});
+    const photoOutcome=assignedBeforeReview
+     ?t(' Selected '+assignedBeforeReview+' approved photos.',' 승인된 실사 '+assignedBeforeReview+'장을 초안에 지정했습니다.'):'';
+    const incompletePhotoOutcome=unassignedPhotoCards.length
+     ?t(' Choose photos for cards '+[...new Set(unassignedPhotoCards)].join(', ')+' in the draft editor.',' '+[...new Set(unassignedPhotoCards)].join(', ')+'번 카드의 사진은 초안에서 다시 확인하고 지정하세요.'):'';
+    setNotice((r.data.review_required?t('Copy saved for editing. Sources and final publishing checks still apply.','원고를 편집 가능한 상태로 저장했습니다. 출처와 최종 발행 검사는 유지됩니다.'):source==='none'?t('Copy saved. Review the text, then add images.','원고가 저장되었습니다. 문장을 확인한 뒤 이미지를 추가하세요.'):['pexels','stock'].includes(candidate.visual_source)
      ?t('Copy saved. licensed photos remain under review until the minimum count is approved; no AI filler was created.','문구 저장 완료. 최소 실제 사진 개수 확보 및 승인 전까지 검수 대기하며 부족한 사진을 AI로 대체하지 않습니다.')
-     :t('Copy, uploaded images, and final cards are ready in Drafts. No image AI was used.','문구 생성, 이미지 업로드, 카드 렌더링까지 완료했습니다. 이미지 AI는 사용하지 않았습니다.'));
+     :t('Copy, uploaded images, and final cards are ready in Drafts. No image AI was used.','문구 생성, 이미지 업로드, 카드 렌더링까지 완료했습니다. 이미지 AI는 사용하지 않았습니다.'))+photoOutcome+incompletePhotoOutcome);
    }else{
     await load(renderOnly?draft?.id:undefined);
     if(renderOnly&&r.data.draft)selectDraft(r.data.draft);
@@ -424,19 +456,28 @@ export function AdminMarketing({locale}:{locale:Locale}){
   await load(draft.id);
   await refreshStock(draft.id);
  }
- async function showApprovedPhotoPicker(slot:number){
-  if(!draft)return;
+ async function showApprovedPhotoPicker(slot:number,target:'draft'|'new'='draft'){
+  if(target==='draft'&&!draft)return;
   await work(async()=>{
    const r=await request('/photos/assets?status=approved',undefined,'GET');
    if(!r.ok||r.data.error)throw new Error(r.data.error||'Could not load approved images');
    setApprovedPool((r.data.assets||[]).filter((item:Row)=>item.review_status==='approved'));
    setApprovedSearch('');
    setApprovedPreviewAsset(null);
+   setPhotoPickerTarget(target);
    setApprovedPickerSlot(slot);
   });
  }
  async function applyApprovedPhoto(assetId:string){
-  if(!draft||approvedPickerSlot===null)return;
+  if(approvedPickerSlot===null)return;
+  if(photoPickerTarget==='new'){
+   const asset=approvedPool.find((photo:Row)=>String(photo.id)===assetId&&photo.review_status==='approved');
+   if(!asset)return;
+   setPlannedApprovedPhotos(current=>({...current,[approvedPickerSlot]:asset}));
+   setApprovedPreviewAsset(null);setApprovedPickerSlot(null);
+   return;
+  }
+  if(!draft)return;
   const target=draft;
   const replaceRendered=Array.isArray(target.images)&&target.images.length>0;
   if(replaceRendered&&!window.confirm(t('Replace this card photo? Existing rendered cards will be cleared and must be rendered again. Scheduled and published posts are unchanged.',
@@ -519,6 +560,9 @@ export function AdminMarketing({locale}:{locale:Locale}){
  const editableDrafts=visibleEditorialDrafts(data.drafts||[]);
  const newMediaPlan=generatorMediaPlan(settings,basis,storyCardCount,aiImageSlot);
  const selectedStoryCount=newMediaPlan.storyCount,newBranded=newMediaPlan.brand,plannedPhotoCount=newMediaPlan.realPhotos;
+ const plannedRealSlots=newMediaPlan.known
+  ?Array.from({length:selectedStoryCount},(_,i)=>i).filter(i=>i!==newMediaPlan.aiSlot).slice(0,newMediaPlan.realPhotos):[];
+ const plannedPickedCount=plannedRealSlots.filter(slot=>Boolean(plannedApprovedPhotos[slot])).length;
  const workflowText=(row:Row)=>t(...EDITORIAL_STATE_LABELS[editorialState(row)]);
  function statusText(status:string){const labels:Record<string,[string,string]>={completed:['Completed','완료'],failed:['Failed','실패'],running:['Running','진행 중'],uncertain:['Needs review','확인 필요'],sent:['Published','게시됨'],queued:['Scheduled','예약됨'],sending:['Publishing','게시 중'],needs_review:['Needs review','확인 필요'],scheduled:['Scheduled','예약됨']};return labels[status]?t(...labels[status]):status;}
  function operationLabel(row:Row){const labels:Record<string,[string,string]>={copy:['Copy creation','문구 생성'],research:['Research + copy','주제 조사 + 문구 생성'],render:['Card rendering','이미지 카드 렌더'],photo:['Visual generation','이미지 생성 + 렌더'],copy_photo:['Copy + visuals','문구 + 이미지 생성']};return labels[row.operation]?t(...labels[row.operation]):t('Generation step','생성 단계');}
@@ -648,10 +692,25 @@ export function AdminMarketing({locale}:{locale:Locale}){
    <details className="marketing-generator-card" open={generatorOpen||!draft} onToggle={e=>setGeneratorOpen(e.currentTarget.open)}><summary>{t("Create a new post","새 콘텐츠 만들기")}</summary>
     <div className="admin-section-title"><div><p className="admin-kicker">{t('Create','생성')}</p><Heading level={2}>{t('New content','새 콘텐츠 생성')}</Heading></div></div>
     <div className="admin-form">
-     <div className="admin-two"><label><span>{t('Content topic','콘텐츠 주제')}</span><select name="new_content_type" value={basis==='growth_carousel'?topic:basis} disabled={busy||!!running} onChange={e=>{const next=generatorSelection(e.currentTarget.value);if(!next)return;setBasis(next.basis);if(next.topic)setTopic(next.topic);}}><optgroup label={t('Editorial card news','카드뉴스')}>{topics.map((key,index)=><option key={key} value={key}>{t(key.replaceAll('_',' '),topicKo[index])}</option>)}</optgroup><optgroup label={t('Roundy promotion','라운디 홍보')}><option value="prelaunch">{t('Pre-launch','오픈 전 홍보')}</option><option value="live_event">{t('Live event','정식 이벤트')}</option></optgroup></select></label><label><span>{t('Images','이미지 방식')}</span><select name="new_visual_source" value={manualVisualSource} disabled={busy||!!running} onChange={e=>setManualVisualSource(e.currentTarget.value as 'stock'|'uploaded'|'none')}><option value="stock">{t('AI cover + reviewed photos','AI 표지 + 검수된 실사')}</option><option value="uploaded">{t('Use my images','내 이미지 사용')}</option><option value="none">{t('Write copy first','원고부터 작성')}</option></select></label></div>
+     <div className="admin-two"><label><span>{t('Content topic','콘텐츠 주제')}</span><select name="new_content_type" value={basis==='growth_carousel'?topic:basis} disabled={busy||!!running} onChange={e=>{const next=generatorSelection(e.currentTarget.value);if(!next)return;setBasis(next.basis);if(next.topic)setTopic(next.topic);}}><optgroup label={t('Editorial card news','카드뉴스')}>{topics.map((key,index)=><option key={key} value={key}>{t(key.replaceAll('_',' '),topicKo[index])}</option>)}</optgroup><optgroup label={t('Roundy promotion','라운디 홍보')}><option value="prelaunch">{t('Pre-launch','오픈 전 홍보')}</option><option value="live_event">{t('Live event','정식 이벤트')}</option></optgroup></select></label></div>
      <label><span>{t('Cover / headline language','표지 / 제목 언어')}</span><select value={contentLanguage} onChange={e=>setContentLanguage(e.target.value as 'ko'|'en')}><option value="ko">{t('Korean post','한국어 콘텐츠')}</option><option value="en">{t('English post','영어 콘텐츠')}</option></select></label>
      {basis==='live_event'?<div className="admin-two"><label><span>{t('Event to promote','홍보할 이벤트')}</span><select value={eventId} onChange={e=>setEventId(e.target.value)}><option value="">{t('Choose an event','이벤트 선택')}</option>{(data.live_events||[]).map((event:Row)=><option key={event.id} value={event.id}>{event.title_ko||event.title} · {new Date(event.starts_at).toLocaleDateString(locale,{timeZone:'Asia/Seoul'})}</option>)}</select></label><label><span>{t('Campaign stage','홍보 단계')}</span><select value={eventCampaignStage} onChange={e=>setEventCampaignStage(e.target.value)}><option value="auto">{t('Auto from event status','이벤트 상태로 자동 추천')}</option><option value="launch">{t('Launch','오픈')}</option><option value="experience">{t('Experience','참가 경험')}</option><option value="venue">{t('Venue','장소')}</option><option value="participants">{t('Participants','참가자 구성')}</option><option value="momentum">{t('Momentum / offer','모멘텀 / 혜택')}</option><option value="imminent">{t('Imminent','임박')}</option><option value="last_call">{t('Last call','라스트콜')}</option></select></label></div>:null}
      {basis==='growth_carousel'&&<label><span>{t('Story length before generation','원고 작성 전 장수 선택')}</span><select value={storyCardCount} disabled={settings?.carousel_mode==='alternating'} onChange={e=>setStoryCardCount(Number(e.target.value) as 0|3|5)}><option value={0}>{t('Use current schedule','현재 발행 설정 따르기')}</option><option value={3}>{t('Short: 3 story cards','짧은 소재: 본문 3장')}{settings?.carousel_brand_outro_enabled?' + 1 Roundy':''}</option><option value={5}>{t('In-depth: 5 story cards','자료가 충분한 소재: 본문 5장')}{settings?.carousel_brand_outro_enabled?' + 1 Roundy':''}</option></select><small>{t('Choose before writing. Existing drafts and alternating reservations keep their original size.','작성 전에 선택합니다. 기존 초안과 교대 발행 예약의 장수는 유지됩니다.')}</small></label>}
+     <section className="marketing-visual-workflow" aria-label={t('Image setup','이미지 구성')} data-testid="marketing-visual-workflow">
+      <div className="marketing-visual-workflow-head">
+       <div><span className="admin-kicker">{t('VISUAL SETUP','이미지 구성')}</span>
+        <strong>{t('Choose how each card gets its image','카드에 사용할 이미지 선택')}</strong>
+        <p>{t('Choose the source, the AI image position, and approved photos here before generating. You can still make changes on each draft card.','생성 전에 이미지 방식, AI 이미지 위치와 카드별 승인 사진을 선택하세요. 생성 후에도 카드별로 변경할 수 있습니다.')}</p>
+       </div>
+      </div>
+      <div className="marketing-image-mode-grid" role="group" aria-label={t('Image source','이미지 방식')}>
+       {(['stock','uploaded','none'] as const).map(mode=><button type="button" key={mode}
+        className={manualVisualSource===mode?'selected':''} aria-pressed={manualVisualSource===mode}
+        disabled={busy||!!running} onClick={()=>setManualVisualSource(mode)}>
+        <strong>{mode==='stock'?t('AI + real photos','AI + 실사'):mode==='uploaded'?t('My images','내 이미지'):t('Copy first','원고 먼저')}</strong>
+        <small>{mode==='stock'?t('Choose licensed photos by card','카드마다 승인 사진 지정'):mode==='uploaded'?t('Upload my own images','이미지 직접 업로드'):t('Add images after writing','원고 작성 후 이미지 추가')}</small>
+       </button>)}
+      </div>
      {manualVisualSource==='stock'?<div className="marketing-mix-options">
        <strong>{t('Mix images per card','카드별 이미지 구성')}</strong>
        <p className="admin-help" hidden={!newMediaPlan.known}>{t('Story cards','본문 카드')} {selectedStoryCount}{newBranded?t(' + one standalone Roundy card',' + 독립 라운디 소개 1장'):''}. {t('Real photos needed','필요한 실사')} {Math.max(0,plannedPhotoCount)}{t('. Each story card has its own image.','. 모든 본문 카드에는 이미지가 한 장씩 들어갑니다.')}</p>
@@ -668,6 +727,38 @@ export function AdminMarketing({locale}:{locale:Locale}){
          <button type="button" className={newMediaPlan.aiSlot===null?'selected':''} aria-pressed={newMediaPlan.aiSlot===null} onClick={()=>setAiImageSlot(null)}>{t('All real photos','모두 실사')}</button></div>
         :<p className="admin-help">{t('The selected 3/5-card schedule or photo minimum does not allow an AI image slot. All required visuals must be real photos.','현재 3/5장 발행 설정 또는 실사 최소 기준에서는 AI 이미지 위치를 미리 지정할 수 없습니다. 필요한 이미지에는 실사를 사용합니다.')}</p>}
        <p className="admin-help">{t('The optional AI cover is generated only after all required real photos are approved. Approved images can be reused deliberately.','선택한 AI 표지는 필요한 실사 사진을 모두 승인한 뒤 생성됩니다. 승인된 사진을 직접 골라 재사용할 수 있습니다.')}</p>
+       {newMediaPlan.known&&<div className="marketing-photo-plan">
+        <div className="marketing-photo-plan-head"><strong>{t('Choose approved photos by card','카드별 승인 실사 선택')}</strong>
+         <span>{plannedPickedCount}/{plannedRealSlots.length} {t('selected','선택')}</span></div>
+        <p className="admin-help">{t('Photos selected here are assigned to the new draft after writing, without a second AI generation. Unselected slots can be filled in the draft editor. Licensed images still require final review before posting.','선택한 사진은 원고 생성 후 초안 카드에 지정되며 AI를 추가 호출하지 않습니다. 나머지 사진은 초안에서 선택할 수 있습니다. 게시 전 최종 검수는 그대로 진행합니다.')}</p>
+        <div className="marketing-photo-plan-grid">
+         {Array.from({length:selectedStoryCount},(_,index)=>{
+          const ai=index===newMediaPlan.aiSlot,real=plannedRealSlots.includes(index);
+          if(!ai&&!real)return null;
+          const photo=plannedApprovedPhotos[index];
+          return <article className="marketing-photo-plan-card" key={index}>
+           <div className="marketing-photo-plan-preview">
+            {real&&photo?.preview_url?<img src={photo.preview_url} alt={String(photo.photographer||t('Approved photo','승인된 사진'))}/>:<span aria-hidden="true">{ai?'AI':'+'}</span>}
+           </div>
+           <div className="marketing-photo-plan-info">
+            <small>{t('Card ','카드 ')}{index+1}</small>
+            <strong>{index===0?t('Cover','표지'):t('Story image','본문 이미지')}</strong>
+            <p>{ai?t('One AI image after real-photo approval','실사 승인 후 AI 이미지 생성'):photo?t('Approved: ','승인됨: ')+String(photo.photographer||photo.provider||''):t('No photo selected yet','선택된 사진 없음')}</p>
+           </div>
+           {real&&<div className="marketing-photo-plan-actions">
+            <button type="button" className="admin-secondary" disabled={busy||!!running}
+             onClick={()=>void showApprovedPhotoPicker(index,'new')}>{photo?t('Change photo','사진 변경'):t('Choose photo','사진 선택')}</button>
+            {photo&&<button type="button" className="marketing-photo-plan-remove" disabled={busy||!!running}
+             onClick={()=>setPlannedApprovedPhotos(current=>{const next={...current};delete next[index];return next;})}>{t('Remove','해제')}</button>}
+           </div>}
+          </article>;
+         })}
+         {newBranded&&<div className="marketing-photo-plan-brand">
+          <strong>{t('Last card: Roundy','마지막 카드: 라운디')}</strong>
+          <small>{t('Standalone brand introduction, not a photo slot','별도 브랜드 소개 카드로 유지')}</small>
+         </div>}
+        </div>
+       </div>}
       </div>:manualVisualSource==='uploaded'?<div className="marketing-setup">
       <strong>{t('Add images now','이미지 바로 추가')}</strong>
       <p className="admin-help">{t('Select 1–6 images here. When you generate, Roundy will create the copy, create a Draft, upload these files, and render the final cards automatically. Image AI is not called.','여기서 이미지를 1–6장 선택하세요. 콘텐츠 생성 시 문구 생성 → 초안 생성 → 이미지 업로드 → 최종 카드 렌더까지 자동으로 이어집니다. 이미지 AI는 호출하지 않습니다.')}</p>
@@ -675,6 +766,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
       <div className="marketing-draft-inbox">{pendingMarketingImages.map((item,index)=><article className="marketing-draft-card" key={item.id}><img src={item.preview} alt={item.file.name}/><div className="marketing-draft-copy"><strong>{index+1}. {item.file.name}</strong><small>{Math.round(item.file.size/1024)} KB · {item.width}×{item.height}</small><select value={item.asset_type} onChange={e=>updatePendingMarketingImageType(item.id,e.target.value as 'photo'|'completed_card')}><option value="photo">{t('Photo source','사진 소스')}</option><option value="completed_card">{t('Completed 4:5 card','완성 4:5 카드')}</option></select></div><div className="admin-form-actions"><button type="button" className="admin-secondary" disabled={busy||index===0} onClick={()=>movePendingMarketingImage(index,-1)}>↑</button><button type="button" className="admin-secondary" disabled={busy||index===pendingMarketingImages.length-1} onClick={()=>movePendingMarketingImage(index,1)}>↓</button><button type="button" className="admin-secondary" disabled={busy} onClick={()=>removePendingMarketingImage(item.id)}>{t('Remove','제거')}</button></div></article>)}</div>
       {!pendingMarketingImages.length&&<p className="admin-help">{t('No images selected yet. JPEG, PNG or WebP, max 10 MB each.','아직 선택한 이미지가 없습니다. JPEG, PNG, WebP, 장당 최대 10MB입니다.')}</p>}
      </div>:<p className="admin-help">{t('Copy only: no images are generated. You can add visuals later.','문구만: 이미지를 생성하지 않습니다. 나중에 비주얼을 추가할 수 있습니다.')}</p>}
+     </section>
      {basis==='growth_carousel'&&<label><span>{t('Reader-first content direction','독자 중심 콘텐츠 방향')}</span>
       <select value={editorialLane} onChange={e=>setEditorialLane(e.target.value)}>
        <option value="auto">{t('Automatic editorial choice','자동 기획')}</option>
@@ -1049,7 +1141,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
     <header>
      <div>
       <small>{t('Approved Photo Library','승인 사진 라이브러리')}</small>
-      <strong>{t('Choose image for card ','카드 사진 선택 ')}{approvedPickerSlot+1}</strong>
+      <strong>{photoPickerTarget==='new'?t('Choose photo for new card ','새 콘텐츠 카드 사진 선택 '):t('Choose image for card ','카드 사진 선택 ')}{approvedPickerSlot+1}</strong>
       <p>{t('Choose from already reviewed photographs. Tap an image to inspect it.',
        '승인된 실사 사진을 선택하세요. 이미지를 누르면 크게 확인할 수 있습니다.')}</p>
      </div>
@@ -1078,9 +1170,9 @@ export function AdminMarketing({locale}:{locale:Locale}){
         {approvedPreviewAsset.license_url&&<a href={approvedPreviewAsset.license_url} target="_blank" rel="noopener noreferrer">{t('View license','라이선스 확인')}</a>}
        </div>
        <button type="button" className="admin-primary"
-        disabled={busy||stockPhotos.some((photo:Row)=>photo.asset_id===approvedPreviewAsset.id&&Number(photo.slot)!==approvedPickerSlot)}
+        disabled={busy||(photoPickerTarget==='new'?Object.entries(plannedApprovedPhotos).some(([slot,photo])=>Number(slot)!==approvedPickerSlot&&photo.id===approvedPreviewAsset.id):stockPhotos.some((photo:Row)=>photo.asset_id===approvedPreviewAsset.id&&Number(photo.slot)!==approvedPickerSlot))}
         onClick={()=>void applyApprovedPhoto(String(approvedPreviewAsset.id))}>
-        {stockPhotos.some((photo:Row)=>photo.asset_id===approvedPreviewAsset.id&&Number(photo.slot)!==approvedPickerSlot)
+        {(photoPickerTarget==='new'?Object.entries(plannedApprovedPhotos).some(([slot,photo])=>Number(slot)!==approvedPickerSlot&&photo.id===approvedPreviewAsset.id):stockPhotos.some((photo:Row)=>photo.asset_id===approvedPreviewAsset.id&&Number(photo.slot)!==approvedPickerSlot))
          ?t('Already used in another card','다른 카드에서 사용 중')
          :t('Use this photo for card ','이 사진을 카드에 사용 ')+(approvedPickerSlot+1)}
        </button>
@@ -1096,7 +1188,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
       </p>
       <div className="marketing-approved-picker-grid" data-testid="marketing-approved-photo-grid">
        {filteredApprovedPool.map((asset:Row)=>{
-        const alreadyHere=stockPhotos.some((photo:Row)=>photo.asset_id===asset.id&&Number(photo.slot)!==approvedPickerSlot);
+        const alreadyHere=photoPickerTarget==='new'?Object.entries(plannedApprovedPhotos).some(([slot,photo])=>Number(slot)!==approvedPickerSlot&&photo.id===asset.id):stockPhotos.some((photo:Row)=>photo.asset_id===asset.id&&Number(photo.slot)!==approvedPickerSlot);
         return <article key={asset.id} className="marketing-approved-picker-card">
          <button type="button" className="marketing-approved-picker-image" onClick={()=>setApprovedPreviewAsset(asset)}
           aria-label={t('Enlarge photo by ','사진 크게 보기, 사진가 ')+String(asset.photographer||asset.provider||'')}>
