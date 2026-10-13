@@ -150,3 +150,21 @@ if(process.argv.includes('--expect-unfixed')){
  check('ordinary retry also replays successfully',()=>{assert.equal(noSelection.response.status,200);assert.equal(noSelection.calls.length,1);});
  console.log(`PASS ${checks} saved-request and real retry-route assertions; no live AI, database writes or Instagram publishing.`);
 }
+
+{
+ const {response,calls}=await retryRoute({jobPatch:{status:'completed',stage:'source_review_required',
+  error_code:'EDITORIAL_SOURCE_REVIEW_REQUIRED',result_snapshot:{images:[],caption:'',carousel_slides:[]}}});
+ assert.equal(response.status,200,'The source-review state must offer an explicit manual retry, not an unimportable dead end');
+ assert.equal(calls.length,1);
+ console.log('PASS source-review result is explicitly retryable without modifying the original attempt');
+}
+
+for(const patch of [
+ {automatic:true}, {status:'uncertain'}, {status:'running'}, {stage:'complete'},
+ {result_snapshot:{content_document:{},carousel_slides:[{title:'Saved'}],caption:'Saved copy'}},
+ {request_payload:[]}
+]){
+ const r=await retryRoute({jobPatch:{status:'completed',stage:'source_review_required',error_code:'EDITORIAL_SOURCE_REVIEW_REQUIRED',...patch}});
+ assert.equal(r.response.status,400);assert.equal(r.calls.length,0);
+}
+console.log('PASS source-review recovery cannot replay automatic, uncertain, running, successful or malformed jobs');

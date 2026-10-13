@@ -7,7 +7,10 @@ function toArrayBuffer(bytes:Uint8Array):ArrayBuffer {const copy=new Uint8Array(
 async function fetchFont(url:string):Promise<ArrayBuffer>{
  const response=await fetch(url,{signal:AbortSignal.timeout(8000),redirect:'error',cache:'force-cache'});
  if(!response.ok)throw new Error('FONT_ASSET_UNAVAILABLE');
- const data=await response.arrayBuffer();if(data.byteLength>20*1024*1024)throw new Error('FONT_ASSET_TOO_LARGE');return data;
+ const data=await response.arrayBuffer();if(data.byteLength>20*1024*1024)throw new Error('FONT_ASSET_TOO_LARGE');
+ const magic=new Uint8Array(data,0,Math.min(4,data.byteLength));
+ if(data.byteLength<100||String.fromCharCode(...magic)!=='OTTO')throw new Error('FONT_ASSET_INVALID');
+ return data;
 }
 async function fonts():Promise<NonNullable<EditorialAssets['fonts']>>{
  if(!fontPromise)fontPromise=(async()=>{
@@ -16,6 +19,7 @@ async function fonts():Promise<NonNullable<EditorialAssets['fonts']>>{
    fetchFont('https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/OTF/Korean/NotoSansCJKkr-Regular.otf'),
    fetchFont('https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/OTF/Korean/NotoSansCJKkr-Black.otf'),
   ]);
+  if(noto[0].status!=='fulfilled'||noto[1].status!=='fulfilled')throw new Error('FONT_ASSET_UNAVAILABLE');
   if(noto[0].status==='fulfilled')loaded.push({name:'Noto Sans KR',data:noto[0].value,weight:400,style:'normal'});
   if(noto[1].status==='fulfilled'){
    loaded.push({name:'Noto Sans KR',data:noto[1].value,weight:700,style:'normal'});
@@ -31,7 +35,10 @@ async function fonts():Promise<NonNullable<EditorialAssets['fonts']>>{
    loaded.push({name:'DM Sans',data:toArrayBuffer(bold),weight:900,style:'normal'});
   }catch{}
   return loaded;
- })();
+ })().catch(error=>{
+  // Let a later explicit render attempt fetch again; never cache a degraded font set.
+  fontPromise=undefined;throw error;
+ });
  return fontPromise;
 }
 export async function loadEditorialAssets():Promise<EditorialAssets>{

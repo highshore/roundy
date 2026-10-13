@@ -26,6 +26,9 @@ export function fitEditorialWritingRequest(instructions:string,schema:Row,origin
  };
  if(oversized())capEvidence(1200);
  if(oversized())capEvidence(600);
+ // The source-linked excerpts remain intact; shrink the duplicated narrative brief only if required.
+ if(oversized()&&typeof payload.research_notes==='string')payload.research_notes=payload.research_notes.slice(0,3000);
+ if(oversized()&&typeof payload.research_notes==='string')payload.research_notes=payload.research_notes.slice(0,1200);
  // On a bounded rewrite the earlier editorial evaluations are not facts and
  // need not be sent back; keep original slides, sources and other fields.
  if(oversized()&&payload.original_document&&typeof payload.original_document==='object'&&!Array.isArray(payload.original_document)){

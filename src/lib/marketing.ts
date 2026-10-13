@@ -1,5 +1,5 @@
 import {EDITOR_FIRST_VERSION,seriesForTopic} from './marketing-editor-first';
-import {restoreSavedGenerationInput} from './marketing-generation-retry';
+import {restoreSavedGenerationInput,canRetryGenerationJob} from './marketing-generation-retry';
 import {openSavedEditorialCopy,saveEditorialFeedback} from './marketing-editorial-workspace';
 import {versionHistory,regenerateVersion,restoreVersion,finishVersionRendering,editManualMagazineSlideVersion} from './marketing-regeneration';
 import {savedCtaRecoverySource} from './marketing-output-recovery';
@@ -453,13 +453,13 @@ if(id==='uploads'&&path.length===1&&req.method==='GET'){
   if(confirmation.confirm_retry!==true)return json({error:'RETRY_CONFIRMATION_REQUIRED'},400);
   const original=checked(await service.from('marketing_generation_jobs').select('*').eq('id',path[2]).maybeSingle());
   if(!original)return json({error:'Generation job not found'},404);
-  if(original.status!=='failed'||original.automatic)return json({error:'RETRY_ONLY_FAILED_MANUAL'},400);
+  if(!canRetryGenerationJob(original))return json({error:'RETRY_ONLY_FAILED_MANUAL'},400);
   if(!original.request_payload||typeof original.request_payload!=='object')return json({error:'RETRY_PAYLOAD_UNAVAILABLE'},400);
   const isPhoto=['photo','copy_photo'].includes(original.operation);
   if(isPhoto&&confirmation.confirm_paid_photo!==true)return json({error:'CONFIRM_PAID_PHOTO_FIRST'},400);
   const threadId=original.generation_thread_id||original.id;
   const latest=checked(await service.from('marketing_generation_jobs').select('*').eq('generation_thread_id',threadId).order('attempt_number',{ascending:false}).order('created_at',{ascending:false}).limit(1).maybeSingle())||original;
-  if(latest.id!==original.id||latest.status!=='failed')return json({error:'GENERATION_THREAD_NOT_RETRYABLE'},409);
+  if(latest.id!==original.id||!canRetryGenerationJob(latest))return json({error:'GENERATION_THREAD_NOT_RETRYABLE'},409);
   const currentDraft=checked(await service.from('instagram_post_drafts').select('id,status,revision').eq('id',original.draft_id).maybeSingle());
   if(!currentDraft)return json({error:'Draft not found'},404);
   if(currentDraft.status!=='needs_approval')return json({error:'DRAFT_NOT_EDITABLE'},409);

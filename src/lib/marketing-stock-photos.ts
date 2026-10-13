@@ -182,9 +182,12 @@ export async function prepareStockSelections(db:DB,draft:Row,opts:{replace?:bool
  const assignments=[...picked.entries()].sort((a,b)=>a[0]-b[0])
   .map(([slot,asset])=>({draft_id:draft.id,asset_id:asset.asset_id||asset.id,slot}));
  const unchanged=assignments.length===selected.length&&assignments.every((r,i)=>r.slot===selected[i]?.slot&&r.asset_id===selected[i]?.asset_id);
- if(!unchanged){
-  check(await db.from('marketing_draft_photos').delete().eq('draft_id',draft.id));
-  if(assignments.length)check(await db.from('marketing_draft_photos').insert(assignments));
+ if(!unchanged&&assignments.length){
+  // A failed insert must not erase approved selections. Fill-missing also leaves
+  // concurrent admin choices intact; replacement is an explicit caller operation.
+  check(await db.from('marketing_draft_photos').upsert(assignments,{
+   onConflict:'draft_id,slot',ignoreDuplicates:!opts.replace
+  }));
  }
  return listStockSelections(db,draft.id);
 }

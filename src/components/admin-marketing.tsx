@@ -5,6 +5,7 @@ import './admin-marketing-composer.css';
 import {AdminMarketingCardRewrite} from './admin-marketing-card-rewrite';
 import {MarketingWorkflowNav,MarketingWorkflowSteps,MarketingProductionMetrics} from './marketing-workflow-nav';
 import {editorialState,EDITORIAL_STATE_LABELS,hasEditorialCopy,visibleEditorialDrafts,type EditorialState} from '@/lib/marketing-workflow';
+import {canRetryGenerationJob} from '@/lib/marketing-generation-retry';
 import {canOfferSavedCtaRecovery} from '@/lib/marketing-output-recovery';
 import { useEffect, useRef, useState } from 'react';
 import { Heading } from './heading';
@@ -981,7 +982,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
    <div className="marketing-filter-chips" role="group" aria-label={t('Generation status filter','생성 상태 필터')}>{([['all',t('All','전체')],['completed',t('Ready','최종 검토 가능')],['review',t('Next step','보완 및 다음 작업')],['failed',t('System issues','시스템 오류')],['running',t('Running','진행 중')]] as const).map(([value,label])=><button type="button" key={value} aria-pressed={generationFilter===value} onClick={()=>{setGenerationFilter(value);setGenerationVisible(20);}}>{label}</button>)}</div>
    <div className="marketing-log-list">{visibleGenerationThreads.length?visibleGenerationThreads.map((thread:Row)=>{
     const latest=thread.latest as Row,root=thread.root as Row,attempts=thread.attempts as Row[],record=contentRecordForAttempts(attempts);
-    const canRetry=latest.status==='failed'&&!latest.automatic&&!!latest.request_payload,publication=publicationInfo(record);
+    const canRetry=canRetryGenerationJob(latest),publication=publicationInfo(record);
     const language=(record?.content_language||root.request_payload?.language)==='en'?'EN':(record?.content_language||root.request_payload?.language)==='ko'?'KO':'';
     const titledAttempt=[...attempts].reverse().find((attempt:Row)=>attempt.result_snapshot)||latest;
     const topicPlan=[...attempts].reverse().map((attempt:Row)=>attempt.request_payload?.topic_selection||attempt.result_snapshot?.topic_selection||attempt.result_snapshot?.content_document?.editorial_topic_selection).find(Boolean) as Row|undefined;

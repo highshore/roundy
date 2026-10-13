@@ -32,3 +32,17 @@ export function restoreSavedGenerationInput(value: unknown): SavedRequest {
   }
   return input;
 }
+
+/** Explicit manual recovery only. No successful copy, automatic job or uncertain
+ * external outcome may use the source-review exception. This grants no approval. */
+export function canRetryGenerationJob(value:unknown):boolean {
+ if(!value||typeof value!=='object'||Array.isArray(value))return false;
+ const job=value as Record<string,any>;
+ if(job.automatic||!job.request_payload||typeof job.request_payload!=='object'||Array.isArray(job.request_payload))return false;
+ if(job.status==='failed')return true;
+ const snapshot=job.result_snapshot||{};
+ const hasCopy=Boolean(snapshot.content_document&&Array.isArray(snapshot.carousel_slides)&&
+  snapshot.carousel_slides.length&&String(snapshot.caption||'').trim());
+ return job.status==='completed'&&job.stage==='source_review_required'&&
+  job.error_code==='EDITORIAL_SOURCE_REVIEW_REQUIRED'&&!hasCopy;
+}

@@ -78,19 +78,42 @@ export function canonicalSourceUrl(value:unknown):string|null{
  }catch{return null;}
 }
 // Only cited URLs count as evidence; search hits alone do not substantiate an article.
-export function extractResearchEvidence(result:Row):{notes:string;sources:Evidence[];completed:boolean}{
- const outputs=Array.isArray(result.output)?result.output:[],calls=outputs.filter((o:Row)=>o.type==='web_search_call');
+export function extractResearchEvidence(result:Row):{notes:string;sources:Evidence[];completed:boolean;diagnostics:Row}{
+ const outputs=Array.isArray(result?.output)?result.output:[];
+ const calls=outputs.filter((o:Row)=>o?.type==='web_search_call');
+ const successful=calls.filter((c:Row)=>c.status==='completed').length;
  const found=new Map<string,Evidence>(),texts:string[]=[];
- for(const item of outputs.filter((o:Row)=>o.type==='message'))for(const part of item.content||[]){
-  if(part.type!=='output_text'||typeof part.text!=='string')continue;texts.push(part.text);
-  for(const a of part.annotations||[]){
-   if(a.type!=='url_citation')continue;const cite=a.url_citation||a,url=canonicalSourceUrl(cite.url);if(!url)continue;
-   const start=Number.isInteger(cite.start_index)?cite.start_index:0,end=Number.isInteger(cite.end_index)?cite.end_index:part.text.length;
-   const evidence=part.text.slice(Math.max(0,start-900),Math.min(part.text.length,end+250)).trim();if(!evidence)continue;
-   found.set(url,{id:'',url,title:str(cite.title)||new URL(url).hostname,evidence});
+ let unfinishedMessage=false;
+ for(const item of outputs.filter((o:Row)=>o?.type==='message')){
+  if(item.status&&item.status!=='completed')unfinishedMessage=true;
+  for(const part of Array.isArray(item.content)?item.content:[]){
+   if(part?.type!=='output_text'||typeof part.text!=='string')continue;
+   texts.push(part.text);
+   for(const a of Array.isArray(part.annotations)?part.annotations:[]){
+    if(a?.type!=='url_citation')continue;
+    const cite=a.url_citation||a,url=canonicalSourceUrl(cite.url);if(!url)continue;
+    const start=Number.isInteger(cite.start_index)?Math.max(0,cite.start_index):0;
+    const end=Number.isInteger(cite.end_index)?Math.max(start,cite.end_index):part.text.length;
+    const evidence=part.text.slice(Math.max(0,start-900),Math.min(part.text.length,end+250)).trim();
+    if(!evidence)continue;
+    const previous=found.get(url);
+    // Repeated citations to one page can substantiate different selected venues.
+    const combined=previous&&!previous.evidence.includes(evidence)
+     ?(previous.evidence+'\n'+evidence).slice(0,2400):previous?.evidence||evidence;
+    found.set(url,{id:'',url,title:str(cite.title)||previous?.title||new URL(url).hostname,evidence:combined});
+   }
   }
  }
- return {notes:texts.join('\n').slice(0,12000),sources:[...found.values()].slice(0,8).map((s,i)=>({...s,id:'S'+(i+1)})),completed:result.status==='completed'&&calls.length>=1&&calls.length<=3&&calls.every((c:Row)=>c.status==='completed')};
+ const sources=[...found.values()].slice(0,8).map((s,i)=>({...s,id:'S'+(i+1)}));
+ const reason=result?.status!=='completed'||unfinishedMessage?'response_incomplete':
+  successful===0?'search_not_completed':sources.length===0?'citations_missing':'ready';
+ return {notes:texts.join('\n').slice(0,12000),sources,completed:reason==='ready',diagnostics:{
+  version:1,response_id:str(result?.id).slice(0,120),response_status:str(result?.status).slice(0,40),
+  incomplete_reason:str(result?.incomplete_details?.reason).slice(0,100),
+  web_call_count:calls.length,successful_web_calls:successful,
+  web_call_statuses:calls.slice(0,12).map((c:Row)=>str(c.status).slice(0,40)),
+  cited_sources:sources.length,requested_tool_budget_exceeded:calls.length>3,reason
+ }};
 }
 export function researchInstructions(type:PostType,language:string,instruction:string,variant=''){
  if(type==='seoul_trend')return [
