@@ -9,9 +9,9 @@ let checks=0;const check=(f)=>{f();checks++;};
 const id='4b9066d0-e01b-4cc4-92d1-469f56317a04';
 const eventId='11111111-1111-4111-8111-111111111111';
 const base={request_key:'manual:quality-test-001',revision:1,mode:'both',content_mode:'prelaunch',language:'en',visual_mode:'cards',instruction:''};
-function harness({denied=false,network=false,badSources=false,duplicate=false,photo403=false,answerFirst=false,photoSettings=null,photoFixture='none',templateSettings=null,slotNumber=1,unsafeFallback=false,topicOutcome='pass',criticOutcome='pass'}={}){
+function harness({denied=false,network=false,badSources=false,duplicate=false,photo403=false,answerFirst=false,photoSettings=null,photoFixture='none',templateSettings=null,slotNumber=1,unsafeFallback=false,topicOutcome='pass',criticOutcome='pass',researchStatus='completed',extraResearchCalls=[],upstreamError=null,unreadableResponse=false,jobAgeMs=0,writerFailures=0,enforceDedupe=false}={}){
  const tables={instagram_post_drafts:[{id,status:'needs_approval',revision:1,caption:'Original',cta:'Follow',images:[],carousel_slides:[],content_mode:'prelaunch'}],marketing_generation_jobs:[],marketing_ai_control:[{singleton:true,enabled:true,blocked_reason:null}],marketing_automation_settings:[{singleton:true,carousel_answer_first_enabled:answerFirst,...(photoSettings||{}),...(templateSettings||{})}],marketing_uploaded_images:[],events:[{id:eventId,slug:'fixture',title:'Fixture event',title_ko:'테스트 모임',status:'live',deleted_at:null,marketing_enabled:true,starts_at:'2099-12-01T10:00:00Z',ends_at:'2099-12-01T12:00:00Z',venue:'Fixture public venue',capacity:12,seats_remaining:12,price_ladies:29000,price_gents:49000,event_language:'either',images:[]}]};
- const requests=[],stored=[];let copyReviewCalls=0;
+ const requests=[],stored=[];let copyReviewCalls=0,writerFailuresLeft=writerFailures;
  class Q{
   constructor(t){this.rows=tables[t]||[];this.pred=[];this.patch=null;this.n=Infinity;}
   select(){return this;}update(p){this.patch=p;return this;}eq(k,v){this.pred.push(r=>r[k]===v);return this;}gt(k,v){this.pred.push(r=>r[k]>v);return this;}gte(k,v){this.pred.push(r=>r[k]>=v);return this;}is(k,v){return this.eq(k,v);}in(k,v){this.pred.push(r=>v.includes(r[k]));return this;}order(){return this;}limit(n){this.n=n;return this;}single(){return this.exec(true);}maybeSingle(){return this.exec(true);}then(a,b){return this.exec().then(a,b);}
@@ -23,7 +23,8 @@ function harness({denied=false,network=false,badSources=false,duplicate=false,ph
   if(name==='set_marketing_quality'){const d=tables.instagram_post_drafts[0];if(d.revision!==p.p_revision)return {error:{message:'DRAFT_CHANGED_REFRESH_FIRST'}};Object.assign(d,{quality_report:p.p_report,quality_revision:d.revision});return {data:structuredClone(d),error:null};}
   if(denied)return {error:{message:'GENERATION_BUDGET_REACHED'}};
   const old=tables.marketing_generation_jobs.find(j=>j.request_key===p.p_key);if(old)return {data:{accepted:false,job:structuredClone(old)},error:null};
-  const cost=p.p_operation==='render'?0:p.p_operation==='research'?.05:p.p_operation==='photo'?.15:p.p_operation==='copy_photo'?.20:.02;const job={id:'12345678-1234-1234-1234-'+String(tables.marketing_generation_jobs.length+1).padStart(12,'0'),draft_id:p.p_draft,request_key:p.p_key,status:'running',created_at:new Date().toISOString(),reserved_usd:cost,operation:p.p_operation};tables.marketing_generation_jobs.push(job);return {data:{accepted:true,job:structuredClone(job)},error:null};
+  if(enforceDedupe&&tables.marketing_generation_jobs.some(j=>j.fingerprint===p.p_fingerprint&&['running','completed','uncertain'].includes(j.status)))return {error:{message:'DUPLICATE_GENERATION_BLOCKED'}};
+  const cost=p.p_operation==='render'?0:p.p_operation==='research'?.05:p.p_operation==='photo'?.15:p.p_operation==='copy_photo'?.20:.02;const job={id:'12345678-1234-1234-1234-'+String(tables.marketing_generation_jobs.length+1).padStart(12,'0'),draft_id:p.p_draft,request_key:p.p_key,fingerprint:p.p_fingerprint,status:'running',created_at:new Date(Date.now()-jobAgeMs).toISOString(),reserved_usd:cost,operation:p.p_operation};tables.marketing_generation_jobs.push(job);return {data:{accepted:true,job:structuredClone(job)},error:null};
  },storage:{from:bucket=>({upload:async(path,bytes)=>{stored.push({bucket,path,bytes});return {error:null};},download:async(path)=>({data:{arrayBuffer:async()=>Buffer.alloc(1600)},error:null}),remove:async()=>({data:[],error:null}),getPublicUrl:path=>({data:{publicUrl:'https://storage.example/'+path}})})}};
  const cache={};
  function load(file){if(cache[file])return cache[file];const context={exports:{},Buffer,URL,AbortSignal,Intl,Date,console,setTimeout,clearTimeout,process:{env:{OPENAI_API_KEY:'mock-only'}},require:name=>{
@@ -56,7 +57,7 @@ function harness({denied=false,network=false,badSources=false,duplicate=false,ph
   if(name==='sharp')return bytes=>{const api={metadata:async()=>({width:1080,height:1350}),rotate:()=>api,resize:()=>api,jpeg:()=>api,toBuffer:async()=>Buffer.from(bytes)};return api;};
   if(name.startsWith('./')&&fs.existsSync('src/lib/'+name.slice(2)+'.ts'))return load('src/lib/'+name.slice(2)+'.ts');return require(name);
  },fetch:async(url,init)=>{
-  const body=JSON.parse(init.body);requests.push({url,body});if(network)throw new Error('timeout');
+  const body=JSON.parse(init.body);requests.push({url,body});if(upstreamError)return {ok:false,status:upstreamError.status,json:async()=>({error:{code:upstreamError.code,message:'Fixture upstream error'}})};if(unreadableResponse)return {ok:true,status:200,json:async()=>{throw Error('Unreadable response')}};if(network)throw new Error('timeout');
   if(url.endsWith('images/generations'))return photo403?{ok:false,status:403,json:async()=>({error:{message:'Verify organization'}})}:{ok:true,json:async()=>({data:Array.from({length:Number(body.n||3)},()=>({b64_json:Buffer.alloc(200).toString('base64')}))})};
   if(url.endsWith('/responses')){
    const inputText=String(body.input||''),seoul=inputText.includes('Seoul dating-location')||inputText.includes('6–10 real candidates'),seoulTrend=inputText.includes('emerging or rising Seoul')||inputText.includes('emerging/rising Seoul');
@@ -73,8 +74,9 @@ function harness({denied=false,network=false,badSources=false,duplicate=false,ph
     {type:'url_citation',url:'https://news.example/hoe-picnic',title:'회크닉 current lifestyle report',start_index:0,end_index:Math.floor(notes.length/2)},
     {type:'url_citation',url:'https://trends.google.com/trends/explore?geo=KR&q=%ED%9A%8C%ED%81%AC%EB%8B%89',title:'회크닉 search trend',start_index:Math.floor(notes.length/2),end_index:notes.length}
    ]:[{type:'url_citation',url:'https://doi.org/10.1234/attentive.2024',title:'Attentive Conversation Study (2024)',start_index:0,end_index:notes.length}];
-   return {ok:true,json:async()=>({status:'completed',output:[{type:'web_search_call',status:'completed',action:{sources:[{url:'https://unrelated.example/english-school'}]}},{type:'message',content:[{type:'output_text',text:notes,annotations}]}],usage:{input_tokens:800,output_tokens:180}})};
+   return {ok:true,json:async()=>({status:researchStatus,incomplete_details:researchStatus==='incomplete'?{reason:'max_output_tokens'}:null,output:[{type:'web_search_call',status:'completed',action:{sources:[{url:'https://unrelated.example/english-school'}]}},...extraResearchCalls,{type:'message',content:[{type:'output_text',text:notes,annotations}]}],usage:{input_tokens:800,output_tokens:180}})};
   }
+  if(body.response_format?.json_schema?.name==='roundy_editorial_v2'&&writerFailuresLeft-->0)return {ok:false,status:503,json:async()=>({error:{code:'service_unavailable',message:'Writer unavailable'}})};
   if(body.response_format?.json_schema?.name==='roundy_topic_critic_v1'){
    // The independent critic receives NO writer self-scores, only eligible topics.
    const data=JSON.parse(body.messages[1].content);
@@ -677,4 +679,118 @@ for(const language of ['ko','en'])for(const count of [3,5])for(const [topic,seri
  assert.ok(result.draft.quality_report.suggestions.some(x=>x.includes('중복')));
  assert.equal(result.draft.content_document.editorial_review_required,false);
  console.log('PASS editorial repetition becomes a retained suggestion, not another paid rewrite');
+}
+
+// Incident regression: usable cited research must not be confused with an
+// unrelated tool's terminal state or the requested tool budget.
+{
+ const p=harness().policy;
+ const result={status:'completed',output:[
+  {type:'web_search_call',status:'completed'},
+  {type:'web_search_call',status:'incomplete'},
+  {type:'message',status:'completed',content:[{type:'output_text',text:'Verified venue information.',annotations:[
+   {type:'url_citation',url:'https://official.example/venue',title:'Official venue',start_index:0,end_index:26}
+  ]}]}
+ ]};
+ assert.equal(p.extractResearchEvidence(result).completed,true,'A completed cited response with a successful search must remain usable despite an unused incomplete call');
+ console.log('PASS cited response with partial tool history remains usable');
+}
+
+// Fault-injection tests execute the same runGeneration code used by the HTTP route.
+const resilientOptions={answerFirst:true,templateSettings:{carousel_mode:'fixed',carousel_brand_outro_enabled:true},
+ photoSettings:{carousel_min_real_photos_5:3,carousel_min_real_photos_3:2,carousel_ai_thumbnail_enabled:false}};
+const resilientInput={...base,content_mode:'growth_carousel',topic_type:'seoul_dating',language:'ko',visual_source:'stock',
+ story_card_count:5,editorial_workflow_version:2,editorial_series:'before_you_go',instruction:'비 오는 날 서울 실내 장소 세 곳의 차이'};
+{
+ const h=harness({...resilientOptions,extraResearchCalls:[{type:'web_search_call',status:'incomplete'}]});
+ const r=await h.api.runGeneration(id,{...resilientInput,request_key:'manual:partial-tool-history'},null);
+ assert.equal(r.job.stage,'photo_review_required',JSON.stringify(r));
+ const cache=h.tables.marketing_generation_jobs[0].research_cache;
+ assert.equal(cache.search_completed,true);assert.equal(cache.diagnostics.successful_web_calls,1);
+ assert.equal(cache.diagnostics.web_call_count,2);
+ const writer=h.requests.find(r=>r.body.response_format?.json_schema?.name==='roundy_editorial_v2');
+ assert.ok(JSON.parse(writer.body.messages[1].content).research_notes.includes('하늘공원'));
+ assert.equal(JSON.parse(writer.body.messages[1].content).seoul_format,'places');
+ assert.equal(h.requests.filter(r=>r.url.endsWith('/responses')).length,1);
+ console.log('PASS completed cited response flows into one writer with full research notes and stable comparison format');
+}
+{
+ const h=harness({...resilientOptions,researchStatus:'incomplete',enforceDedupe:true});
+ const r=await h.api.runGeneration(id,{...resilientInput,request_key:'manual:unfinished-research'},null);
+ assert.equal(r.job.stage,'source_review_required');
+ assert.equal(r.job.quality_report.research_diagnostics.reason,'response_incomplete');
+ assert.equal(r.job.quality_report.research_diagnostics.incomplete_reason,'max_output_tokens');
+ assert.ok(r.job.result_snapshot.research_sources.length>0);
+ assert.match(r.job.error_message,/끝까지 완료되지/);
+ assert.equal(h.requests.length,1,'incomplete response must not be passed to a paid writer');
+ const retry=await h.api.runGeneration(id,{...resilientInput,request_key:'retry:unfinished-research'},null,false,
+  {threadId:r.job.id,retryOfJobId:r.job.id,attemptNumber:2});
+ assert.equal(retry.job.stage,'source_review_required');
+ assert.notEqual(h.tables.marketing_generation_jobs[0].fingerprint,h.tables.marketing_generation_jobs[1].fingerprint,
+  'explicit source-review retry must not be rejected by the completed-parent fingerprint');
+ console.log('PASS incomplete answers retain evidence and diagnostics; explicit same-revision retry has distinct reservation identity');
+}
+{
+ const h=harness({...resilientOptions,writerFailures:2});
+ const first=await h.api.runGeneration(id,{...resilientInput,request_key:'manual:cache-chain-1'},null);
+ assert.equal(first.job.status,'failed');
+ const firstCache=structuredClone(h.tables.marketing_generation_jobs[0].research_cache);
+ const second=await h.api.runGeneration(id,{...resilientInput,request_key:'retry:cache-chain-2'},null,false,
+  {threadId:first.job.id,retryOfJobId:first.job.id,attemptNumber:2});
+ assert.equal(second.job.status,'failed');
+ const third=await h.api.runGeneration(id,{...resilientInput,request_key:'retry:cache-chain-3'},null,false,
+  {threadId:first.job.id,retryOfJobId:second.job.id,attemptNumber:3});
+ assert.equal(third.job.stage,'photo_review_required',JSON.stringify(third));
+ assert.equal(h.requests.filter(r=>r.url.endsWith('/responses')).length,1,'retries reuse research across the full attempt chain');
+ assert.equal(h.tables.marketing_generation_jobs[2].research_cache.saved_at,firstCache.saved_at,'cache TTL must not slide');
+ console.log('PASS three-attempt recovery reuses one research response without extending its verification TTL');
+}
+for(const [status,code,paused] of [[429,'rate_limit_exceeded',false],[429,'insufficient_quota',true],[429,'credit_balance_exhausted',true],[503,'service_unavailable',false]]){
+ const h=harness({upstreamError:{status,code}});
+ const r=await h.api.runGeneration(id,{...base,request_key:'manual:error-'+code},null);
+ assert.equal(r.job.status,'failed');assert.equal(h.requests.length,1);
+ assert.equal(Boolean(h.tables.marketing_ai_control[0].blocked_reason),paused);
+ console.log('PASS upstream '+code+' circuit breaker and single-call policy');
+}
+{
+ const h=harness({unreadableResponse:true});const r=await h.api.runGeneration(id,{...base,request_key:'manual:unreadable-result'},null);
+ assert.equal(r.job.status,'uncertain');assert.equal(r.job.error_code,'UPSTREAM_OUTCOME_UNKNOWN');assert.equal(h.requests.length,1);
+ console.log('PASS unreadable successful HTTP response is an uncertain paid outcome, never an automatic retry');
+}
+{
+ const h=harness({...resilientOptions,photoFixture:'ready'});
+ const r=await h.api.runGeneration(id,{...resilientInput,request_key:'manual:overlong-credit',mode:'text',visual_source:'none'},null);
+ const draft=h.tables.instagram_post_drafts[0];
+ draft.caption=String(draft.caption)+'\n'+('Extra context. '.repeat(160)).slice(0,1989-String(draft.caption).length);draft.visual_source='stock';
+ const before=h.requests.length;
+ const rendered=await h.api.runGeneration(id,{...resilientInput,request_key:'manual:credit-render',revision:draft.revision,
+  mode:'image',render_only:true},null);
+ assert.equal(rendered.job.error_code,'STOCK_CAPTION_CREDIT_LIMIT',JSON.stringify(rendered));
+ assert.equal(h.requests.length,before,'known credit overflow must fail before any paid image call');
+ assert.equal(h.stored.length,0,'known credit overflow must fail before uploading rendered cards');
+ console.log('PASS caption credit overflow is detected before rendering or image charges');
+}
+{
+ const h=harness({...resilientOptions,photoFixture:'ready',jobAgeMs:100_000,
+  photoSettings:{...resilientOptions.photoSettings,carousel_ai_thumbnail_enabled:true}});
+ const r=await h.api.runGeneration(id,{...resilientInput,request_key:'manual:time-budget'},null);
+ assert.equal(r.job.status,'completed');assert.equal(r.job.stage,'render_review_required',JSON.stringify(r));
+ assert.equal(r.job.result_snapshot.render_deferred_reason,'HANDLER_TIME_BUDGET');
+ assert.ok(r.job.result_snapshot.carousel_slides.length);assert.ok(r.job.result_snapshot.stock_photo_selections.length);
+ assert.equal(h.requests.filter(r=>r.url.endsWith('images/generations')).length,0);
+ assert.equal(h.stored.length,0);
+ console.log('PASS nearly exhausted handler saves copy and selected photos and defers paid imagery to image-only completion');
+}
+{
+ const p=harness().policy;
+ const message={type:'message',content:[{type:'output_text',text:'A verified source.',annotations:[
+  {type:'url_citation',url:'https://official.example/source',title:'Source'}]}]};
+ const many={status:'completed',output:[...Array.from({length:4},()=>({type:'web_search_call',status:'completed'})),message]};
+ assert.equal(p.extractResearchEvidence(many).completed,true);
+ assert.equal(p.extractResearchEvidence(many).diagnostics.requested_tool_budget_exceeded,true);
+ assert.equal(p.extractResearchEvidence({status:'completed',output:[message]}).completed,false);
+ assert.equal(p.extractResearchEvidence({status:'completed',output:[null,{type:'message',content:{}},{type:'message',content:[{type:'output_text',text:'https://fake.example/',annotations:{}}]}]}).completed,false);
+ assert.equal(p.extractResearchEvidence({status:'failed',output:many.output}).completed,false);
+ assert.equal(p.extractResearchEvidence({status:'completed',output:[{type:'web_search_call',status:'completed'}, {...message,status:'incomplete'}]}).completed,false);
+ console.log('PASS research parser handles budgets and malformed shapes while rejecting missing searches and incomplete responses');
 }

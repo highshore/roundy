@@ -1,3 +1,4 @@
+import {generatedAssetKey,loadGeneratedAsset,persistGeneratedAsset} from './marketing-generated-assets';
 import {EDITOR_FIRST_VERSION,validEditorialSeries,seriesForTopic} from './marketing-editor-first';
 import {EditorialReviewRequired,productionMetrics} from './marketing-workflow';
 import {prepareSavedCtaRecovery,SAVED_CTA_RECOVERY_VERSION} from './marketing-output-recovery';
@@ -87,8 +88,8 @@ async function upstream(endpoint:string,body:Row,timeout:number):Promise<Row>{
  let response:Response;
  try{response=await fetch('https://api.openai.com/v1/'+endpoint,{method:'POST',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(timeout),redirect:'error',cache:'no-store'});}catch{throw new GenerationError('UPSTREAM_OUTCOME_UNKNOWN','API 응답을 확인하지 못했습니다. 중복 과금을 피하려고 자동 재시도를 중지했습니다.',true);}
  const data=await response.json().catch(()=>null);
- if(!response.ok){const code=String(data?.error?.code||'OPENAI_HTTP_'+response.status),message=String(data?.error?.message||'OpenAI request failed.');throw new GenerationError(code,'OpenAI '+response.status+': '+safeError(new Error(message)),[401,403,404,429].includes(response.status));}
- if(!data)throw new GenerationError('INVALID_API_RESPONSE','OpenAI returned an unreadable response.');return data;
+ if(!response.ok){const code=String(data?.error?.code||'OPENAI_HTTP_'+response.status),message=String(data?.error?.message||'OpenAI request failed.');throw new GenerationError(code,'OpenAI '+response.status+': '+safeError(new Error(message)),[401,403,404].includes(response.status)||['insufficient_quota','credit_balance_exhausted','billing_hard_limit_reached'].includes(code));}
+ if(!data||typeof data!=='object'||Array.isArray(data))throw new GenerationError('UPSTREAM_OUTCOME_UNKNOWN','API 응답을 읽지 못했습니다. 중복 과금을 피하려고 자동 재시도를 중지했습니다.',true);return data;
 }
 function slide(value:Row,index:number,total:number){
  if(!value||typeof value.title!=='string'||typeof value.body!=='string'||!value.title.trim()||!value.body.trim())throw new Error('INVALID_SLIDE');
@@ -312,6 +313,9 @@ async function generateAiCard(db:DB,draft:Row,job:Row,slot:number):Promise<strin
   'The server overlays the exact card headline and body; do not generate typography.',
   'Selected card context:',visualContext(draft).split('\n')[slot]||'',
  ].join('\n');
+ const assetKey=generatedAssetKey(prompt,IMAGE_MODEL);
+ const cached=await loadGeneratedAsset(db,draft.content_document,assetKey);
+ if(cached)return cached;
  const result=await upstream('images/generations',{
   model:IMAGE_MODEL,prompt,n:1,size:'1024x1280',quality:'low',
   output_format:'jpeg',output_compression:85,background:'opaque'
@@ -319,8 +323,18 @@ async function generateAiCard(db:DB,draft:Row,job:Row,slot:number):Promise<strin
  const encoded=Array.isArray(result.data)?result.data[0]?.b64_json:null;
  if(typeof encoded!=='string'||encoded.length<100||encoded.length>8*1024*1024)
   throw new Error('INVALID_GENERATED_AI_THUMBNAIL');
+ const saved=await persistGeneratedAsset(db,job.id,assetKey,encoded);
+ // Persist the private raw image before rendering. A render failure must not buy it again.
+ // Private cache bookkeeping is not a new content version. Keep the same
+ // optimistic revision check, without consuming the finite content revision budget.
+ const cachedDraft=checked(await db.from('instagram_post_drafts').update({
+  content_document:{...draft.content_document,
+   generated_ai_assets:{...draft.content_document?.generated_ai_assets,[assetKey]:saved.asset}},quality_revision:null
+ }).eq('id',draft.id).eq('status','needs_approval').eq('revision',draft.revision).select('*').maybeSingle()).data;
+ if(!cachedDraft)throw new Error('DRAFT_CHANGED_DURING_GENERATION');
+ Object.assign(draft,cachedDraft);
  await progress(db,job,'thumbnail_ready');
- return 'data:image/jpeg;base64,'+encoded;
+ return saved.image;
 }
 type GenerationThreadContext={selectedTopicKey?:string;threadId:string;attemptNumber:number;retryOfJobId:string;recoverySourceJobId?:string;workflowId?:string};
 async function resolveContentWorkflowId(db:DB,draft:Row,job:Row,thread?:GenerationThreadContext){
@@ -409,7 +423,7 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
     ?(input.mode==='image'||input.render_only?'render':research?'research':'copy')
     :(input.mode==='image'||input.render_only||recoveryPatch?'photo':'copy_photo'))
   :uploadedVisuals?'render':research?'research':'copy';
- const fingerprint=createHash('sha256').update(JSON.stringify({id:draftId,revision:input.revision,mode:input.mode,content:input.content_mode,language:input.language,visual:input.visual_mode,visual_source:visualSource,topic:input.topic_type||'',instruction:input.instruction,editorial_workflow_version:input.editorial_workflow_version||null,editorial_series:input.editorial_series||null,selected_topic_key:input.selected_topic_key||null,editorial_lane:input.editorial_lane||'auto',campaign_pattern:input.campaign_pattern||null,campaign_tone:input.campaign_tone||null,launch_date:input.launch_date||null,event_id:input.event_id||draft.event_id||null,event_campaign_stage:input.event_campaign_stage||null,event_campaign_pattern:input.event_campaign_pattern||null,render:!!input.render_only,carousel_slot:plan?.reservation_number||null,carousel_count:plan?.slide_count||null,brand_outro_enabled:input.brand_outro_enabled===true,answer_first_enabled:input.answer_first_enabled===true,photo_first:managedPhotoSourcing,ai_image_slot:selectedAiSlot,saved_recovery_of:thread?.recoverySourceJobId||null})).digest('hex');
+ const fingerprint=createHash('sha256').update(JSON.stringify({id:draftId,revision:input.revision,mode:input.mode,content:input.content_mode,language:input.language,visual:input.visual_mode,visual_source:visualSource,topic:input.topic_type||'',instruction:input.instruction,editorial_workflow_version:input.editorial_workflow_version||null,editorial_series:input.editorial_series||null,selected_topic_key:input.selected_topic_key||null,editorial_lane:input.editorial_lane||'auto',campaign_pattern:input.campaign_pattern||null,campaign_tone:input.campaign_tone||null,launch_date:input.launch_date||null,event_id:input.event_id||draft.event_id||null,event_campaign_stage:input.event_campaign_stage||null,event_campaign_pattern:input.event_campaign_pattern||null,render:!!input.render_only,carousel_slot:plan?.reservation_number||null,carousel_count:plan?.slide_count||null,brand_outro_enabled:input.brand_outro_enabled===true,answer_first_enabled:input.answer_first_enabled===true,photo_first:managedPhotoSourcing,ai_image_slot:selectedAiSlot,retry_of_job_id:thread?.retryOfJobId||null,saved_recovery_of:thread?.recoverySourceJobId||null})).digest('hex');
  const reservation=checked(await db.rpc('reserve_marketing_generation',{p_key:input.request_key,p_fingerprint:fingerprint,p_draft:draftId,p_revision:input.revision,p_operation:operation,p_actor:actor,p_automatic:automatic})).data as Row,job=reservation.job as Row;
  if(!reservation.accepted)return {draft,job,deduplicated:true};
  let contentQuality:Row|null=null;
@@ -433,12 +447,12 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
    const copy=await generateCopy(db,draft,input,job,research);contentQuality=copy.quality_report;await progress(db,job,'saving_copy');
    const roles=Array.isArray(copy.carousel_slides)?copy.carousel_slides.map((slide:Row)=>String(slide.role||'')):[];
    const policy=managedPhotoSourcing?configuredPhotoSourcingPolicy(preference,roles,input.ai_image_slot):null;
-   const contentDocument={...copy.content_document,...(policy?{photo_sourcing:policy}:{}),...(!automatic&&input.story_card_count?{editorial_workflow_version:input.editorial_workflow_version||1,story_length_source:'admin'}:{})};
+   const contentDocument={...copy.content_document,...(draft.content_document?.generated_ai_assets?{generated_ai_assets:draft.content_document.generated_ai_assets}:{}),...(policy?{photo_sourcing:policy}:{}),...(!automatic&&input.story_card_count?{editorial_workflow_version:input.editorial_workflow_version||1,story_length_source:'admin'}:{})};
    draft=await savePartial(db,draft,{...copy,content_document:contentDocument,
     ...(String((contentDocument as Row)?.design_preset||'')==='roundy_magazine_editorial_v2'?{render_style:'editorial'}:{}),
     generation_source:automatic?'automation':'manual',visual_source:visualSource,last_regeneration_mode:input.mode,last_regeneration_instruction:input.instruction,images:[]});
   }
-  let stockPhotos:ReturnType<typeof photoSelectionSnapshot>=[],photoReviewRequired=false;
+  let stockPhotos:ReturnType<typeof photoSelectionSnapshot>=[],photoReviewRequired=false,renderDeferred=false;
   if(autoVisuals){
    let images:string[];
    if(input.content_mode==='live_event'){
@@ -465,27 +479,36 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
      :await prepareStockSelections(db,draft);
    stockPhotos=photoSelectionSnapshot(selected);
    if(stockReady(draft,selected)){
-    await progress(db,job,'rendering_approved_photos');
-    const assets=await loadEditorialAssets();
-    Object.assign(assets,await approvedStockCardAssets(db,draft));
-     assets.cardCredits=Object.fromEntries(selected.map((photo:Row)=>[Number(photo.slot),photoCardSourceLabel(photo)]));
     const policy=savedPhotoSourcingPolicy(draft.content_document?.photo_sourcing);
     const aiSlot=aiImageSlotForPolicy(policy);
-    if(aiSlot!==null){
-     const generated=await generateAiCard(db,draft,job,aiSlot);
-     if(aiSlot===0)assets.photo=generated;
-     assets.cardPhotos={...(assets.cardPhotos||{}),[aiSlot]:generated};
-     assets.reusePhotos=false;
-    }
-    const images=await renderCardsWithAssets(db,draft,job,assets);
-    await progress(db,job,'saving_images');
     // Record every provider, creator and ORIGINAL source URL in the final draft caption.
     const originalCaption=String(draft.caption||'')
      .replace(/\n\n(?:Photos:|Photo sources \/ 사진 출처:)[\s\S]*$/,'')
      .replace(/\n\nAI-generated editorial illustration: Card \d+$/,'');
     const captionWithCredit=photoCreditCaption(aiSlot===null?originalCaption:
      originalCaption+'\n\nAI-generated editorial illustration: Card '+(aiSlot+1),selected);
+    // 150s upstream limit + 45s to render/save. Copy and selected photos are already durable.
+    // The existing image-only action resumes this result without rewriting the copy.
+    renderDeferred=aiSlot!==null&&Date.now()-Date.parse(job.created_at)>95_000;
+    if(!renderDeferred){
+    await progress(db,job,'rendering_approved_photos');
+    const assets=await loadEditorialAssets();
+    Object.assign(assets,await approvedStockCardAssets(db,draft));
+     assets.cardCredits=Object.fromEntries(selected.map((photo:Row)=>[Number(photo.slot),photoCardSourceLabel(photo)]));
+    // Font and archived-photo loading also consume the request deadline.
+    renderDeferred=aiSlot!==null&&Date.now()-Date.parse(job.created_at)>95_000;
+    if(!renderDeferred&&aiSlot!==null){
+     const generated=await generateAiCard(db,draft,job,aiSlot);
+     if(aiSlot===0)assets.photo=generated;
+     assets.cardPhotos={...(assets.cardPhotos||{}),[aiSlot]:generated};
+     assets.reusePhotos=false;
+    }
+    if(!renderDeferred){
+    const images=await renderCardsWithAssets(db,draft,job,assets);
+    await progress(db,job,'saving_images');
     draft=await savePartial(db,draft,{images,caption:captionWithCredit,generation_source:automatic?'automation':'manual',visual_source:visualSource,last_regeneration_mode:input.mode,last_regeneration_instruction:input.instruction});
+    }
+    }
    }else{
     // Missing, insufficient, unlicensed or unapproved Pexels photos are a review
     // state, NOT a failed job and NEVER an excuse to produce replacement AI photos.
@@ -494,7 +517,7 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
    }
   }
   // Metadata state only: the existing image-only renderer has finished with the selected headline.
-  if(draft.content_document?.thumbnail_render_pending===true&&Array.isArray(draft.images)&&draft.images.length>0){
+  if(!renderDeferred&&draft.content_document?.thumbnail_render_pending===true&&Array.isArray(draft.images)&&draft.images.length>0){
    draft=await savePartial(db,draft,{content_document:{...draft.content_document,thumbnail_render_pending:false}});
   }
   const coverStillPending=draft.content_document?.thumbnail_render_pending===true;
@@ -509,7 +532,7 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
   const quality=preflight?mergePreflightQuality(copyQuality,preflight,false):copyQuality;
   // A cover selection that still needs a new image must retain the invalidated
   // quality gate. Do not accidentally re-approve a stale cover during review.
-  if(!(photoReviewRequired&&coverStillPending))
+  if(!((photoReviewRequired||renderDeferred)&&coverStillPending))
    draft=checked(await db.rpc('set_marketing_quality',{p_draft:draft.id,p_revision:draft.revision,p_report:quality})).data as Row;
   const resultSnapshot={
    ...(recoverySource?{recovery:{version:SAVED_CTA_RECOVERY_VERSION,source_job_id:recoverySource.id,original_cta:recoverySource.result_snapshot.content_document.cta,additional_paid_calls:1}}:{}),
@@ -522,14 +545,14 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
    render_style:draft.render_style||null,campaign_pattern:draft.campaign_pattern||draft.content_document?.campaign_pattern||null,campaign_tone:draft.campaign_tone||draft.content_document?.campaign_tone||null,campaign_version:draft.campaign_version||draft.content_document?.campaign_version||null,launch_date:draft.launch_date||draft.content_document?.launch_date||null,
    event_campaign_stage:draft.event_campaign_stage||draft.content_document?.event_campaign_stage||null,event_campaign_pattern:draft.event_campaign_pattern||draft.content_document?.event_campaign_pattern||null,event_campaign_version:draft.event_campaign_version||draft.content_document?.campaign_version||null,event_facts_snapshot:draft.event_facts_snapshot||draft.content_document?.event_facts||null,
    generation_recovery:(quality as Row).recovery||draft.content_document?.generation_recovery||null,
-   stock_photo_selections:stockPhotos,photos_pending_review:photoReviewRequired,
+   stock_photo_selections:stockPhotos,photos_pending_review:photoReviewRequired,render_deferred:renderDeferred,render_deferred_reason:renderDeferred?'HANDLER_TIME_BUDGET':null,
    real_photos_required:savedPhotoSourcingPolicy(draft.content_document?.photo_sourcing)?.min_real_photos||null,
    real_photos_selected:stockPhotos.length,
    real_photos_approved:stockPhotos.filter(photo=>photo.review_status==='approved').length,
    photo_review_reason:photoReviewRequired?(stockPhotos.length===0?'NO_APPROVED_OR_DISCOVERED_PHOTOS':'INSUFFICIENT_OR_UNREVIEWED_PHOTOS'):null
   };
-  checked(await db.from('marketing_generation_jobs').update({status:'completed',stage:photoReviewRequired?'photo_review_required':'complete',quality_report:quality,result_snapshot:resultSnapshot,result_revision:draft.revision,updated_at:new Date().toISOString()}).eq('id',job.id).eq('status','running'));
-  return {draft,job:{...job,status:'completed',stage:photoReviewRequired?'photo_review_required':'complete',result_snapshot:resultSnapshot,result_revision:draft.revision},deduplicated:false};
+  checked(await db.from('marketing_generation_jobs').update({status:'completed',stage:renderDeferred?'render_review_required':photoReviewRequired?'photo_review_required':'complete',quality_report:quality,result_snapshot:resultSnapshot,result_revision:draft.revision,updated_at:new Date().toISOString()}).eq('id',job.id).eq('status','running'));
+  return {draft,job:{...job,status:'completed',stage:renderDeferred?'render_review_required':photoReviewRequired?'photo_review_required':'complete',result_snapshot:resultSnapshot,result_revision:draft.revision},deduplicated:false};
  }catch(error){
   if(error instanceof EditorialReviewRequired&&error.patch){
    const roles=error.patch.carousel_slides.map((s:Row)=>String(s.role||''));
@@ -560,7 +583,7 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
    checked(await db.from('marketing_generation_jobs').update({status:'completed',stage:review.stage,error_code:review.error_code,error_message:review.error_message,updated_at:new Date().toISOString()}).eq('id',job.id).eq('status','running'));
    return {draft,job:review,deduplicated:false,review_required:true};
   }
-  const message=safeError(error),code=error instanceof GenerationError||error instanceof EditorialReviewRequired?error.code:message==='PROMPT_SIZE_LIMIT'?'PROMPT_SIZE_LIMIT':'GENERATION_FAILED',unknown=code==='UPSTREAM_OUTCOME_UNKNOWN';
+  const message=safeError(error),code=error instanceof GenerationError||error instanceof EditorialReviewRequired?error.code:(/^(?:PROMPT_SIZE_LIMIT|FONT_ASSET_[A-Z_]+|AI_ASSET_[A-Z_]+|STOCK_[A-Z_]+|INVALID_GENERATED_[A-Z_]+|AI_RETURNED_INVALID_JSON)$/.test(message)?message:'GENERATION_FAILED'),unknown=code==='UPSTREAM_OUTCOME_UNKNOWN';
   await db.from('marketing_generation_jobs').update({status:unknown?'uncertain':'failed',stage:error instanceof EditorialReviewRequired?'topic_review_required':'stopped',error_code:code,error_message:message,updated_at:new Date().toISOString()}).eq('id',job.id).eq('status','running');
   if(error instanceof GenerationError&&error.block)await db.from('marketing_ai_control').update({blocked_reason:message,updated_at:new Date().toISOString()}).eq('singleton',true);
   // Only upstream/configuration errors and unknown network outcomes trip the circuit breaker.

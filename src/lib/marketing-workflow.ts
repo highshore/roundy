@@ -24,6 +24,7 @@ export function editorialState(row:Row|null|undefined):EditorialState {
  if(row.status==='failed')return 'system_error';
  if(!hasEditorialCopy(s))return 'empty';
  if(s.photos_pending_review||row.stage==='photo_review_required')return 'photo_review';
+ if(s.render_deferred||row.stage==='render_review_required')return 'render_review';
  if(doc.thumbnail_render_pending||!Array.isArray(s.images)||s.images.length!==s.carousel_slides.length||s.images.some((image:unknown)=>typeof image!=='string'||!image.trim()))return 'render_review';
  if(q.status!=='passed')return 'copy_review';
  return 'ready';
