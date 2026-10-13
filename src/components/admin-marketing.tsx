@@ -627,10 +627,17 @@ export function AdminMarketing({locale}:{locale:Locale}){
   if(!draft)return null;
   const incomplete=!draft.images?.length||draft.images.length!==draft.carousel_slides?.length||draft.images.some((image:unknown)=>!image);
   if(!incomplete)return null;
+  const doc=draft.content_document||{};
+  // Never imply the image stage is ready when the manuscript is still flagged
+  // for human editorial/source review. Final server preflight stays authoritative.
+  const copyNeedsReview=doc.source_review_required===true||
+   (doc.editorial_review_required===true&&!doc.editorial_human_approval)||
+   (!!doc.editorial_critic&&doc.editorial_critic.status!=='passed'&&!doc.editorial_human_approval);
   return <div id="roundy-marketing-photo-editor" className="marketing-inline-media-actions">
    <p role="status">{t('Real photos approved','실사 승인')} {stockReview?.approved??0}/{stockReview?.minimum??draftMediaPlan.realPhotos} — {stockReview?.ready?t('Ready to render','이미지 완성 준비됨'):t('Select Image on each card to assign or review photos.','각 카드의 이미지 변경에서 사진을 지정하고 검수하세요.')}</p>
+   {copyNeedsReview&&<p role="status">{t('Finish editing and reviewing the saved copy before completing the images. Fix repeated cover titles under Other cover titles, then review the content.','이미지 완성 전에 원고 품질 검토가 필요합니다. 다른 표지 제목에서 중복 후보를 수정하고 카드 내용의 편집 검수를 완료하세요.')}</p>}
    {!stockReview?.ready&&<button type="button" className="admin-secondary" disabled={busy||!!running||dirty} onClick={()=>void work(discoverStock)}>{t('Find missing photos','빠진 사진 검색')}</button>}
-   <button type="button" className="admin-primary" disabled={busy||!!running||dirty||stockReview?.ready!==true} onClick={()=>void work(renderStock)}>{t('Finish card images','카드 이미지 완성')}</button>
+   <button type="button" className="admin-primary" disabled={busy||!!running||dirty||copyNeedsReview||stockReview?.ready!==true} onClick={()=>void work(renderStock)}>{t('Finish card images','카드 이미지 완성')}</button>
   </div>;
  }
  if(loading)return <p role="status">{t('Loading marketing workspace…','마케팅 정보를 불러오는 중입니다…')}</p>;
@@ -662,7 +669,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
    <button type="button" className="admin-secondary" onClick={()=>setActiveTab('connection')}>{t('View connection settings','연결 관리에서 확인')}</button>
   </div>}
   {(error||notice)&&<div className={'marketing-workspace-toast'+(error?' is-error':'')} data-testid="marketing-action-feedback">
-   <span>{error||notice}</span>
+   <span>{error.startsWith('품질 검토 필요:')?t('Editorial review is required. Open the saved copy, fix repeated headlines and edit the story before completing card images.','원고 품질 검토가 필요합니다. 저장된 원고에서 중복 제목과 카드 내용을 수정한 뒤 이미지를 완성하세요.'):error||notice}</span>
    <button type="button" aria-label={t('Dismiss message','메시지 닫기')} onClick={()=>{setError('');setNotice('');}}>×</button>
   </div>}
   {channel==='instagram'&&<MarketingWorkflowNav locale={locale} activeTab={activeTab} items={tabItems} onNavigate={setActiveTab}/>}
