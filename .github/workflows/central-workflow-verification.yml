@@ -1,0 +1,40 @@
+name: Central workflow verification
+on:
+  push:
+    branches: [codex/roundy-central-workflow-20261013]
+    paths: ['scripts/central-workflow-transport/**', '.github/workflows/central-workflow-verification.yml']
+permissions:
+  contents: write
+concurrency:
+  group: roundy-central-workflow-verification
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: codex/roundy-central-workflow-20261013
+      - name: Apply reviewed source and remove transport
+        run: |
+          python3 scripts/central-workflow-transport/apply.py
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm -r scripts/central-workflow-transport .github/workflows/central-workflow-verification.yml
+          git commit -m 'feat(marketing): centralize content state and durable stage execution'
+          git push origin HEAD:codex/roundy-central-workflow-20261013
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: node scripts/prepare-marketing-fonts.mjs
+      - run: npm run typecheck
+      - run: npm test
+      - run: node scripts/test-marketing-generation.mjs
+      - run: node scripts/test-marketing-prompt-budget.mjs
+      - run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
+      - run: node scripts/test-marketing-runtime-assets.mjs
