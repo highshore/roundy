@@ -138,6 +138,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
    CONFIRM_NOT_PUBLISHED_AND_REVIEW_NOTE_REQUIRED:['Verify the post is absent from Instagram and enter at least 12 characters explaining how you checked.','Instagram에서 미게시 상태를 확인하고 확인 방법을 12자 이상 기록하세요.'],
    FEED_RUN_NOT_RETRYABLE:['This run is not eligible for a retry. Check its status and attempt history.','이 게시물은 재시도 대상이 아닙니다. 상태 및 시도 이력을 확인하세요.'],
    GENERATION_COOLDOWN_30_SECONDS:['Please wait 30 seconds before starting another generation.','연속 생성 방지를 위해 30초 후 다시 시도하세요.'],
+   PROMPT_SIZE_LIMIT:['The writing request exceeded the editorial prompt size limit, not the daily AI usage budget.','원고 작성에 필요한 입력 크기가 서버 제한을 초과했습니다. 일일 AI 사용량 초과는 아닙니다.'],
    GENERATION_BUDGET_REACHED:['Today’s marketing AI safety budget has been reached.','오늘 마케팅 AI 안전 한도에 도달했습니다.'],
    GENERATION_CALL_LIMIT:['Today’s generation call limit has been reached.','오늘 생성 횟수 안전 한도에 도달했습니다.'],
    TREND_RADAR_BUDGET_REACHED:['The Trend Radar safety budget has been reached.','Trend Radar 안전 예산 한도에 도달했습니다.'],
@@ -198,6 +199,11 @@ export function AdminMarketing({locale}:{locale:Locale}){
    title:t('Independent editorial review failed','독립 편집 검수 탈락'),
    cause:t('The independent editor found an unconvincing story or disconnected carousel cards, even after the bounded revision. No photos were purchased or post published.','독립 평가에서 카드 간 흐름이나 실제 독자 가치가 부족하다고 판단했습니다. 제한된 재작성 후에도 통과하지 못했으며 사진 생성과 게시로 진행하지 않았습니다.'),
    action:t('Expand the editorial feedback below. A new attempt with the corrected workflow requires explicitly choosing Retry; it is not automatic and may incur AI charges.','아래 검수 의견을 열어 확인하세요. 개선된 생성 방식으로 다시 시도하려면 재시도를 직접 선택해야 하며 AI 비용이 발생할 수 있습니다.')
+  };
+  if(/PROMPT_SIZE_LIMIT/.test(message+' '+code))return {
+   title:t('Editorial input too large','원고 입력 크기 초과'),
+   cause:t('The combined editorial instructions, source context and output schema exceeded the server request-size guard. This is not a daily AI spend or call-limit error.','원고 지시문, 출처 자료와 출력 형식 정의가 서버 내부 크기 제한을 넘었습니다. 일일 AI 비용 또는 생성 횟수 초과가 아닙니다.'),
+   action:t('The writing request now trims optional context before applying its bounded size guard. Existing failures never restart automatically; retry deliberately after reviewing possible API charges.','선택적 참고 자료를 줄이는 사전 검사가 적용됩니다. 기존 실패 작업은 자동으로 재시도하지 않습니다. 추가 AI 비용을 확인한 뒤 직접 재시도하세요.')
   };
   if(/품질|quality|중복|카드|캡션|문구/i.test(message+' '+code))return {title:t('Copy quality issue','문구 품질 실패'),cause:t('The draft did not pass editorial rules.','문구가 편집 품질 기준을 통과하지 못했습니다.'),action:t('Formatting is fixed locally first, then copy gets one bounded repair pass.','형식은 서버가 먼저 보정하고 문구는 최대 1회만 자동 수정합니다.')};
   if(/image|photo|render|CARD_RENDER/i.test(message+' '+code))return {title:t('Image issue','이미지 생성 실패'),cause:t('The image generation or card rendering step stopped.','사진 생성 또는 카드 렌더링 단계에서 중지됐습니다.'),action:t('Saved copy is preserved so image work can be retried separately.','문구는 보존되므로 이미지만 별도로 다시 만들 수 있습니다.')};
