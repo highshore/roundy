@@ -809,10 +809,10 @@ export function AdminMarketing({locale}:{locale:Locale}){
       </select>
       <small>{t('Guides the angle; the selected content category, source evidence and manual approval still apply.','접근 방식만 지정하며 선택된 주제 유형, 출처 검증과 수동 승인은 그대로 유지됩니다.')}</small>
      </label>}
-     </details>
      <p className="admin-help">{t('Roundy logo, coral accents and typography are composed server-side for photo-source cards. Completed 4:5 cards are used without additional design overlays.','사진 소스 카드는 Roundy 로고, 코랄 강조와 타이포를 서버에서 합성합니다. 완성된 4:5 카드는 추가 디자인 합성 없이 그대로 사용합니다.')}</p>
      {basis==='growth_carousel'&&['book_insight','trend_research','dating_myth'].includes(topic)&&<p className="admin-help">{t('High-context research may use up to three targeted searches before one structured writing request. Missing evidence is saved for source review; the subject stays unchanged.','고품질 검색으로 목적별 검색을 최대 3회 사용한 뒤 구조화된 문구를 작성합니다. 근거가 부족하면 출처 보완 상태로 저장하며 다른 소재로 전환하지 않습니다.')}</p>}
      <p className="admin-help">{t('Caption order: Korean → English → sources → tagline and 5 relevant tags. Tags are selected for topic relevance; live search volume is not measured.','캡션 순서: 국문 → 영어 → 출처 → 태그라인과 관련 태그 5개. 태그는 주제 관련성으로 선별하며 실시간 검색량 순위는 아닙니다.')}</p>
+     </details>
      <button type="button" className="admin-primary" disabled={busy||!!running||blocked||(basis==='growth_carousel'&&!direction.trim())||(manualVisualSource==='uploaded'&&!pendingMarketingImages.length)} onClick={()=>void generate(false)}>{manualVisualSource==='uploaded'?t('Generate with my images','내 이미지로 콘텐츠 생성'):t('Create editable draft','초안 만들기')}</button>
     </div>
    </details>
