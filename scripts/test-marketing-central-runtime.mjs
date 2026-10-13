@@ -51,6 +51,31 @@ try{
  const brand=await h.controller.startContentWorkflow(h.db,{...h.frozen,request_key:'manual:brand-matrix',content_mode:'prelaunch',topic_type:undefined},h.actor);
  const brandResult=await h.task(brand.content.id);assert.equal(brandResult.content.stage,'media',JSON.stringify(brandResult));n++;
  await h.rpc('archive_marketing_content',{p_content:brand.content.id,p_state:brandResult.content.state_version});
+ // A saved review flag must not trap a manually corrected version forever.
+ const reviewCase=await h.controller.startContentWorkflow(h.db,{...h.frozen,request_key:'manual:copy-review-edit-runtime'},h.actor),cid=reviewCase.content.id;
+ await h.task(cid);await h.task(cid);
+ let cd=await h.controller.contentDetail(h.db,cid),cs=cd.versions[0].snapshot;
+ await h.rpc('edit_marketing_content_copy',{p_content:cid,p_state:cd.content.state_version,p_actor:h.actor,
+  p_snapshot:{...cs,content_document:{...cs.content_document,editorial_review_required:true}}});
+ const copyCount=h.counts.copy;
+ async function fixSavedReview(){
+  const current=await h.controller.contentDetail(h.db,cid),first=current.draft.carousel_slides[0];
+  const req={method:'POST',json:async()=>({state_version:current.content.state_version,
+   edits:[{index:0,title:first.title,body:'답이 끝날 때까지 기다려요.',secondary_body:'Wait until the answer is finished.'}]})};
+  const response=await h.controller.contentWorkflowApi(req,h.db,[cid,'edit'],h.actor);
+  assert.equal(response.status,200);return h.controller.contentDetail(h.db,cid);
+ }
+ cd=await fixSavedReview();assert.equal(cd.draft.content_document.editorial_review_required,false);n++;
+ assert.equal(cd.content.version,3);assert.equal(cd.draft.approved_at,null);n++;
+ await h.resume(cid);const corrected=await h.task(cid);assert.equal(corrected.content.required_action,'photo_approval_required',JSON.stringify(corrected));
+ assert.equal(h.counts.copy,copyCount);n++;
+ // Editorial flag removal must NEVER erase a factual/source-review requirement.
+ cd=await h.controller.contentDetail(h.db,cid);cs=cd.versions[0].snapshot;
+ await h.rpc('edit_marketing_content_copy',{p_content:cid,p_state:cd.content.state_version,p_actor:h.actor,
+  p_snapshot:{...cs,content_document:{...cs.content_document,source_review_required:true,editorial_review_required:true}}});
+ cd=await fixSavedReview();assert.equal(cd.draft.content_document.source_review_required,true);n++;
+ await h.resume(cid);const sourceBlocked=await h.task(cid);assert.equal(sourceBlocked.content.required_action,'copy_review_required');n++;
+ await h.rpc('archive_marketing_content',{p_content:cid,p_state:sourceBlocked.content.state_version});
  // Pausing cannot route to the legacy writer or discard already completed stages.
  await h.pg.exec('update marketing_content_workflow_control set enabled=false');
  await assert.rejects(()=>h.controller.startContentWorkflow(h.db,{...h.frozen,request_key:'manual:paused-runtime'},h.actor),e=>e.message==='CONTENT_WORKFLOW_PAUSED');n++;
