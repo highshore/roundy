@@ -1,4 +1,7 @@
 'use client';
+import {EDITOR_FIRST_VERSION,EDITORIAL_SERIES,SERIES_CONTENT,seriesForTopic} from '@/lib/marketing-editor-first';
+import './admin-marketing-composer.css';
+
 import {AdminMarketingCardRewrite} from './admin-marketing-card-rewrite';
 import {MarketingWorkflowNav,MarketingWorkflowSteps,MarketingProductionMetrics} from './marketing-workflow-nav';
 import {editorialState,EDITORIAL_STATE_LABELS,hasEditorialCopy,visibleEditorialDrafts,type EditorialState} from '@/lib/marketing-workflow';
@@ -55,7 +58,9 @@ export function AdminMarketing({locale}:{locale:Locale}){
  const [feedAttempts,setFeedAttempts]=useState<Record<string,Row>>({});
  const [draft,setDraft]=useState<Row|null>(null),[settings,setSettings]=useState<Row|null>(null),[generation,setGeneration]=useState<Row|null>(null);
  const [channel,setChannel]=useState<'instagram'|'koreapas'>('instagram'),[requestBusy,setBusy]=useState(false),[loading,setLoading]=useState(true),[error,setError]=useState(''),[notice,setNotice]=useState('');
- const [basis,setBasis]=useState('growth_carousel'),[manualVisualSource,setManualVisualSource]=useState<'auto_ai'|'uploaded'|'none'|'pexels'|'stock'>('stock'),[topic,setTopic]=useState('conversation_prompt'),[contentLanguage,setContentLanguage]=useState<'ko'|'en'>('ko'),[direction,setDirection]=useState(''),[editorialLane,setEditorialLane]=useState('auto'),[storyCardCount,setStoryCardCount]=useState<3|5|0>(0),[captionDirty,setDirty]=useState(false);
+ const [basis,setBasis]=useState('growth_carousel'),[manualVisualSource,setManualVisualSource]=useState<'auto_ai'|'uploaded'|'none'|'pexels'|'stock'>('stock'),[topic,setTopic]=useState('conversation_prompt'),[contentLanguage,setContentLanguage]=useState<'ko'|'en'>('ko'),[direction,setDirection]=useState(''),[editorialLane,setEditorialLane]=useState('auto'),[storyCardCount,setStoryCardCount]=useState<3|5|0>(3),[captionDirty,setDirty]=useState(false);
+ const [showMaterialExamples,setShowMaterialExamples]=useState(false);
+ const activeSeries=seriesForTopic(topic);
  const [eventId,setEventId]=useState(''),[eventCampaignStage,setEventCampaignStage]=useState('auto');
  const [template,setTemplate]=useState<Row>(blank());
  const [stockPhotos,setStockPhotos]=useState<Row[]>([]),[stockReview,setStockReview]=useState<Row|null>(null);
@@ -287,12 +292,13 @@ export function AdminMarketing({locale}:{locale:Locale}){
   });
  }
  async function generate(today=false,renderOnly=false){
+  if(!today&&!renderOnly&&basis==='growth_carousel'&&!direction.trim()){setError(t('Enter a subject or select a material example first.','소재를 입력하거나 소재 예시를 선택하세요.'));return;}
   if(renderOnly&&!draft)return;
   if(renderOnly&&dirty&&!window.confirm(t('Discard unsaved edits before rendering?','저장하지 않은 수정을 버리고 이미지를 다시 렌더할까요?')))return;
   const source=today?'stock':renderOnly?(draft?.visual_source||'auto_ai'):manualVisualSource;
   if(!today&&!renderOnly&&source==='uploaded'&&!pendingMarketingImages.length){setError(t('Add at least one image before generating with uploads.','직접 업로드 방식은 이미지를 1장 이상 추가한 뒤 생성하세요.'));return;}
   if(!today&&!renderOnly&&basis==='live_event'&&!eventId){setError(t('Choose the live event to promote.','홍보할 정식 이벤트를 선택하세요.'));return;}
-  const contentInput=renderOnly?savedRenderContent(draft!):{content_mode:basis,topic_type:basis==='growth_carousel'?topic:undefined,language:contentLanguage,event_id:basis==='live_event'?eventId:undefined,event_campaign_stage:basis==='live_event'?eventCampaignStage:undefined,instruction:direction.trim(),editorial_lane:editorialLane};
+  const contentInput=renderOnly?savedRenderContent(draft!):{...(basis==='growth_carousel'?{editorial_workflow_version:EDITOR_FIRST_VERSION,editorial_series:activeSeries}:{}),content_mode:basis,topic_type:basis==='growth_carousel'?topic:undefined,language:contentLanguage,event_id:basis==='live_event'?eventId:undefined,event_campaign_stage:basis==='live_event'?eventCampaignStage:undefined,instruction:direction.trim(),editorial_lane:editorialLane};
   const research=contentInput.content_mode==='growth_carousel'&&['book_insight','trend_research','dating_myth','seoul_trend'].includes(contentInput.topic_type||''),requestedMode=renderOnly?'image':(['auto_ai','pexels','stock'].includes(source)?'both':'text');
   const selectedEvent=(data.live_events||[]).find((item:Row)=>String(item.id)===String(contentInput.event_id||'')),eventHasEnoughPhotos=contentInput.content_mode==='live_event'&&Array.isArray(selectedEvent?.images)&&selectedEvent.images.length>=3;
   const managed=Number.isInteger(settings?.carousel_min_real_photos_5)&&Number.isInteger(settings?.carousel_min_real_photos_3)&&['auto_ai','pexels','stock'].includes(source);
@@ -325,6 +331,10 @@ export function AdminMarketing({locale}:{locale:Locale}){
    if(!r.ok||r.data.error)throw new Error(r.data.error||'Generation failed');
    if(r.data.job?.status==='running'){setNotice(t('This request already exists. Check Generation history; it was not billed again.','이미 접수된 요청입니다. 생성 기록을 확인하세요. 추가 호출하지 않았습니다.'));return;}
    if(['failed','uncertain'].includes(r.data.job?.status))throw new Error(r.data.job?.error_message||'Previous attempt stopped; no retry was sent.');
+   if(r.data.job?.stage==='source_review_required'&&!hasEditorialCopy(r.data.job)){
+    await load();setActiveTab('draft');setGeneratorOpen(true);
+    setNotice(t('Sources need more detail. Your subject is unchanged; add a reference or narrow the brief. No replacement topic was generated.','자료가 부족합니다. 입력한 소재는 유지했습니다. 참고 링크를 보완하거나 비교 범위를 좁혀주세요. 다른 주제는 생성하지 않았습니다.'));return;
+   }
    const actuallyPexels=['pexels','stock'].includes(r.data.draft?.visual_source);
    if(!today&&!renderOnly){
     const jobId=String(r.data.job?.id||'');if(!jobId)throw new Error('RESULT_SNAPSHOT_UNAVAILABLE');
@@ -373,7 +383,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
     await load(renderOnly?draft?.id:undefined);
     if(renderOnly&&r.data.draft)selectDraft(r.data.draft);
     else setActiveTab('generation');
-    setNotice(renderOnly?t('Fresh visuals generated and cards rendered from the current draft.','현재 초안에 맞는 새 이미지를 생성하고 카드를 다시 렌더했습니다.'):t('Generation complete. Open the result in Generation history and choose Add to Drafts.','생성이 완료됐습니다. 생성 기록에서 결과를 확인한 뒤 초안으로 가져오세요.'));
+    setNotice(renderOnly?(r.data.job?.stage==='photo_review_required'?t('Copy is saved. Finish approving the missing photos before rendering.','원고는 저장되어 있습니다. 누락된 사진을 선택하고 승인한 뒤 이미지를 완성하세요.'):t('Cards rendered from the saved copy and reviewed images.','저장된 원고와 검수된 사진으로 카드를 렌더했습니다.')):t('Generation complete. Open the result in Generation history and choose Add to Drafts.','생성이 완료됐습니다. 생성 기록에서 결과를 확인한 뒤 초안으로 가져오세요.'));
    }
    if(!renderOnly){setDirection('');setGeneratorOpen(false);}
   });
@@ -699,10 +709,25 @@ export function AdminMarketing({locale}:{locale:Locale}){
    <details className="marketing-generator-card" open={generatorOpen||!draft} onToggle={e=>setGeneratorOpen(e.currentTarget.open)}><summary>{t("Create a new post","새 콘텐츠 만들기")}</summary>
     <div className="admin-section-title"><div><p className="admin-kicker">{t('Create','생성')}</p><Heading level={2}>{t('New content','새 콘텐츠 생성')}</Heading></div></div>
     <div className="admin-form">
-     <div className="admin-two"><label><span>{t('Content topic','콘텐츠 주제')}</span><select name="new_content_type" value={basis==='growth_carousel'?topic:basis} disabled={busy||!!running} onChange={e=>{const next=generatorSelection(e.currentTarget.value);if(!next)return;setBasis(next.basis);if(next.topic)setTopic(next.topic);}}><optgroup label={t('Editorial card news','카드뉴스')}>{topics.map((key,index)=><option key={key} value={key}>{t(key.replaceAll('_',' '),topicKo[index])}</option>)}</optgroup><optgroup label={t('Roundy promotion','라운디 홍보')}><option value="prelaunch">{t('Pre-launch','오픈 전 홍보')}</option><option value="live_event">{t('Live event','정식 이벤트')}</option></optgroup></select></label></div>
+     <div className="roundy-composer-intro"><p>{t('Choose a series, tell us the moment or material, then edit one saved draft.','시리즈를 고르고 소재를 입력하세요. 생성된 초안에서 원고와 사진을 함께 편집합니다.')}</p></div>
+     <div className="roundy-composer-series" role="group" aria-label={t('Content series','콘텐츠 시리즈')}>
+      {EDITORIAL_SERIES.map(key=>{const item=SERIES_CONTENT[key],selected=basis==='growth_carousel'&&activeSeries===key;return <button type="button" key={key} aria-pressed={selected} className={selected?'is-selected':''} disabled={busy||!!running} onClick={()=>{setBasis('growth_carousel');setTopic(item.topic);setStoryCardCount(key==='before_you_go'?5:3);setShowMaterialExamples(false);}}>
+       <strong>{t(item.title[0],item.title[1])}</strong><span>{t(item.description[0],item.description[1])}</span>
+      </button>;})}
+     </div>
+     <label className="roundy-composer-subject"><span>{t('What is this post about?','이번 콘텐츠의 소재')}</span>
+      <textarea name="editorial_subject" value={direction} maxLength={500} rows={3} placeholder={t(SERIES_CONTENT[activeSeries].seeds[0][0],SERIES_CONTENT[activeSeries].seeds[0][1])} disabled={busy||!!running} onChange={e=>setDirection(e.target.value)}/>
+      <small>{t('Add a specific scene, source URL or notes. Sources are verified before factual writing; the subject will not be replaced automatically.','구체적인 장면, 참고 링크나 메모를 적어주세요. 사실은 자료를 확인한 뒤 작성하며, 소재를 임의로 바꾸지 않습니다.')} {direction.length}/500</small>
+     </label>
+     {basis==='growth_carousel'&&<div className="roundy-composer-materials">
+      <button type="button" className="admin-secondary" aria-expanded={showMaterialExamples} disabled={busy||!!running} onClick={()=>setShowMaterialExamples(value=>!value)}>{t('Choose a material example (no AI call)','소재 예시 고르기 (AI 호출 없음)')}</button>
+      {showMaterialExamples&&<div className="roundy-composer-examples">{SERIES_CONTENT[activeSeries].seeds.map((seed,index)=><button type="button" key={index} disabled={busy||!!running} onClick={()=>{setDirection(t(seed[0],seed[1]));setShowMaterialExamples(false);}}>{t(seed[0],seed[1])}</button>)}</div>}
+     </div>}
      <label><span>{t('Cover / headline language','표지 / 제목 언어')}</span><select value={contentLanguage} onChange={e=>setContentLanguage(e.target.value as 'ko'|'en')}><option value="ko">{t('Korean post','한국어 콘텐츠')}</option><option value="en">{t('English post','영어 콘텐츠')}</option></select></label>
      {basis==='live_event'?<div className="admin-two"><label><span>{t('Event to promote','홍보할 이벤트')}</span><select value={eventId} onChange={e=>setEventId(e.target.value)}><option value="">{t('Choose an event','이벤트 선택')}</option>{(data.live_events||[]).map((event:Row)=><option key={event.id} value={event.id}>{event.title_ko||event.title} · {new Date(event.starts_at).toLocaleDateString(locale,{timeZone:'Asia/Seoul'})}</option>)}</select></label><label><span>{t('Campaign stage','홍보 단계')}</span><select value={eventCampaignStage} onChange={e=>setEventCampaignStage(e.target.value)}><option value="auto">{t('Auto from event status','이벤트 상태로 자동 추천')}</option><option value="launch">{t('Launch','오픈')}</option><option value="experience">{t('Experience','참가 경험')}</option><option value="venue">{t('Venue','장소')}</option><option value="participants">{t('Participants','참가자 구성')}</option><option value="momentum">{t('Momentum / offer','모멘텀 / 혜택')}</option><option value="imminent">{t('Imminent','임박')}</option><option value="last_call">{t('Last call','라스트콜')}</option></select></label></div>:null}
      {basis==='growth_carousel'&&<label><span>{t('Story length before generation','원고 작성 전 장수 선택')}</span><select value={storyCardCount} disabled={settings?.carousel_mode==='alternating'} onChange={e=>setStoryCardCount(Number(e.target.value) as 0|3|5)}><option value={0}>{t('Use current schedule','현재 발행 설정 따르기')}</option><option value={3}>{t('Short: 3 story cards','짧은 소재: 본문 3장')}{settings?.carousel_brand_outro_enabled?' + 1 Roundy':''}</option><option value={5}>{t('In-depth: 5 story cards','자료가 충분한 소재: 본문 5장')}{settings?.carousel_brand_outro_enabled?' + 1 Roundy':''}</option></select><small>{t('Choose before writing. Existing drafts and alternating reservations keep their original size.','작성 전에 선택합니다. 기존 초안과 교대 발행 예약의 장수는 유지됩니다.')}</small></label>}
+     <details className="roundy-composer-advanced"><summary>{t('Image settings and other content types','이미지 설정과 다른 콘텐츠 유형')}</summary>
+     <div className="admin-two"><label><span>{t('Content topic','콘텐츠 주제')}</span><select name="new_content_type" value={basis==='growth_carousel'?topic:basis} disabled={busy||!!running} onChange={e=>{const next=generatorSelection(e.currentTarget.value);if(!next)return;setBasis(next.basis);if(next.topic)setTopic(next.topic);}}><optgroup label={t('Editorial card news','카드뉴스')}>{topics.map((key,index)=><option key={key} value={key}>{t(key.replaceAll('_',' '),topicKo[index])}</option>)}</optgroup><optgroup label={t('Roundy promotion','라운디 홍보')}><option value="prelaunch">{t('Pre-launch','오픈 전 홍보')}</option><option value="live_event">{t('Live event','정식 이벤트')}</option></optgroup></select></label></div>
      <section className="marketing-visual-workflow" aria-label={t('Image setup','이미지 구성')} data-testid="marketing-visual-workflow">
       <div className="marketing-visual-workflow-head">
        <div><span className="admin-kicker">{t('VISUAL SETUP','이미지 구성')}</span>
@@ -784,11 +809,11 @@ export function AdminMarketing({locale}:{locale:Locale}){
       </select>
       <small>{t('Guides the angle; the selected content category, source evidence and manual approval still apply.','접근 방식만 지정하며 선택된 주제 유형, 출처 검증과 수동 승인은 그대로 유지됩니다.')}</small>
      </label>}
-     <label><span>{t('Creative direction','커스텀 지시문')}</span><textarea value={direction} maxLength={500} rows={4} onChange={e=>setDirection(e.target.value)}/><small>{direction.length}/500</small></label>
+     </details>
      <p className="admin-help">{t('Roundy logo, coral accents and typography are composed server-side for photo-source cards. Completed 4:5 cards are used without additional design overlays.','사진 소스 카드는 Roundy 로고, 코랄 강조와 타이포를 서버에서 합성합니다. 완성된 4:5 카드는 추가 디자인 합성 없이 그대로 사용합니다.')}</p>
-     {basis==='growth_carousel'&&['book_insight','trend_research','dating_myth'].includes(topic)&&<p className="admin-help">{t('High-context research may use up to three targeted searches before one structured writing request. Missing evidence triggers one safe fallback when possible.','고품질 검색으로 목적별 검색을 최대 3회 사용한 뒤 구조화된 문구를 작성합니다. 근거가 부족하면 가능한 경우 안전한 비연구 콘텐츠로 1회 전환합니다.')}</p>}
+     {basis==='growth_carousel'&&['book_insight','trend_research','dating_myth'].includes(topic)&&<p className="admin-help">{t('High-context research may use up to three targeted searches before one structured writing request. Missing evidence is saved for source review; the subject stays unchanged.','고품질 검색으로 목적별 검색을 최대 3회 사용한 뒤 구조화된 문구를 작성합니다. 근거가 부족하면 출처 보완 상태로 저장하며 다른 소재로 전환하지 않습니다.')}</p>}
      <p className="admin-help">{t('Caption order: Korean → English → sources → tagline and 5 relevant tags. Tags are selected for topic relevance; live search volume is not measured.','캡션 순서: 국문 → 영어 → 출처 → 태그라인과 관련 태그 5개. 태그는 주제 관련성으로 선별하며 실시간 검색량 순위는 아닙니다.')}</p>
-     <button type="button" className="admin-primary" disabled={busy||!!running||blocked||(manualVisualSource==='uploaded'&&!pendingMarketingImages.length)} onClick={()=>void generate(false)}>{manualVisualSource==='uploaded'?t('Generate with my images','내 이미지로 콘텐츠 생성'):t('Generate content','콘텐츠 생성')}</button>
+     <button type="button" className="admin-primary" disabled={busy||!!running||blocked||(basis==='growth_carousel'&&!direction.trim())||(manualVisualSource==='uploaded'&&!pendingMarketingImages.length)} onClick={()=>void generate(false)}>{manualVisualSource==='uploaded'?t('Generate with my images','내 이미지로 콘텐츠 생성'):t('Create editable draft','초안 만들기')}</button>
     </div>
    </details>
    <div className="admin-section-title"><div><p className="admin-kicker">{t('Working inbox','작업함')}</p><Heading level={2}>{t('Drafts','초안')}</Heading><p>{t('Only editable drafts appear here. Scheduled and published posts move to Publishing history.','편집 가능한 초안만 표시됩니다. 예약 또는 게시된 콘텐츠는 게시 기록으로 이동합니다.')}</p></div><button type="button" className="admin-secondary" onClick={()=>setActiveTab('generation')}>{t('Add from generated results','생성 결과에서 가져오기')}</button></div>

@@ -1,3 +1,4 @@
+import {isEditorFirst,editorFirstReview} from './marketing-editor-first';
 import {readTrendFactPack,trendFactPackIssues,trendGuideRoles} from './marketing-trend-guide';
 import {EDITORIAL_ENGAGEMENT_POLICY,evaluateEditorialEngagement} from './marketing-editorial-quality';
 import {storyFirstPostType} from './marketing-editorial-critic';
@@ -29,7 +30,7 @@ export type TrendTopicKey=typeof TREND_TOPIC_KEYS[number];
 export const DATING_MYTH_KEYS=['questions_and_liking','first_impression_speed','silence_means_failure','similarity_compatibility','opposites_attract','delayed_reply_attraction','self_disclosure_intimacy','eye_contact_attraction','nervousness_attractiveness','other_dating_belief'] as const;
 export type DatingMythKey=typeof DATING_MYTH_KEYS[number];
 export type Evidence={id:string;url:string;title:string;evidence:string};
-export type QualityReport={version:number;status:'passed'|'rejected';issues:string[];review_required:boolean;editorial_score?:number;editorial_threshold?:number;editorial_policy_version?:number};
+export type QualityReport={version:number;status:'passed'|'rejected';issues:string[];review_required:boolean;suggestions?:string[];editorial_score?:number;editorial_threshold?:number;editorial_policy_version?:number};
 export type QualitySeverity='critical'|'quality'|'formatting';
 export function qualitySeverity(issue:string):QualitySeverity{
  const critical=[
@@ -412,10 +413,10 @@ export function evaluateContent(value:unknown,type:PostType,language:string,sour
   }
  }
  if(language==='ko')for(const s of slides){if(!s)continue;const titleNeedsKorean=s.role!=='book',bodyNeedsKorean=!['opener','followup','example'].includes(s.role);if(titleNeedsKorean&&!/[가-힣]/.test(str(s.title)))add('한국어 카드 제목은 한국어로 작성해야 합니다. 원서 제목은 책 소개 카드에서만 영문을 허용합니다.');if(bodyNeedsKorean&&!/[가-힣]/.test(str(s.body)))add('한국어 카드 설명은 한국어로 작성해야 합니다.');}
- if(type==='conversation_prompt'&&magazine){
+ if(type==='conversation_prompt'&&magazine&&!isEditorFirst(c)){
   const factCards=slides.slice(1,-1),questions=factCards.reduce((n:number,s:Row)=>n+((String(s.body||'')+' '+String(s.highlight||'')).match(/[?？]/g)?.length||0),0);
   if(questions<2)add('에디토리얼 대화 질문에는 실제 첫 질문과 후속 질문이 필요합니다.');
- }else if(type==='conversation_prompt')for(const role of (plan?.slide_count===3?['opener']:['opener','followup'])){const s=slides.find((v:Row)=>v.role===role);if(!s||!/[?？]/.test(s.body+' '+s.highlight))add('실제로 사용할 질문과 후속 질문이 필요합니다.');}
+ }else if(type==='conversation_prompt'&&!isEditorFirst(c))for(const role of (plan?.slide_count===3?['opener']:['opener','followup'])){const s=slides.find((v:Row)=>v.role===role);if(!s||!/[?？]/.test(s.body+' '+s.highlight))add('실제로 사용할 질문과 후속 질문이 필요합니다.');}
  if(type==='conversation_prompt'&&!magazine&&plan?.slide_count===3){
   const detail=slides[1],questionCount=(String(detail?.body||'')+' '+String(detail?.highlight||'')+' '+(Array.isArray(detail?.options)?detail.options.join(' '):'')).match(/[?？]/g)?.length||0;
   if(questionCount<2)add('3장 구성에도 실제 첫 질문과 후속 질문이 모두 필요합니다.');
@@ -424,8 +425,8 @@ export function evaluateContent(value:unknown,type:PostType,language:string,sour
  const impact=isImmersiveMagazineDocument(c)&&c.editorial_engagement_policy===EDITORIAL_ENGAGEMENT_POLICY
   ?evaluateEditorialEngagement(c,language):null;
  if(impact)for(const problem of impact.issues)add('에디토리얼 편집 검수: '+problem);
- return {version:2,status:issues.length?'rejected':'passed',issues,review_required:true,
-  ...(impact?{editorial_score:impact.score,editorial_threshold:impact.threshold,editorial_policy_version:impact.version}:{})};
+ return editorFirstReview({version:2,status:issues.length?'rejected' as const:'passed' as const,issues,review_required:true,
+  ...(impact?{editorial_score:impact.score,editorial_threshold:impact.threshold,editorial_policy_version:impact.version}:{})},c);
 }
 export function prepareContent(value:Row,type:PostType,language:string,sources:Evidence[]){
  const document=normalizeCompactDocument(value,language),report=evaluateContent(document,type,language,sources),profile=CONTENT_PROFILES[type];

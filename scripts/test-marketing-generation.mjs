@@ -616,3 +616,65 @@ for(const language of ['ko','en'])for(const source of ['stock','none']){
  assert.equal(JSON.stringify(h.tables.instagram_post_drafts[0]),original);
 }
 console.log('PASS 4 KO/EN pre-photo editorial-review snapshot scenarios; no real AI or photo requests.');
+
+// Editor-first v2: production writer, persistence and render path, mocked external services only.
+for(const language of ['ko','en'])for(const count of [3,5])for(const [topic,series] of [
+ ['conversation_prompt','different_words'],['dating_archetype','read_the_room'],['seoul_dating','before_you_go']
+]){
+ const h=harness({topicOutcome:'reject',criticOutcome:'reject',answerFirst:true,
+  templateSettings:{carousel_mode:'fixed',carousel_brand_outro_enabled:true},
+  photoSettings:{carousel_min_real_photos_5:3,carousel_min_real_photos_3:2,carousel_ai_thumbnail_enabled:false}});
+ const subject=language==='ko'?'사용자가 고른 소재와 참고 메모를 그대로 유지하세요.':'Preserve this specific human-selected subject and reference notes.';
+ const result=await h.api.runGeneration(id,{...base,request_key:'manual:editor-first-'+language+'-'+count+'-'+topic,
+  content_mode:'growth_carousel',topic_type:topic,language,visual_source:'stock',story_card_count:count,
+  editorial_workflow_version:2,editorial_series:series,instruction:subject},null);
+ assert.equal(result.job.status,'completed',JSON.stringify(result));
+ assert.equal(result.job.stage,'photo_review_required',JSON.stringify(result.job));
+ const requests=h.requests.filter(x=>x.url.endsWith('chat/completions'));
+ assert.equal(requests.length,1,'exactly one writer, no planner/critic/automatic rewrite');
+ assert.equal(h.requests.filter(x=>x.url.endsWith('/responses')).length,topic==='seoul_dating'?1:0);
+ const writer=requests[0].body;
+ assert.equal(writer.response_format.json_schema.schema.properties.thumbnail_candidates.maxItems,1);
+ assert.equal(JSON.parse(writer.messages[1].content).direction,subject);
+ assert.equal(result.draft.content_document.editorial_subject,subject);
+ assert.equal(result.draft.content_document.editorial_workflow_version,2,'manual size must not overwrite v2');
+ assert.equal(result.draft.content_document.editorial_series,series);
+ assert.equal(result.draft.content_document.thumbnail_candidates.length,1);
+ assert.equal(result.draft.carousel_slides.length,count+1);
+ assert.equal(result.draft.carousel_slides.at(-1).role,'brand_outro');
+ assert.equal(result.draft.content_document.photo_sourcing.min_real_photos,count);
+ assert.equal(result.job.result_snapshot.images.length,0,'missing photos keep copy, never generate filler');
+ assert.equal(h.requests.filter(x=>x.url.endsWith('images/generations')).length,0);
+ assert.equal(h.tables.marketing_generation_jobs[0].request_payload.editorial_workflow_version,2);
+ assert.equal(h.tables.marketing_generation_jobs[0].request_payload.editorial_series,series);
+ assert.equal(result.draft.approved_at,undefined,'writing is not publishing approval');
+ console.log('PASS editor-first '+language+' '+count+' '+series+' retains subject, writes once, preserves images/approval boundaries');
+}
+{
+ const h=harness({badSources:true,answerFirst:true,templateSettings:{carousel_mode:'fixed',carousel_brand_outro_enabled:true},
+  photoSettings:{carousel_min_real_photos_5:3,carousel_min_real_photos_3:2,carousel_ai_thumbnail_enabled:false}});
+ const result=await h.api.runGeneration(id,{...base,request_key:'manual:editor-first-no-sources',content_mode:'growth_carousel',
+  topic_type:'dating_myth',language:'ko',visual_source:'stock',story_card_count:3,editorial_workflow_version:2,
+  editorial_series:'read_the_room',instruction:'첫인상에 관한 특정 통념을 검토하세요.'},null);
+ assert.equal(result.job.status,'completed');
+ assert.equal(result.job.stage,'source_review_required');
+ assert.equal(result.job.quality_report.severity,'critical');
+ assert.equal(result.job.result_snapshot.growth_topic_type,'dating_myth');
+ assert.equal(h.requests.length,1,'missing research does not cause a paid fallback writer');
+ assert.equal(h.tables.instagram_post_drafts[0].caption,'Original');
+ assert.equal(h.stored.length,0);
+ console.log('PASS editor-first missing evidence retains source review and original subject, no fallback or images');
+}
+{
+ const h=harness({duplicate:true,answerFirst:true,templateSettings:{carousel_mode:'fixed',carousel_brand_outro_enabled:true},
+  photoSettings:{carousel_min_real_photos_5:3,carousel_min_real_photos_3:2,carousel_ai_thumbnail_enabled:false}});
+ const result=await h.api.runGeneration(id,{...base,request_key:'manual:editor-first-advisory',content_mode:'growth_carousel',
+  topic_type:'dating_archetype',language:'ko',visual_source:'stock',story_card_count:3,editorial_workflow_version:2,
+  editorial_series:'read_the_room',instruction:'같은 침묵을 서로 다르게 읽는 장면'},null);
+ assert.equal(result.job.status,'completed');
+ assert.equal(result.job.stage,'photo_review_required',JSON.stringify(result.job));
+ assert.equal(h.requests.length,1);
+ assert.ok(result.draft.quality_report.suggestions.some(x=>x.includes('중복')));
+ assert.equal(result.draft.content_document.editorial_review_required,false);
+ console.log('PASS editorial repetition becomes a retained suggestion, not another paid rewrite');
+}

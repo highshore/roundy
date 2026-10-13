@@ -84,9 +84,28 @@ try{
  for(const locale of ['ko','en']){
   drafts=[makeDraft('11111111-1111-4111-8111-111111111111'),makeDraft('22222222-2222-4222-8222-222222222222','growth_carousel','ko')];requests.length=0;confirmations.length=0;
   await act(async()=>{renderer=create(React.createElement(AdminMarketing,{locale}));await tick();});
+  await test(locale+' editor-first composer has three series and defaults to three story cards',()=>{
+   const series=renderer.root.findByProps({'aria-label':locale==='ko'?'콘텐츠 시리즈':'Content series'});
+   assert.equal(series.findAllByType('button').length,3);
+   assert.equal(selectWith('3').props.value,3);
+   assert.equal(renderer.root.findByProps({name:'editorial_subject'}).props.value,'');
+   const advanced=renderer.root.findByProps({className:'roundy-composer-advanced'});
+   assert.equal(Boolean(advanced.props.open),false);
+  });
+  await test(locale+' choosing a material example makes no paid or mutation request',async()=>{
+   const before=requests.filter(r=>r.method!=='GET').length;
+   const examples=renderer.root.findAllByType('button').find(b=>text(b).includes(locale==='ko'?'소재 예시 고르기':'Choose a material example'));
+   await act(async()=>{examples.props.onClick();await tick();});
+   const choices=renderer.root.findByProps({className:'roundy-composer-examples'}).findAllByType('button');
+   await act(async()=>{choices[0].props.onClick();await tick();});
+   assert.ok(renderer.root.findByProps({name:'editorial_subject'}).props.value.length>10);
+   assert.equal(requests.filter(r=>r.method!=='GET').length,before);
+  });
   const original=JSON.stringify(drafts);
   if(selectWith('growth_carousel'))await choose('growth_carousel');
   await choose('dating_myth');
+  // Long legacy photo-layout scenario is explicit; the new composer defaults to three story cards.
+  await choose('5');
   await test(locale+' topic selector renders dating myth without a component crash',()=>assert.equal(selectWith('dating_myth').props.value,'dating_myth'));
   for(const value of ['book_insight','meme_remix','conversation_prompt','dating_myth'])await choose(value);
   await test(locale+' changing type makes no paid request',()=>assert.equal(requests.filter(r=>r.body).length,0));
@@ -139,7 +158,7 @@ try{
   await choose('ko');
   const directionField=renderer.root.findAllByType('textarea').find(x=>x.props.maxLength===500);
   await act(async()=>{directionField.props.onChange({target:{value:'첫인상의 설렘만으로 관계를 단정할 수 있을까?'},currentTarget:{value:'첫인상의 설렘만으로 관계를 단정할 수 있을까?'}});await tick();});
-  const createButton=renderer.root.findAllByType('button').find(b=>text(b)===(locale==='ko'?'콘텐츠 생성':'Generate content'));
+  const createButton=renderer.root.findAllByType('button').find(b=>text(b)===(locale==='ko'?'초안 만들기':'Create editable draft'));
   assert.ok(createButton,'Create button exists');
   await act(async()=>{createButton.props.onClick();await tick();});
   const creation=requests.find(r=>r.route==='/draft/generate');

@@ -1,3 +1,4 @@
+import {EDITOR_FIRST_VERSION,validEditorialSeries,seriesForTopic} from './marketing-editor-first';
 import {EditorialReviewRequired,productionMetrics} from './marketing-workflow';
 import {prepareSavedCtaRecovery,SAVED_CTA_RECOVERY_VERSION} from './marketing-output-recovery';
 import {loadEditorialAssets} from './marketing-render-assets';
@@ -27,7 +28,7 @@ type Row=Record<string,any>;
 type DB=ReturnType<typeof createServiceRoleClient>;
 type ContentLanguage='ko'|'en';
 type VisualSource='auto_ai'|'uploaded'|'none'|'pexels'|'stock';
-export type GenerationInput={selected_topic_key?:string;editorial_lane?:string;story_card_count?:3|5;carousel_plan?:CarouselPlan|null;brand_outro_enabled?:boolean;answer_first_enabled?:boolean;ai_image_slot?:number|null;request_key:string;revision:number;mode:'text'|'image'|'both';content_mode:'prelaunch'|'live_event'|'growth_carousel';visual_mode:'cards'|'photo';visual_source?:VisualSource;topic_type?:string;instruction?:string;language?:ContentLanguage;confirm_photo?:boolean;render_only?:boolean;campaign_pattern?:'auto'|'poster'|'problem_solution'|'how_it_works'|'benefit_stack'|'countdown';campaign_tone?:'modern_premium'|'soft_romantic'|'bold_teaser';launch_date?:string;event_id?:string;event_campaign_stage?:'auto'|'launch'|'experience'|'venue'|'participants'|'momentum'|'imminent'|'last_call';event_campaign_pattern?:'auto'|'event_poster'|'experience'|'social_proof'|'offer'|'last_call'};
+export type GenerationInput={editorial_workflow_version?:2;editorial_series?:import('./marketing-editor-first').EditorialSeries;selected_topic_key?:string;editorial_lane?:string;story_card_count?:3|5;carousel_plan?:CarouselPlan|null;brand_outro_enabled?:boolean;answer_first_enabled?:boolean;ai_image_slot?:number|null;request_key:string;revision:number;mode:'text'|'image'|'both';content_mode:'prelaunch'|'live_event'|'growth_carousel';visual_mode:'cards'|'photo';visual_source?:VisualSource;topic_type?:string;instruction?:string;language?:ContentLanguage;confirm_photo?:boolean;render_only?:boolean;campaign_pattern?:'auto'|'poster'|'problem_solution'|'how_it_works'|'benefit_stack'|'countdown';campaign_tone?:'modern_premium'|'soft_romantic'|'bold_teaser';launch_date?:string;event_id?:string;event_campaign_stage?:'auto'|'launch'|'experience'|'venue'|'participants'|'momentum'|'imminent'|'last_call';event_campaign_pattern?:'auto'|'event_poster'|'experience'|'social_proof'|'offer'|'last_call'};
 const topics=['mbti','dating_archetype','book_insight','trend_research','meme_remix','dating_myth','conversation_prompt','seoul_dating','korea_life','mini_quiz'];
 const allowedTopics=[...topics,'seoul_trend'];
 const researchTopics=new Set(['book_insight','trend_research','dating_myth','seoul_dating','seoul_trend']);
@@ -41,6 +42,8 @@ export function validateGenerationInput(value:unknown):GenerationInput{
  const v=value as GenerationInput;
  if(!v||typeof v!=='object'||typeof v.request_key!=='string'||!/^[a-zA-Z0-9:_-]{8,120}$/.test(v.request_key)||!Number.isInteger(v.revision)||v.revision<1||v.revision>98)throw new Error('INVALID_GENERATION_REQUEST');
  if(!['text','image','both'].includes(v.mode)||!['prelaunch','live_event','growth_carousel'].includes(v.content_mode)||!['cards','photo'].includes(v.visual_mode))throw new Error('INVALID_GENERATION_OPTIONS');
+ if(v.editorial_workflow_version!==undefined&&v.editorial_workflow_version!==EDITOR_FIRST_VERSION)throw new Error('INVALID_EDITORIAL_WORKFLOW');
+ if(v.editorial_series!==undefined&&!validEditorialSeries(v.editorial_series))throw new Error('INVALID_EDITORIAL_SERIES');
  if(v.editorial_lane!==undefined&&!['auto','seoul','relationship','social','brand'].includes(v.editorial_lane))throw new Error('INVALID_EDITORIAL_LANE');
  if(v.story_card_count!==undefined&&![3,5].includes(v.story_card_count))throw new Error('INVALID_STORY_CARD_COUNT');
  if(v.instruction!==undefined&&(typeof v.instruction!=='string'||v.instruction.trim().length>500))throw new Error('INSTRUCTION_LIMIT_500');
@@ -406,12 +409,12 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
     ?(input.mode==='image'||input.render_only?'render':research?'research':'copy')
     :(input.mode==='image'||input.render_only||recoveryPatch?'photo':'copy_photo'))
   :uploadedVisuals?'render':research?'research':'copy';
- const fingerprint=createHash('sha256').update(JSON.stringify({id:draftId,revision:input.revision,mode:input.mode,content:input.content_mode,language:input.language,visual:input.visual_mode,visual_source:visualSource,topic:input.topic_type||'',instruction:input.instruction,selected_topic_key:input.selected_topic_key||null,editorial_lane:input.editorial_lane||'auto',campaign_pattern:input.campaign_pattern||null,campaign_tone:input.campaign_tone||null,launch_date:input.launch_date||null,event_id:input.event_id||draft.event_id||null,event_campaign_stage:input.event_campaign_stage||null,event_campaign_pattern:input.event_campaign_pattern||null,render:!!input.render_only,carousel_slot:plan?.reservation_number||null,carousel_count:plan?.slide_count||null,brand_outro_enabled:input.brand_outro_enabled===true,answer_first_enabled:input.answer_first_enabled===true,photo_first:managedPhotoSourcing,ai_image_slot:selectedAiSlot,saved_recovery_of:thread?.recoverySourceJobId||null})).digest('hex');
+ const fingerprint=createHash('sha256').update(JSON.stringify({id:draftId,revision:input.revision,mode:input.mode,content:input.content_mode,language:input.language,visual:input.visual_mode,visual_source:visualSource,topic:input.topic_type||'',instruction:input.instruction,editorial_workflow_version:input.editorial_workflow_version||null,editorial_series:input.editorial_series||null,selected_topic_key:input.selected_topic_key||null,editorial_lane:input.editorial_lane||'auto',campaign_pattern:input.campaign_pattern||null,campaign_tone:input.campaign_tone||null,launch_date:input.launch_date||null,event_id:input.event_id||draft.event_id||null,event_campaign_stage:input.event_campaign_stage||null,event_campaign_pattern:input.event_campaign_pattern||null,render:!!input.render_only,carousel_slot:plan?.reservation_number||null,carousel_count:plan?.slide_count||null,brand_outro_enabled:input.brand_outro_enabled===true,answer_first_enabled:input.answer_first_enabled===true,photo_first:managedPhotoSourcing,ai_image_slot:selectedAiSlot,saved_recovery_of:thread?.recoverySourceJobId||null})).digest('hex');
  const reservation=checked(await db.rpc('reserve_marketing_generation',{p_key:input.request_key,p_fingerprint:fingerprint,p_draft:draftId,p_revision:input.revision,p_operation:operation,p_actor:actor,p_automatic:automatic})).data as Row,job=reservation.job as Row;
  if(!reservation.accepted)return {draft,job,deduplicated:true};
  let contentQuality:Row|null=null;
  try{
-  const requestPayload={selected_topic_key:input.selected_topic_key||null,editorial_lane:input.editorial_lane||'auto',story_card_count:plan?.slide_count,carousel_plan:plan,brand_outro_enabled:input.brand_outro_enabled===true,answer_first_enabled:input.answer_first_enabled===true,photo_first:managedPhotoSourcing,ai_image_slot:selectedAiSlot,mode:input.mode,content_mode:input.content_mode,language:input.language,visual_mode:input.visual_mode,visual_source:visualSource,topic_type:input.topic_type||null,trend_id:draft.trend_id||null,instruction:input.instruction||'',campaign_pattern:input.campaign_pattern||null,campaign_tone:input.campaign_tone||null,launch_date:input.launch_date||null,event_id:input.event_id||draft.event_id||null,event_campaign_stage:input.event_campaign_stage||null,event_campaign_pattern:input.event_campaign_pattern||null,confirm_photo:input.confirm_photo===true,render_only:input.render_only===true,...(recoverySource?{saved_recovery_of:recoverySource.id}: {})};
+  const requestPayload={...(input.editorial_workflow_version===EDITOR_FIRST_VERSION?{editorial_workflow_version:EDITOR_FIRST_VERSION,editorial_series:input.editorial_series||seriesForTopic(input.topic_type)}:{}),selected_topic_key:input.selected_topic_key||null,editorial_lane:input.editorial_lane||'auto',story_card_count:plan?.slide_count,carousel_plan:plan,brand_outro_enabled:input.brand_outro_enabled===true,answer_first_enabled:input.answer_first_enabled===true,photo_first:managedPhotoSourcing,ai_image_slot:selectedAiSlot,mode:input.mode,content_mode:input.content_mode,language:input.language,visual_mode:input.visual_mode,visual_source:visualSource,topic_type:input.topic_type||null,trend_id:draft.trend_id||null,instruction:input.instruction||'',campaign_pattern:input.campaign_pattern||null,campaign_tone:input.campaign_tone||null,launch_date:input.launch_date||null,event_id:input.event_id||draft.event_id||null,event_campaign_stage:input.event_campaign_stage||null,event_campaign_pattern:input.event_campaign_pattern||null,confirm_photo:input.confirm_photo===true,render_only:input.render_only===true,...(recoverySource?{saved_recovery_of:recoverySource.id}: {})};
   const threadId=thread?.threadId||job.id,attemptNumber=thread?.attemptNumber||1,workflowId=await resolveContentWorkflowId(db,draft,job,thread);
   checked(await db.from('marketing_generation_jobs').update({
    request_payload:requestPayload,
@@ -430,7 +433,7 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
    const copy=await generateCopy(db,draft,input,job,research);contentQuality=copy.quality_report;await progress(db,job,'saving_copy');
    const roles=Array.isArray(copy.carousel_slides)?copy.carousel_slides.map((slide:Row)=>String(slide.role||'')):[];
    const policy=managedPhotoSourcing?configuredPhotoSourcingPolicy(preference,roles,input.ai_image_slot):null;
-   const contentDocument={...copy.content_document,...(policy?{photo_sourcing:policy}:{}),...(!automatic&&input.story_card_count?{editorial_workflow_version:1,story_length_source:'admin'}:{})};
+   const contentDocument={...copy.content_document,...(policy?{photo_sourcing:policy}:{}),...(!automatic&&input.story_card_count?{editorial_workflow_version:input.editorial_workflow_version||1,story_length_source:'admin'}:{})};
    draft=await savePartial(db,draft,{...copy,content_document:contentDocument,
     ...(String((contentDocument as Row)?.design_preset||'')==='roundy_magazine_editorial_v2'?{render_style:'editorial'}:{}),
     generation_source:automatic?'automation':'manual',visual_source:visualSource,last_regeneration_mode:input.mode,last_regeneration_instruction:input.instruction,images:[]});
@@ -531,7 +534,7 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
   if(error instanceof EditorialReviewRequired&&error.patch){
    const roles=error.patch.carousel_slides.map((s:Row)=>String(s.role||''));
    const policy=managedPhotoSourcing?configuredPhotoSourcingPolicy(preference,roles,input.ai_image_slot):null;
-   const doc={...error.patch.content_document,...(policy?{photo_sourcing:policy}:{}),...(!automatic&&input.story_card_count?{editorial_workflow_version:1,story_length_source:'admin'}:{})};
+   const doc={...error.patch.content_document,...(policy?{photo_sourcing:policy}:{}),...(!automatic&&input.story_card_count?{editorial_workflow_version:input.editorial_workflow_version||1,story_length_source:'admin'}:{})};
    // Preserve the source draft. Review-only output is opened as a separate
    // unpublished candidate; a rejected rewrite must never overwrite good copy.
    const snapshot={...error.patch,content_document:doc,draft_id:draft.id,draft_date:draft.draft_date,
@@ -550,6 +553,12 @@ export async function runGeneration(draftId:string,value:unknown,actor:string|nu
     error_code:error.code,error_message:reviewedJob.error_message,quality_report:error.patch.quality_report,
     result_snapshot:snapshot,result_revision:draft.revision,updated_at:new Date().toISOString()}).eq('id',job.id).eq('status','running'));
    return {draft,job:reviewedJob,deduplicated:false,review_required:true};
+  }
+  if(error instanceof EditorialReviewRequired&&error.code==='EDITORIAL_SOURCE_REVIEW_REQUIRED'){
+   const stored=checked(await db.from('marketing_generation_jobs').select('result_snapshot,quality_report').eq('id',job.id).single()).data as Row;
+   const review={...job,...stored,status:'completed',stage:'source_review_required',error_code:error.code,error_message:safeError(error)};
+   checked(await db.from('marketing_generation_jobs').update({status:'completed',stage:review.stage,error_code:review.error_code,error_message:review.error_message,updated_at:new Date().toISOString()}).eq('id',job.id).eq('status','running'));
+   return {draft,job:review,deduplicated:false,review_required:true};
   }
   const message=safeError(error),code=error instanceof GenerationError||error instanceof EditorialReviewRequired?error.code:message==='PROMPT_SIZE_LIMIT'?'PROMPT_SIZE_LIMIT':'GENERATION_FAILED',unknown=code==='UPSTREAM_OUTCOME_UNKNOWN';
   await db.from('marketing_generation_jobs').update({status:unknown?'uncertain':'failed',stage:error instanceof EditorialReviewRequired?'topic_review_required':'stopped',error_code:code,error_message:message,updated_at:new Date().toISOString()}).eq('id',job.id).eq('status','running');
@@ -637,7 +646,7 @@ export async function automaticGeneration(){
  const selectedTrend=trendScheduled&&settings.trend_radar_enabled&&settings.trend_override_enabled?await selectTrendForAutomaticContent(db,Number(settings.trend_override_score||80)):null;
  const draft=await todayDraft(selectedTrend,growthSlot);if(draft.status!=='needs_approval')return {skipped:true};
  const trend=selectedTrend&&draft.trend_id===selectedTrend.id?selectedTrend:null,instruction=trend?[String(trend.display_name),String(trend.content_angle||trend.summary||'')].filter(Boolean).join(': ').slice(0,500):'';
- const result=await runGeneration(draft.id,{request_key:key,revision:draft.revision,mode:'both',visual_mode:'cards',visual_source:'auto_ai',content_mode:draft.draft_kind==='growth_carousel'?'growth_carousel':draft.content_mode,topic_type:draft.growth_topic_type||'conversation_prompt',instruction},null,true);
+ const result=await runGeneration(draft.id,{...(draft.draft_kind==='growth_carousel'?{editorial_workflow_version:EDITOR_FIRST_VERSION,editorial_series:seriesForTopic(draft.growth_topic_type)}:{}),request_key:key,revision:draft.revision,mode:'both',visual_mode:'cards',visual_source:'auto_ai',content_mode:draft.draft_kind==='growth_carousel'?'growth_carousel':draft.content_mode,topic_type:draft.growth_topic_type||'conversation_prompt',instruction},null,true);
  if(trend&&result.job?.status==='completed')await markTrendUsed(db,trend.id);
  return {...result,trend_override:trend?{id:trend.id,trend_key:trend.trend_key,display_name:trend.display_name,score:trend.adjusted_trend_score||trend.trend_score,route_type:trend.route_type}:null};
 }

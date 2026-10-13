@@ -18,7 +18,7 @@ export function editorialState(row:Row|null|undefined):EditorialState {
  const code=String(row.error_code||'')+' '+String(row.error_message||'');
  if(row.status==='uncertain'||/UPSTREAM_OUTCOME_UNKNOWN|credit_balance_exhausted|OPENAI_KEY_MISSING|OPENAI_[45]|column .+ does not exist|JOB_EXPIRED/.test(code))return 'system_error';
  if(row.stage==='topic_review_required'||/TOPIC_CANDIDATES_DISCARDED/.test(code))return 'topic_review';
- if(doc.source_review_required||q.severity==='critical'||q.classification?.critical?.length)return 'source_review';
+ if(row.stage==='source_review_required'||doc.source_review_required||q.severity==='critical'||q.classification?.critical?.length)return 'source_review';
  if(doc.translation_pending_indices?.length)return 'translation_review';
  if(doc.editorial_review_required||row.stage==='editorial_review_required'||/EDITORIAL_.*REJECTED|CONTENT_QUALITY_REJECTED|품질 검토 필요/.test(code))return 'copy_review';
  if(row.status==='failed')return 'system_error';
