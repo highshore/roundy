@@ -1,3 +1,4 @@
+import { publicMetadata, publicPages } from '@/lib/seo';
 import { retiredEventDestination } from '@/lib/event-scope';
 import { isMemberUser } from '@/lib/auth-user';
 import { App } from '@/components/app';
@@ -5,6 +6,12 @@ import LanguageExchangePage from '@/app/language-exchange/page';
 import { redirect, permanentRedirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { authConfigured, isPrivatePath, signInPath } from '@/lib/auth-routing';
+
+export async function generateMetadata({params}:{params:Promise<{path?:string[]}>}) {
+ const {path=[]}=await params;
+ const pathname='/' + path.join('/');
+ return pathname in publicPages ? publicMetadata(pathname as keyof typeof publicPages) : { robots: { index:false, follow:false } };
+}
 
 export default async function Page({params,searchParams}:{params:Promise<{path?:string[]}>;searchParams:Promise<Record<string,string|string[]|undefined>>}) {
  const {path=[]}=await params;

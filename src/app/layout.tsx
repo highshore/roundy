@@ -25,4 +25,4 @@ export const metadata: Metadata = {
  twitter:{card:'summary_large_image',title:'Roundy | Meet in Real Life',description:'Roundy | Meet in Real Life',images:['/opengraph-image']}
 };
 export const viewport: Viewport = {width:'device-width',initialScale:1,themeColor:'#FFFEFA'};
-export default function Layout({children}:{children:React.ReactNode}) {return <html lang="en" className={notoSansKr.variable}><body><ToastProvider><SiteShell>{children}</SiteShell></ToastProvider></body></html>;}
+export default function Layout({children}:{children:React.ReactNode}) {return <html lang="en" className={notoSansKr.variable}><body><script type="application/ld+json" dangerouslySetInnerHTML={{__html:JSON.stringify({'@context':'https://schema.org','@type':'Organization',name:'Roundy',url:'https://roundy.team',logo:'https://roundy.team/icon.svg'})}}/><ToastProvider><SiteShell>{children}</SiteShell></ToastProvider></body></html>;}
