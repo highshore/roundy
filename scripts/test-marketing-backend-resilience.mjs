@@ -5,24 +5,20 @@ import {createRequire} from 'node:module';
 const require=createRequire(import.meta.url),ts=require('typescript');
 const compile=file=>ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText;
 
-// The real font loader must neither serve missing Korean glyphs nor cache a
-// transient CDN error for the lifetime of a warm worker. No network is used.
+// Real local-font loader, isolated filesystem failures and forbidden network.
 {
- let attempts=0,healthy=false;
- const context={exports:{},Uint8Array,ArrayBuffer,Buffer,Promise,AbortSignal,process:{cwd:()=>'/fixture'},require:name=>{
-  if(name==='node:fs/promises')return {readFile:async()=>Buffer.alloc(256)};
+ let reads=0,healthy=false;
+ const context={exports:{},Uint8Array,ArrayBuffer,Buffer,Promise,process:{cwd:()=>'/fixture'},require:name=>{
+  if(name==='node:fs/promises')return {readFile:async p=>{reads++;if(!healthy)throw Error('missing');const b=Buffer.alloc(256);b.write(p.endsWith('.otf')?'OTTO':'wOFF');return b;}};
   return require(name);
- },fetch:async()=>{attempts++;return {ok:healthy,arrayBuffer:async()=>{const b=new Uint8Array(256);b.set([79,84,84,79]);return b.buffer;}};}};
+ },fetch:()=>{throw Error('Runtime font network is forbidden');}};
  vm.runInNewContext(compile('src/lib/marketing-render-assets.ts'),context);
  await assert.rejects(()=>context.exports.loadEditorialAssets(),/FONT_ASSET_UNAVAILABLE/);
- assert.equal(attempts,2);
- healthy=true;
+ assert.equal(reads,4);healthy=true;
  const [a,b]=await Promise.all([context.exports.loadEditorialAssets(),context.exports.loadEditorialAssets()]);
- assert.equal(attempts,4,'concurrent callers share one clean retry, not a stuck or duplicated fetch');
- assert.ok(a.fonts.some(f=>f.name==='Noto Sans KR'&&f.weight===400));
- assert.ok(b.fonts.some(f=>f.name==='Noto Sans KR'&&f.weight===700));
- await context.exports.loadEditorialAssets();assert.equal(attempts,4);
- console.log('PASS font failure resets cache; concurrent explicit retry obtains complete Korean font coverage');
+ assert.equal(reads,8);assert.equal(a.fonts.length,6);assert.equal(b.fonts.length,6);
+ await context.exports.loadEditorialAssets();assert.equal(reads,8);
+ console.log('PASS local fonts fail closed, retry cleanly and never use runtime network');
 }
 
 // Test the actual selection writer. Rights/scene predicates are isolated here;

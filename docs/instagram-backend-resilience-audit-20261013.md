@@ -25,3 +25,10 @@ Scope: backend inspection requested after editor-first rollout. Production logs 
 ## Remaining limits
 
 The old incident did not retain its raw Responses status/tool history, so the exact failed completion condition for that individual request cannot be reconstructed solely from saved citations. New diagnostic fields address this gap. Real provider timeouts, genuinely missing evidence, revoked credentials and unavailable photo sources can still require intervention. Fonts still use a remote download on a cold worker; bundling/pinning them would remove that dependency. An AI image that was returned but lost before durable persistence may still require a separately authorized regeneration. No live paid AI generation, authenticated end-to-end admin session or Instagram publication is claimed by the fixture tests. Historical source-review records are not rewritten or automatically replayed.
+
+## Final verification follow-up
+
+- Removed runtime font downloads. Build downloads a commit-pinned Noto font set and its license, validates Git blob hashes, and traces it into the application. Missing/corrupt local fonts fail closed before image work.
+- Persist the optional generated AI card in private marketing-images storage before rendering, with its exact prompt/model hash and content digest in the draft. Matching image-only completion can reuse it after render failure; missing or corrupt saved assets stop instead of silently buying replacements.
+- Added actual ImageResponse/Sharp rendering of 20 Korean/English 3/5-story-plus-brand cards using bundled fonts with runtime network forbidden, plus private image-cache fault injection.
+- No production credentials are copied into CI and no publishing approvals are bypassed. Live authenticated generation remains a separate verification boundary.

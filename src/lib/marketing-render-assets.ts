@@ -4,45 +4,34 @@ import type {EditorialAssets} from './marketing-visuals';
 
 let fontPromise:Promise<NonNullable<EditorialAssets['fonts']>>|undefined;
 function toArrayBuffer(bytes:Uint8Array):ArrayBuffer {const copy=new Uint8Array(bytes.length);copy.set(bytes);return copy.buffer;}
-async function fetchFont(url:string):Promise<ArrayBuffer>{
- const response=await fetch(url,{signal:AbortSignal.timeout(8000),redirect:'error',cache:'force-cache'});
- if(!response.ok)throw new Error('FONT_ASSET_UNAVAILABLE');
- const data=await response.arrayBuffer();if(data.byteLength>20*1024*1024)throw new Error('FONT_ASSET_TOO_LARGE');
- const magic=new Uint8Array(data,0,Math.min(4,data.byteLength));
- if(data.byteLength<100||String.fromCharCode(...magic)!=='OTTO')throw new Error('FONT_ASSET_INVALID');
- return data;
+async function localFont(relative:string,signature:string):Promise<ArrayBuffer>{
+ let bytes:Buffer;
+ try{bytes=await readFile(path.join(process.cwd(),relative));}
+ catch{throw new Error('FONT_ASSET_UNAVAILABLE');}
+ if(bytes.length<100||bytes.length>20*1024*1024||bytes.subarray(0,4).toString()!==signature)
+  throw new Error('FONT_ASSET_INVALID');
+ return toArrayBuffer(bytes);
 }
 async function fonts():Promise<NonNullable<EditorialAssets['fonts']>>{
  if(!fontPromise)fontPromise=(async()=>{
-  const loaded:NonNullable<EditorialAssets['fonts']>=[];
-  const noto=await Promise.allSettled([
-   fetchFont('https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/OTF/Korean/NotoSansCJKkr-Regular.otf'),
-   fetchFont('https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/OTF/Korean/NotoSansCJKkr-Black.otf'),
+  // These files are verified and bundled at build time, never fetched in a paid job.
+  const [regular,black,latin,latinBold]=await Promise.all([
+   localFont('.cache/marketing-fonts/NotoSansCJKkr-Regular.otf','OTTO'),
+   localFont('.cache/marketing-fonts/NotoSansCJKkr-Black.otf','OTTO'),
+   localFont('node_modules/@fontsource/dm-sans/files/dm-sans-latin-400-normal.woff','wOFF'),
+   localFont('node_modules/@fontsource/dm-sans/files/dm-sans-latin-700-normal.woff','wOFF')
   ]);
-  if(noto[0].status!=='fulfilled'||noto[1].status!=='fulfilled')throw new Error('FONT_ASSET_UNAVAILABLE');
-  if(noto[0].status==='fulfilled')loaded.push({name:'Noto Sans KR',data:noto[0].value,weight:400,style:'normal'});
-  if(noto[1].status==='fulfilled'){
-   loaded.push({name:'Noto Sans KR',data:noto[1].value,weight:700,style:'normal'});
-   loaded.push({name:'Noto Sans KR',data:noto[1].value,weight:900,style:'normal'});
-  }
-  try{
-   const regular=await readFile(path.join(process.cwd(),'node_modules/@fontsource/dm-sans/files/dm-sans-latin-400-normal.woff'));
-   loaded.push({name:'DM Sans',data:toArrayBuffer(regular),weight:400,style:'normal'});
-  }catch{}
-  try{
-   const bold=await readFile(path.join(process.cwd(),'node_modules/@fontsource/dm-sans/files/dm-sans-latin-700-normal.woff'));
-   loaded.push({name:'DM Sans',data:toArrayBuffer(bold),weight:700,style:'normal'});
-   loaded.push({name:'DM Sans',data:toArrayBuffer(bold),weight:900,style:'normal'});
-  }catch{}
-  return loaded;
- })().catch(error=>{
-  // Let a later explicit render attempt fetch again; never cache a degraded font set.
-  fontPromise=undefined;throw error;
- });
+  return [
+   {name:'Noto Sans KR',data:regular,weight:400 as const,style:'normal' as const},
+   {name:'Noto Sans KR',data:black,weight:700 as const,style:'normal' as const},
+   {name:'Noto Sans KR',data:black,weight:900 as const,style:'normal' as const},
+   {name:'DM Sans',data:latin,weight:400 as const,style:'normal' as const},
+   {name:'DM Sans',data:latinBold,weight:700 as const,style:'normal' as const},
+   {name:'DM Sans',data:latinBold,weight:900 as const,style:'normal' as const}
+  ];
+ })().catch(error=>{fontPromise=undefined;throw error;});
  return fontPromise;
 }
 export async function loadEditorialAssets():Promise<EditorialAssets>{
- // Photography is intentionally NOT loaded from static/local assets.
- // Every rendered marketing visual set receives fresh, content-specific generated images.
  return {photo:null,photos:[],fonts:await fonts()};
 }

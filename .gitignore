@@ -8,3 +8,6 @@ AGENTS.md
 CLAUDE.md
 .vercel
 .env*
+
+# Pinned build-time marketing assets; traced into server functions, not public.
+.cache/marketing-fonts/
