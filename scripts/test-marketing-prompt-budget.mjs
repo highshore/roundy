@@ -32,9 +32,10 @@ check('oversized verified-trend request is fitted before a paid call',()=>{
 check('required trend facts and immutable source links survive compaction',()=>{
  assert.deepEqual(JSON.parse(JSON.stringify(compact.fact_pack)),factPack);
  assert.deepEqual(JSON.parse(JSON.stringify(compact.trend_context)),payload.trend_context);
- assert.deepEqual(compact.evidence.map(x=>x.id),['S1','S2']);
- assert.deepEqual(compact.evidence.map(x=>x.url),evidence.map(x=>x.url));
- assert.deepEqual(compact.evidence.map(x=>x.title),evidence.map(x=>x.title));
+ const cited=JSON.parse(JSON.stringify(compact.evidence));
+ assert.deepEqual(cited.map(x=>x.id),['S1','S2']);
+ assert.deepEqual(cited.map(x=>x.url),evidence.map(x=>x.url));
+ assert.deepEqual(cited.map(x=>x.title),evidence.map(x=>x.title));
  assert.ok(compact.evidence.every(x=>x.evidence.length<=600));
  assert.equal(compact.human_style_references.length,0);
 });
