@@ -34,14 +34,17 @@ jobs:
             fi
           fi
       - name: Source inspection package
+        if: always()
         run: tar --exclude=.git --exclude=node_modules --exclude=quality-artifacts -czf /tmp/roundy-source.tar.gz .
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: roundy-source
           path: /tmp/roundy-source.tar.gz
           retention-days: 1
       - run: npm run typecheck
       - run: npm test
+      - run: npm run test:marketing-editor-first
       - run: node scripts/test-marketing-compact.mjs --render
       - uses: actions/upload-artifact@v4
         if: always()
