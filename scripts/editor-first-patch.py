@@ -1,33 +1,15 @@
-# Temporary transport for reviewed source edits, removed before merge.
-import base64, hashlib, json, zlib
+# Temporary hash-checked test-loader update; remove before merge.
+import hashlib
 from pathlib import Path
-parts=[Path(f'scripts/editor-first-transport-{i}.txt').read_text(encoding='utf-8').strip() for i in range(1,4)]
-# Restore verified transport fragments. Source hashes below remain authoritative.
-parts[0]=parts[0].replace('i8OoN1l6QyUK','i8OoN1Ftsl6QyUK').replace('Xfjnz6sg+GCBQcT','Xfjnz6sg+CBQcT')
-for i,p in enumerate(parts):
-    print('Transport',i+1,len(p),hashlib.sha256(p.encode()).hexdigest())
-data=''.join(parts)
-if hashlib.sha256(data.encode()).hexdigest()!='a4127cff7b69faf30e536ada69798dd9cad1daff80916b4580b5c2dfbe21906d':
-    raise RuntimeError('Transport checksum mismatch; no application files changed')
-changes=json.loads(zlib.decompress(base64.b64decode(data)))
-prepared=[]
-for item in changes:
-    path=Path(item['path'])
-    if path.is_absolute() or '..' in path.parts or not (str(path).startswith(('src/','scripts/','docs/')) or str(path)=='package.json'):
-        raise RuntimeError('Invalid path')
-    old=path.read_text(encoding='utf-8') if path.exists() else ''
-    old_hash=hashlib.sha256(old.encode()).hexdigest() if path.exists() else None
-    if old_hash==item['after']:
-        continue
-    if old_hash!=item['before']:
-        raise RuntimeError('Source changed: '+str(path))
-    new=old
-    for start,end,replacement in reversed(item['edits']):
-        new=new[:start]+replacement+new[end:]
-    if hashlib.sha256(new.encode()).hexdigest()!=item['after']:
-        raise RuntimeError('Invalid result: '+str(path))
-    prepared.append((path,new))
-for path,text in prepared:
-    path.parent.mkdir(parents=True,exist_ok=True)
-    path.write_text(text,encoding='utf-8')
-print('Applied',len(prepared),'verified source files')
+p=Path('scripts/test-marketing-answer-first.mjs')
+s=p.read_text(encoding='utf-8')
+before='78c81cfae9e2084685c0e228fa182bf193f3bf8ed6bef22d9ccb1fb1e5a6ac11'
+after='f96ebd3f02f0d5ec5b847aa5dda551649073080e2d9dba3de78cdf9cffe9907a'
+hash=lambda v:hashlib.sha256(v.encode()).hexdigest()
+if hash(s)!=after:
+    if hash(s)!=before: raise RuntimeError('Test source changed')
+    s=s.replace('vm.runInNewContext(js,{module,exports:module.exports,',"const editorFirstModule={exports:{}};\nvm.runInNewContext(ts.transpileModule(read('src/lib/marketing-editor-first.ts'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{module:editorFirstModule,exports:editorFirstModule.exports});\nvm.runInNewContext(js,{module,exports:module.exports,")
+    s=s.replace("require:name=>{if(name==='./marketing-carousel-template')", "require:name=>{if(name==='./marketing-editor-first')return editorFirstModule.exports;if(name==='./marketing-carousel-template')")
+    if hash(s)!=after: raise RuntimeError('Test result mismatch')
+    p.write_text(s,encoding='utf-8')
+print('Test dependency loader verified')
