@@ -29,7 +29,7 @@ jobs:
             git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
             git add src scripts package.json docs
             if ! git diff --cached --quiet; then
-              git commit -m 'feat(marketing): implement editor-first content studio'
+              git commit -m 'test(marketing): verify editor-first content studio'
               git push origin HEAD:codex/roundy-editor-first-20261013
             fi
           fi
@@ -45,7 +45,15 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run test:marketing-editor-first
+        if: always()
       - run: node scripts/test-marketing-compact.mjs --render
+        if: always()
+      - name: Responsive browser regression
+        if: always()
+        run: |
+          npm install --prefix /tmp/roundy-editor-tools --no-save --no-audit --no-fund esbuild@0.28.2 playwright@1.64.0
+          /tmp/roundy-editor-tools/node_modules/.bin/playwright install chromium
+          ROUNDY_QA_TOOLS=/tmp/roundy-editor-tools node scripts/qa-marketing-editor/run.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
