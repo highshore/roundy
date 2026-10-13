@@ -32,6 +32,9 @@ export function composeManualMagazineEdit(source:Row,value:unknown):ManualEditRe
  if(v.highlight!==undefined&&(typeof v.highlight!=='string'||v.highlight.length>80))
   throw new Error('MANUAL_HIGHLIGHT_INVALID');
  const index=v.index,sourceSlide=slides[index],language=source.content_language==='en'?'en':'ko';
+ // A complete set of alternative cover titles can be repaired without changing
+ // the rendered first card. Non-cover edits may never alter headline metadata.
+ if(v.thumbnail_candidates!==undefined&&index!==0)throw new Error('HEADLINE_OPTIONS_COVER_ONLY');
  const title=v.title.trim(),body=v.body.trim(),oldSecondary=String(sourceSlide.secondary_body||(language==='ko'?sourceSlide.body_en:sourceSlide.body_ko)||''),secondary=String(v.secondary_body||oldSecondary).trim();
  const pending=translationPendingAfterEdit(original,index,body!==sourceSlide.body,v.secondary_body,oldSecondary);
  const highlight=String(v.highlight??sourceSlide.highlight??'').trim();
@@ -44,15 +47,32 @@ export function composeManualMagazineEdit(source:Row,value:unknown):ManualEditRe
  // Never accept role/source_ids/closing_type/options/metadata/photo URLs from the browser.
  magazineCarouselFit(changed,plan,index,language);
  const nextSlides=slides.map((slide:Row,i:number)=>i===index?changed:{...slide});
- let nextDoc={...original,slides:nextSlides,thumbnail_render_pending:index===0,translation_pending_indices:pending,editorial_human_approval:null,
+ const coverCopyChanged=index===0&&['title','body','secondary_body','highlight'].some(field=>
+  String(sourceSlide[field]??'').trim()!==String(changed[field]??'').trim());
+ let nextDoc={...original,slides:nextSlides,
+  thumbnail_render_pending:original.thumbnail_render_pending===true||coverCopyChanged,
+  translation_pending_indices:pending,editorial_human_approval:null,
   editorial_critic:null,editorial_critic_history:[],editorial_critic_policy:null};
  if(index===0&&original.thumbnail_candidates){
-  const choices=[...original.thumbnail_candidates],selected=Number(original.thumbnail_selected_index??0);
-  if(!Number.isInteger(selected)||selected<0||selected>=choices.length)throw new Error('INVALID_THUMBNAIL_CHOICE');
-  choices[selected]=title;
-  if(new Set(choices.map((x:string)=>x.normalize('NFKC').replace(/\s+/g,'').toLowerCase())).size!==choices.length)
-   throw new Error('DUPLICATE_THUMBNAIL_COPY');
-  nextDoc={...nextDoc,thumbnail_candidates:choices};
+  if(!Array.isArray(original.thumbnail_candidates))throw new Error('HEADLINE_OPTIONS_REQUIRED');
+  const count=original.thumbnail_candidates.length,selected=Number(original.thumbnail_selected_index??0);
+  if(![3,5].includes(count)||!Number.isInteger(selected)||selected<0||selected>=count)
+   throw new Error('INVALID_THUMBNAIL_CHOICE');
+  const supplied=v.thumbnail_candidates!==undefined;
+  if(supplied&&(!Array.isArray(v.thumbnail_candidates)||v.thumbnail_candidates.length!==count))
+   throw new Error('HEADLINE_OPTIONS_COUNT_MISMATCH');
+  const choices=supplied?[...v.thumbnail_candidates]:[...original.thumbnail_candidates];
+  choices[selected]=supplied?choices[selected]:title;
+  const maxLength=language==='en'?64:34;
+  if(choices.some((candidate:unknown)=>typeof candidate!=='string'||
+   candidate.trim().length<6||candidate.trim().length>maxLength))
+   throw new Error('HEADLINE_OPTIONS_LENGTH_INVALID');
+  if(supplied&&choices[selected].trim()!==title)
+   throw new Error('HEADLINE_SELECTED_TITLE_MISMATCH');
+  const normalized=choices.map((candidate:string)=>candidate.normalize('NFKC').toLowerCase()
+   .replace(/[^\p{L}\p{N}]+/gu,''));
+  if(new Set(normalized).size!==choices.length)throw new Error('DUPLICATE_THUMBNAIL_COPY');
+  nextDoc={...nextDoc,thumbnail_candidates:choices.map((candidate:string)=>candidate.trim())};
  }
  const storyboard=reviewMagazineStoryboard(storyOnlyDocument(nextDoc),language);
  nextDoc={...nextDoc,
