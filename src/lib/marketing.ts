@@ -1,3 +1,4 @@
+import {EDITOR_FIRST_VERSION,seriesForTopic} from './marketing-editor-first';
 import {restoreSavedGenerationInput} from './marketing-generation-retry';
 import {openSavedEditorialCopy,saveEditorialFeedback} from './marketing-editorial-workspace';
 import {versionHistory,regenerateVersion,restoreVersion,finishVersionRendering,editManualMagazineSlideVersion} from './marketing-regeneration';
@@ -532,6 +533,10 @@ if(id==='uploads'&&path.length===1&&req.method==='GET'){
   if(old)return json({job:old,deduplicated:true});
   const user=(await db.auth.getUser()).data.user;if(!user)return json({error:'Sign in required'},401);
   const input=validateGenerationInput(body);
+  if(input.content_mode==='growth_carousel'){
+   input.editorial_workflow_version=EDITOR_FIRST_VERSION;
+   input.editorial_series=input.editorial_series||seriesForTopic(input.topic_type);
+  }
   let selectedEvent:Row|null=null;
   if(input.content_mode==='live_event'){
    const eventId=String(input.event_id||'');

@@ -1,3 +1,4 @@
+import {isEditorFirst} from './marketing-editor-first';
 // Explicit manual edits to one Magazine Editorial card.
 // Returns a new immutable copy: role, source IDs, photo assignments and other
 // slides are never accepted from the browser or rewritten by this helper.
@@ -40,7 +41,7 @@ export function composeManualMagazineEdit(source:Row,value:unknown):ManualEditRe
  const highlight=String(v.highlight??sourceSlide.highlight??'').trim();
  if(EDITORIAL_AD_CTA.test([title,body,secondary,highlight].join(' ')))
   throw new Error('FEED_AD_CTA_NOT_ALLOWED');
- if(index===0&&sourceSlide.title!==title&&(!Array.isArray(original.thumbnail_candidates)||original.thumbnail_candidates.length<3))
+ if(index===0&&sourceSlide.title!==title&&(!Array.isArray(original.thumbnail_candidates)||original.thumbnail_candidates.length<(isEditorFirst(original)?1:3)))
   throw new Error('HEADLINE_OPTIONS_REQUIRED');
  const changed={...sourceSlide,title,body,secondary_body:secondary,highlight,
   body_ko:language==='ko'?body:secondary,body_en:language==='en'?body:secondary};
@@ -59,7 +60,7 @@ export function composeManualMagazineEdit(source:Row,value:unknown):ManualEditRe
  if(index===0&&original.thumbnail_candidates){
   if(!Array.isArray(original.thumbnail_candidates))throw new Error('HEADLINE_OPTIONS_REQUIRED');
   const count=original.thumbnail_candidates.length,selected=Number(original.thumbnail_selected_index??0);
-  if(![3,5].includes(count)||!Number.isInteger(selected)||selected<0||selected>=count)
+  if(!(isEditorFirst(original)?[1]:[3,5]).includes(count)||!Number.isInteger(selected)||selected<0||selected>=count)
    throw new Error('INVALID_THUMBNAIL_CHOICE');
   const supplied=v.thumbnail_candidates!==undefined;
   if(supplied&&(!Array.isArray(v.thumbnail_candidates)||v.thumbnail_candidates.length!==count))

@@ -1,3 +1,4 @@
+import {isEditorFirst} from './marketing-editor-first';
 import 'server-only';
 import {createHash} from 'node:crypto';
 import sharp from 'sharp';
@@ -127,7 +128,7 @@ export async function prepareStockSelections(db:DB,draft:Row,opts:{replace?:bool
  }
  // Bounded provider fallback. Candidates are never used before human approval.
  let attempts=0;
- for(const provider of PHOTO_PROVIDERS){
+ for(const provider of (isEditorFirst(draft.content_document)?PHOTO_PROVIDERS.filter(provider=>provider==='pexels'):PHOTO_PROVIDERS)){
   if(picked.size>=slots.length||attempts>=MAX_PROVIDER_ATTEMPTS)break;
   for(let attempt=0;attempt<ATTEMPTS_PER_PROVIDER&&picked.size<slots.length&&attempts<MAX_PROVIDER_ATTEMPTS;attempt++){
    const slot=nextUnfilled();if(slot===undefined)break;

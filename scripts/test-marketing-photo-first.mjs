@@ -63,7 +63,7 @@ assert.match(stock,/perceptual_hash:hash/);
 assert.match(stock,/PHOTO_COOLDOWN_DAYS=90/);
 assert.match(stock,/usedRecently\(db,draft\.id\)/);
 assert.match(stock,/if\(!rows\.length\)return/,'zero-photo pending results must remain importable for admin sourcing');
-assert.match(stock,/for\(const provider of PHOTO_PROVIDERS\)/);
+assert.match(stock,/for\(const provider of \(isEditorFirst\(draft.content_document\)\?PHOTO_PROVIDERS.filter\(provider=>provider==='pexels'\):PHOTO_PROVIDERS\)\)/,'new editor-first drafts use bounded Pexels sourcing while legacy provider fallback remains');
 assert.match(stock,/return \{photo:cardPhotos\[0\]\|\|null,photos:\[\],cardPhotos,reusePhotos:false\}/);
 const generation=source('src/lib/marketing-generation.ts');
 assert.match(generation,/configuredPhotoSourcingPolicy/);

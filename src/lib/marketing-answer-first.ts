@@ -1,3 +1,4 @@
+import {isEditorFirst} from './marketing-editor-first';
 // Editorial-only Answer-First contract. Does not generate images or schedule publication.
 import {type CarouselPlan,withCarouselPlan,savedCarouselPlan} from './marketing-carousel-template';
 import {EDITORIAL_HEADLINE_VERSION} from './marketing-editorial-storyboard';
@@ -120,7 +121,7 @@ export function answerFirstIssues(doc:CopyRow,language:string):string[]{
   if(slides.some((slide:CopyRow,i:number)=>slide.role!==expected[i]))add('Answer-First 에디토리얼 카드 역할 또는 순서가 올바르지 않습니다.');
  }else if(slides[count-1]?.role!=='cta')add('Answer-First 마지막 장은 CTA여야 합니다.');
  const choices=doc.thumbnail_candidates;
- const desired=doc?.cover_editorial_version===EDITORIAL_HEADLINE_VERSION?5:3;
+ const desired=isEditorFirst(doc)?1:doc?.cover_editorial_version===EDITORIAL_HEADLINE_VERSION?5:3;
  if(!Array.isArray(choices)||choices.length!==desired)add('썸네일 문구 후보가 정확히 '+desired+'개 필요합니다.');
  else{
   const limit=language==='en'?64:34;

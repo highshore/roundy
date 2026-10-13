@@ -1,3 +1,4 @@
+import {isEditorFirst,isEditorialSuggestion} from './marketing-editor-first';
 import {answerFirstIssues} from './marketing-answer-first';
 import {mobileCarouselFit,magazineCarouselFit,savedCarouselPlan,resolveCarouselPlan} from './marketing-carousel-template';
 import {BRAND_OUTRO_VERSION,brandedStoryCount,storyOnlyDocument} from './marketing-brand-outro';
@@ -113,7 +114,9 @@ export function evaluateMarketingPreflight(draft:Record<string,any>,settings:Rec
  const answerIssues:string[]=[];
  if(settings?.carousel_answer_first_enabled!==false&&doc.answer_first!==true)
   answerIssues.push('Answer-First 메타데이터가 없습니다. 결과형 썸네일을 재생성하세요.');
- if(doc.answer_first===true)for(const issue of answerFirstIssues(storyOnlyDocument(doc),draft.content_language==='en'?'en':'ko'))answerIssues.push(issue);
+ if(doc.answer_first===true)for(const issue of answerFirstIssues(storyOnlyDocument(doc),draft.content_language==='en'?'en':'ko')){
+  if(!isEditorFirst(doc)||!isEditorialSuggestion(issue))answerIssues.push(issue);
+ }
  if(!str(slides[0]?.title))answerIssues.push('썸네일에 구체적인 결과 또는 추천 제목이 필요합니다.');
  if(doc.answer_first===true&&str(doc.slides?.[0]?.title)!==str(slides[0]?.title))
   answerIssues.push('선택한 썸네일 제목과 실제 카드 문구가 다릅니다. 다시 렌더링하세요.');
