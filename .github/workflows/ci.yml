@@ -26,6 +26,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: node scripts/prepare-marketing-fonts.mjs
       - run: npm run typecheck
       - run: node scripts/test-marketing-trend-guides.mjs
       - run: node scripts/test-marketing-trend-radar.mjs
