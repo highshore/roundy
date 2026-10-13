@@ -11,8 +11,10 @@ const layoutCode=ts.transpileModule(read('src/lib/marketing-carousel-template.ts
 }).outputText;
 const layoutModule={exports:{}};
 vm.runInNewContext(layoutCode,{module:layoutModule,exports:layoutModule.exports});
+const editorFirstModule={exports:{}};
+vm.runInNewContext(ts.transpileModule(read('src/lib/marketing-editor-first.ts'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{module:editorFirstModule,exports:editorFirstModule.exports});
 vm.runInNewContext(js,{module,exports:module.exports,
- require:name=>{if(name==='./marketing-carousel-template')return layoutModule.exports;if(name==='./marketing-editorial-storyboard')return {EDITORIAL_HEADLINE_VERSION:1};throw new Error('Unexpected module '+name);}
+ require:name=>{if(name==='./marketing-editor-first')return editorFirstModule.exports;if(name==='./marketing-carousel-template')return layoutModule.exports;if(name==='./marketing-editorial-storyboard')return {EDITORIAL_HEADLINE_VERSION:1};throw new Error('Unexpected module '+name);}
 });
 const {
  fiveEditorialRoles,fiveCampaignRoles,fiveEventRoles,withAnswerFirstSchema,
