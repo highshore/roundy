@@ -47,12 +47,15 @@ export function composeManualMagazineEdit(source:Row,value:unknown):ManualEditRe
  // Never accept role/source_ids/closing_type/options/metadata/photo URLs from the browser.
  magazineCarouselFit(changed,plan,index,language);
  const nextSlides=slides.map((slide:Row,i:number)=>i===index?changed:{...slide});
- const coverCopyChanged=index===0&&['title','body','secondary_body','highlight'].some(field=>
+ const visibleCopyChanged=['title','body','secondary_body','highlight'].some(field=>
   String(sourceSlide[field]??'').trim()!==String(changed[field]??'').trim());
  let nextDoc={...original,slides:nextSlides,
-  thumbnail_render_pending:original.thumbnail_render_pending===true||coverCopyChanged,
-  translation_pending_indices:pending,editorial_human_approval:null,
-  editorial_critic:null,editorial_critic_history:[],editorial_critic_policy:null};
+  thumbnail_render_pending:original.thumbnail_render_pending===true||(index===0&&visibleCopyChanged),
+  translation_pending_indices:pending,
+  editorial_human_approval:visibleCopyChanged?null:original.editorial_human_approval,
+  editorial_critic:visibleCopyChanged?null:original.editorial_critic,
+  editorial_critic_history:visibleCopyChanged?[]:original.editorial_critic_history,
+  editorial_critic_policy:visibleCopyChanged?null:original.editorial_critic_policy};
  if(index===0&&original.thumbnail_candidates){
   if(!Array.isArray(original.thumbnail_candidates))throw new Error('HEADLINE_OPTIONS_REQUIRED');
   const count=original.thumbnail_candidates.length,selected=Number(original.thumbnail_selected_index??0);
