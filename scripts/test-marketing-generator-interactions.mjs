@@ -9,6 +9,11 @@ globalThis.IS_REACT_ACT_ENVIRONMENT=true;
 const cache=new Map(),requests=[],confirmations=[];
 const settings={carousel_mode:'fixed',carousel_default_slides:5,carousel_min_real_photos_5:3,carousel_min_real_photos_3:2,carousel_brand_outro_enabled:true};
 const gen={jobs:[],provider:{configured:true},control:{enabled:true},usage:{daily_call_limit:50}};
+const approvedAssets=[1,2].map(n=>({
+ id:'aaaaaaaa-aaaa-4aaa-8aaa-00000000000'+n,review_status:'approved',provider:'pexels',
+ photographer:'Approved Photographer '+n,license_name:'Pexels commercial reuse',
+ preview_url:'https://example.invalid/approved-'+n+'.jpg'
+}));
 const makeDraft=(id,kind='brand',lang='en')=>({id,revision:2,status:'needs_approval',draft_role:'candidate',visual_source:'stock',draft_kind:kind,content_mode:'prelaunch',content_language:lang,growth_topic_type:kind==='growth_carousel'?'conversation_prompt':null,caption:'A concrete original caption.',images:Array(5).fill('https://example.invalid/card.jpg'),carousel_slides:['cover','context','insight','insight','editorial_closing'].map(role=>({role,title:'Saved '+role,body:'Original copy.'})),content_document:{design_preset:'roundy_magazine_editorial_v2',photo_sourcing:{version:1,slide_count:5,min_real_photos:3,ai_thumbnail_enabled:true,requested_ai_thumbnail:true,ai_image_slot:0}},quality_report:{status:'passed'},draft_date:'2026-10-12',updated_at:'2026-10-12T10:00:00Z'});
 let drafts=[makeDraft('11111111-1111-4111-8111-111111111111'),makeDraft('22222222-2222-4222-8222-222222222222','growth_carousel','ko')],createdDraft;
 async function fakeFetch(url,init={}){
@@ -17,10 +22,25 @@ async function fakeFetch(url,init={}){
  if(route==='')data={drafts,runs:[],templates:[],settings,generation:gen,connection:{instagram_status:'valid'},live_events:[]};
  else if(route==='/generation')data=gen;
  else if(route.startsWith('/quality/preflight?')){const id=new URLSearchParams(route.split('?')[1]).get('draft_id');data={draft_id:id,revision:2,preflight:{status:'passed',checks:[]},quality_report:{status:'passed'}};}
- else if(route.startsWith('/photos?'))data={photos:[],ready:false,required_count:3};
+ else if(route==='/photos/assets?status=approved')data={assets:approvedAssets};
+ else if(route.startsWith('/photos?'))data={photos:[],ready:false,required_count:4};
+ else if(route.endsWith('/assign-stock')){
+  const id=route.split('/')[2],target=drafts.find(d=>d.id===id);
+  if(!target)throw Error('Assignment target does not exist');
+  if(body.revision!==target.revision)throw Error('Stale revision');
+  if(!['aaaaaaaa-aaaa-4aaa-8aaa-000000000001','aaaaaaaa-aaaa-4aaa-8aaa-000000000002'].includes(body.asset_id))throw Error('Unapproved asset');
+  if(![1,2,3,4].includes(body.slot))throw Error('Invalid card photo slot');
+  target.revision++;
+  data={draft:{...target},photos:[{slot:body.slot,asset_id:body.asset_id,review_status:'approved'}]};
+ }
  else if(route.startsWith('/uploads?'))data={images:[]};
  else if(route.endsWith('/regenerate')){const id=route.split('/')[2];data={draft:drafts.find(d=>d.id===id),job:{id:'render-job',status:'completed'}};}
- else if(route==='/draft/generate'){createdDraft={...makeDraft('33333333-3333-4333-8333-333333333333','growth_carousel','ko'),growth_topic_type:body.topic_type};data={draft:createdDraft,job:{id:'new-job',status:'completed'}};}
+ else if(route==='/draft/generate'){
+  createdDraft={...makeDraft('33333333-3333-4333-8333-333333333333','growth_carousel','ko'),growth_topic_type:body.topic_type,
+   images:[],carousel_slides:['cover','context','insight','insight','editorial_closing','brand_outro'].map(role=>({role,title:'New '+role,body:'Original body'})),
+   content_document:{design_preset:'roundy_magazine_editorial_v2',brand_outro_version:1,photo_sourcing:{version:2,slide_count:6,min_real_photos:4,ai_thumbnail_enabled:true,requested_ai_thumbnail:true,ai_image_slot:0}}};
+  data={draft:createdDraft,job:{id:'new-job',status:'completed'}};
+ }
  else if(route==='/generation/jobs/new-job/import'){drafts=[createdDraft,...drafts];data={draft:createdDraft};}
  else throw new Error('Unexpected API route in test: '+route);
  return {ok:true,status:200,json:async()=>data};
@@ -80,6 +100,42 @@ try{
   const render=requests.find(r=>r.route.endsWith('/regenerate'));
   await test(locale+' render uses saved topic, not new-post topic',()=>{assert.ok(render);assert.equal(render.body.topic_type,'conversation_prompt');assert.equal(render.body.content_mode,'growth_carousel');assert.equal(render.body.render_only,true);assert.equal(render.body.instruction,'');});
   await test(locale+' render does not reset new-post topic',()=>assert.equal(selectWith('dating_myth').props.value,'dating_myth'));
+  await test(locale+' new-post composer starts open even when drafts exist',()=>{
+   const generator=renderer.root.findAllByType('details').find(e=>e.props.className==='marketing-generator-card');
+   assert.ok(generator?.props.open,'New content is visible, not silently collapsed');
+  });
+  await test(locale+' unified visual selector has three labeled modes and four real-photo slots',()=>{
+   const workflow=renderer.root.findByProps({'data-testid':'marketing-visual-workflow'});
+   const modes=workflow.findAllByProps({className:'marketing-image-mode-grid'})[0].findAllByType('button');
+   assert.equal(modes.length,3);assert.equal(modes.filter(b=>b.props['aria-pressed']===true).length,1);
+   assert.equal(workflow.findAllByProps({className:'marketing-photo-plan-card'}).length,5);
+   assert.equal(workflow.findAllByProps({className:'marketing-photo-plan-brand'}).length,1);
+  });
+  const plannedCards=()=>renderer.root.findAllByProps({className:'marketing-photo-plan-card'});
+  const selectPhoto=async(index,assetIndex)=>{
+   const slot=plannedCards()[index];
+   const btn=slot.findAllByType('button').find(b=>text(b)===(locale==='ko'?'사진 선택':'Choose photo'));
+   assert.ok(btn,'Selection exists for story card '+index);
+   await act(async()=>{btn.props.onClick();await tick();});
+   const gallery=renderer.root.findByProps({'data-testid':'marketing-approved-photo-grid'});
+   const actions=gallery.findAllByProps({className:'marketing-approved-picker-actions'});
+   const use=actions.map(section=>section.findByType('button'));
+   assert.equal(use.length,2);
+   assert.equal(Boolean(use[0].props.disabled),assetIndex===1,'Selected image cannot be duplicated on a different card');
+   assert.equal(Boolean(use[assetIndex].props.disabled),false,'The intended photo remains selectable');
+   await act(async()=>{use[assetIndex].props.onClick();await tick();});
+  };
+  await selectPhoto(1,0);
+  await test(locale+' gallery choice is local only, no draft mutation before generation',()=>{
+   assert.equal(requests.filter(r=>r.route.endsWith('/assign-stock')).length,0);
+   assert.equal(requests.filter(r=>r.route==='/photos/assets?status=approved').length,1);
+   assert.equal(plannedCards()[1].findAllByType('img').length,1);
+  });
+  await selectPhoto(2,1);
+  await test(locale+' separate slots do not reuse a selected approved asset',()=>{
+   assert.equal(plannedCards()[2].findAllByType('img').length,1);
+   assert.equal(requests.filter(r=>r.route.endsWith('/assign-stock')).length,0);
+  });
   await choose('ko');
   const directionField=renderer.root.findAllByType('textarea').find(x=>x.props.maxLength===500);
   await act(async()=>{directionField.props.onChange({target:{value:'첫인상의 설렘만으로 관계를 단정할 수 있을까?'},currentTarget:{value:'첫인상의 설렘만으로 관계를 단정할 수 있을까?'}});await tick();});
@@ -87,8 +143,17 @@ try{
   assert.ok(createButton,'Create button exists');
   await act(async()=>{createButton.props.onClick();await tick();});
   const creation=requests.find(r=>r.route==='/draft/generate');
+  await test(locale+' selected approved photos are assigned after import with fresh revisions',()=>{
+   const assignment=requests.filter(r=>r.route.endsWith('/assign-stock'));
+   assert.equal(assignment.length,2);
+   assert.deepEqual(assignment.map(a=>a.body.slot),[1,2]);
+   assert.deepEqual(assignment.map(a=>a.body.revision),[2,3]);
+   assert.equal(assignment.every(a=>a.body.confirm_replace===false),true);
+   const oldDrafts=drafts.filter(d=>!d.id.startsWith('3333'));
+   assert.ok(oldDrafts.every(d=>d.revision===2),'Existing drafts untouched');
+  });
   await test(locale+' generate submits requested myth once and imports once',()=>{assert.ok(creation);assert.equal(creation.body.topic_type,'dating_myth');assert.equal(creation.body.content_mode,'growth_carousel');assert.equal(creation.body.language,'ko');assert.equal(requests.filter(r=>r.route==='/draft/generate').length,1);assert.equal(requests.filter(r=>r.route==='/generation/jobs/new-job/import').length,1);});
-  await test(locale+' generating does not approve or publish',()=>assert.equal(requests.filter(r=>/publish|approve|schedule/.test(r.route)).length,0));
+  await test(locale+' generating does not approve or publish',()=>assert.equal(requests.filter(r=>r.method!=='GET'&&/\/(approve|publish|schedule)(?:\/|$)/.test(r.route)).length,0));
   await act(async()=>renderer.unmount());renderer=null;
  }
  const {generatorSelection,generatorMediaPlan,savedRenderContent,savedDraftMediaPlan}=load('src/lib/marketing-generator-ui.ts');
