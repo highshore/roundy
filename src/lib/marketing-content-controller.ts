@@ -132,7 +132,9 @@ export async function contentWorkflowApi(req:NextRequest,db:DB,path:string[],act
   }
   if(body.caption!==undefined){if(typeof body.caption!=='string'||!body.caption.trim()||body.caption.length>2000)throw new Error('INVALID_CAPTION');changed.caption=body.caption.trim();}
   // Persist invalidated downstream artifacts, not user-supplied approvals, roles or source IDs.
-  changed={...changed,images:[],quality_revision:null,approved_at:null,approved_by:null};
+  // A previous formatting rejection is not a permanent approval latch. Re-evaluate
+  // the edited copy below; keep factual/source and translation gates unchanged.
+  changed={...changed,content_document:{...changed.content_document,editorial_review_required:false},images:[],quality_revision:null,approved_at:null,approved_by:null};
   const report=draftQuality({...changed,content_document:{...changed.content_document,thumbnail_render_pending:false}});
   const snapshot={caption:changed.caption,cta:changed.cta,content_document:changed.content_document,carousel_slides:changed.carousel_slides,
    content_language:changed.content_language,research_sources:changed.research_sources,research_status:changed.research_status,
