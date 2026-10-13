@@ -76,6 +76,31 @@ test(()=>assert.equal(cover.document.thumbnail_candidates[0],'첫 만남에서 �
 test(()=>assert.equal(cover.document.thumbnail_render_pending,true));
 test(()=>assert.equal(source.content_document.thumbnail_candidates[0],titles[0]));
 test(()=>assert.throws(()=>edit.composeManualMagazineEdit(source,{...payload,index:0,title:titles[1]}),/DUPLICATE_THUMBNAIL_COPY/));
+// A real production failure left five identical headline options on an
+// unpublished review candidate. Repair all choices without losing the source
+// version, re-rendering unchanged cover copy, or clearing a failed critique.
+const duplicateSource={...source,content_document:{...source.content_document,
+ thumbnail_candidates:Array(5).fill(titles[0]),editorial_review_required:true,
+ editorial_critic:{status:'replace_topic',score:35}}};
+const repairInput={...payload,index:0,title:titles[0],body:slides[0].body,
+ secondary_body:slides[0].secondary_body,highlight:slides[0].highlight,
+ thumbnail_candidates:titles};
+const repaired=edit.composeManualMagazineEdit(duplicateSource,repairInput);
+test(()=>assert.deepEqual(Array.from(repaired.document.thumbnail_candidates),titles));
+test(()=>assert.equal(repaired.document.thumbnail_render_pending,false,'Only unused options changed, no stale image'));
+test(()=>assert.equal(repaired.document.editorial_critic.status,'replace_topic','Repair must not erase an independent quality rejection'));
+test(()=>assert.equal(repaired.document.editorial_review_required,true));
+test(()=>assert.equal(repaired.slides[0].title,titles[0]));
+test(()=>assert.equal(duplicateSource.content_document.thumbnail_candidates.every(value=>value===titles[0]),true));
+test(()=>assert.throws(()=>edit.composeManualMagazineEdit(duplicateSource,{...repairInput,thumbnail_candidates:Array(5).fill(titles[0])}),/DUPLICATE_THUMBNAIL_COPY/));
+test(()=>assert.throws(()=>edit.composeManualMagazineEdit(duplicateSource,{...repairInput,thumbnail_candidates:titles.slice(0,3)}),/HEADLINE_OPTIONS_COUNT_MISMATCH/));
+test(()=>assert.throws(()=>edit.composeManualMagazineEdit(duplicateSource,{...repairInput,thumbnail_candidates:[...titles.slice(0,4),'x']}),/HEADLINE_OPTIONS_LENGTH_INVALID/));
+test(()=>assert.throws(()=>edit.composeManualMagazineEdit(duplicateSource,{...repairInput,thumbnail_candidates:titles,title:'Another title'}),/HEADLINE_SELECTED_TITLE_MISMATCH/));
+test(()=>assert.throws(()=>edit.composeManualMagazineEdit(duplicateSource,{...repairInput,index:2}),/HEADLINE_OPTIONS_COVER_ONLY/));
+const newSelected=['이렇게 말하면 달라지는 첫 만남',...titles.slice(1)];
+const changedCover=edit.composeManualMagazineEdit(duplicateSource,{...repairInput,title:newSelected[0],thumbnail_candidates:newSelected});
+test(()=>assert.equal(changedCover.document.thumbnail_render_pending,true,'Edited visible cover must be re-rendered'));
+
 const shortlist=story.evaluateHeadlineOptions(source.content_document,'ko');
 test(()=>assert.equal(shortlist.length,5));
 test(()=>assert.equal(shortlist.every(x=>Number.isInteger(x.score)&&x.score>=0&&x.score<=100),true));
@@ -106,6 +131,10 @@ test(()=>assert.match(screen,/versions\/manual/));
 test(()=>assert.match(screen,/onRequestAiEdit/));
 test(()=>assert.match(route,/editManualMagazineSlideVersion/));
 test(()=>assert.match(regen,/renderVersionCards\(db,changed,\[index\]\)/));
+test(()=>assert.match(regen,/const visibleCopyChanged=/));
+test(()=>assert.match(regen,/if\(visibleCopyChanged\)images\[index\]=''/));
+test(()=>assert.match(admin,/const copyNeedsReview=/));
+test(()=>assert.match(admin,/copyNeedsReview\|\|stockReview\?\.ready!==true/));
 test(()=>assert.match(regen,/NON_ARCHIVED_AI_CARD_UNEDITABLE/));
 test(()=>assert.match(screen,/unarchivedAi/));
 test(()=>assert.match(regen,/insertVersion\(db,source,snapshot,photos/));

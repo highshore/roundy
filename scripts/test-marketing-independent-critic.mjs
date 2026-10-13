@@ -100,6 +100,10 @@ check(()=>assert.match(editorial,/critique:editorialReview.current\?\.status===/
 check(()=>assert.match(policy,/NARRATIVE MODE: STORY-FIRST/));
 check(()=>assert.match(policy,/magazineAnswerFirstPrompt\(plan!\.slide_count,storyFirst\)/));
 check(()=>assert.match(policy,/ONE STORY PER CAROUSEL/));
+check(()=>assert.match(policy,/HEADLINE CONTRACT: For new magazine content return exactly FIVE/));
+check(()=>assert.match(policy,/If the only point is one simple instruction/));
+const answer=fs.readFileSync('src/lib/marketing-answer-first.ts','utf8');
+check(()=>assert.match(answer,/Return EXACTLY FIVE semantically DISTINCT/));
 check(()=>assert.match(policy,/Do NOT alternate event catalog facts/));
 const admin=fs.readFileSync('src/components/admin-marketing.tsx','utf8');
 check(()=>assert.match(admin,/Independent editorial review failed/));

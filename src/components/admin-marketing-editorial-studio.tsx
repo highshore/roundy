@@ -41,16 +41,21 @@ export function AdminMarketingEditorialStudio({draft,locale,disabled,onUpdated,o
  const [fields,setFields]=useState({title:'',body:'',secondary_body:'',highlight:''});
  const [focusedIndex,setFocusedIndex]=useState(0);
  const [feedbackNote,setFeedbackNote]=useState('');
+ const [headlineEditing,setHeadlineEditing]=useState(false);
+ const [headlineValues,setHeadlineValues]=useState<string[]>([]);
+ const headlineDuplicates=headlines.length>1&&new Set(headlines.map(value=>text(value).normalize('NFKC').toLowerCase()
+  .replace(/[^\p{L}\p{N}]+/gu,''))).size!==headlines.length;
+ const headlineDirty=headlineEditing&&headlineValues.some((value,index)=>value!==headlines[index]);
  const busy=disabled||working;
  const lock=useRef(false);
  const [tool,setTool]=useState<'preview'|'text'|'image'|'ai'>('preview');
  const original=editing===null?null:slides[editing];
- const unsaved=!!original&&(fields.title!==text(original.title)||fields.body!==text(original.body)||fields.secondary_body!==text(original.secondary_body||(language==='en'?original.body_ko:original.body_en))||fields.highlight!==text(original.highlight));
+ const unsaved=(!!original&&(fields.title!==text(original.title)||fields.body!==text(original.body)||fields.secondary_body!==text(original.secondary_body||(language==='en'?original.body_ko:original.body_en))||fields.highlight!==text(original.highlight)))||headlineDirty;
  useEffect(()=>{onUnsavedChange?.(unsaved);return()=>onUnsavedChange?.(false);},[unsaved,onUnsavedChange]);
  useEffect(()=>{onWorkingChange?.(working);return()=>onWorkingChange?.(false);},[working,onWorkingChange]);
  function leaveEditor(){return !unsaved||window.confirm(t('Discard unsaved changes to this card?','이 카드의 저장하지 않은 수정을 버릴까요?'));}
- function selectCard(index:number){if(busy||index===focusedIndex||!leaveEditor())return;setEditing(null);setTool('preview');setFocusedIndex(index);}
- function changeTool(next:'preview'|'text'|'image'|'ai',index:number){if(busy||!leaveEditor())return;setError('');if(next==='text'){startEdit(index);return;}setEditing(null);setTool(tool===next?'preview':next);}
+ function selectCard(index:number){if(busy||index===focusedIndex||!leaveEditor())return;setEditing(null);setHeadlineEditing(false);setTool('preview');setFocusedIndex(index);}
+ function changeTool(next:'preview'|'text'|'image'|'ai',index:number){if(busy||!leaveEditor())return;setHeadlineEditing(false);setError('');if(next==='text'){startEdit(index);return;}setEditing(null);setTool(tool===next?'preview':next);}
  async function saveFeedback(decision:'approve'|'rework'){
   if(working||disabled)return;
   if(feedbackNote.trim().length<8){setError(t('Explain what works or needs changing (at least 8 characters).','좋은 점 또는 고칠 점을 8자 이상 적어주세요.'));return;}
@@ -61,8 +66,8 @@ export function AdminMarketingEditorialStudio({draft,locale,disabled,onUpdated,o
    setFeedbackNote('');onUpdated(result.draft);
   }catch(error){setError(error instanceof Error?error.message:String(error));}finally{setWorking(false);}
  }
- useEffect(()=>{setEditing(null);setTool('preview');setError('');setFeedbackNote('');},[draft.id]);
- useEffect(()=>{setEditing(null);setTool('preview');setError('');setFocusedIndex(index=>Math.min(index,Math.max(0,slides.length-1)));},[draft.revision,slides.length]);
+ useEffect(()=>{setEditing(null);setHeadlineEditing(false);setHeadlineValues([]);setTool('preview');setError('');setFeedbackNote('');},[draft.id]);
+ useEffect(()=>{setEditing(null);setHeadlineEditing(false);setHeadlineValues([]);setTool('preview');setError('');setFocusedIndex(index=>Math.min(index,Math.max(0,slides.length-1)));},[draft.revision,slides.length]);
  function startEdit(index:number){
   const slide=slides[index];if(!slide||index===brandIndex||disabled||working)return;
   if(!manualSupported){setError(t('This image source has no reusable verified photo archive. Keep the original and use a new upload/re-render instead.','이 이미지 유형은 검증된 원본을 다시 사용할 수 없습니다. 기존 게시물을 보존하고 새 원본을 업로드해 렌더링하세요.'));return;}
@@ -90,8 +95,36 @@ export function AdminMarketingEditorialStudio({draft,locale,disabled,onUpdated,o
   }catch(e){setError(e instanceof Error?e.message:String(e));}
   finally{lock.current=false;setWorking(false);}
  }
+ async function saveHeadlineOptions(){
+  if(disabled||working||lock.current||!headlineEditing)return;
+  if(unsaved&&editing!==null){setError(t('Save the current card edit first.','먼저 현재 카드 수정을 저장하세요.'));return;}
+  const options=headlineValues.map(value=>value.trim()),cover=slides[0];
+  if(!cover||options.length!==headlines.length||!options[chosen]){
+   setError(t('Review the headline count and selected title.','표지 문구 개수와 선택된 제목을 확인하세요.'));return;
+  }
+  const distinct=new Set(options.map(value=>value.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,'')));
+  const max=language==='en'?64:34;
+  if(options.some(value=>value.length<6||value.length>max)||distinct.size!==options.length){
+   setError(t('All five headlines must be different and fit the cover.','다섯 표지 후보를 서로 다르게 작성하고 길이를 확인하세요.'));return;
+  }
+  lock.current=true;setWorking(true);setError('');
+  try{
+   const response=await fetch(BASE+'/draft/'+draft.id+'/versions/manual',{
+    method:'POST',credentials:'same-origin',cache:'no-store',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({request_key:'manual:'+crypto.randomUUID(),revision:draft.revision,
+     index:0,title:options[chosen],body:text(cover.body),
+     secondary_body:text(cover.secondary_body||(language==='en'?cover.body_ko:cover.body_en)),
+     highlight:text(cover.highlight),thumbnail_candidates:options})
+   });
+   const result=await response.json().catch(()=>({}));
+   if(!response.ok||result.error||!result.draft?.id)throw new Error(String(result.error||'HEADLINE_UPDATE_FAILED'));
+   setHeadlineEditing(false);onUpdated(result.draft);
+  }catch(e){setError(e instanceof Error?e.message:String(e));}
+  finally{lock.current=false;setWorking(false);}
+ }
  async function selectTitle(index:number){
-  if(disabled||working||chosen===index)return;
+  if(disabled||working||chosen===index||headlineDuplicates)return;
   const score=scores.find(s=>Number(s.index)===index);
   if(score?.fits_canvas===false){setError(t('This headline overflows the cover. Choose another.','이 제목은 표지에 맞지 않습니다. 다른 제목을 선택하세요.'));return;}
   setWorking(true);setError('');
@@ -165,19 +198,37 @@ export function AdminMarketingEditorialStudio({draft,locale,disabled,onUpdated,o
    })}</div>
   </div>
   {mediaActions}
-  {headlines.length>1&&<details className="roundy-editorial-section roundy-editorial-collapsed"><summary>{t('Other cover titles','다른 표지 제목')} <span>{headlines.length}</span></summary>
-   <p className="admin-help">{t('Changing the title requires an updated cover image before publishing.','제목을 바꾸면 게시 전에 표지 이미지를 갱신해야 합니다.')}</p>
+  {headlines.length>1&&<details className="roundy-editorial-section roundy-editorial-collapsed" open={headlineDuplicates||headlineEditing} data-testid="headline-choice-panel"><summary>{t('Other cover titles','다른 표지 제목')} <span>{headlines.length}</span></summary>
+   <p className="admin-help">{t('If you change the selected cover title, its image must be updated before publishing. Editing unused title choices alone keeps the cover image.','현재 선택된 표지 제목을 바꾸면 게시 전 이미지 갱신이 필요합니다. 사용하지 않는 후보만 수정하면 표지 이미지는 유지됩니다.')}</p>
+   {headlineDuplicates&&<p className="roundy-editorial-headline-warning" role="status">{t('Duplicate cover titles must be corrected before publishing.','표지 후보 제목이 중복되었습니다. 게시 전에 다섯 후보를 다르게 수정하세요.')}</p>}
    <div className="roundy-editorial-headlines">
     {headlines.map((title,index)=>{
      const selected=index===chosen,review=scores.find(s=>Number(s.index)===index);
      return <div key={index} className={'roundy-editorial-headline '+(selected?'is-selected':'')}>
       <strong>{title}</strong>
-      <button type="button" className="admin-secondary" disabled={busy||selected||review?.fits_canvas===false} aria-pressed={selected} onClick={()=>void selectTitle(index)}>
-       {selected?<><Check size={14} aria-hidden="true"/>{t('Selected','선택됨')}</>:review?.fits_canvas===false?t('Too long','길이 초과'):t('Select','선택')}
+      <button type="button" className="admin-secondary" disabled={busy||selected||headlineDuplicates||headlineEditing||review?.fits_canvas===false} aria-pressed={selected} onClick={()=>void selectTitle(index)}>
+       {selected?<><Check size={14} aria-hidden="true"/>{t('Selected','선택됨')}</>:headlineDuplicates?t('Fix duplicates','중복 수정 필요'):review?.fits_canvas===false?t('Too long','길이 초과'):t('Select','선택')}
       </button>
      </div>;
     })}
    </div>
+   {manualSupported&&<div className="roundy-editorial-headline-tools" data-testid="headline-edit-tools">
+    {!headlineEditing
+     ?<button type="button" className="admin-secondary" disabled={busy||unsaved} onClick={()=>{setHeadlineValues([...headlines]);setHeadlineEditing(true);setError('');}}>
+       {t('Edit all cover title options','표지 제목 후보 전체 수정')}
+      </button>
+     :<div className="roundy-editorial-headline-form">
+       <p className="admin-help">{t('Write five distinct headlines that genuinely fit the same story. Fixing titles does not override independent copy review.','같은 이야기를 설명하는 서로 다른 제목 다섯 개를 작성하세요. 제목 수정만으로 본문 품질 검수가 통과되지는 않습니다.')}</p>
+       {headlineValues.map((value,index)=><label key={index}>
+        <span>{t('Cover option ','표지 후보 ')}{index+1}{index===chosen?' ('+t('on cover','현재 선택')+')':''}</span>
+        <input type="text" value={value} maxLength={language==='en'?64:34} disabled={busy} onChange={event=>setHeadlineValues(current=>current.map((item,i)=>i===index?event.target.value:item))}/>
+       </label>)}
+       <div className="roundy-editorial-save-actions">
+        <button type="button" className="admin-primary" disabled={busy||!headlineDirty} onClick={()=>void saveHeadlineOptions()}>{t('Save headline options','표지 후보 저장')}</button>
+        <button type="button" className="admin-secondary" disabled={busy} onClick={()=>{setHeadlineEditing(false);setHeadlineValues([]);setError('');}}>{t('Cancel','취소')}</button>
+       </div>
+      </div>}
+   </div>}
   </details>}
   <details className="roundy-editorial-section roundy-editorial-collapsed roundy-editorial-feedback" open={doc.editorial_review_required===true}>
    <summary>{doc.editorial_review_required?t('Review saved copy','저장된 원고 검토'):t('Style feedback (optional)','문체 피드백 (선택)')}</summary>

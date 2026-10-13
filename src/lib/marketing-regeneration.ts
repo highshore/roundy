@@ -371,7 +371,10 @@ export async function editManualMagazineSlideVersion(id:string,value:unknown,act
  });
  try {
   const images=Array.isArray(source.images)?[...source.images]:[];
-  images[index]=''; // Old image depicts the previous text; never publish it again.
+  const sourceCard=(source.carousel_slides||[])[index]||{},nextCard=edit.slides[index]||{};
+  const visibleCopyChanged=['title','body','secondary_body','highlight'].some(field=>
+   String(sourceCard[field]??'').trim()!==String(nextCard[field]??'').trim());
+  if(visibleCopyChanged)images[index]=''; // Never publish an image with stale visible copy.
   const changed=ok(await db.from('instagram_post_drafts').update({
    content_document:edit.document,carousel_slides:edit.slides,images,
    revision:2,quality_report:unapprovedQuality(),quality_revision:null,
@@ -379,7 +382,9 @@ export async function editManualMagazineSlideVersion(id:string,value:unknown,act
   }).eq('id',child.id).eq('status','needs_approval').eq('revision',1).select('*').single()) as Row;
   // Saving primary-language text never depends on a reusable photo.
   let renderIssue='';
-  const rendered=await renderVersionCards(db,changed,[index]).catch((error:unknown)=>{renderIssue=error instanceof Error?error.message:'RENDER_SOURCE_UNAVAILABLE';return {draft:changed,ready:false};});
+  const rendered=visibleCopyChanged
+   ?await renderVersionCards(db,changed,[index]).catch((error:unknown)=>{renderIssue=error instanceof Error?error.message:'RENDER_SOURCE_UNAVAILABLE';return {draft:changed,ready:false};})
+   :{draft:changed,ready:images.every((value:unknown)=>typeof value==='string'&&value.trim().length>0)};
   let reviewed=await recheck(db,rendered.draft);
   const finalPhotos=await listStockSelections(db,child.id),now=new Date().toISOString();
   reviewed=ok(await db.from('instagram_post_drafts').update({
