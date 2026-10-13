@@ -6,7 +6,7 @@ import {workflowNavigation,carouselCounts,focusWorkflowTarget} from '@/lib/marke
 import './marketing-workflow-nav.css';
 type Row=Record<string,any>;
 const groups=[
- {id:'content',en:'Content',ko:'콘텐츠',tabs:['draft','reels','stories','trend','assets','generation']},
+ {id:'content',en:'Content',ko:'콘텐츠',tabs:['contents','draft','reels','stories','trend','assets','generation']},
  {id:'calendar',en:'Calendar',ko:'캘린더',tabs:['queue','publishing']},
  {id:'performance',en:'Performance',ko:'성과',tabs:['growth','overview']},
  {id:'settings',en:'Settings',ko:'설정',tabs:['automation','connection']}
@@ -14,7 +14,7 @@ const groups=[
 export function MarketingWorkflowNav({locale,activeTab,items,onNavigate}:{locale:Locale;activeTab:string;items:readonly(readonly[string,string,any])[];onNavigate:(id:any)=>void}){
  const t=(en:string,ko:string)=>tr(locale,en,ko),current=groups.find(g=>g.tabs.includes(activeTab))||groups[0];
  return <nav className="marketing-workflow-nav" aria-label={t('Instagram workspace','인스타그램 작업 메뉴')}>
-  <div className="marketing-workflow-groups">{groups.map(g=><button type="button" key={g.id} aria-pressed={current.id===g.id} onClick={()=>onNavigate(g.tabs[0])}>{t(g.en,g.ko)}</button>)}</div>
+  <div className="marketing-workflow-groups">{groups.map(g=><button type="button" key={g.id} aria-pressed={current.id===g.id} onClick={()=>onNavigate(g.tabs.find(id=>items.some(item=>item[0]===id))||g.tabs[0])}>{t(g.en,g.ko)}</button>)}</div>
   <div className="marketing-workflow-tools" aria-label={t(current.en,current.ko)}>{current.tabs.map(id=>{
    const item=items.find(x=>x[0]===id);if(!item)return null;const Icon=item[2];
    return <button type="button" key={id} aria-current={activeTab===id?'page':undefined} onClick={()=>onNavigate(id)}><Icon size={15} aria-hidden="true"/>{item[1]}</button>;

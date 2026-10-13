@@ -37,7 +37,7 @@ function harness({visualSource='stock',language='ko',snapshotPatch={},jobPatch={
   quality_report:{version:2,status:'rejected',review_required:true,issues:['Needs a more concrete scene']},...clone(snapshotPatch)};
  const base={id:sourceId,status:'needs_approval',draft_role:'candidate',revision:1,caption:'Original workspace',images:[],carousel_slides:[],visual_source:visualSource,imported_at:null};
  const job={id:jobId,draft_id:sourceId,status:'completed',stage:'editorial_review_required',result_snapshot:snapshot,automatic:false,...clone(jobPatch)};
- const rows={marketing_generation_jobs:[job],instagram_post_drafts:[base,...(existing?[{...clone(snapshot),...clone(existing),id:candidateId,source_generation_job_id:jobId}]:[])],marketing_draft_photos:[]};
+ const rows={marketing_contents:[],marketing_content_steps:[],marketing_generation_jobs:[job],instagram_post_drafts:[base,...(existing?[{...clone(snapshot),...clone(existing),id:candidateId,source_generation_job_id:jobId}]:[])],marketing_draft_photos:[]};
  const writes=[],photoImports=[],rpcCalls=[];
  const before=JSON.stringify({base,job});
  class Q{

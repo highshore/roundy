@@ -100,9 +100,10 @@ function parseDocument(result:Row){
  catch{throw new Error('생성 결과 형식이 유효하지 않습니다. 원문을 보존했으며 자동 반복 생성하지 않습니다.');}
 }
 
-export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,call:Call){
+export type EditorialStepOptions={central?:boolean;researchOnly?:boolean;researchContext?:Row};
+export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,call:Call,options:EditorialStepOptions={}):Promise<Row>{
  const requestedType=postType(input),language=input.language==='en'?'en':'ko',answerFirst=input.answer_first_enabled===true,plan=(input.carousel_plan||null) as CarouselPlan|null;
- const editorFirst=input.editorial_workflow_version===EDITOR_FIRST_VERSION&&input.content_mode==='growth_carousel'&&!!plan;
+ const editorFirst=!!plan&&(options.central===true||(input.editorial_workflow_version===EDITOR_FIRST_VERSION&&input.content_mode==='growth_carousel'));
  const series=validEditorialSeries(input.editorial_series)?input.editorial_series:seriesForTopic(requestedType);
  const seoulFormat:SeoulDatingFormat=requestedType==='seoul_dating'&&!(editorFirst&&series==='before_you_go')?seoulDatingFormat(String(draft.draft_date||'')+':'+String(draft.id||'')):'places';
  const trendItems=requestedType==='trend_research'?await loadTrendHistory(db):[],trendHistory=trendHistoryPrompt(trendItems);
@@ -205,6 +206,19 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
  }
 
 
+ // Central workers exchange a durable, server-loaded research result. The copy
+ // worker is never permitted to buy another search when a cached result is stale.
+ if(options.researchContext){
+  const ctx=options.researchContext;
+  if(ctx.version!==1||ctx.requested_type!==requestedType||ctx.language!==language||ctx.direction!==creativeDirection||
+   !Array.isArray(ctx.sources)||typeof ctx.notes!=='string'||!Number.isFinite(Date.parse(ctx.saved_at))||
+   Date.now()-Date.parse(ctx.saved_at)<0||Date.now()-Date.parse(ctx.saved_at)>=86400000)
+   throw new EditorialReviewRequired('DISCOVERY_REFRESH_REQUIRED','저장된 조사 결과를 다시 확인해야 합니다. 원고 단계에서 재검색하지 않았습니다.');
+  sources=ctx.sources;notes=ctx.notes;trendContext=ctx.trend_context||null;trendPack=ctx.trend_pack||null;
+  selectedBook=ctx.selected_book||null;
+  if(CONTENT_PROFILES[requestedType].research&&!sources.length)
+   throw new EditorialReviewRequired('EDITORIAL_SOURCE_REVIEW_REQUIRED','저장된 조사 결과에 인용 근거가 없습니다.');
+ }else{
  if(requestedType==='seoul_trend'&&draft.trend_id){
   trendContext=ok(await db.from('marketing_trends').select('*').eq('id',draft.trend_id).maybeSingle()) as Row|null;
   if(!trendContext||!['emerging','rising','peak'].includes(String(trendContext.status)))throw new Error('TREND_CONTEXT_UNAVAILABLE');
@@ -255,6 +269,10 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
    }
   }
  }
+
+ }
+ if(options.researchOnly)return {research_context:{version:1,requested_type:requestedType,language,direction:creativeDirection,
+  sources,notes,trend_context:trendContext,trend_pack:trendPack,selected_book:selectedBook,saved_at:new Date().toISOString()}};
 
  const referenceSamples=await editorialReferenceSamples(db,language);
  const write=async(type:PostType,repair?:{document:Row;issues:string[];critique?:EditorialCopyCritique|null},candidateVariant:''|'backup'='')=>{
@@ -526,7 +544,7 @@ export async function generateEditorialCopy(db:any,draft:Row,input:Row,job:Row,c
   if(eventCard){const factsText=[facts.title,new Date(facts.starts_at).toLocaleString(language==='ko'?'ko-KR':'en-GB',{timeZone:'Asia/Seoul'})+' KST',facts.venue||facts.neighborhood].filter(Boolean).join('\n');eventCard.body=factsText;eventCard.body_ko=[facts.title,new Date(facts.starts_at).toLocaleString('ko-KR',{timeZone:'Asia/Seoul'})+' KST',facts.venue||facts.neighborhood].filter(Boolean).join('\n');eventCard.body_en=[new Date(facts.starts_at).toLocaleString('en-GB',{timeZone:'Asia/Seoul'})+' KST',facts.venue||facts.neighborhood].filter(Boolean).join('\n');eventCard.source_label='Roundy에 등록된 행사 정보 / Published event';}
  }
  let finalSlides=prepared.slides;
- if(plan&&input.brand_outro_enabled===true&&input.content_mode==='growth_carousel'&&isMagazineDocument(document)){
+ if(plan&&input.brand_outro_enabled===true&&(input.content_mode==='growth_carousel'||options.central)&&isMagazineDocument(document)){
   const completed=appendRoundyOutro(document,finalSlides,language,plan);
   document=completed.document;finalSlides=completed.slides;
  }
