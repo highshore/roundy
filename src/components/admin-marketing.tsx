@@ -1,4 +1,5 @@
 'use client';
+import {AdminMarketingContentLibrary} from './admin-marketing-content-library';
 import {EDITOR_FIRST_VERSION,EDITORIAL_SERIES,SERIES_CONTENT,seriesForTopic} from '@/lib/marketing-editor-first';
 import './admin-marketing-composer.css';
 
@@ -53,7 +54,7 @@ async function request(path='',body?:unknown,method='POST'){
  return {ok:response.ok,data};
 }
 const blank=()=>({channel:'koreapas',name:'',title:'',caption:'',cta:'자세히 보기',destination_url:'https://roundy.team',images:[] as string[],days:[] as number[],time_kst:'10:00',enabled:false});
-export function AdminMarketing({locale}:{locale:Locale}){
+export function AdminMarketing({locale,initialTab='contents'}:{locale:Locale;initialTab?:'contents'|'draft'}){
  const t=(en:string,ko:string)=>tr(locale,en,ko);
  const [data,setData]=useState<Row>({drafts:[],runs:[],templates:[]});
  const [feedAttempts,setFeedAttempts]=useState<Record<string,Row>>({});
@@ -78,7 +79,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
  const [resultPreview,setResultPreview]=useState<Row|null>(null);
  const [regenerationSourceId,setRegenerationSourceId]=useState<string|null>(null);
  const [regenerationFocus,setRegenerationFocus]=useState<{index:number;nonce:number}|null>(null);
- const [activeTab,setActiveTab]=useState<'overview'|'draft'|'assets'|'queue'|'growth'|'reels'|'stories'|'generation'|'trend'|'publishing'|'automation'|'connection'>('draft');
+ const [activeTab,setActiveTab]=useState<'contents'|'overview'|'draft'|'assets'|'queue'|'growth'|'reels'|'stories'|'generation'|'trend'|'publishing'|'automation'|'connection'>(initialTab);
  const [generatorOpen,setGeneratorOpen]=useState(true);
  const [editorBusy,setEditorBusy]=useState(false),[advancedRegenOpen,setAdvancedRegenOpen]=useState(false);
  const [editorDirty,setEditorDirty]=useState(false);
@@ -330,6 +331,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
    const path=renderOnly?'/draft/'+draft!.id+'/regenerate':'/draft/generate';
    const r=await request(path,payload);
    if(!r.ok||r.data.error)throw new Error(r.data.error||'Generation failed');
+   if(r.data.content){setActiveTab('contents');setGeneratorOpen(false);return;}
    if(r.data.job?.status==='running'){setNotice(t('This request already exists. Check Generation history; it was not billed again.','이미 접수된 요청입니다. 생성 기록을 확인하세요. 추가 호출하지 않았습니다.'));return;}
    if(['failed','uncertain'].includes(r.data.job?.status))throw new Error(r.data.job?.error_message||'Previous attempt stopped; no retry was sent.');
    if(r.data.job?.stage==='source_review_required'&&!hasEditorialCopy(r.data.job)){
@@ -554,7 +556,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
  const channelRuns=((data.runs||[]) as Row[]).filter((r:Row)=>r.channel===channel);
  const contentRecords=((data.content_records||[]) as Row[]);
  const visibleRuns=channelRuns.slice(0,publishVisible);
- const tabItems=[
+ const tabItems=[['contents',t('Content library','콘텐츠 라이브러리'),BookOpen],
   ['overview',t('Overview','개요'),LayoutDashboard],
   ['draft',t('Content studio','콘텐츠 작업'),FileText],
   ['assets',t('Photo library','사진 자산'),Images],
@@ -651,7 +653,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
    <button type="button" className="admin-primary" disabled={busy||!!running||dirty||copyNeedsReview||stockReview?.ready!==true} onClick={()=>void work(renderStock)}>{t('Finish card images','카드 이미지 완성')}</button>
   </div>;
  }
- if(loading)return <p role="status">{t('Loading marketing workspace…','마케팅 정보를 불러오는 중입니다…')}</p>;
+ if(loading&&activeTab!=='contents')return <p role="status">{t('Loading marketing workspace…','마케팅 정보를 불러오는 중입니다…')}</p>;
  return <section className="admin-panel marketing-panel marketing-workspace">
   <header className="marketing-workspace-header">
    <div className="marketing-workspace-header-title">
@@ -700,6 +702,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
   {channel==='instagram'&&activeTab==='growth'&&<AdminMarketingGrowth locale={locale}/>}
   {channel==='instagram'&&activeTab==='reels'&&<AdminMarketingReels locale={locale}/>}
   {channel==='instagram'&&activeTab==='stories'&&<AdminMarketingStories locale={locale}/>}
+  {channel==='instagram'&&activeTab==='contents'&&<AdminMarketingContentLibrary locale={locale} events={data.live_events||[]} legacyDrafts={data.drafts||[]} onLegacy={()=>setActiveTab('draft')}/>}
   {channel==='instagram'&&activeTab==='draft'&&<>
    <details className="marketing-setup"><summary>{t('API cost and connection status','API 비용 및 연결 상태')}</summary><p className="admin-help">{t('App reservations and provider credits are separate. A remaining app budget does not prove the API account has credits.','앱 예약액과 외부 API 크레딧은 별개입니다. 앱 예산이 남아 있어도 API 계정의 크레딧 부족으로 중단될 수 있습니다.')}</p><p>{t('Reserved today','오늘 예약액')} ${Number(generation?.usage?.daily_reserved_usd||0).toFixed(2)} / ${Number(generation?.usage?.daily_budget_usd??5).toFixed(2)}. {t('This month','이번 달')} ${Number(generation?.usage?.monthly_reserved_usd||0).toFixed(2)} / ${Number(generation?.usage?.monthly_budget_usd??20).toFixed(2)}. {t('Paid generation attempts','오늘 유료 생성 시도')} {generation?.usage?.daily_attempts||0}. {t('Safety-counted jobs','안전 카운트')} {generation?.usage?.daily_calls||0}/{generation?.usage?.daily_call_limit??10}.</p><p className="admin-help">{t('No automatic paid retries or fallback. With Pexels configured, automatic posts use 2–3 rights-reviewed photographs and wait for approval of new images. Without Pexels, the existing AI visual flow remains. Overall daily/monthly AI budgets and generation limits remain the safety controls. External account spending is separate.','유료 API 자동 재시도나 자동 대체는 없습니다. Pexels 설정 시 자동 콘텐츠에 검수된 사진 2~3장을 사용하며 신규 사진은 승인을 기다립니다. Pexels 미설정 시 기존 AI 이미지 흐름을 유지합니다. 전체 일/월 AI 예산과 생성 횟수 한도가 비용 안전장치로 적용됩니다. 다른 서비스의 API 사용액은 이 한도에 포함되지 않습니다.')}</p>{generation?.usage?.daily_budget_override_expires_at&&<p className="admin-help">{t('Temporary daily limit is active until midnight KST. It will automatically fall back to the normal $5.00 limit.','오늘만 임시 한도가 적용 중입니다. KST 자정이 지나면 기본 $5.00 한도로 자동 복귀합니다.')}</p>}
     {!generation?.provider?.configured&&<p className="admin-error">{t('OPENAI_API_KEY is missing from this deployment. Configure Vercel Production and redeploy.','이 배포에 OPENAI_API_KEY가 없습니다. Vercel Production 설정 후 재배포가 필요합니다.')}</p>}
@@ -1046,7 +1049,7 @@ export function AdminMarketing({locale}:{locale:Locale}){
        <div className="trend-fact-sources">{sourceLinks.map((source:Row,index:number)=><a key={index} href={source.url} target="_blank" rel="noreferrer">{'S'+(index+1)}: {source.title||source.url}</a>)}</div>
       </details>:<p className="trend-fact-warning">{expired?t('Expired event — requires refreshed facts','기간이 지난 행사 — 정보 갱신 필요'):t('Missing verified facts — generation disabled','검증된 정보 부족 — 생성 비활성화')}</p>}
      </div>
-     <button type="button" className="trend-create-button" disabled={busy||!ready} onClick={()=>{if(window.confirm(previouslyUsed?t('This trend was already used. Generate another carousel from the same topic? It may cost money for AI copy and visuals, but will not run a new trend search.','이미 사용한 트렌드입니다. 같은 주제로 콘텐츠를 다시 생성할까요? 문구와 이미지 생성 비용이 발생할 수 있으며 트렌드 검색은 다시 하지 않습니다.'):t('Generate a fact-checked carousel from the stored Fact Pack? No new trend web search; AI copy and visuals may incur generation costs.','저장된 팩트팩으로 '+(trendLanguage==='ko'?'한국어':'영어')+' 캐러셀을 생성할까요? 추가 트렌드 검색은 하지 않지만 문구와 이미지 생성 비용은 발생할 수 있습니다.')))void work(async()=>{const r=await mutate('/trend-radar/generate',{trend_id:item.id,language:trendLanguage,confirm_generate:true});await load(r.draft?.id);setActiveTab('generation');setNotice(t('Trend guide generated. Review sourced details before publishing.','정보형 트렌드 콘텐츠가 생성됐습니다. 게시 전 출처를 검토하세요.'));return r;});}}>{previouslyUsed?t('Recreate guide','가이드 다시 만들기'):t('Create guide','가이드 만들기')}</button>
+     <button type="button" className="trend-create-button" disabled={busy||!ready} onClick={()=>{if(window.confirm(previouslyUsed?t('This trend was already used. Generate another carousel from the same topic? It may cost money for AI copy and visuals, but will not run a new trend search.','이미 사용한 트렌드입니다. 같은 주제로 콘텐츠를 다시 생성할까요? 문구와 이미지 생성 비용이 발생할 수 있으며 트렌드 검색은 다시 하지 않습니다.'):t('Generate a fact-checked carousel from the stored Fact Pack? No new trend web search; AI copy and visuals may incur generation costs.','저장된 팩트팩으로 '+(trendLanguage==='ko'?'한국어':'영어')+' 캐러셀을 생성할까요? 추가 트렌드 검색은 하지 않지만 문구와 이미지 생성 비용은 발생할 수 있습니다.')))void work(async()=>{const r=await mutate('/trend-radar/generate',{trend_id:item.id,language:trendLanguage,confirm_generate:true});await load(r.draft?.id);setActiveTab(r.content?'contents':'generation');setNotice(t('Trend guide generated. Review sourced details before publishing.','정보형 트렌드 콘텐츠가 생성됐습니다. 게시 전 출처를 검토하세요.'));return r;});}}>{previouslyUsed?t('Recreate guide','가이드 다시 만들기'):t('Create guide','가이드 만들기')}</button>
     </article>})}</div>:<p className="admin-empty">{trendUsageView==='used'?t('No previously used trends yet.','아직 콘텐츠 생성에 사용한 트렌드가 없습니다.'):t('No unused trends are available. Check the used trends archive or wait for new research.','미사용 트렌드가 없습니다. 사용 기록을 확인하거나 새로운 후보를 기다려주세요.')}</p>}
    </div>
   </section>}

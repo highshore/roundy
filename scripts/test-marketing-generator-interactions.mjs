@@ -83,7 +83,7 @@ let checks=0;const test=async(name,fn)=>{await fn();checks++;console.log('PASS '
 try{
  for(const locale of ['ko','en']){
   drafts=[makeDraft('11111111-1111-4111-8111-111111111111'),makeDraft('22222222-2222-4222-8222-222222222222','growth_carousel','ko')];requests.length=0;confirmations.length=0;
-  await act(async()=>{renderer=create(React.createElement(AdminMarketing,{locale}));await tick();});
+  await act(async()=>{renderer=create(React.createElement(AdminMarketing,{locale,initialTab:'draft'}));await tick();});
   await test(locale+' editor-first composer has three series and defaults to three story cards',()=>{
    const series=renderer.root.findByProps({'aria-label':locale==='ko'?'콘텐츠 시리즈':'Content series'});
    assert.equal(series.findAllByType('button').length,3);
@@ -185,7 +185,7 @@ try{
  const brandedDraft=(stories,aiSlot)=>({...makeDraft('44444444-4444-4444-8444-444444444444','growth_carousel','ko'),images:[],carousel_slides:[...Array.from({length:stories},(_,index)=>({role:index===0?'cover':index===stories-1?'editorial_closing':'insight',title:'Card '+index,body:'Saved body'})),{role:'brand_outro',title:'Roundy',body:'Brand introduction'}],content_document:{design_preset:'roundy_magazine_editorial_v2',brand_outro_version:1,photo_sourcing:{version:2,slide_count:stories+1,min_real_photos:stories-(aiSlot===null?0:1),ai_thumbnail_enabled:aiSlot===0,requested_ai_thumbnail:aiSlot===0,ai_image_slot:aiSlot}}});
  for(const stories of [3,5])for(const locale of ['ko','en']){
   drafts=[brandedDraft(stories,stories===5?0:null)];
-  await act(async()=>{renderer=create(React.createElement(AdminMarketing,{locale}));await tick();});
+  await act(async()=>{renderer=create(React.createElement(AdminMarketing,{locale,initialTab:'draft'}));await tick();});
   const editor=renderer.root.findByProps({id:'roundy-marketing-photo-editor'});
   const options=editor.findAllByType('select')[0].findAllByType('option');
   await test(locale+' branded '+(stories+1)+'-card editor displays saved AI value',()=>{assert.ok(options.some(o=>String(o.props.value)===String(stories===5?0:'none')));assert.equal(options.find(o=>o.props.value==='none').props.disabled,undefined);assert.equal(options.filter(o=>o.props.value!=='none').length,stories===5?4:0);});

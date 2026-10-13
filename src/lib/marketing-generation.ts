@@ -176,11 +176,12 @@ async function storeImage(db:DB,job:Row,bytes:Buffer,index:number){
  const suffix=createHash('sha256').update(job.id+':'+index).digest('hex'),id=suffix.slice(0,8)+'-'+suffix.slice(8,12)+'-'+suffix.slice(12,16)+'-'+suffix.slice(16,20)+'-'+suffix.slice(20,32),path=job.id+'/'+id+'.jpg';
  checked(await db.storage.from('wis-event-images').upload(path,bytes,{contentType:'image/jpeg',upsert:true}));return db.storage.from('wis-event-images').getPublicUrl(path).data.publicUrl;
 }
-async function renderCardsWithAssets(db:DB,draft:Row,job:Row,assets:Awaited<ReturnType<typeof loadEditorialAssets>>,directCards:Record<number,Buffer>={}){
+async function renderCardsWithAssets(db:DB,draft:Row,job:Row,assets:Awaited<ReturnType<typeof loadEditorialAssets>>,directCards:Record<number,Buffer>={},deadline=Infinity){
  const cards=draft.carousel_slides||[];
  if(!draft.content_document||!cards.length||cards.length>6)throw new Error('유형별 카드 문구가 없습니다. 품질 재작업 후 렌더하세요.');
  const urls:string[]=[];
  for(let i=0;i<cards.length;i++){
+  if(Date.now()+25000>deadline)throw new Error('CONTENT_RENDER_TIME_LIMIT');
   await progress(db,job,'rendering_'+(i+1)+'_of_'+cards.length);
   if(directCards[i]){urls.push(await storeImage(db,job,directCards[i],i));continue;}
   const document={...draft.content_document,slides:cards};
@@ -640,7 +641,9 @@ async function nextEventCampaignLanguage(db:DB,eventId:string):Promise<ContentLa
  if(previous==='en')return 'ko';
  return nextContentLanguage(db);
 }
-export async function automaticEventGeneration(){
+async function legacyAutomaticEventGeneration(){
+ const centralDb=createServiceRoleClient(),centralFlag=checked(await centralDb.from('marketing_content_workflow_control').select('enabled').eq('singleton',true).maybeSingle()).data;
+ if(centralFlag?.enabled){const {startAutomaticContentWorkflow}=await import('./marketing-content-automation');return startAutomaticContentWorkflow(centralDb,true);}
  if(process.env.VERCEL_ENV&&process.env.VERCEL_ENV!=='production')throw new Error('PRODUCTION_ONLY');
  const db=createServiceRoleClient(),settings=checked(await db.from('marketing_automation_settings').select('*').eq('singleton',true).single()).data as Row;
  if(settings.event_campaign_enabled===false)return {skipped:true,reason:'EVENT_CAMPAIGN_DISABLED'};
@@ -659,7 +662,9 @@ export async function automaticEventGeneration(){
  }
  return {...result,event_campaign:{event_id:opportunity.event_id,stage:opportunity.stage,pattern:opportunity.pattern,score:opportunity.score}};
 }
-export async function automaticGeneration(){
+async function legacyAutomaticGeneration(){
+ const centralDb=createServiceRoleClient(),centralFlag=checked(await centralDb.from('marketing_content_workflow_control').select('enabled').eq('singleton',true).maybeSingle()).data;
+ if(centralFlag?.enabled){const {startAutomaticContentWorkflow}=await import('./marketing-content-automation');return startAutomaticContentWorkflow(centralDb,false);}
  if(process.env.VERCEL_ENV&&process.env.VERCEL_ENV!=='production')throw new Error('PRODUCTION_ONLY');
  const db=createServiceRoleClient(),settings=checked(await db.from('marketing_automation_settings').select('*').eq('singleton',true).single()).data as Row,time=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date());
  if(!settings.daily_instagram_enabled||time<String(settings.draft_generation_time_kst).slice(0,5))return {skipped:true};
@@ -672,4 +677,15 @@ export async function automaticGeneration(){
  const result=await runGeneration(draft.id,{...(draft.draft_kind==='growth_carousel'?{editorial_workflow_version:EDITOR_FIRST_VERSION,editorial_series:seriesForTopic(draft.growth_topic_type)}:{}),request_key:key,revision:draft.revision,mode:'both',visual_mode:'cards',visual_source:'auto_ai',content_mode:draft.draft_kind==='growth_carousel'?'growth_carousel':draft.content_mode,topic_type:draft.growth_topic_type||'conversation_prompt',instruction},null,true);
  if(trend&&result.job?.status==='completed')await markTrendUsed(db,trend.id);
  return {...result,trend_override:trend?{id:trend.id,trend_key:trend.trend_key,display_name:trend.display_name,score:trend.adjusted_trend_score||trend.trend_score,route_type:trend.route_type}:null};
+}
+
+// Stateless provider/render primitives shared by isolated content-step workers.
+export {upstream as marketingProviderRequest,renderCardsWithAssets,visualContext};
+
+// Scheduler entrypoints always use the central controller. Pausing cannot re-enable legacy generation.
+export async function automaticEventGeneration(){
+ return (await import('./marketing-content-automation')).startAutomaticContentWorkflow(createServiceRoleClient(),true);
+}
+export async function automaticGeneration(){
+ return (await import('./marketing-content-automation')).startAutomaticContentWorkflow(createServiceRoleClient(),false);
 }

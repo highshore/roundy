@@ -1,3 +1,4 @@
+import {contentWorkflowApi,startContentWorkflow} from './marketing-content-controller';
 import {EDITOR_FIRST_VERSION,seriesForTopic} from './marketing-editor-first';
 import {restoreSavedGenerationInput,canRetryGenerationJob} from './marketing-generation-retry';
 import {openSavedEditorialCopy,saveEditorialFeedback} from './marketing-editorial-workspace';
@@ -58,6 +59,16 @@ async function invokeMarketingWorker(db:Client,body:Record<string,unknown>,timeo
 // No generation route, including malformed suffixes, can reach legacy AI code.
 export async function marketingApi(req:NextRequest,db:Client,path:string[]){
  const id=path[0],service=createServiceRoleClient();
+ if(id==='contents'){const actor=(await db.auth.getUser()).data.user;if(!actor)return json({error:'Sign in required'},401);return contentWorkflowApi(req,service,path.slice(1),actor.id);}
+ // Managed content can only be changed through its version-aware controller.
+ if(id==='draft'&&uuid(path[1]||'')&&req.method!=='GET'){
+  const managed=checked(await service.from('marketing_contents').select('id').eq('id',path[1]).maybeSingle());
+  if(managed)return json({error:'USE_CONTENT_WORKFLOW',content_id:managed.id},409);
+ }
+ if(id==='generation'&&path[1]==='jobs'&&uuid(path[2]||'')&&req.method!=='GET'){
+  const linked=checked(await service.from('marketing_content_steps').select('content_id').eq('generation_job_id',path[2]).limit(1).maybeSingle());
+  if(linked)return json({error:'USE_CONTENT_WORKFLOW',content_id:linked.content_id},409);
+ }
 
  if(id==='draft'&&path.length===3&&uuid(path[1])&&path[2]==='editorial-review'&&req.method==='POST'){
   const actor=(await db.auth.getUser()).data.user;if(!actor)return json({error:'Sign in required'},401);
@@ -399,7 +410,9 @@ if(id==='uploads'&&path.length===1&&req.method==='GET'){
    service.from('marketing_event_campaign_history').select('*').order('generated_at',{ascending:false}).limit(100)
   ]);
   if(liveEvents.error)throw liveEvents.error;if(eventCampaignHistory.error)throw eventCampaignHistory.error;
-  return json({...data,generation,trend,live_events:(liveEvents.data||[]).filter((event:Row)=>!/^\s*\((?:test|테스트)\)/i.test(String(event.title||event.title_ko||''))),event_campaign_history:eventCampaignHistory.data||[]});
+  const managedIds=(data.drafts||[]).length?checked(await service.from('marketing_contents').select('id').in('id',data.drafts.map((d:Row)=>d.id))):[];
+  const managedSet=new Set(managedIds.map((d:Row)=>d.id));
+  return json({...data,drafts:(data.drafts||[]).filter((d:Row)=>!managedSet.has(d.id)),generation:{...generation,jobs:(generation.jobs||[]).filter((j:Row)=>!j.content_id)},trend,live_events:(liveEvents.data||[]).filter((event:Row)=>!/^\s*\((?:test|테스트)\)/i.test(String(event.title||event.title_ko||''))),event_campaign_history:eventCampaignHistory.data||[]});
  }
  if(id==='generation'&&path.length===1&&req.method==='GET')return json(await generationOverview());
  if(id==='generation'&&path[1]==='control'&&path.length===2&&req.method==='PUT'){
@@ -430,22 +443,10 @@ if(id==='uploads'&&path.length===1&&req.method==='GET'){
   const recent=checked(await service.from('marketing_generation_jobs').select('id,status').contains('request_payload',{trend_id:trendId}).gte('created_at',recentSince).limit(1));
   if(recent.length)return json({error:'GENERATION_COOLDOWN_30_SECONDS'},429);
   const user=(await db.auth.getUser()).data.user;if(!user)return json({error:'Sign in required'},401);
-  // Manual Trend Radar generation must never reuse or create the daily automation workspace.
-  const today=kstDate(),dow=new Date(today+'T12:00:00+09:00').getUTCDay();
-  const rec=checked(await service.from('instagram_posting_time_recommendations').select('*').eq('dow',dow).maybeSingle());
-  const recommended=String(rec?.recommended_time_kst||'21:00').slice(0,5);
-  const draft=checked(await service.from('instagram_post_drafts').insert({
-   draft_date:today,draft_role:'candidate',status:'needs_approval',generation_source:'manual',visual_source:'auto_ai',
-   content_language:language,content_mode:'prelaunch',draft_kind:'growth_carousel',growth_topic_type:'seoul_trend',
-   trend_id:trendId,content_pillar:'seoul',caption:'',cta:'Follow @roundy.meet',destination_url:'https://roundy.team',images:[],carousel_slides:[],
-   research_sources:[],research_status:'pending',generation_reason:'Manual Trend Radar content: '+String(trend.display_name),
-   recommended_time_kst:recommended,window_start_kst:rec?.window_start_kst||'20:30',window_end_kst:rec?.window_end_kst||'21:30',
-   scheduled_for:today+'T'+recommended+':00+09:00',revision:1
-  }).select('*').single());
-  const instruction=[String(trend.display_name),String(trend.content_angle||trend.summary||'')].filter(Boolean).join(': ').slice(0,500);
-  const result=await runGeneration(draft.id,{request_key:'trend-manual:'+trendId+':'+language+':'+randomUUID(),revision:draft.revision,mode:'both',visual_mode:'cards',visual_source:'auto_ai',content_mode:'growth_carousel',topic_type:'seoul_trend',language,instruction},user.id,false);
-  if(result.job?.status==='completed')checked(await service.from('marketing_trends').update({used_at:new Date().toISOString(),cooldown_until:new Date(Date.now()+60*86400000).toISOString(),material_change:false,updated_at:new Date().toISOString()}).eq('id',trendId));
-  return json(result,result.error?400:200);
+  return json(await startContentWorkflow(service,{request_key:'trend-manual:'+trendId+':'+randomUUID(),revision:1,
+   mode:'both',visual_mode:'cards',visual_source:'stock',content_mode:'growth_carousel',topic_type:'seoul_trend',language,
+   instruction:[trend.display_name,trend.content_angle||trend.summary||''].filter(Boolean).join(': ').slice(0,500)},user.id,'manual',{trend_id:trendId}),202);
+
  }
 
  if(id==='generation'&&path[1]==='jobs'&&path.length===4&&uuid(path[2])&&path[3]==='retry'&&req.method==='POST'){
@@ -527,49 +528,8 @@ if(id==='uploads'&&path.length===1&&req.method==='GET'){
   return json(result,result.error?400:200);
  }
  if(id==='draft'&&path[1]==='generate'&&path.length===2&&req.method==='POST'){
-  const body=await req.json().catch(()=>null);
-  if(!body||typeof body.request_key!=='string')return json({error:'Refresh this page to use the cost-protected generator.'},400);
-  const old=checked(await service.from('marketing_generation_jobs').select('*').eq('request_key',body.request_key).maybeSingle());
-  if(old)return json({job:old,deduplicated:true});
-  const user=(await db.auth.getUser()).data.user;if(!user)return json({error:'Sign in required'},401);
-  const input=validateGenerationInput(body);
-  if(input.content_mode==='growth_carousel'){
-   input.editorial_workflow_version=EDITOR_FIRST_VERSION;
-   input.editorial_series=input.editorial_series||seriesForTopic(input.topic_type);
-  }
-  let selectedEvent:Row|null=null;
-  if(input.content_mode==='live_event'){
-   const eventId=String(input.event_id||'');
-   if(!uuid(eventId))return json({error:'Choose a live event to promote.'},400);
-   selectedEvent=checked(await service.from('events').select('id,slug,title,title_ko,starts_at,status,deleted_at,marketing_enabled').eq('id',eventId).maybeSingle());
-   if(!selectedEvent||selectedEvent.deleted_at||selectedEvent.status!=='live'||selectedEvent.marketing_enabled===false||Date.parse(selectedEvent.starts_at)<=Date.now())return json({error:'EVENT_NOT_MARKETABLE'},409);
-  }
-  // All manual generations use an isolated hidden candidate. Only an explicit import makes it visible in Drafts.
-  const today=kstDate(),dow=new Date(today+'T12:00:00+09:00').getUTCDay();
-  const [settings,rec]=await Promise.all([
-   service.from('marketing_automation_settings').select('*').eq('singleton',true).single(),
-   service.from('instagram_posting_time_recommendations').select('*').eq('dow',dow).maybeSingle()
-  ]);
-  const s=checked(settings),r=checked(rec),growth=input.content_mode==='growth_carousel',recommended=String(r?.recommended_time_kst||'21:00').slice(0,5);
-  const draft=checked(await service.from('instagram_post_drafts').insert({
-   draft_date:today,draft_role:'candidate',status:'needs_approval',generation_source:'manual',visual_source:input.visual_source,
-   content_language:input.language||null,content_mode:growth?String(s.content_mode||'prelaunch'):input.content_mode,
-   draft_kind:growth?'growth_carousel':'brand',growth_topic_type:growth?String(input.topic_type||'conversation_prompt'):null,
-   trend_id:null,event_id:selectedEvent?.id||null,content_pillar:input.content_mode==='live_event'?'event':'concept',caption:'',cta:'Follow @roundy.meet',destination_url:selectedEvent?'https://roundy.team/events/'+selectedEvent.slug:'https://roundy.team',images:[],carousel_slides:[],
-   research_sources:[],research_status:growth?'pending':'not_required',generation_reason:'Manual generation workspace',
-   render_style:growth?'editorial':['prelaunch','live_event'].includes(input.content_mode)?'campaign':null,
-   event_campaign_stage:input.content_mode==='live_event'&&input.event_campaign_stage&&input.event_campaign_stage!=='auto'?input.event_campaign_stage:null,
-   event_campaign_pattern:null,
-   event_campaign_version:input.content_mode==='live_event'?EVENT_CAMPAIGN_VERSION:null,
-   event_facts_snapshot:null,
-   campaign_pattern:input.content_mode==='prelaunch'&&input.campaign_pattern&&input.campaign_pattern!=='auto'?input.campaign_pattern:null,
-   campaign_tone:input.content_mode==='prelaunch'?(input.campaign_tone||'modern_premium'):null,
-   campaign_version:input.content_mode==='prelaunch'?CAMPAIGN_VERSION:null,
-   launch_date:input.content_mode==='prelaunch'?(input.launch_date||null):null,
-   recommended_time_kst:recommended,window_start_kst:r?.window_start_kst||'20:30',window_end_kst:r?.window_end_kst||'21:30',
-   scheduled_for:today+'T'+recommended+':00+09:00',revision:1,imported_at:null
-  }).select('*').single());
-  const result=await runGeneration(draft.id,{...input,revision:draft.revision},user.id,false);return json(result,result.error?400:200);
+  const actor=(await db.auth.getUser()).data.user;if(!actor)return json({error:'Sign in required'},401);
+  return json(await startContentWorkflow(service,await req.json(),actor.id),202);
  }
  if(id==='draft'&&path.length===3&&['regenerate','growth-generate'].includes(path[2])&&req.method==='POST'){
   if(!uuid(path[1]))return json({error:'Invalid draft'},400);

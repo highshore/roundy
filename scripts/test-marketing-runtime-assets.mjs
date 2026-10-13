@@ -28,7 +28,7 @@ for(const lang of ['ko','en'])for(const length of [3,5]){
  }
 }
 assert.equal(count,20);
-const traces=['.next/server/app/api/internal/marketing-generation/route.js.nft.json','.next/server/app/api/admin/marketing/[[...marketingPath]]/route.js.nft.json'];
+const traces=['.next/server/app/api/internal/marketing-content-workflows/route.js.nft.json','.next/server/app/api/internal/marketing-generation/route.js.nft.json','.next/server/app/api/admin/marketing/[[...marketingPath]]/route.js.nft.json'];
 for(const p of traces){
  const trace=JSON.parse(fs.readFileSync(p,'utf8'));
  for(const name of ['NotoSansCJKkr-Regular.otf','NotoSansCJKkr-Black.otf','dm-sans-latin-400-normal.woff','dm-sans-latin-700-normal.woff']){
