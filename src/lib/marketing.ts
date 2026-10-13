@@ -1,29 +1,22 @@
-import {contentWorkflowApi,startContentWorkflow} from './marketing-content-controller';
-import {EDITOR_FIRST_VERSION,seriesForTopic} from './marketing-editor-first';
-import {restoreSavedGenerationInput,canRetryGenerationJob} from './marketing-generation-retry';
-import {openSavedEditorialCopy,saveEditorialFeedback} from './marketing-editorial-workspace';
-import {versionHistory,regenerateVersion,restoreVersion,finishVersionRendering,editManualMagazineSlideVersion} from './marketing-regeneration';
-import {savedCtaRecoverySource} from './marketing-output-recovery';
-import {selectAnswerFirstHeadline} from './marketing-answer-first';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest,NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
-import {draftQuality} from './marketing-editorial';
-import {reviewMarketingDraft,mergePreflightQuality} from './marketing-preflight-service';
-import {factPackReady} from './marketing-trend-guide';
-import {importStockSelections,listStockSelections,prepareStockSelections,requiredStockSlots,stockReady,reviewStockAsset} from './marketing-stock-photos';
-import {supportedPhotoSources,providerConfigured} from './marketing-photo-providers';
-import {fullReviewPhotoUrl} from './marketing-photo-rights';
+import { marketingAdministrationApi } from './marketing-admin-api';
+import { CAMPAIGN_VERSION } from './marketing-campaign';
+import { contentWorkflowApi,startContentWorkflow } from './marketing-content-controller';
+import { draftQuality } from './marketing-editorial';
+import { generationOverview } from './marketing-generation';
+import { growthOverview } from './marketing-growth';
+import { providerConfigured,supportedPhotoSources } from './marketing-photo-providers';
+import { fullReviewPhotoUrl } from './marketing-photo-rights';
+import { mergePreflightQuality,reviewMarketingDraft } from './marketing-preflight-service';
+import { reelsApi } from './marketing-reels';
+import { listStockSelections,requiredStockSlots,reviewStockAsset,stockReady } from './marketing-stock-photos';
+import { marketingStoryApi } from './marketing-stories';
+import { factPackReady } from './marketing-trend-guide';
+import { runTrendRadar,trendOverview } from './marketing-trend-radar';
 import type { createClient } from './supabase/server';
 import { createServiceRoleClient } from './supabase/service';
-import { marketingApi as legacyMarketingApi } from './marketing-legacy';
-import { generationOverview, kstDate, runGeneration, validateGenerationInput } from './marketing-generation';
-import {runTrendRadar,trendOverview} from './marketing-trend-radar';
-import {growthOverview} from './marketing-growth';
-import {reelsApi} from './marketing-reels';
-import {marketingStoryApi} from './marketing-stories';
-import {CAMPAIGN_VERSION} from './marketing-campaign';
-import {EVENT_CAMPAIGN_VERSION} from './marketing-event-campaign';
 type Client=Awaited<ReturnType<typeof createClient>>;
 type Row=Record<string,any>;
 const json=(value:unknown,status=200)=>NextResponse.json(value,{status,headers:{'Cache-Control':'private, no-store'}});
@@ -59,72 +52,16 @@ async function invokeMarketingWorker(db:Client,body:Record<string,unknown>,timeo
 // No generation route, including malformed suffixes, can reach legacy AI code.
 export async function marketingApi(req:NextRequest,db:Client,path:string[]){
  const id=path[0],service=createServiceRoleClient();
+ // Retired draft mutations must not reach an old paid writer or bypass current approvals.
+ if(id==='draft'){
+  if(path.length===2&&path[1]==='generate'&&req.method==='POST'){
+   const actor=(await db.auth.getUser()).data.user;if(!actor)return json({error:'Sign in required'},401);
+   return json(await startContentWorkflow(service,await req.json(),actor.id),202);
+  }
+  return json({error:'CONTENT_WORKFLOW_REQUIRED',message:'Use the content library workflow. Saved records are preserved.'},410);
+ }
+ if(id==='generation'&&path[1]==='jobs'&&req.method!=='GET')return json({error:'CONTENT_WORKFLOW_REQUIRED'},410);
  if(id==='contents'){const actor=(await db.auth.getUser()).data.user;if(!actor)return json({error:'Sign in required'},401);return contentWorkflowApi(req,service,path.slice(1),actor.id);}
- // Managed content can only be changed through its version-aware controller.
- if(id==='draft'&&uuid(path[1]||'')&&req.method!=='GET'){
-  const managed=checked(await service.from('marketing_contents').select('id').eq('id',path[1]).maybeSingle());
-  if(managed)return json({error:'USE_CONTENT_WORKFLOW',content_id:managed.id},409);
- }
- if(id==='generation'&&path[1]==='jobs'&&uuid(path[2]||'')&&req.method!=='GET'){
-  const linked=checked(await service.from('marketing_content_steps').select('content_id').eq('generation_job_id',path[2]).limit(1).maybeSingle());
-  if(linked)return json({error:'USE_CONTENT_WORKFLOW',content_id:linked.content_id},409);
- }
-
- if(id==='draft'&&path.length===3&&uuid(path[1])&&path[2]==='editorial-review'&&req.method==='POST'){
-  const actor=(await db.auth.getUser()).data.user;if(!actor)return json({error:'Sign in required'},401);
-  return json({draft:await saveEditorialFeedback(service,path[1],await req.json(),actor.id)});
- }
- // All mutations below create a separate unapproved version; they never change the published or reserved original.
-
- // Skipping is an administrative review action, not a publishing/quality-gated action.
- // Handle it here instead of the legacy route so it has revision and status guards.
- if(id==='draft'&&path.length===3&&uuid(path[1])&&path[2]==='skip'&&req.method==='POST'){
-  const body=await req.json().catch(()=>({}));
-  if(body.revision!==undefined&&(!Number.isInteger(body.revision)||body.revision<1))
-   return json({error:'INVALID_SKIP_REVISION'},400);
-  const current=checked(await service.from('instagram_post_drafts')
-   .select('id,status,draft_role,revision,imported_at').eq('id',path[1]).maybeSingle());
-  if(!current)return json({error:'DRAFT_NOT_FOUND'},404);
-  if(current.status!=='needs_approval'||current.draft_role!=='candidate'||!current.imported_at)
-   return json({error:'DRAFT_NOT_EDITABLE'},409);
-  if(body.revision!==undefined&&body.revision!==current.revision)
-   return json({error:'DRAFT_CHANGED_REFRESH_FIRST'},409);
-  const active=checked(await service.from('marketing_generation_jobs').select('id')
-   .eq('draft_id',current.id).eq('status','running')
-   .gt('created_at',new Date(Date.now()-300000).toISOString()).limit(1));
-  if(active.length)return json({error:'GENERATION_ALREADY_RUNNING'},409);
-  const skipped=checked(await service.from('instagram_post_drafts')
-   .update({status:'skipped',eligible_for_optimization:false})
-   .eq('id',current.id).eq('revision',current.revision)
-   .eq('status','needs_approval').eq('draft_role','candidate')
-   .select('id,status,revision').maybeSingle());
-  if(!skipped)return json({error:'DRAFT_CHANGED_REFRESH_FIRST'},409);
-  return json({draft:skipped,skipped:true});
- }
- if(id==='draft'&&path.length===3&&uuid(path[1])&&path[2]==='versions'&&req.method==='GET')
-  return json(await versionHistory(path[1]));
- if(id==='draft'&&path.length===3&&uuid(path[1])&&path[2]==='versions'&&req.method==='POST'){
-  const body=await req.json().catch(()=>null);
-  const actor=(await db.auth.getUser()).data.user;
-  if(!actor)return json({error:'Sign in required'},401);
-  return json(await regenerateVersion(path[1],body,actor.id));
- }
- if(id==='draft'&&path.length===4&&uuid(path[1])&&path[2]==='versions'&&path[3]==='manual'&&req.method==='POST'){
-  const body=await req.json().catch(()=>null);
-  const actor=(await db.auth.getUser()).data.user;
-  if(!actor)return json({error:'Sign in required'},401);
-  return json(await editManualMagazineSlideVersion(path[1],body,actor.id));
- }
- if(id==='draft'&&path.length===4&&uuid(path[1])&&path[2]==='versions'&&path[3]==='render'&&req.method==='POST'){
-  const body=await req.json().catch(()=>({}));
-  return json(await finishVersionRendering(path[1],Number(body.revision)));
- }
- if(id==='draft'&&path.length===4&&uuid(path[1])&&path[2]==='versions'&&path[3]==='restore'&&req.method==='POST'){
-  const body=await req.json().catch(()=>({}));
-  const actor=(await db.auth.getUser()).data.user;
-  if(!actor)return json({error:'Sign in required'},401);
-  return json(await restoreVersion(path[1],String(body.version_id||''),Number(body.revision),actor.id,body.confirm_restore===true));
- }
 
  async function recheckForPublishing(draft:Row){
   const preflight=await reviewMarketingDraft(service,draft),report=mergePreflightQuality(draftQuality(draft),preflight);
@@ -173,11 +110,6 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
   if(d.revision!==body.revision)return json({error:'DRAFT_CHANGED_REFRESH_FIRST'},409);
   const {report,preflight,draft}=await recheckForPublishing(d);
   return json({draft,quality_report:report,preflight});
- }
- if(id==='generation'&&path[1]==='jobs'&&path.length===4&&uuid(path[2])&&path[3]==='reject'&&req.method==='POST'){
-  const body=await req.json();if(body.confirm_reject!==true)return json({error:'REJECT_CONFIRMATION_REQUIRED'},400);
-  const result=checked(await service.rpc('reject_marketing_content',{p_job:path[2],p_reason:typeof body.reason==='string'?body.reason.slice(0,500):'관리자 품질 검토에서 재작업 요청'}));
-  return json(result);
  }
 
  async function manualCandidate(draftId:string){
@@ -274,69 +206,6 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
    return json({photo});
   }catch(error){return json({error:error instanceof Error?error.message:'PHOTO_REVIEW_FAILED'},400);}
  }
- // Approved assets can be assigned deterministically to a specific card.
- // Atomic service-role RPC enforces approval, rights, draft revision, uniqueness,
- // archived bytes, and immutable scheduled/published snapshots.
- if(id==='draft'&&path.length===3&&uuid(path[1])&&path[2]==='assign-stock'&&req.method==='POST'){
-  const body=await req.json().catch(()=>({}));
-  if(!Number.isInteger(body.revision)||!Number.isInteger(body.slot)||!uuid(String(body.asset_id||'')))
-   return json({error:'INVALID_PHOTO_ASSIGNMENT'},400);
-  const draft=checked(await service.from('instagram_post_drafts').select('id,revision,images').eq('id',path[1]).maybeSingle());
-  if(!draft)return json({error:'DRAFT_NOT_FOUND'},404);
-  if(draft.revision!==body.revision)return json({error:'DRAFT_CHANGED_REFRESH_FIRST'},409);
-  if((draft.images||[]).length&&!body.confirm_replace)
-   return json({error:'CONFIRM_REPLACE_RENDERED_IMAGES'},409);
-  try{
-   const updated=checked(await service.rpc('assign_marketing_approved_photo',{
-    p_draft:path[1],p_revision:body.revision,p_slot:body.slot,p_asset:body.asset_id
-   }));
-   return json({draft:updated,photos:await listStockSelections(service,path[1])});
-  }catch(error){return json({error:error instanceof Error?error.message:'PHOTO_ASSIGNMENT_FAILED'},409);}
- }
- if(id==='draft'&&path.length===3&&uuid(path[1])&&path[2]==='image-layout'&&req.method==='POST'){
-  const body=await req.json().catch(()=>({}));
-  if(!Number.isInteger(body.revision)||!(body.ai_image_slot===null||Number.isInteger(body.ai_image_slot)))
-   return json({error:'INVALID_AI_IMAGE_SLOT'},400);
-  const draft=checked(await service.from('instagram_post_drafts').select('id,revision,images,carousel_slides').eq('id',path[1]).maybeSingle());
-  if(!draft)return json({error:'DRAFT_NOT_FOUND'},404);
-  if(draft.revision!==body.revision)return json({error:'DRAFT_CHANGED_REFRESH_FIRST'},409);
-  if(body.ai_image_slot===null&&Array.isArray(draft.carousel_slides)&&draft.carousel_slides.length===5)
-   return json({error:'FIVE_CARD_NEEDS_THREE_REAL_AND_ONE_AI_IMAGE'},400);
-  if((draft.images||[]).length&&!body.confirm_replace)
-   return json({error:'CONFIRM_REPLACE_RENDERED_IMAGES'},409);
-  try{
-   const updated=checked(await service.rpc('set_marketing_draft_ai_slot',{
-    p_draft:path[1],p_revision:body.revision,p_ai_slot:body.ai_image_slot
-   }));
-   return json({draft:updated,photos:await listStockSelections(service,path[1])});
-  }catch(error){return json({error:error instanceof Error?error.message:'AI_IMAGE_SLOT_UPDATE_FAILED'},409);}
- }
- if(id==='draft'&&path.length===3&&uuid(path[1])&&path[2]==='refresh-stock'&&req.method==='POST'){
-  const body=await req.json().catch(()=>({}));
-  const draft=checked(await service.from('instagram_post_drafts').select('*').eq('id',path[1]).maybeSingle());
-  if(!draft||draft.draft_role!=='candidate'||draft.status!=='needs_approval'||!['pexels','stock'].includes(String(draft.visual_source)))return json({error:'STOCK_DRAFT_NOT_EDITABLE'},409);
-  if(body.revision!==draft.revision||draft.images?.length)return json({error:'DRAFT_CHANGED_OR_ALREADY_RENDERED'},409);
-  try{
-   const photos=await prepareStockSelections(service,draft,{replace:false});
-   return json({photos,ready:stockReady(draft,photos),required:requiredStockSlots(draft).length});
-  }catch(error){return json({error:error instanceof Error?error.message:'STOCK_DISCOVERY_FAILED'},400);}
- }
- if(id==='draft'&&path.length===3&&uuid(path[1])&&path[2]==='render-stock'&&req.method==='POST'){
-  const body=await req.json().catch(()=>({}));
-  const draft=checked(await service.from('instagram_post_drafts').select('*').eq('id',path[1]).maybeSingle());
-  if(!draft||draft.draft_role!=='candidate'||draft.status!=='needs_approval'||!['pexels','stock'].includes(String(draft.visual_source)))return json({error:'STOCK_DRAFT_NOT_EDITABLE'},409);
-  if(body.revision!==draft.revision)return json({error:'DRAFT_CHANGED_REFRESH_FIRST'},409);
-  const user=(await db.auth.getUser()).data.user;if(!user)return json({error:'Sign in required'},401);
-  const result=await runGeneration(draft.id,{
-   request_key:'stock-render:'+randomUUID(),revision:draft.revision,mode:'image',
-   render_only:true,visual_mode:'cards',visual_source:draft.visual_source,
-   content_mode:draft.draft_kind==='growth_carousel'?'growth_carousel':draft.content_mode,
-   topic_type:draft.growth_topic_type||undefined,language:draft.content_language==='en'?'en':'ko',
-   ...(draft.content_mode==='live_event'?{event_id:draft.event_id}:{}),
-   instruction:''
-  },user.id,false);
-  return json(result,result.error?400:200);
- }
 
 if(id==='uploads'&&path.length===1&&req.method==='GET'){
   const draftId=req.nextUrl.searchParams.get('draft_id')||'';
@@ -401,7 +270,7 @@ if(id==='uploads'&&path.length===1&&req.method==='GET'){
   return json({images:await signedUploads(row.draft_id)});
  }
  if(!id&&req.method==='GET'){
-  const response=await legacyMarketingApi(req,db,path);if(!response.ok)return response;
+  const response=await marketingAdministrationApi(req,db,path);if(!response.ok)return response;
   const data=await response.json();
   const [generation,trend,liveEvents,eventCampaignHistory]=await Promise.all([
    generationOverview(),
@@ -448,161 +317,6 @@ if(id==='uploads'&&path.length===1&&req.method==='GET'){
    instruction:[trend.display_name,trend.content_angle||trend.summary||''].filter(Boolean).join(': ').slice(0,500)},user.id,'manual',{trend_id:trendId}),202);
 
  }
-
- if(id==='generation'&&path[1]==='jobs'&&path.length===4&&uuid(path[2])&&path[3]==='retry'&&req.method==='POST'){
-  const confirmation=await req.json().catch(()=>({}));
-  if(confirmation.confirm_retry!==true)return json({error:'RETRY_CONFIRMATION_REQUIRED'},400);
-  const original=checked(await service.from('marketing_generation_jobs').select('*').eq('id',path[2]).maybeSingle());
-  if(!original)return json({error:'Generation job not found'},404);
-  if(!canRetryGenerationJob(original))return json({error:'RETRY_ONLY_FAILED_MANUAL'},400);
-  if(!original.request_payload||typeof original.request_payload!=='object')return json({error:'RETRY_PAYLOAD_UNAVAILABLE'},400);
-  const isPhoto=['photo','copy_photo'].includes(original.operation);
-  if(isPhoto&&confirmation.confirm_paid_photo!==true)return json({error:'CONFIRM_PAID_PHOTO_FIRST'},400);
-  const threadId=original.generation_thread_id||original.id;
-  const latest=checked(await service.from('marketing_generation_jobs').select('*').eq('generation_thread_id',threadId).order('attempt_number',{ascending:false}).order('created_at',{ascending:false}).limit(1).maybeSingle())||original;
-  if(latest.id!==original.id||!canRetryGenerationJob(latest))return json({error:'GENERATION_THREAD_NOT_RETRYABLE'},409);
-  const currentDraft=checked(await service.from('instagram_post_drafts').select('id,status,revision').eq('id',original.draft_id).maybeSingle());
-  if(!currentDraft)return json({error:'Draft not found'},404);
-  if(currentDraft.status!=='needs_approval')return json({error:'DRAFT_NOT_EDITABLE'},409);
-  const user=(await db.auth.getUser()).data.user;if(!user)return json({error:'Sign in required'},401);
-  const recoverySourceJobId=savedCtaRecoverySource(latest);
-  if(confirmation.recover_saved_result===true&&!recoverySourceJobId)return json({error:'SAVED_RESULT_RECOVERY_UNAVAILABLE'},409);
-  const retryPayload={...latest.request_payload,request_key:(recoverySourceJobId?'recover:':'retry:')+randomUUID(),revision:currentDraft.revision,confirm_photo:isPhoto};
-  const selectedTopicKey=confirmation.selected_topic_key;
-  if(selectedTopicKey!==undefined&&(typeof selectedTopicKey!=='string'||selectedTopicKey.length>120||!latest.request_payload?.topic_selection?.candidates?.some((c:Row)=>c.angle_key===selectedTopicKey)))return json({error:'SAVED_TOPIC_NOT_SELECTABLE'},400);
-  const nextAttempt=Math.max(1,Number(latest.attempt_number||1))+1;
-  try{
-   const result=await runGeneration(currentDraft.id,restoreSavedGenerationInput(retryPayload),user.id,false,{threadId,attemptNumber:nextAttempt,retryOfJobId:latest.id,selectedTopicKey,workflowId:String(latest.content_workflow_id||latest.generation_thread_id||latest.id),...(recoverySourceJobId?{recoverySourceJobId}:{})});
-   return json({...result,recovered_without_ai:false,recovered_saved_copy:!!recoverySourceJobId,fresh_visuals_generated:!!recoverySourceJobId,content_workflow_id:String(latest.content_workflow_id||latest.generation_thread_id||latest.id),generation_thread_id:threadId,attempt_number:nextAttempt,retry_of_job_id:latest.id},result.error?400:200);
-  }catch(error){return json({error:error instanceof Error?error.message:'Recovery or retry could not start'},400);}
- }
- if(id==='generation'&&path[1]==='jobs'&&path.length===4&&uuid(path[2])&&path[3]==='import'&&req.method==='POST'){
-  const body=await req.json().catch(()=>({}));
-  if(body.confirm_import!==true)return json({error:'IMPORT_CONFIRMATION_REQUIRED'},400);
-  try{
-   const savedCopy=await openSavedEditorialCopy(service,path[2]);
-   // The workspace helper already restores photos for review-only copy and
-   // returns existing imported drafts unchanged. Do not import them twice or
-   // overwrite subsequent admin edits with the original generation snapshot.
-   if(savedCopy)return json({draft:savedCopy});
-   let imported:Row=checked(await service.rpc('create_marketing_candidate_from_generation',{p_job_id:path[2]}));
-   if(imported.status!=='needs_approval')return json({error:'RESULT_ALREADY_USED'},409);
-   const source=checked(await service.from('marketing_generation_jobs').select('draft_id,result_snapshot').eq('id',path[2]).single()),snapshot=source?.result_snapshot||{},trendId=snapshot.trend_id,campaignMeta=campaignMetaFromSnapshot(snapshot),eventMeta=eventCampaignMetaFromSnapshot(snapshot);
-   const importedPatch={...(trendId?{trend_id:trendId}:{}),...(campaignMeta||{}),...(eventMeta||{}),...(['pexels','stock'].includes(String(snapshot.visual_source))?{visual_source:snapshot.visual_source}:{}),updated_at:new Date().toISOString()};
-   if(trendId||campaignMeta||eventMeta||['pexels','stock'].includes(String(snapshot.visual_source)))imported=checked(await service.from('instagram_post_drafts').update(importedPatch).eq('id',imported.id).select('*').single());
-   if(['pexels','stock'].includes(String(snapshot.visual_source)))await importStockSelections(service,imported.id,snapshot.stock_photo_selections);
-   return json({draft:imported});
-  }catch(error){
-   const message=error instanceof Error?error.message:String((error as {message?:unknown})?.message||'Import failed');
-   return json({error:message.slice(0,500)},400);
-  }
- }
- if(id==='generation'&&path[1]==='jobs'&&path.length===4&&uuid(path[2])&&path[3]==='restore'&&req.method==='POST'){
-  const body=await req.json().catch(()=>({}));
-  if(body.confirm_restore!==true)return json({error:'RESTORE_CONFIRMATION_REQUIRED'},400);
-  let restored=checked(await service.rpc('restore_marketing_generation_snapshot',{p_job_id:path[2]}));
-  const source=checked(await service.from('marketing_generation_jobs').select('result_snapshot').eq('id',path[2]).single()),campaignMeta=campaignMetaFromSnapshot(source?.result_snapshot),eventMeta=eventCampaignMetaFromSnapshot(source?.result_snapshot);
-  if(campaignMeta||eventMeta)restored=checked(await service.from('instagram_post_drafts').update({...campaignMeta,...eventMeta,updated_at:new Date().toISOString()}).eq('id',restored.id).select('*').single());
-  return json({draft:restored});
- }
- if(id==='draft'&&path.length===3&&uuid(path[1])&&path[2]==='render-uploaded'&&req.method==='POST'){
-  const body=await req.json().catch(()=>({})),draft=await manualCandidate(path[1]);
-  if(!draft)return json({error:'Draft not found'},404);
-  if(!Number.isInteger(body.revision)||body.revision!==draft.revision)return json({error:'DRAFT_CHANGED_REFRESH_FIRST'},409);
-  const countResult=await service.from('marketing_uploaded_images').select('id',{count:'exact',head:true}).eq('draft_id',draft.id);
-  if(countResult.error)throw countResult.error;
-  if(Number(countResult.count||0)<1)return json({error:'UPLOADED_IMAGES_REQUIRED'},400);
-  const user=(await db.auth.getUser()).data.user;if(!user)return json({error:'Sign in required'},401);
-  const result=await runGeneration(draft.id,{
-   request_key:typeof body.request_key==='string'?body.request_key:'upload-render:'+randomUUID(),
-   revision:draft.revision,
-   mode:'image',
-   render_only:true,
-   visual_mode:'cards',
-   visual_source:'uploaded',
-   content_mode:draft.draft_kind==='growth_carousel'?'growth_carousel':draft.content_mode,
-   topic_type:draft.growth_topic_type||undefined,
-   language:draft.content_language==='en'?'en':'ko',
-   instruction:''
-  },user.id,false);
-  return json(result,result.error?400:200);
- }
- if(id==='draft'&&path[1]==='generate'&&path.length===2&&req.method==='POST'){
-  const actor=(await db.auth.getUser()).data.user;if(!actor)return json({error:'Sign in required'},401);
-  return json(await startContentWorkflow(service,await req.json(),actor.id),202);
- }
- if(id==='draft'&&path.length===3&&['regenerate','growth-generate'].includes(path[2])&&req.method==='POST'){
-  if(!uuid(path[1]))return json({error:'Invalid draft'},400);
-  const body=await req.json(),user=(await db.auth.getUser()).data.user;
-  const result=await runGeneration(path[1],path[2]==='growth-generate'?{...body,content_mode:'growth_carousel',visual_mode:'cards'}:body,user?.id||null);return json(result,result.error?400:200);
- }
  if(path.some(p=>['generate','regenerate','growth-generate','render-uploaded','generation'].includes(p)))return json({error:'Invalid generation route'},404);
- if(id==='draft'&&path[1]&&uuid(path[1])){
-  if(req.method!=='GET'){
-   const active=checked(await service.from('marketing_generation_jobs').select('id').eq('draft_id',path[1]).eq('status','running').gt('created_at',new Date(Date.now()-300000).toISOString()).limit(1));
-   if(active.length)return json({error:'GENERATION_ALREADY_RUNNING'},409);
-  }
-  if(path.length===3&&path[2]==='thumbnail'&&req.method==='PATCH'){
-   const body=await req.json().catch(()=>null);
-   if(!body||!Number.isInteger(body.revision)||!Number.isInteger(body.index))
-    return json({error:'INVALID_THUMBNAIL_CHOICE'},400);
-   const old=checked(await service.from('instagram_post_drafts').select('*').eq('id',path[1]).maybeSingle());
-   if(!old||old.status!=='needs_approval'||old.draft_role!=='candidate'||!old.imported_at)
-    return json({error:'THUMBNAIL_DRAFT_NOT_EDITABLE'},409);
-   if(old.revision!==body.revision)return json({error:'DRAFT_CHANGED_REFRESH_FIRST'},409);
-   let document:Row;
-   try{document=selectAnswerFirstHeadline(old.content_document,body.index,Array.isArray(old.images)&&old.images.length>0);}
-   catch(error){return json({error:error instanceof Error?error.message:'INVALID_THUMBNAIL_CHOICE'},400);}
-   if(document===old.content_document)return json({draft:old,unchanged:true});
-   const slides=(old.carousel_slides||[]).map((slide:Row,index:number)=>index===0?{...slide,title:document.slides[0].title}:slide);
-   const draft=checked(await service.from('instagram_post_drafts')
-    .update({content_document:document,carousel_slides:slides,revision:old.revision+1})
-    .eq('id',old.id).eq('revision',old.revision).eq('status','needs_approval')
-    .eq('draft_role','candidate').select('*').maybeSingle());
-   if(!draft)return json({error:'DRAFT_CHANGED_REFRESH_FIRST'},409);
-   return json({draft,rerender_required:document.thumbnail_render_pending===true});
-  }
-  if(path.length===2&&req.method==='PUT'){
-   const v=await req.json();
-   const currentDraft=checked(await service.from('instagram_post_drafts').select('content_document,status').eq('id',path[1]).maybeSingle());
-   const magazine=currentDraft?.content_document?.design_preset==='roundy_magazine_editorial_v2';
-   if(!Number.isInteger(v.revision)||typeof v.caption!=='string'||!v.caption.trim()||v.caption.length>2000||typeof v.cta!=='string'||v.cta.trim().length>70||(!magazine&&!v.cta.trim())||(magazine&&!!v.cta.trim())||typeof v.destination_url!=='string')return json({error:'Check the caption, editorial CTA rules and draft revision.'},400);
-   try{const u=new URL(v.destination_url);if(u.protocol!=='https:'||u.username||u.password)throw new Error();}catch{return json({error:'Use a valid HTTPS destination URL.'},400);}
-   if(v.images!==undefined)return json({error:'Images are saved by the protected generation worker. Use render saved cards or generate photo.'},400);
-   return json({draft:checked(await service.rpc('edit_marketing_draft',{p_id:path[1],p_revision:v.revision,p_patch:{caption:v.caption.trim(),cta:v.cta.trim(),destination_url:v.destination_url.trim()}}))});
-  }
-  if(path.length===3&&path[2]==='publish-now'&&req.method==='POST'){
-   const body=await req.json();if(!Number.isInteger(body.revision))return json({error:'Refresh and review the current draft before publishing.'},400);
-   const user=(await db.auth.getUser()).data.user;if(!user)return json({error:'Sign in required'},401);
-   const current=checked(await service.from('instagram_post_drafts').select('*').eq('id',path[1]).maybeSingle());
-   if(!current||current.status!=='needs_approval'||current.revision!==body.revision)return json({error:'DRAFT_CHANGED_REFRESH_FIRST'},409);
-   const review=await recheckForPublishing(current);
-   if(review.report.status!=='passed')return json({error:'MARKETING_PREFLIGHT_FAILED',draft:review.draft,
-    quality_report:review.report,checks:review.preflight.checks,issues:review.report.issues},409);
-   const queued=checked(await service.rpc('publish_marketing_draft_now',{p_id:path[1],p_revision:body.revision,p_actor:user.id}));
-   if(queued.deferred===true)return json({
-    ...queued,published:false,pending:true,deferred:true,
-    warning:'FEED_DAILY_LIMIT_KST: Today\'s Feed capacity is full. The approved post is reserved for '+String(queued.feed_date_kst)+' KST.'
-   },202);
-   let workerWarning='';
-   try{await invokeMarketingWorker(db,{action:'process_queue'});}catch(error){workerWarning=error instanceof Error?error.message:'The publish worker response could not be confirmed.';}
-   const run=checked(await service.from('marketing_runs').select('*').eq('id',queued.run.id).single());
-   const draft=checked(await service.from('instagram_post_drafts').select('*').eq('id',path[1]).single());
-   if(run.status==='sent')return json({draft,run,published:true});
-   if(run.status==='failed')return json({draft,run,error:run.message||'Instagram publishing failed.'},400);
-   if(run.status==='needs_review')return json({draft,run,published:false,needs_review:true,warning:run.message||workerWarning||'Instagram may have received the publish request. Check the account before resolving.'},202);
-   return json({draft,run,published:false,pending:true,warning:workerWarning||'The post is queued for immediate processing. Refresh status before trying again.'},202);
-  }
-  if(path.length===3&&path[2]==='approve'&&req.method==='POST'){
-   const body=await req.json();if(!Number.isInteger(body.revision))return json({error:'Refresh and review the current draft before approving.'},400);
-   const user=(await db.auth.getUser()).data.user;if(!user)return json({error:'Sign in required'},401);
-   const current=checked(await service.from('instagram_post_drafts').select('*').eq('id',path[1]).maybeSingle());
-   if(!current||current.status!=='needs_approval'||current.revision!==body.revision)return json({error:'DRAFT_CHANGED_REFRESH_FIRST'},409);
-   const review=await recheckForPublishing(current);
-   if(review.report.status!=='passed')return json({error:'MARKETING_PREFLIGHT_FAILED',draft:review.draft,
-    quality_report:review.report,checks:review.preflight.checks,issues:review.report.issues},409);
-   return json(checked(await service.rpc('approve_marketing_draft',{p_id:path[1],p_revision:body.revision,p_actor:user.id})));
-  }
- }
- return legacyMarketingApi(req,db,path);
+ return marketingAdministrationApi(req,db,path);
 }

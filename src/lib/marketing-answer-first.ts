@@ -1,7 +1,7 @@
-import {isEditorFirst} from './marketing-editor-first';
+import { isEditorFirst } from './marketing-editor-first';
 // Editorial-only Answer-First contract. Does not generate images or schedule publication.
-import {type CarouselPlan,withCarouselPlan,savedCarouselPlan} from './marketing-carousel-template';
-import {EDITORIAL_HEADLINE_VERSION} from './marketing-editorial-storyboard';
+import { type CarouselPlan,savedCarouselPlan,withCarouselPlan } from './marketing-carousel-template';
+import { EDITORIAL_HEADLINE_VERSION } from './marketing-editorial-storyboard';
 export type CopyRow=Record<string,any>;
 export const ANSWER_FIRST_VERSION=1;
 const clean=(v:unknown)=>typeof v==='string'?v.replace(/\r\n?/g,'\n').trim():'';
@@ -34,22 +34,6 @@ export function threeEditorialRoles(type:string,legacy:readonly string[]):string
 }
 export function magazineRolesForCount(count:3|5):string[]{
  return count===3?['cover','key_insight','editorial_closing']:['cover','context','insight','insight','editorial_closing'];
-}
-export function magazineAnswerFirstPrompt(count:3|5,storyFirst=false):string {
- if(storyFirst)return [
-  'STORY-FIRST (REQUIRED): This is a human-first Instagram narrative, NOT a result-first service article. The cover poses one concrete social dilemma, tension or true-to-life question. Card 2 shows a recognisable scene. Later cards reveal what changed or why it mattered. The closing offers one specific take-home line without preaching.',
-  count===3?'Three cards: compelling truthful scene on cover, specific development or example in key_insight, earned takeaway in editorial_closing.':'Five cards: hook/scene on cover, actual social context, a first revealing observation, a DIFFERENT example or consequence, and a natural useful closing. Never pad a banal tip just to reach five cards.',
-  'Return EXACTLY FIVE semantically DISTINCT, natural thumbnail_candidates for this SAME specific story. Candidate 1 MUST exactly equal slides[0].title. Candidates 2-5 must take different editorial approaches (recognizable tension, specific scene, honest contrast, reader decision, revealing outcome) and cannot merely swap synonyms or repeat candidate 1. The selected cover must be fulfilled by the following cards. A real question is allowed if the next slide answers it; no clickbait, invented statistics or guarantees.',
-  'No signup, links, direct brand CTA or advertorial claims on cards. The renderer adds one light Roundy brand bridge below the human takeaway. Preserve source IDs and factual qualifications if any.',
-  'Do not copy the example story or use generic claims about everyone behaving alike.'
- ].join('\n');
- return [
-  'ANSWER-FIRST (REQUIRED): SEOUL MAGAZINE EDITORIAL. Deliver a precise conclusion first, then verifiable context, one idea per slide. This is reader service journalism, not an advertising campaign.',
-  count===3?'Three cards: cover with answer-first headline, key_insight with a concrete and source-grounded fact, editorial_closing with a thoughtful summary, insight or subtle brand outro.':'Five cards: cover with answer-first headline, context giving real background, two distinct insights with verifiable details, editorial_closing with a useful summary, insight or subtle brand outro.',
-  'No signup, click, link, learn more, fake button, or sales CTA on feed cards. The last editorial_closing must give a useful take-home point; the server adds a different context-aware Roundy brand bridge beneath that point, plus one friendly invitation in the caption. Do not repeat the brand line in the generated body.',
-  'Preserve all attribution and limitations, source IDs and truthful specific Seoul venue names. Never invent statistics or claim venue availability.',
-  'Produce exactly FIVE semantically DISTINCT and truthful thumbnail_candidates: a relatable moment, a contrast, a defensible surprising observation, a concrete benefit and a specific perspective. Candidate 1 MUST exactly equal slides[0].title; candidates 2-5 must not repeat it or each other, including near-synonyms. Never strengthen evidence, invent insights or promise results. All five must accurately describe the same sourced story.'
- ].join('\n');
 }
 export function editorialRolesForCount(type:string,legacy:readonly string[],count:3|5){
  return count===3?threeEditorialRoles(type,legacy):fiveEditorialRoles(type,legacy);
@@ -91,21 +75,6 @@ export function withAnswerFirstSchema(schema:CopyRow,language:string,enabled:boo
  return {...schema,properties:{...schema.properties,thumbnail_candidates:{
   type:'array',minItems:quantity,maxItems:quantity,items:{type:'string',minLength:6,maxLength:max}
  }},required:[...schema.required,'thumbnail_candidates']};
-}
-export function answerFirstPrompt(language:string,count:3|5=5){
- return [
-  'ANSWER-FIRST (REQUIRED): Start with a practical answer, concrete takeaway, recommendation, or a defensible finding. NEVER open with a vague abstract question or a suspense hook.',
-  count===3?'Exactly THREE slides: 1 Result = verified actionable conclusion; 2 Value/Detail = specific verified evidence, practical next step, critical limitations or context compressed without distorting claims; 3 CTA = subtle truthful Roundy reference.':'Exactly FIVE slides, in order: 1 Result = the conclusion on the cover; 2 Context = situation and why it matters; 3 Detail = specific example/evidence; 4 Value = useful practice, limitations or next step; 5 CTA = concise recap and a subtle, truthful Roundy connection.',
-  'Keep the existing role names in the JSON schema: slide POSITION dictates Result / Context / Detail / Value / CTA. The role labels may differ for source verification, but the narrative must follow the five-part order.',
-  'Return EXACTLY three different thumbnail_candidates. Each is a short, natural, factual, specific RESULT-FIRST headline in the primary post language. Candidate 1 MUST exactly equal slides[0].title. Never suggest an unrelated angle or a stronger claim than the verified body.',
-  'Example: instead of "어디서 데이트할까?" use "성수 첫 데이트, 서울숲부터 시작하는 코스" ONLY if 서울숲 is actually verified in supplied facts/sources. This is a style example, NEVER a factual instruction to name 서울숲.',
-  'Avoid clickbait, bait-and-switch, unsupported rankings/numbers, invented opening hours, popularity, venues, participants, guarantees or absolute claims. A sourced claim may not be strengthened by removing its qualification.',
-  'For research/myth cards, preserve study scope and its material limitations together with practical advice, especially on the Value card. Only cited source IDs may support claim cards. Preserve existing research metadata and limitations.',
-  'For Seoul recommendations, use only explicitly verified place names; if evidence is missing, present a generic practical recommendation WITHOUT inventing a destination.',
-  'Mobile legibility: cover title should be concise, body cards one short point each, ideally <= 2 compact lines per paragraph; no walls of text.',
-  'Do not present the Roundy brand as objective evidence. Final CTA is low-pressure and never claims that joining guarantees a date, match, safety or outcome.',
-  language==='en'?'Write all three candidate headlines in English.':'썸네일 후보 3개 모두 한국어로 작성하고 질문형 낚시 문구를 사용하지 마세요.'
- ].join('\n');
 }
 export function answerFirstIssues(doc:CopyRow,language:string):string[]{
  if(doc?.answer_first!==true)return [];

@@ -1,15 +1,15 @@
+import { createHash } from 'node:crypto';
 import 'server-only';
-import {fiveCampaignRoles,campaignRolesForCount,withAnswerFirstSchema,answerFirstPrompt,answerFirstIssues,applyAnswerFirstDocument} from './marketing-answer-first';
-import {savedCarouselPlan,mobileCarouselFit,type CarouselPlan} from './marketing-carousel-template';
-import {createHash} from 'node:crypto';
+import { answerFirstIssues,applyAnswerFirstDocument,campaignRolesForCount,fiveCampaignRoles } from './marketing-answer-first';
+import { mobileCarouselFit,savedCarouselPlan,type CarouselPlan } from './marketing-carousel-template';
 import {
- CAMPAIGN_PRESET,
- ROUNDY_IDENTITY,
- captionAction,
- captionCoreIssues,
- curateHashtags,
- generatedCta,
- normalizeCaptionCore,
+CAMPAIGN_PRESET,
+ROUNDY_IDENTITY,
+captionAction,
+captionCoreIssues,
+curateHashtags,
+generatedCta,
+normalizeCaptionCore,
 } from './marketing-presentation';
 
 export type CampaignRow=Record<string,any>;
@@ -95,79 +95,6 @@ function choosePattern(requested:unknown,history:CampaignRow[],launchDate:string
  let cursor=0;
  for(const p of candidates){cursor+=WEIGHTS[p];if(roll<cursor)return p;}
  return candidates[0]||'poster';
-}
-function campaignSchema(pattern:CampaignPattern,tone:CampaignTone,language:string,answerFirst=false,plan:CarouselPlan|null=null){
- const roles=plan?campaignRolesForCount(pattern,ROLE_MAP[pattern],plan.slide_count):answerFirst?fiveCampaignRoles(pattern,ROLE_MAP[pattern]):ROLE_MAP[pattern],primaryTitle=language==='en'?45:24,primaryBody=language==='en'?80:42,secondaryBody=language==='en'?42:80;
- const str=(maxLength:number,minLength=0)=>({type:'string',minLength,maxLength});
- const slide={
-  type:'object',
-  additionalProperties:false,
-  properties:{
-   role:{type:'string',enum:[...new Set(roles)]},
-   eyebrow:str(24),
-   title:str(primaryTitle,1),
-   body:str(primaryBody),
-   secondary_body:str(secondaryBody),
-   visual_direction:str(180,8),
-   step_number:{type:'integer',minimum:0,maximum:4},
-   source_ids:{type:'array',maxItems:0,items:{type:'string'}},
-  },
-  required:['role','eyebrow','title','body','secondary_body','visual_direction','step_number','source_ids'],
- };
- return withAnswerFirstSchema({
-  type:'object',
-  additionalProperties:false,
-  properties:{
-   schema_version:{type:'integer',enum:[2]},
-   campaign_version:{type:'string',enum:[CAMPAIGN_VERSION]},
-   design_preset:{type:'string',enum:[CAMPAIGN_PRESET]},
-   post_type:{type:'string',enum:['prelaunch']},
-   campaign_pattern:{type:'string',enum:[pattern]},
-   campaign_tone:{type:'string',enum:[tone]},
-   campaign_goal:{type:'string',enum:[GOAL_MAP[pattern]]},
-   caption_ko:str(360,1),
-   caption_en:str(480,1),
-   slides:{type:'array',minItems:roles.length,maxItems:roles.length,items:slide},
-  },
-  required:['schema_version','campaign_version','design_preset','post_type','campaign_pattern','campaign_tone','campaign_goal','caption_ko','caption_en','slides'],
- },language,answerFirst);
-}
-function campaignInstructions(pattern:CampaignPattern,tone:CampaignTone,language:string,launchDate:string|null,answerFirst=false,plan:CarouselPlan|null=null){
- const limits=language==='en'?'headline <= 45 characters; subcopy <= 80 characters':'headline <= 24 characters; subcopy <= 42 characters';
- const patternGuide:Record<CampaignPattern,string>={
-  poster:'POSTER: hook = one arresting brand statement; benefit = one supporting product truth; CTA = a clean launch/follow invitation. Treat every card like a campaign poster, not a page of information.',
-  problem_solution:'PROBLEM -> SOLUTION: hook names a recognisable friction; problem makes it concrete without attacking other apps; solution introduces Roundy\'s offline-first format; benefit states the user-facing payoff; CTA closes the launch campaign.',
-  how_it_works:'HOW IT WORKS: hook introduces the flow; step 1 = meet one-on-one; step 2 = rotate / have the next conversation; step 3 = choose privately and only match when mutual; CTA closes. Keep each step visually and verbally independent.',
-  benefit_stack:'BENEFIT STACK: hook sets the proposition; each benefit card contains exactly one distinct benefit with no repeated explanation; CTA closes. Prefer crisp fragments over explanatory prose.',
-  countdown:'COUNTDOWN: hook creates anticipation without invented scarcity; countdown uses only the server-supplied timing; CTA tells people where to follow for the launch. Do not invent an event, venue, ticket, or application deadline.',
- };
- const toneGuide:Record<CampaignTone,string>={
-  modern_premium:'MODERN PREMIUM: clean, confident, urban, minimal, restrained. No luxury-status language.',
-  soft_romantic:'SOFT ROMANTIC: warm and human, but never sentimental, destiny-based, wedding-like, or cliché.',
-  bold_teaser:'BOLD TEASER: high-impact, few words, strong contrast, curiosity first. Do not become aggressive or sensational.',
- };
- return [
-  'Create a PRE-LAUNCH ADVERTISING CAMPAIGN for Roundy, a Seoul-based offline-first Rotation Dating service.',
-  'This is NOT editorial content, NOT a magazine carousel, NOT an article, and NOT educational long-form content.',
-  'Goal: stop the scroll, explain one idea quickly, create curiosity, and make Roundy feel like a real consumer brand launch.',
-  'Use ONLY the selected campaign pattern: '+pattern+'. Exact card roles in order: '+(plan?campaignRolesForCount(pattern,ROLE_MAP[pattern],plan.slide_count):answerFirst?fiveCampaignRoles(pattern,ROLE_MAP[pattern]):ROLE_MAP[pattern]).join(' -> ')+'.',
-  patternGuide[pattern],
-  'Campaign tone: '+tone+'. '+toneGuide[tone],
-  'ONE message per card. '+limits+'. body is optional short subcopy, never a paragraph. Do not fill the maximum just because it exists.',
-  'Use strong ad-copy compression. No magazine-style eyebrow/title/body hierarchy, no essays, no bullet-heavy explainer cards.',
-  'Core product truths you MAY use: offline-first; meet people one-on-one; rotate between conversations; choose privately; match only when interest is mutual; Seoul-based social format.',
-  'Do NOT invent participant counts, launch dates, prices, venues, success rates, testimonials, scarcity, screening/qualification claims, safety guarantees, or event facts.',
-  'Avoid cliché dating copy such as 특별한 인연, 운명적인 만남, 소중한 인연, meaningful connection, find your person, unforgettable night.',
-  'Korean must sound like natural Korean advertising, not translated English. Do not use the middle dot character in Korean prose.',
-  'Each visual_direction describes a clean TEXT-FREE photograph the image model can make later. Never ask for text, typography, logos, signs, screenshots, or watermarks inside the photograph.',
-  'caption_ko and caption_en are concise equivalent Instagram caption cores with 2-4 short paragraphs. Do not include CTA language, handles, URLs, hashtags, or source labels; the server appends them.',
-  'No research claims, statistics, percentages, or claims that something is trending.',
-  pattern==='how_it_works'?'For the three step cards use step_number 1, 2, 3. Other cards use 0. Explain Meet -> Rotate/Conversation -> Private choice/Mutual match without overexplaining.':'All step_number values must be 0.',
-  pattern==='countdown'
-   ?'A verified launch date was supplied by the server: '+launchDate+'. The countdown card title will be normalized server-side. Do not invent another date.'
-   :'No launch date is supplied. Do not use D-day numbers, dates, "tomorrow", "today", or any specific opening date.',
-  language==='en'?'Primary card title/body are English. secondary_body is a short faithful Korean rendering of body only.':'Primary card title/body are Korean. secondary_body is a short faithful English rendering of body only.',
- ].join('\n')+(answerFirst?'\n'+answerFirstPrompt(language,plan?.slide_count||5):'')+(plan?.slide_count===3?'\nThree-card copy MUST be Result, one specific useful product fact/detail, and a restrained CTA. Preserve all factual conditions.':'');
 }
 function parseDocument(result:CampaignRow){
  const choice=result.choices?.[0],raw=choice?.message?.content;
@@ -275,63 +202,4 @@ export function campaignDraftQuality(draft:CampaignRow){
  if(!savedCta||savedCta.length>70)report.issues.push('CTA 안내 문구를 확인하세요.');
  if(report.issues.length)report.status='rejected';
  return report;
-}
-export async function generateCampaignCopy(db:any,draft:CampaignRow,input:CampaignRow,job:CampaignRow,call:Call){
- const language=input.language==='en'?'en':'ko',answerFirst=input.answer_first_enabled===true,plan=(input.carousel_plan||null) as CarouselPlan|null,history=await recentCampaignHistory(db),launchDate=validDate(input.launch_date||draft.launch_date);
- const requested=input.campaign_pattern||draft.campaign_pattern||'auto',tone=((CAMPAIGN_TONES as readonly string[]).includes(String(input.campaign_tone||draft.campaign_tone))?String(input.campaign_tone||draft.campaign_tone):'modern_premium') as CampaignTone;
- const pattern=choosePattern(requested,history,launchDate,String(draft.id)+':'+String(draft.draft_date)+':'+String(input.instruction||'')),recentHooks=history.slice(0,10).map(x=>x.hook).filter(Boolean);
- const schema=campaignSchema(pattern,tone,language,answerFirst,plan),goal=GOAL_MAP[pattern],countdown=pattern==='countdown'&&launchDate?countdownLabel(launchDate,String(draft.draft_date||''),language):null;
- let inputTokens=0,outputTokens=0;
- const record=async(result:CampaignRow)=>{inputTokens+=Number(result.usage?.input_tokens||result.usage?.prompt_tokens||0);outputTokens+=Number(result.usage?.output_tokens||result.usage?.completion_tokens||0);ok(await db.from('marketing_generation_jobs').update({input_tokens:inputTokens,output_tokens:outputTokens}).eq('id',job.id));};
- const write=async(repair?:{document:CampaignRow;issues:string[]})=>{
-  const instructions=campaignInstructions(pattern,tone,language,launchDate,answerFirst,plan)+(repair?'\nREPAIR PASS: Fix ONLY the listed issues. Keep the same campaign pattern, tone and product truths. Return the full corrected JSON.':'');
-  const payload={
-   campaign_pattern:pattern,
-   campaign_tone:tone,
-   campaign_goal:goal,
-   language,
-   launch_date:launchDate,
-   countdown_label:countdown,
-   recent_patterns:history.slice(0,5).map(x=>x.pattern),
-   recent_hooks:recentHooks,
-   direction:clean(input.instruction).slice(0,500),
-   ...(repair?{original_document:repair.document,quality_issues:repair.issues}:{}),
-  };
-  if(Buffer.byteLength(instructions+JSON.stringify(payload)+JSON.stringify(schema),'utf8')>28000)throw new Error('PROMPT_SIZE_LIMIT');
-  ok(await db.from('marketing_generation_jobs').update({stage:repair?'repairing_copy':'writing'}).eq('id',job.id));
-  const result=await call('chat/completions',{model:MODEL,reasoning_effort:'none',max_completion_tokens:2800,response_format:{type:'json_schema',json_schema:{name:'roundy_prelaunch_campaign_v1',strict:true,schema}},messages:[{role:'system',content:instructions},{role:'user',content:JSON.stringify(payload)}]},55000);
-  await record(result);return {...parseDocument(result),result};
- };
- let written=await write(),prepared=prepareCampaign(written.document,language,pattern,tone,launchDate,String(draft.draft_date||''),recentHooks,answerFirst,plan),repairUsed=false;
- if(prepared.report.status!=='passed'){
-  repairUsed=true;written=await write({document:prepared.document,issues:prepared.report.issues});prepared=prepareCampaign(written.document,language,pattern,tone,launchDate,String(draft.draft_date||''),recentHooks,answerFirst);
- }
- const recovery={requested_type:'prelaunch',effective_type:'prelaunch',fallback_reason:null,repair_used:repairUsed,campaign_pattern:pattern,campaign_tone:tone};
- const quality={...prepared.report,recovery};
- const patch={
-  caption:prepared.caption,
-  cta:prepared.cta,
-  content_document:{...prepared.document,generation_recovery:recovery},
-  quality_report:quality,
-  carousel_slides:prepared.slides,
-  research_sources:[],
-  research_status:'not_required',
-  content_language:language,
-  draft_kind:'brand',
-  growth_topic_type:null,
-  content_mode:'prelaunch',
-  content_pillar:'concept',
-  generation_reason:'오픈 전 홍보 / campaign '+pattern+' / '+CAMPAIGN_VERSION,
-  event_id:null,
-  trend_id:null,
-  destination_url:'https://roundy.team',
-  render_style:'campaign',
-  campaign_pattern:pattern,
-  campaign_tone:tone,
-  campaign_version:CAMPAIGN_VERSION,
-  launch_date:launchDate,
- };
- ok(await db.from('marketing_generation_jobs').update({quality_report:quality,result_snapshot:{...patch,draft_id:draft.id,images:[],saved_at:new Date().toISOString(),generation_recovery:recovery}}).eq('id',job.id));
- if(prepared.report.status!=='passed')throw new Error('품질 검토 필요: '+prepared.report.issues.join(' '));
- return patch;
 }

@@ -1,6 +1,6 @@
 // Independent, bounded editorial review. Never publishes or changes research evidence.
 // Scores screen draft copy; they do not predict social-media reach.
-import type {TopicSelection,TopicAssessment} from './marketing-topic-planner';
+import type { TopicAssessment,TopicSelection } from './marketing-topic-planner';
 
 export const EDITORIAL_CRITIC_VERSION=1;
 export const EDITORIAL_CRITIC_MIN_SCORE=80;
@@ -28,19 +28,6 @@ export function topicCriticSchema(){
   decision:{type:'string',enum:['approve','reject']},reason:{type:'string'}
  },required:['angle_key','hook','scene','originality','usefulness','shareability','decision','reason']};
  return {type:'object',additionalProperties:false,properties:{reviews:{type:'array',minItems:1,maxItems:5,items:item}},required:['reviews']};
-}
-export function topicCriticPrompt(language:string):string {
- return [
-  'You are an INDEPENDENT, skeptical editor. You did NOT write these topic ideas.',
-  'Evaluate each candidate solely from its headline, scene, core insight and reader payoff. The generator self-ratings have deliberately been hidden.',
-  'Do not accept generic advice dressed up with a novelty word, a numbered list, or a question mark. A familiar first-date problem alone is insufficient without a fresh scene or observation.',
-  'A good idea has a recognizable social moment, a specific tension, a non-obvious observation, and enough DISTINCT material for the requested 3 or 5 cards.',
-  'Return one review for EACH supplied angle_key, once and only once. Score hook, scene, originality, usefulness and shareability individually 1 to 5.',
-  '1=weak textbook tip; 3=competent but ordinary; 5=exceptionally specific and worth saving or sharing. Reject weak ideas, even if they are grammatically polished.',
-  'Do not invent studies, relationship outcomes, trends or other facts. Your job is topic appeal, not fact validation.',
-  'Primary reader language: '+(language==='en'?'English':'Korean')+'. The reason may use that language.',
-  'Output the strict JSON schema only.'
- ].join('\n');
 }
 export type TopicCriticReview={angle_key:string;score:number;approved:boolean;reason:string};
 export function independentlyRankTopics(selection:TopicSelection,value:unknown):{selection:TopicSelection;reviews:TopicCriticReview[]} {
@@ -83,57 +70,11 @@ export function copyCriticSchema(){
   issues:{type:'array',maxItems:4,items:{type:'string'}}};
  return {type:'object',additionalProperties:false,properties:fields,required:Object.keys(fields)};
 }
-export function copyCriticPrompt(language:string,mode:'story_first'|'answer_first',count:3|5):string {
- return [
-  'You are an INDEPENDENT, tough magazine editor, not the writer of this carousel.',
-  'Judge whether a real reader would want to keep swiping, not whether a schema or marketing checklist is satisfied.',
-  'Evaluate ONLY the supplied reader-visible title, body, highlight and editorial closing. Do not use author self-ratings or hidden rationales.',
-  ...(mode==='answer_first'?[
-   'This is a FACT-FIRST or service-journalism carousel. A concrete scene may be a reader deciding what to see, a verified activity or a practical trade-off; do not require invented dialogue or personal experience.',
-   'Reward useful verified specifics and a coherent reader decision. Reject unrelated social advice inserted beside event, book or research facts, or an event listing that never fulfills its cover promise.',
-   'A fictional conversation is optional, never a factual claim about event visitors. Judge the progression of on-screen facts and useful choices, not the theatrical intensity of a fabricated anecdote.'
-  ]:[
-   'Look for a recognisable human scene, emotional or practical tension, a fresh observation, different payoff per swipe and natural ending.',
-   'The narrative should pay off the cover promise through tangible dialogue, reactions or changing choices, not just generic questions.'
-  ]),
-  'A single banal suggestion split across multiple cards MUST fail, even when it contains the words "instead", "but", or "why".',
-  ...(mode==='story_first'?[
-   'BAD example: 언제 한번 대신 날짜 두 개 -> 첫 장도 뒤의 네 장도 날짜 두 개를 고르라는 조언의 반복. It is not publishable.',
-   'GOOD structure: atmosphere was good on a first date, but a second meeting never happened -> real goodbye dialogue -> why the vague promise fizzles -> one usable concrete line -> humane closing.'
-  ]:[
-   'BAD fact-first example: an arts festival list -> one generic question about feelings -> a bare program count -> another generic question. Verified facts and conversation tips do not automatically form a story.',
-   'GOOD fact-first structure: a concrete choice that readers face -> source-grounded options and differences -> what to pay attention to -> a distinct practical constraint -> an earned decision or reflection.'
-  ]),
-  'The examples teach DIFFERENCE in narrative depth, not text to reproduce. Reject near-copies of either example.',
-  '1=generic filler, 3=acceptable prose but not compelling, 5=original, natural, specific and shareable.',
-  'If copy is fixable without changing its core subject, choose rewrite with exact defects. If the core idea is banal or cannot support '+count+' distinct cards, choose replace_topic.',
-  'Give pass only if you would publish the story as an editor, subject to separate factual, legal, source and image checks.',
-  'No invented external facts, quotes attributed to real people or promised outcomes. No rewrite text; only ratings, decision and concise actionable issues.',
-  'Narrative mode: '+mode+'. Primary language: '+(language==='en'?'English':'Korean')+'.',
-  'Output JSON matching the schema.'
- ].join('\n');
-}
 export type EditorialCopyCritique={
  version:number;score:number;status:'passed'|'rewrite'|'replace_topic';
  reason:string;issues:string[];
  ratings:{hook:number;scene:number;originality:number;progression:number;shareability:number};
 };
-// Structured, bounded feedback given to the ONE permitted rewrite. Independent
-// criticism is untrusted editorial feedback, never authority over verified facts.
-export function editorialRevisionBrief(review:EditorialCopyCritique,count:3|5,sourceLocked:boolean){
- const weakest=Object.entries(review.ratings).sort((a,b)=>a[1]-b[1]).slice(0,3).map(([name])=>name);
- const steps=count===5
-  ?['Cover: ONE concrete reader dilemma or decision and an honest promise.',
-    'Card 2: demonstrate the exact context or reader friction promised on the cover.',
-    'Card 3: provide one new observation or sourced fact that changes the situation.',
-    'Card 4: advance with a DIFFERENT insight, example or grounded practical trade-off.',
-    'Card 5: resolve the same thread with a genuinely useful, memorable takeaway.']
-  :['Cover: one truthful, specific promise.','Card 2: fulfill it with a grounded example and distinct insight.',
-    'Card 3: close the same thread with a concrete reader payoff.'];
- return {editor_reason:review.reason,editor_issues:review.issues.slice(0,4),
-  weakest_dimensions:weakest,slide_progression:steps,
-  factual_lock:sourceLocked?'Keep the verified subject, source IDs, facts and uncertainties. Move relevant facts into the thread instead of inventing emotional scenes.':'Keep the approved subject. Illustrative conversation is allowed but must not be presented as testimony or fact.'};
-}
 
 export function assessIndependentCopyReview(value:unknown):EditorialCopyCritique {
  if(!isRow(value)||!Array.isArray(value.issues)||value.issues.length>4)throw new Error('EDITORIAL_COPY_CRITIC_INVALID');

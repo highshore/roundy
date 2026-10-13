@@ -59,7 +59,7 @@ export async function centralHarness(){
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText,context,{filename:file});return context.exports;
  }
  // Reuse the existing strict-schema provider fixtures, not a replacement implementation of the writer.
- let fixtureSource=fs.readFileSync('scripts/test-marketing-generation.mjs','utf8').split("\nfor(const language of ['en','ko'])")[0];
+ let fixtureSource=fs.readFileSync('scripts/marketing-provider-fixture.mjs','utf8').split("\nfor(const language of ['en','ko'])")[0];
  fixtureSource=fixtureSource.replace(/^import .*;\n/gm,'').replace('const require=createRequire(import.meta.url),','const ');
  fixtureSource=fixtureSource.replace('const requests=[],stored=[];','let providerFetch;const requests=[],stored=[];');
  fixtureSource=fixtureSource.replace('vm.runInNewContext(compiled(file),context);',"if(file==='src/lib/marketing-generation.ts')providerFetch=context.fetch;vm.runInNewContext(compiled(file),context);");

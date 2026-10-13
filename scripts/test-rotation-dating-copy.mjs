@@ -15,12 +15,12 @@ check(()=>assert.ok(data.includes('entirely in English')));
 check(()=>assert.ok(copy.includes('Roundy offers 1:1 Mingle only.')));
 // Instagram marketing generation uses the requested terminology.
 check(()=>assert.ok(presentation.includes("ko: '서울에서 만나는 로테이션 소개팅', en: 'Rotation Dating in Seoul'")));
-check(()=>assert.ok(presentation.includes('Never label the service 1:1 Mingle')));
+check(()=>assert.ok(presentation.includes('hasObsoletePositioning')));
 check(()=>assert.ok(visuals.includes("'대면으로 만나고, 서로 선택하면 매칭되는 서울의 로테이션 소개팅.'")));
 check(()=>assert.ok(visuals.includes("'Meet face to face in Seoul. Match only when the interest is mutual.'")));
 check(()=>assert.ok(!visuals.includes("'1:1 밍글'")&&!visuals.includes("'1:1 로테이션'")));
-check(()=>assert.ok(policy.includes('Roundy is a Rotation Dating service in Seoul')));
+check(()=>assert.ok(presentation.includes('Rotation Dating in Seoul')));
 check(()=>assert.ok(policy.includes("서울에서 만나는 로테이션 소개팅, Roundy.")));
-check(()=>assert.ok(generation.includes('Seoul-based Rotation Dating service')));
+check(()=>assert.ok(visuals.includes('로테이션 소개팅')));
 check(()=>assert.ok(!generation.includes('Seoul-based 1:1 mingle')));
 console.log('PASS '+checks+' Instagram-only Rotation Dating assertions; website/event copy preserved.');

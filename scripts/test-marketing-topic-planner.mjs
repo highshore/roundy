@@ -61,7 +61,7 @@ const repeated=p.assessTopicCandidates({candidates:sameBatch},[], 'ko',now);
 check(()=>assert.equal(repeated.candidates[1].status,'discarded'));
 check(()=>assert.equal(repeated.candidates[1].reasons.some(s=>s.includes('유사 주제')),true));
 check(()=>assert.equal(p.topicCandidateSchema().properties.candidates.minItems,5));
-check(()=>assert.match(p.topicDiscoveryPrompt('conversation_prompt','ko','',history),/RECENT HISTORY/));
+check(()=>assert.equal(p.topicDiscoveryPrompt,undefined));
 const english=[
  candidate('Why first dates feel like job interviews','first_date_interview_questions','Questions arrive quickly, but people often need a moment to explain their own perspective.'),
  candidate('Why a quiet date feels different','quiet_date_room_to_listen','A quieter place gives both people time and room to share something personal.'),

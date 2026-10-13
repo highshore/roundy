@@ -50,7 +50,7 @@ for (const key of Object.keys(defaults)) {
 }
 assert.doesNotMatch(foundation, /\b(drop|truncate|delete\s+from|update\s+public\.instagram_post_drafts)\b/i);
 assert.match(migration, /Manual extra publication remains permitted/);
-const legacy = read('src/lib/marketing-legacy.ts');
+const legacy = read('src/lib/marketing-admin-api.ts');
 assert.match(legacy, /req\.method==='GET'/);
 assert.match(legacy, /parseEditorialSettingsPatch\(body\)/);
 assert.match(legacy, /req\.method==='PATCH'/);

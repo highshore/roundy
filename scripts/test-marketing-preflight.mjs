@@ -102,8 +102,8 @@ assert.match(sql,/preflight/);
 assert.doesNotMatch(sql,/truncate|delete from public\.instagram_post_drafts|drop table public\.instagram_post_drafts/i);
 const route=fs.readFileSync('src/lib/marketing.ts','utf8');
 assert.match(route,/path\[1\]==='preflight'/);
-assert.match(route,/recheckForPublishing\(current\)/);
-assert.match(route,/MARKETING_PREFLIGHT_FAILED/);
+assert.match(fs.readFileSync('src/lib/marketing-content-controller.ts','utf8'),/reviewMarketingDraft/);
+assert.match(fs.readFileSync('src/lib/marketing-content-workers.ts','utf8'),/MARKETING_PREFLIGHT_FAILED/);
 console.log('PASS marketing preflight: seven checks, source/provenance, human approval, 3/5 photos, Answer-First, CTA, no-clipping, idempotent DB guards');
 
 // Production regression: a 5-story + 1-brand card was rejected as an invalid

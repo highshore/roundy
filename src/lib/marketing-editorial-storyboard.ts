@@ -1,6 +1,6 @@
 // Stage 3 magazine copy checks. Review only; no source, image or workflow mutations.
 // Heuristic ratings are an editing aid, NOT a prediction of Instagram reach.
-import {savedCarouselPlan,magazineCarouselFit} from './marketing-carousel-template';
+import { magazineCarouselFit,savedCarouselPlan } from './marketing-carousel-template';
 
 export const EDITORIAL_STORYBOARD_VERSION=1;
 export const EDITORIAL_HEADLINE_VERSION=1;
@@ -75,9 +75,4 @@ export function reviewMagazineStoryboard(doc:Document,language:string):Storyboar
    :'The fixed five-card reservation stays unchanged; empty filler is rejected rather than silently changing the schedule.',
   issues,measured_cards:body.length
  };
-}
-export function storyboardWritingGuide(count:3|5){
- return count===3
-  ?'STORYBOARD EDIT: Three reserved slides are immutable: (1) one truthful reader-first cover, (2) a dense but readable key insight, including source context or limitations when relevant, (3) a specific editorial takeaway. Combine overlapping details instead of adding new slides.'
-  :'STORYBOARD EDIT: Five reserved slides are immutable: cover, a recognisable context, two genuinely different useful insights, and a memorable editorial closing. Do not split one obvious tip over multiple cards. Each middle card must add an observable scene, substantive distinction, or sourced fact, without padding.';
 }
