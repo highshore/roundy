@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import path from 'node:path';
 import {createRequire} from 'node:module';
 const require=createRequire(import.meta.url),ts=require('typescript'),sharp=require('sharp'),cache={};
 function load(file){
@@ -17,9 +18,10 @@ assets.cardPhotos=Object.fromEntries(Array.from({length:5},(_,i)=>[i,'data:image
 for(const lang of ['ko','en'])for(const length of [3,5]){
  const doc={schema_version:2,design_preset:'roundy_magazine_editorial_v2',content_language:lang,brand_outro_version:1,
  carousel_template:{version:1,mode:'fixed',slide_count:length,title_font_size_px:72,body_font_size_px:36,reservation_number:null}};
- const cards=Array.from({length:length+1},(_,i)=>({role:i===0?'cover':i===length?'brand_outro':i===length-1?'editorial_closing':'insight',
- title:lang==='ko'?'비 오는 날, 대화가 시작되는 순간':'A rainy day and a different conversation',
- body:lang==='ko'?'같은 상황에서도 어떤 말을 고르느냐에 따라 다음 대화가 달라집니다.':'The next conversation changes when you choose a different response.'}));
+ const roles=length===3?['cover','key_insight','editorial_closing','brand_outro']:['cover','context','insight','insight','editorial_closing','brand_outro'];
+ const cards=roles.map((role,i)=>({role,closing_type:role==='brand_outro'?'brand_outro':role==='editorial_closing'?'summary':'none',
+ title:lang==='ko'?'같은 상황, 다른 한마디':'Same moment, different words',
+ body:lang==='ko'?'어떤 말을 고르느냐에 따라 다음 대화가 달라집니다.':'The next conversation can change with a different response.'}));
  for(let i=0;i<cards.length;i++){
   const png=Buffer.from(await renderer.editorialCard(cards[i],i,cards.length,{...doc,slides:cards},assets).arrayBuffer());
   const meta=await sharp(png).metadata();assert.equal(meta.width,1080);assert.equal(meta.height,1350);assert.ok(png.length>3000);count++;
@@ -27,5 +29,12 @@ for(const lang of ['ko','en'])for(const length of [3,5]){
 }
 assert.equal(count,20);
 const traces=['.next/server/app/api/internal/marketing-generation/route.js.nft.json','.next/server/app/api/admin/marketing/[[...marketingPath]]/route.js.nft.json'];
-for(const p of traces){if(!fs.existsSync(p))continue;const text=fs.readFileSync(p,'utf8');for(const name of ['NotoSansCJKkr-Regular.otf','NotoSansCJKkr-Black.otf','dm-sans-latin-400-normal.woff','dm-sans-latin-700-normal.woff'])assert.ok(text.includes(name),'Missing deployment font '+name+' in '+p);}
-console.log('PASS 20 real Korean/English story+brand cards with bundled fonts and runtime network forbidden');
+for(const p of traces){
+ const trace=JSON.parse(fs.readFileSync(p,'utf8'));
+ for(const name of ['NotoSansCJKkr-Regular.otf','NotoSansCJKkr-Black.otf','dm-sans-latin-400-normal.woff','dm-sans-latin-700-normal.woff']){
+  const item=trace.files.find(f=>f.endsWith('/'+name));assert.ok(item,'Missing deployment font '+name+' in '+p);
+  assert.ok(fs.statSync(path.resolve(path.dirname(p),item)).size>100,'Traced font must exist');
+ }
+ assert.ok(!trace.files.some(f=>f.includes('/scripts/backend-')||f.includes('/.github/')),'Do not trace repository tooling');
+}
+console.log('PASS 20 real Korean/English story+brand cards, bundled deployment font files and no runtime network');
