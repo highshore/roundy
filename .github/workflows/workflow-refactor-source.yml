@@ -1,0 +1,22 @@
+name: Workflow refactor source
+on:
+  push:
+    branches: [codex/roundy-central-workflow-20261013]
+    paths: ['.github/workflows/workflow-refactor-source.yml']
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Archive tracked source only
+        run: git archive --format=tar.gz HEAD > /tmp/roundy-central-source.tar.gz
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: roundy-central-source
+          path: /tmp/roundy-central-source.tar.gz
+          retention-days: 1
