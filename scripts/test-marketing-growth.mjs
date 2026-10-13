@@ -36,8 +36,9 @@ assert.equal(trained.weights.brand,15,'brand exposure cap');
 const broken=strong.filter(s=>s.pillar!=='culture');
 assert.equal(recommendGrowthWeights(aggregateGrowthSignals(broken)).learning,false,'no extrapolation from untested pillar');
 const generation=readFileSync(new URL('../src/lib/marketing-generation.ts',import.meta.url),'utf8');
-assert.match(generation,/growth_mode_enabled/);
-assert.match(generation,/Verified Seoul trend unavailable; use evergreen Korea-life post/);
+const automation=readFileSync(new URL('../src/lib/marketing-content-automation.ts',import.meta.url),'utf8');
+assert.match(automation,/growth_mode_enabled/);
+assert.match(automation,/startContentWorkflow/);assert.match(automation,/korea_life/);
 // Regression: every topic accepted by the generator, including the culture slot,
 // must be persisted by the production DB constraint. Test against real Postgres
 // semantics in memory; no Supabase, paid AI, or publishing calls.

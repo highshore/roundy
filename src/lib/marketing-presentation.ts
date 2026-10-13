@@ -150,27 +150,6 @@ export function compactContentSchema(schema: PresentationRow, language: string, 
     required:[...(magazine?schema.required.filter((field:string)=>field!=='cta'):schema.required), 'design_preset', ...(magazine?['cover_layout']:[]), 'caption_ko', 'caption_en', 'tagline', 'hashtags'],
   };
 }
-export function compactWritingInstructions(language: string, magazine = false) {
-  if(!magazine)return [
-   'EDITORIAL PRESET '+EDITORIAL_PRESET+'. Maintain the existing compact Roundy document contract for historical jobs.',
-   'Write concise authentic copy with primary-language slides and faithful secondary translations. The server will attach brand contact/footer details.',
-   'For the old schema top-level cta is exactly '+JSON.stringify(generatedCta(language))+'; final card role is cta.',
-   'Write caption_ko and caption_en as clean 2-4 paragraph cores without URLs, hashtags, source list or CTA.',
-  ].join('\n');
-  return [
-    'EDITORIAL VISUAL PRESET: '+MAGAZINE_EDITORIAL_PRESET+' with cover_layout '+MAGAZINE_IMMERSIVE_LAYOUT+'. Cover is a FULL-BLEED 4:5 photographic magazine cover with strong, short type in a subtle bottom readability gradient. Subsequent cards use airy warm ivory panels, black copy and Roundy coral highlights. No fake buttons, clickable-looking links, numbered badges, stickers or dark scrims on body cards. The final card keeps an informative conclusion and a separate subtle Roundy invitation set by the renderer.',
-    'Roundy is a Seoul-based Rotation Dating service for Korean and international adults. Korean-Korean meetings are also part of the service. In Korean, always call the format 로테이션 소개팅. In English, call it Rotation Dating. Never label the service 1:1 Mingle. Do not describe the whole service as English-only or as a language class/exchange. Do not invent a particular event language.',
-    'Write compact, complete sentences on the FIRST writing call. There is no automatic paid compression/rewrite call. Do not fill the available maximum length. One card = one useful point, one short example, and at most one takeaway.',
-    'COVER: write a magnetic but truthful scroll-stopping headline (Korean ideally 8-22 characters / English 3-9 words) and ONE short subtitle. Lead with a recognizable situation, surprising but verifiable contrast or immediately useful suggestion, NEVER a vague motivational slogan. Image fills the background; copy sits at the lower third, so keep text concise. Aim for 2-3 impactful lines with no bibliography in the title.',
-    'CONTENT: one useful idea per card; prioritize a scene people recognize, a plausible actual question they could ask, a tiny observation, or a specific next step. Korean body ideally 25-75 characters; English 8-20 words. Use quoted speech only as a clearly original example, not a purported book or interview quote. No generic headings such as 핵심 정리, 의미 있는 관계, 알아보기 or Important Points. Avoid abstract nouns such as 목적, 방향, 구조, 분위기 without immediately grounding them in a concrete action.',
-    language==='en'
-      ? 'title/body/highlight/options are English. secondary_body is a short, faithful Korean rendering of the same idea for storage and caption parity only; it is NOT visible on the image. The Korean and English must preserve the same uncertainty and limitations.'
-      : 'title/body/highlight/options are Korean. secondary_body is a short, faithful English rendering of the same idea for storage and caption parity only; it is NOT visible on the image. Only original book titles/authors may remain English when editorially necessary. Use Korean conversation examples for Korean content, not mandatory English lessons.',
-    'caption_ko and caption_en are natural bilingual Instagram editorial cores, not card-by-card summaries. Use 2-4 short paragraphs starting with a relatable hook (KO <=30 chars / EN <=12 words), then one useful example or practical detail. No marketing CTA, handles, URLs, hashtags, labels or branded footer inside model copy. The server appends one varied, light Roundy invitation and source credits after review. Never invent trends, metrics, endorsements or testimonials.',
-    'Source IDs must stay linked to each sourced idea. Bibliographic facts, limitations and uncertainty must survive compression. Sources will be printed as small footnotes and full links in the caption by the server. Never fabricate a citation or copy a test/example book.',
-    'There is NO top-level cta field. All slides have closing_type: none for cover and body; the last editorial_closing has summary, insight or brand_outro. Make its TITLE and BODY a valuable punchy synthesis or a small practical action. Do not insert the company handle into the content body: the server adds a varied Roundy brand bridge beneath the takeaway. Never draw buttons, text links, sales instructions or fake click affordances on feed images.',
-  ].join('\n');
-}
 export function normalizeCompactDocument(raw: PresentationRow, language: string) {
   if (!isCompactDocument(raw)) return raw; // Legacy snapshots remain readable, not silently rewritten.
   const ko = language !== 'en';

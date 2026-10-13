@@ -156,6 +156,6 @@ check(()=>assert.match(migration,/metric_availability jsonb/));
 check(()=>assert.match(migration,/media_follows integer/));
 check(()=>assert.doesNotMatch(migration,/update public\.instagram_post_insights|delete from public\.(marketing_runs|instagram_post_drafts|instagram_reel_drafts)/i));
 check(()=>assert.match(reelSource,/readInstagramPerformance\(service\)/));
-check(()=>assert.match(editorial,/performanceEditorialHint\(db,'feed'/));
+check(()=>assert.doesNotMatch(editorial,/performanceEditorialHint\(db,'feed'/));
 check(()=>assert.match(creative,/performanceEditorialHint\(db,'reel'/));
 console.log('PASS '+n+' Instagram Performance Stage 5 assertions: official observed metrics, account-only nonfollower, null vs zero, 72h de-duplication, outlier suppression, per-language cohort stability and guarded prompt feedback.');

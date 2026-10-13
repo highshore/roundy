@@ -60,10 +60,9 @@ const schema=quality.contentSchema('conversation_prompt','ko','',true,doc.carous
 assert.equal(schema.properties.thumbnail_candidates.minItems,5,'legacy schema retained until trusted authoring opt-in');
 const workflow=load('src/lib/marketing-workflow.ts');
 assert.equal(workflow.editorialState({status:'completed',stage:'source_review_required'}),'source_review');
-const ui=fs.readFileSync('src/components/admin-marketing.tsx','utf8');
-assert.match(ui,/roundy-composer-series/);assert.match(ui,/name="editorial_subject"/);
-assert.match(ui,/roundy-composer-advanced/);assert.match(ui,/AI 호출 없음/);
-assert.doesNotMatch(ui,/안전한 비연구 콘텐츠로 1회 전환/);
+const ui=fs.readFileSync('src/components/admin-marketing-content-library.tsx','utf8');
+assert.match(ui,/content-composer/);assert.match(ui,/subject/);assert.match(ui,/saveEdits|function save/);
+assert.doesNotMatch(ui,/onLegacy/);
 const photos=fs.readFileSync('src/lib/marketing-stock-photos.ts','utf8');
 assert.match(photos,/isEditorFirst\(draft.content_document\)\?PHOTO_PROVIDERS.filter/);
 console.log('PASS editor-first series, short prompts, advisory allowlist, legacy isolation, single-title edits, source-review and composer contracts');

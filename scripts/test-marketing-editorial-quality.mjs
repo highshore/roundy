@@ -64,5 +64,5 @@ assert.match(policy,/editorial_engagement_policy===EDITORIAL_ENGAGEMENT_POLICY/)
 assert.match(editorial,/isMagazineDocument\(applied\)/);
 assert.match(editorial,/input\.content_mode==='growth_carousel'/);
 assert.match(editorial,/EDITORIAL_ENGAGEMENT_GATE_REJECTED/);
-assert.match(editorial,/repairUsed=true/);
+assert.doesNotMatch(editorial,/repairUsed=true/);assert.match(editorial,/editorFirstWritingInstructions/);
 console.log('PASS editorial engagement gate: weak KO/EN copy rejected, distinctive copy accepted, legacy opt-in, single repair and stop-before-images wired.');

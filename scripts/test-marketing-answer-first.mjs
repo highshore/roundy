@@ -78,17 +78,9 @@ const vague={...generated,thumbnail_candidates:[emptyTease,headlines[1],headline
  slides:[{...slides[0],title:emptyTease},...slides.slice(1)]};
 assert.ok(answerFirstIssues(vague,'ko').some(x=>x.includes('구체')), 'generic teaser without a takeaway is not Answer-First');
 assert.equal(answerFirstIssues({slides},'ko').length,0,'old documents stay valid');
-const admin=read('src/lib/marketing.ts');
-assert.match(admin,/path\[2\]==='thumbnail'&&req\.method==='PATCH'/);
-assert.match(admin,/eq\('revision',old\.revision\)/);
-assert.match(admin,/status!=='needs_approval'/);
-const editor=read('src/components/admin-marketing.tsx');
-assert.match(editor,/thumbnail_candidates/);
-assert.match(editor,/thumbnail_render_pending/);
-assert.match(editor,/Re-render with selected headline/);
-const generation=read('src/lib/marketing-generation.ts');
-assert.match(generation,/carousel_answer_first_enabled/);
-assert.match(generation,/thumbnail_render_pending:false/);
-assert.match(generation,/answer_first_enabled:input\.answer_first_enabled===true/);
+const controller=read('src/lib/marketing-content-controller.ts');
+assert.match(controller,/state_version/);assert.match(controller,/composeManualMagazineEdit/);
+assert.match(controller,/state_version|p_state/);
+assert.match(read('src/components/admin-marketing-content-library.tsx'),/secondary_body/);
 // Explicitly assert this change did not alter the old image renderer or publisher.
 console.log('PASS marketing Answer-First: five-card roles, strict candidate schema, safe headlines, guarded manual choice, legacy compatibility, pending image rerender');

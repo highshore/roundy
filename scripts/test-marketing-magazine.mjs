@@ -50,7 +50,7 @@ for(const count of [3,5])for(const language of ['ko','en']){
  assert.ok(!schema.required.includes('cta'));
  assert.ok(schema.properties.slides.items.required.includes('closing_type'));
  assert.deepEqual(Array.from(schema.properties.slides.items.properties.role.enum),Array.from(new Set(roles)));
- assert.match(policy.writingInstructions('korea_life',language,'',true,plan),/editorial_closing/);
+ assert.match(load('marketing-editor-first').editorFirstWritingInstructions('korea_life',language,count,'read_the_room'),/editorial_closing/);
  const other=language==='ko'?['서울에서 즐길 수 있는 주말','산책하면서 새로운 거리 구경하기','동네마다 취향이 다른 이유','골목에서 찾는 새로운 시선']:
   ['Explore Seoul more slowly','Find a welcoming new neighborhood','Discover a little local context','Small discoveries in daily life'];
  const slides=roles.map((role,i)=>({

@@ -105,7 +105,7 @@ assert.match(worker,/await beforeFirstExternalPost\(\)/);
 assert.match(worker,/await service\.rpc\('mark_marketing_feed_external_attempt'/);
 assert.match(worker,/outcome=\{status:externalAttempt\?'needs_review':'failed'/);
 const api=read('src/lib/marketing.ts');
-assert.match(api,/queued\.deferred===true/);
+assert.match(read('src/lib/marketing-content-controller.ts'),/approve_marketing_content/);
 assert.match(api,/retry_marketing_feed_after_review/);
 assert.match(api,/path\[2\]==='attempts'/);
 console.log('PASS simulated KST Feed reservations: 3 approvals -> 3 days, daily cap, mode parity, no double claims, uncertain-result quarantine. No real Instagram calls.');

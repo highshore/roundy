@@ -1,9 +1,9 @@
+import { createHash } from 'node:crypto';
 import 'server-only';
-import {fiveEventRoles,eventRolesForCount,withAnswerFirstSchema,answerFirstPrompt,answerFirstIssues,applyAnswerFirstDocument} from './marketing-answer-first';
-import {savedCarouselPlan,mobileCarouselFit,type CarouselPlan} from './marketing-carousel-template';
-import {createHash} from 'node:crypto';
-import {EVENT_CAMPAIGN_PRESET,ROUNDY_IDENTITY,captionAction,captionCoreIssues,curateHashtags,normalizeCaptionCore} from './marketing-presentation';
-import {eventStatus} from './event-status';
+import { eventStatus } from './event-status';
+import { answerFirstIssues,applyAnswerFirstDocument,eventRolesForCount,fiveEventRoles } from './marketing-answer-first';
+import { mobileCarouselFit,savedCarouselPlan,type CarouselPlan } from './marketing-carousel-template';
+import { EVENT_CAMPAIGN_PRESET,ROUNDY_IDENTITY,captionCoreIssues,curateHashtags,normalizeCaptionCore } from './marketing-presentation';
 
 export type EventCampaignRow=Record<string,any>;
 type Call=(endpoint:string,body:EventCampaignRow,timeout:number)=>Promise<EventCampaignRow>;
@@ -239,46 +239,6 @@ function ctaCopy(stage:EventCampaignStage,language:string){
  if(stage==='momentum')return ko?'남은 자리 확인하기':'Check remaining spots';
  return ko?'자리 확인하기':'Check spots';
 }
-function schema(pattern:EventCampaignPattern,stage:EventCampaignStage,language:string,answerFirst=false,plan:CarouselPlan|null=null){
- const roles=plan?eventRolesForCount(pattern,PATTERN_ROLES[pattern],plan.slide_count):answerFirst?fiveEventRoles(pattern,PATTERN_ROLES[pattern]):PATTERN_ROLES[pattern],titleMax=language==='en'?48:26,bodyMax=language==='en'?90:48;
- const str=(maxLength:number,minLength=0)=>({type:'string',minLength,maxLength});
- return withAnswerFirstSchema({
-  type:'object',additionalProperties:false,
-  properties:{
-   schema_version:{type:'integer',enum:[2]},
-   campaign_version:{type:'string',enum:[EVENT_CAMPAIGN_VERSION]},
-   design_preset:{type:'string',enum:[EVENT_CAMPAIGN_PRESET]},
-   post_type:{type:'string',enum:['live_event']},
-   event_campaign_stage:{type:'string',enum:[stage]},
-   event_campaign_pattern:{type:'string',enum:[pattern]},
-   caption_ko:str(420,1),caption_en:str(520,1),
-   slides:{type:'array',minItems:roles.length,maxItems:roles.length,items:{
-    type:'object',additionalProperties:false,
-    properties:{role:{type:'string',enum:[...new Set(roles)]},eyebrow:str(24),title:str(titleMax,1),body:str(bodyMax),secondary_body:str(language==='en'?48:90),visual_direction:str(180,8),step_number:{type:'integer',minimum:0,maximum:3},source_ids:{type:'array',maxItems:0,items:{type:'string'}}},
-    required:['role','eyebrow','title','body','secondary_body','visual_direction','step_number','source_ids']
-   }}
-  },
-  required:['schema_version','campaign_version','design_preset','post_type','event_campaign_stage','event_campaign_pattern','caption_ko','caption_en','slides']
- },language,answerFirst);
-}
-function instructions(stage:EventCampaignStage,pattern:EventCampaignPattern,language:string,answerFirst=false,plan:CarouselPlan|null=null){
- return [
-  'Create a conversion-focused Instagram campaign for ONE real Roundy event using only the supplied server facts.',
-  'This is an EVENT CAMPAIGN, not editorial magazine content and not a generic brand teaser.',
-  'Stage: '+stage+'. Pattern: '+pattern+'. Exact card roles: '+(plan?eventRolesForCount(pattern,PATTERN_ROLES[pattern],plan.slide_count):answerFirst?fiveEventRoles(pattern,PATTERN_ROLES[pattern]):PATTERN_ROLES[pattern]).join(' -> ')+'.',
-  'One message per card. Keep copy short, direct and visual-first. No paragraphs on cards.',
-  'Never invent dates, venue details, prices, discounts, seats, attendee demographics, popularity, reviews, testimonials, scarcity, sell-out speed, safety guarantees, or participant identities.',
-  'Dynamic roles named facts, participants, offer, and status are overwritten by the server. For those roles write neutral placeholders only and never add additional facts.',
-  'Use urgency only when present in supplied server status. Never write Hurry, selling fast, last chance, or similar unsupported pressure language.',
-  'Participants content may use only the supplied privacy-safe aggregate summary. Never infer gender, profession, age, nationality, height, smoking status, or identity beyond it.',
-  'Experience cards explain the actual Roundy flow: arrive, meet one-on-one, rotate between conversations, choose privately, match only when mutual.',
-  'The event CTA goes to the supplied event URL. Do not invent a waitlist or alternate purchase flow.',
-  'caption_ko and caption_en must be equivalent concise Instagram caption cores with 2-4 short paragraphs. No handles, URLs, hashtags, or source labels; the server appends the CTA/footer.',
-  'Event photography should prefer the supplied real event/venue images. visual_direction is only a fallback brief when AI photography is needed. It must request a clean text-free photograph with no logos, signs, or watermarks.',
-  language==='en'?'Primary card title/body are English; secondary_body is faithful Korean.':'Primary card title/body are Korean; secondary_body is faithful English.',
-  'Do not use the Korean middle dot character.',
- ].join('\n')+(answerFirst?'\n'+answerFirstPrompt(language,plan?.slide_count||5):'')+(plan?.slide_count===3?'\nThree-card compact format: result cover, ONE essential verified event detail card, final CTA. Preserve server facts and limitations.':'');
-}
 function parse(result:EventCampaignRow){
  const raw=result.choices?.[0]?.message?.content;
  if(result.choices?.[0]?.finish_reason!=='stop'||typeof raw!=='string')throw new Error('EVENT_CAMPAIGN_RESPONSE_INCOMPLETE');
@@ -331,49 +291,6 @@ export function eventCampaignDraftQuality(draft:EventCampaignRow){
  if(!clean(draft.cta)||clean(draft.cta).length>70)report.issues.push('저장된 이벤트 CTA를 확인하세요.');
  if(report.issues.length)report.status='rejected';
  return report;
-}
-export async function generateEventCampaignCopy(db:any,draft:EventCampaignRow,input:EventCampaignRow,job:EventCampaignRow,call:Call){
- const language=input.language==='en'?'en':'ko',answerFirst=input.answer_first_enabled===true,plan=(input.carousel_plan||null) as CarouselPlan|null,eventId=String(input.event_id||draft.event_id||'');
- const facts=await loadEventCampaignFacts(db,eventId);
- let stage=String(input.event_campaign_stage||'auto') as EventCampaignStage|'auto';
- if(stage==='auto'){
-  const history=ok(await db.from('marketing_event_campaign_history').select('stage,generated_at,status').eq('event_id',facts.id).eq('status','generated').order('generated_at',{ascending:false}).limit(10))||[];
-  const allowed=allowedStages(facts,new Set<string>(history.map((x:EventCampaignRow)=>String(x.stage))),history.length,history[0]?.generated_at||null);
-  stage=allowed[0]||(
-   Number(facts.status.hours_until_event)<=24?'last_call':
-   Number(facts.status.hours_until_event)<=72?'imminent':
-   Number(facts.status.occupancy)>=.7?'momentum':
-   Number(facts.roster.total)>=4?'participants':
-   'launch'
-  );
- }
- if(!(EVENT_CAMPAIGN_STAGES as readonly string[]).includes(stage))throw new Error('INVALID_EVENT_CAMPAIGN_STAGE');
- const resolvedStage=stage as EventCampaignStage;
- const pattern=STAGE_PATTERN[resolvedStage],eventSchema=schema(pattern,resolvedStage,language,answerFirst,plan);
- let inputTokens=0,outputTokens=0;
- const record=async(result:EventCampaignRow)=>{inputTokens+=Number(result.usage?.input_tokens||result.usage?.prompt_tokens||0);outputTokens+=Number(result.usage?.output_tokens||result.usage?.completion_tokens||0);ok(await db.from('marketing_generation_jobs').update({input_tokens:inputTokens,output_tokens:outputTokens}).eq('id',job.id));};
- const write=async(repair?:{document:EventCampaignRow;issues:string[]})=>{
-  const payload={language,event_campaign_stage:resolvedStage,event_campaign_pattern:pattern,event_facts:facts,direction:clean(input.instruction).slice(0,500),...(repair?{original_document:repair.document,quality_issues:repair.issues}:{})};
-  const system=instructions(resolvedStage,pattern,language,answerFirst,plan)+(repair?'\nREPAIR PASS: Fix ONLY the listed quality issues. Do not alter server facts or invent new claims. Return complete corrected JSON.':'');
-  if(Buffer.byteLength(system+JSON.stringify(payload)+JSON.stringify(eventSchema),'utf8')>30000)throw new Error('PROMPT_SIZE_LIMIT');
-  ok(await db.from('marketing_generation_jobs').update({stage:repair?'repairing_copy':'writing'}).eq('id',job.id));
-  const result=await call('chat/completions',{model:MODEL,reasoning_effort:'none',max_completion_tokens:3000,response_format:{type:'json_schema',json_schema:{name:'roundy_live_event_campaign_v1',strict:true,schema:eventSchema}},messages:[{role:'system',content:system},{role:'user',content:JSON.stringify(payload)}]},55000);
-  await record(result);return parse(result);
- };
- let written=await write(),document=normalize(written.document,language,resolvedStage,pattern,facts,answerFirst,plan),report=evaluateEventCampaign(document,language),repairUsed=false;
- if(report.status!=='passed'){repairUsed=true;written=await write({document,issues:report.issues});document=normalize(written.document,language,resolvedStage,pattern,facts,answerFirst);report=evaluateEventCampaign(document,language);}
- const recovery={requested_type:'live_event',effective_type:'live_event',fallback_reason:null,repair_used:repairUsed,event_campaign_stage:resolvedStage,event_campaign_pattern:pattern};
- const caption=buildCaption(document,resolvedStage,facts),quality={...report,recovery};
- const patch={
-  caption,cta:ctaCopy(resolvedStage,language),content_document:{...document,generation_recovery:recovery},quality_report:quality,
-  carousel_slides:document.slides,research_sources:[],research_status:'not_required',content_language:language,
-  draft_kind:'brand',growth_topic_type:null,content_mode:'live_event',content_pillar:resolvedStage==='imminent'||resolvedStage==='last_call'?'urgency':'event',
-  generation_reason:'이벤트 홍보 / '+resolvedStage+' / '+EVENT_CAMPAIGN_VERSION,event_id:facts.id,trend_id:null,destination_url:facts.event_url,
-  render_style:'campaign',event_campaign_stage:resolvedStage,event_campaign_pattern:pattern,event_campaign_version:EVENT_CAMPAIGN_VERSION,event_facts_snapshot:facts,
- };
- ok(await db.from('marketing_generation_jobs').update({quality_report:quality,result_snapshot:{...patch,draft_id:draft.id,images:[],saved_at:new Date().toISOString(),generation_recovery:recovery}}).eq('id',job.id));
- if(report.status!=='passed')throw new Error('품질 검토 필요: '+report.issues.join(' '));
- return patch;
 }
 export async function createAutomaticEventDraft(db:any,opportunity:EventCampaignRow,language:'ko'|'en',recommendation:EventCampaignRow){
  const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()),recommended=String(recommendation?.recommended_time_kst||'21:00').slice(0,5);

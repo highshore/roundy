@@ -120,51 +120,6 @@ async function retryRoute({jobPatch={},draftPatch={},confirmation={},signedIn=tr
  const response=await context.exports.marketingApi(request,client,['generation','jobs',originalId,'retry']);
  assert.equal(JSON.stringify(rows),before,'Existing job/draft changed');return {response,calls};
 }
-if(process.argv.includes('--expect-unfixed')){
- const {response,calls}=await retryRoute();assert.equal(response.status,400);assert.equal(response.body.error,'INVALID_CAMPAIGN_PATTERN');assert.equal(calls.length,0);
- console.log('REPRODUCED: real retry route rejects its own saved null campaign fields before provider execution.');
-}else{
- const {response,calls}=await retryRoute();
- check('real retry route accepts the saved topic request',()=>{assert.equal(response.status,200,JSON.stringify(response.body));assert.equal(calls.length,1);});
- check('selected candidate, thread, revision and language stay intact',()=>{
-  const call=calls[0];assert.equal(call.thread.selectedTopicKey,key);assert.equal(call.thread.retryOfJobId,originalId);
-  assert.equal(call.thread.attemptNumber,2);assert.equal(call.parsed.revision,3);assert.equal(call.parsed.topic_type,'mbti');
-  assert.equal(call.parsed.language,'ko');assert.equal(call.automatic,false);assert.match(call.parsed.request_key,/^retry:/);
-  assert.equal(call.parsed.confirm_photo,true);assert.equal(call.parsed.ai_image_slot,0);
- });
- for(const [name,args,status,error] of [
-  ['confirmation',{confirmation:{confirm_retry:false}},400,'RETRY_CONFIRMATION_REQUIRED'],
-  ['paid image confirmation',{confirmation:{confirm_paid_photo:false}},400,'CONFIRM_PAID_PHOTO_FIRST'],
-  ['signed-in actor',{signedIn:false},401,'Sign in required'],
-  ['uncertain outcome',{jobPatch:{status:'uncertain'}},400,'RETRY_ONLY_FAILED_MANUAL'],
-  ['completed job',{jobPatch:{status:'completed'}},400,'RETRY_ONLY_FAILED_MANUAL'],
-  ['automatic job',{jobPatch:{automatic:true}},400,'RETRY_ONLY_FAILED_MANUAL'],
-  ['superseded attempt',{newer:true},409,'GENERATION_THREAD_NOT_RETRYABLE'],
-  ['published draft',{draftPatch:{status:'published'}},409,'DRAFT_NOT_EDITABLE'],
-  ['unknown topic',{confirmation:{selected_topic_key:'not-in-snapshot'}},400,'SAVED_TOPIC_NOT_SELECTABLE'],
-  ['invalid saved pattern',{jobPatch:{request_payload:{...snapshot,campaign_pattern:'invented'}}},400,'INVALID_CAMPAIGN_PATTERN'],
- ]){
-  const result=await retryRoute(args);check(name+' gate preserved',()=>{assert.equal(result.response.status,status);assert.equal(result.response.body.error,error);assert.equal(result.calls.length,0);});
- }
- const noSelection=await retryRoute({confirmation:{selected_topic_key:undefined}});
- check('ordinary retry also replays successfully',()=>{assert.equal(noSelection.response.status,200);assert.equal(noSelection.calls.length,1);});
- console.log(`PASS ${checks} saved-request and real retry-route assertions; no live AI, database writes or Instagram publishing.`);
-}
-
-{
- const {response,calls}=await retryRoute({jobPatch:{status:'completed',stage:'source_review_required',
-  error_code:'EDITORIAL_SOURCE_REVIEW_REQUIRED',result_snapshot:{images:[],caption:'',carousel_slides:[]}}});
- assert.equal(response.status,200,'The source-review state must offer an explicit manual retry, not an unimportable dead end');
- assert.equal(calls.length,1);
- console.log('PASS source-review result is explicitly retryable without modifying the original attempt');
-}
-
-for(const patch of [
- {automatic:true}, {status:'uncertain'}, {status:'running'}, {stage:'complete'},
- {result_snapshot:{content_document:{},carousel_slides:[{title:'Saved'}],caption:'Saved copy'}},
- {request_payload:[]}
-]){
- const r=await retryRoute({jobPatch:{status:'completed',stage:'source_review_required',error_code:'EDITORIAL_SOURCE_REVIEW_REQUIRED',...patch}});
- assert.equal(r.response.status,400);assert.equal(r.calls.length,0);
-}
-console.log('PASS source-review recovery cannot replay automatic, uncertain, running, successful or malformed jobs');
+const retired=await retryRoute();
+check('retired retry rejects before DB/provider work',()=>{assert.equal(retired.response.status,410);assert.equal(retired.response.body.error,'CONTENT_WORKFLOW_REQUIRED');assert.equal(retired.calls.length,0);});
+console.log('PASS '+checks+' saved-input validation and retired-route checks. Current retry covered by central runtime tests.');

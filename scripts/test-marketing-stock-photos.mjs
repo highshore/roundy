@@ -40,7 +40,7 @@ assert.throws(()=>photoCreditCaption('Hello',[]),/PHOTOGRAPHER_REQUIRED/);
 assert.throws(()=>photoCreditCaption('x'.repeat(1990),['Alice']),/CREDIT_LIMIT/);
 
 const stock=fs.readFileSync(path.join(root,'src/lib/marketing-stock-photos.ts'),'utf8');
-const generation=fs.readFileSync(path.join(root,'src/lib/marketing-generation.ts'),'utf8');
+const generation=fs.readFileSync(path.join(root,'src/lib/marketing-content-workers.ts'),'utf8');
 const admin=fs.readFileSync(path.join(root,'src/lib/marketing.ts'),'utf8');
 const worker=fs.readFileSync(path.join(root,'supabase/functions/roundy-marketing/index.ts'),'utf8');
 const migration=fs.readFileSync(path.join(root,'supabase/migrations/20261008160000_pexels_marketing_photo_library.sql'),'utf8');
@@ -48,8 +48,9 @@ for(const guard of ['DUPLICATE_OR_NEAR_DUPLICATE_STOCK_PHOTO','ARCHIVED_STOCK_IM
  assert.ok(stock.includes(guard),guard);
 }
 assert.ok(stock.includes("review_status:'approved'")||stock.includes("review_status:'approved'"));
-assert.ok(generation.includes('photoCreditCaption(')&&generation.includes('photoReviewRequired'));
-assert.ok(admin.includes("path[2]==='review'")&&admin.includes("path[2]==='render-stock'"));
+assert.ok(generation.includes('photoCreditCaption(')&&generation.includes('PHOTO_APPROVAL_REQUIRED'));
+assert.ok(admin.includes("path[2]==='review'"));
+assert.match(fs.readFileSync(path.join(root,'src/lib/marketing-content-controller.ts'),'utf8'),/assign-photo/);
 assert.ok(worker.includes('await validateReviewedStockDraft(t)'));
 assert.ok(migration.includes('guard_marketing_stock_photo_publication'));
 console.log('PASS marketing stock photos: slot counts, approval, rejection, archive, rights and attribution');
