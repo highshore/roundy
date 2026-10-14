@@ -70,12 +70,12 @@ try{
  // Caption-only repair persists a new version, with both language fields and a server-built footer.
  const beforeCaption=cd.draft.content_document.caption_ko;
  const captionRequest={method:'POST',json:async()=>({state_version:cd.content.state_version,edits:[],
-  caption_ko:'새로운 대화는 작은 질문에서 시작해요.\\n다음에 나누고 싶은 이야기를 생각해 보세요.',
-  caption_en:'A question can open a conversation.\\nTry one the next time you meet.'})};
+  caption_ko:'새로운 대화는 작은 질문에서 시작해요.\n다음에 나누고 싶은 이야기를 생각해 보세요.',
+  caption_en:'A question can open a conversation.\nTry one the next time you meet.'})};
  const captionResponse=await h.controller.contentWorkflowApi(captionRequest,h.db,[cid,'edit'],h.actor);
  assert.equal(captionResponse.status,200);cd=await h.controller.contentDetail(h.db,cid);
  assert.notEqual(cd.draft.content_document.caption_ko,beforeCaption);
- assert.match(cd.draft.caption,/@roundy\\.meet \\| roundy\\.team/);
+ assert.match(cd.draft.caption,/@roundy\.meet \| roundy\.team/);
  assert.equal(cd.content.version,4);n++;
  await h.resume(cid);const corrected=await h.task(cid);assert.equal(corrected.content.required_action,'photo_approval_required',JSON.stringify(corrected));
  assert.equal(h.counts.copy,copyCount);n++;
