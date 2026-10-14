@@ -29,7 +29,7 @@ export async function startContentWorkflow(db:DB,value:unknown,actor:string|null
  const input=validateGenerationInput({...incoming,mode:'both',visual_mode:'cards',visual_source:'stock',revision:1});
  if(origin==='manual'&&!actor)throw new Error('CONTENT_ACTOR_REQUIRED');
  const identity=JSON.stringify([origin,input.content_mode,input.topic_type||null,input.language||'ko',input.instruction||'',input.story_card_count??null,
-  input.ai_image_slot===undefined?'default':input.ai_image_slot,input.editorial_series||null,input.event_id||null,input.event_campaign_stage||null,input.event_campaign_pattern||null,context.trend_id||null]);
+  input.ai_image_slot===undefined?'default':input.ai_image_slot,input.editorial_series||null,input.event_id||null,input.event_campaign_stage||null,input.event_campaign_pattern||null,context.trend_id||null,context.editorial_idea_id||null]);
  const signature=createHash('sha256').update(identity).digest('hex');
  const prior=contentResult(await db.from('marketing_contents').select('*').eq('request_key',input.request_key).maybeSingle());
  if(prior){
@@ -40,7 +40,11 @@ export async function startContentWorkflow(db:DB,value:unknown,actor:string|null
  const settings=contentResult(await db.from('marketing_automation_settings').select('*').eq('singleton',true).single());
  const plan=resolveCarouselPlan(settings,settings.carousel_mode==='alternating'?1:null);
  if(!plan)throw new Error('CAROUSEL_SETTINGS_REQUIRED');
- if(settings.carousel_mode==='fixed'&&input.story_card_count)plan.slide_count=input.story_card_count;
+ if(context.editorial_idea_id){
+  if(!id(context.editorial_idea_id)||![3,5].includes(Number(input.story_card_count)))throw new Error('EDITORIAL_STORY_COUNT_REQUIRED');
+  // An explicitly edited source storyboard must not be rewritten by the legacy alternating scheduler.
+  plan.mode='fixed';plan.reservation_number=null;plan.slide_count=input.story_card_count as 3|5;
+ }else if(settings.carousel_mode==='fixed'&&input.story_card_count)plan.slide_count=input.story_card_count;
  if(input.content_mode==='live_event'){
   if(!id(input.event_id))throw new Error('EVENT_REQUIRED');
   const event=contentResult(await db.from('events').select('id,status,deleted_at,marketing_enabled,starts_at').eq('id',input.event_id).single());
@@ -57,6 +61,7 @@ export async function startContentWorkflow(db:DB,value:unknown,actor:string|null
   story_card_count:plan.slide_count,carousel_plan:plan,answer_first_enabled:true,brand_outro_enabled:true,
   mode:'both',visual_mode:'cards',visual_source:'stock',ai_image_slot:ai,
   event_id:input.event_id||null,trend_id:context.trend_id||null,event_campaign_stage:input.event_campaign_stage||null,event_campaign_pattern:input.event_campaign_pattern||null,
+  editorial_idea_id:context.editorial_idea_id||null,editorial_source_url:context.editorial_source_url||null,editorial_pillar:context.editorial_pillar||null,
   photo_settings:{carousel_min_real_photos_5:settings.carousel_min_real_photos_5,carousel_min_real_photos_3:settings.carousel_min_real_photos_3,
    carousel_ai_thumbnail_enabled:ai!==null}};
  const content=contentResult(await db.rpc('start_marketing_content',{p_key:input.request_key,p_input:frozen,p_origin:origin,p_actor:actor}));
