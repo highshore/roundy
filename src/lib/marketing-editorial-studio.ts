@@ -184,7 +184,7 @@ export async function marketingEditorialStudioApi(req:NextRequest,db:DB,path:str
    language,editorial_series:source.pillar==='seoul_guides'?'before_you_go':'read_the_room',
    story_card_count:brief.storyboard.length,ai_image_slot:null,
    instruction:editorialHandoffInstruction(sourceInput(source),brief)
-  },actor);
+  },actor,'manual',{editorial_idea_id:idea.id,editorial_source_url:source.source_url,editorial_pillar:source.pillar});
   const updated=checked(await db.from('marketing_editorial_ideas')
    .update({content_id:result.content.id,status:'handed_off',updated_at:new Date().toISOString()})
    .eq('id',idea.id).eq('revision',idea.revision).is('content_id',null).select('*').maybeSingle());
