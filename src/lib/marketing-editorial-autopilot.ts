@@ -209,6 +209,7 @@ export async function runEditorialAutopilot(db:DB=createServiceRoleClient(),key=
       .select('id').single();
     if(inserted.error?.code==='23505')continue;
     const row=checked(inserted);
+    if(!row)continue;
     const added=await db.from('marketing_editorial_ideas').insert({...idea,source_id:row.id,
      origin:'automated',editorial_review:'pending',status:'ready',created_by:null,
      editorial_rationale:rationale}).select('id').single();
