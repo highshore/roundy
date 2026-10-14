@@ -145,7 +145,8 @@ begin
  if not pg_try_advisory_xact_lock(20261015090001) then return null;end if;
  today:=to_char(now() at time zone 'Asia/Seoul','YYYY-MM-DD');
  if exists(select 1 from public.marketing_editorial_autopilot_scans
-  where scan_key='editorial:auto:'||today) then return null;end if;
+  where created_at >= (date_trunc('day',now() at time zone 'Asia/Seoul') at time zone 'Asia/Seoul'))
+ then return null;end if;
  select secret into secret_value from roundy_private.marketing_scheduler_config where singleton;
  if secret_value is null then return null;end if;
  select net.http_post(
