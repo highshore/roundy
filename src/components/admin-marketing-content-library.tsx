@@ -18,7 +18,7 @@ export function AdminMarketingContentLibrary({locale,events=[],savedDrafts=[]}:{
  const [enabled,setEnabled]=useState(false),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
  const [composer,setComposer]=useState(false),[subject,setSubject]=useState(''),[topic,setTopic]=useState('conversation_prompt'),[language,setLanguage]=useState('ko'),[count,setCount]=useState(3),[ai,setAi]=useState(false);
  const [kind,setKind]=useState('growth_carousel'),[eventId,setEventId]=useState('');
- const [edits,setEdits]=useState<Record<number,Row>>({}),[caption,setCaption]=useState(''),[dirty,setDirty]=useState(false),[note,setNote]=useState(''),[refinedSubject,setRefinedSubject]=useState('');
+ const [edits,setEdits]=useState<Record<number,Row>>({}),[caption,setCaption]=useState(''),[captionKo,setCaptionKo]=useState(''),[captionEn,setCaptionEn]=useState(''),[dirty,setDirty]=useState(false),[note,setNote]=useState(''),[refinedSubject,setRefinedSubject]=useState('');
  const [pickerSlot,setPickerSlot]=useState<number|null>(null),[pool,setPool]=useState<Row[]>([]),[nextCursor,setNextCursor]=useState<string|null>(null);
  const selectedRef=useRef(''),mounted=useRef(true),polling=useRef(false),mutation=useRef(false),pendingCreate=useRef<Row|null>(null),editVersion=useRef('');
  const refresh=useCallback(async(prefer?:string,append=false)=>{
@@ -36,7 +36,7 @@ export function AdminMarketingContentLibrary({locale,events=[],savedDrafts=[]}:{
  useEffect(()=>{
   const current=detail?.content;const key=current?.id+':'+current?.version+':'+Boolean(detail?.draft?.carousel_slides?.length);
   if(key===editVersion.current)return;editVersion.current=key;
-  setEdits({});setCaption(detail?.draft?.caption||'');setDirty(false);setPickerSlot(null);setNote('');setRefinedSubject(current?.request_payload?.instruction||'');
+  setEdits({});setCaption(detail?.draft?.caption||'');setCaptionKo(detail?.draft?.content_document?.caption_ko||'');setCaptionEn(detail?.draft?.content_document?.caption_en||'');setDirty(false);setPickerSlot(null);setNote('');setRefinedSubject(current?.request_payload?.instruction||'');
  },[detail?.content?.id,detail?.content?.version,Boolean(detail?.draft?.carousel_slides?.length)]);
  const anyActive=rows.some(row=>['queued','running'].includes(row.status));
  useEffect(()=>{
@@ -75,6 +75,7 @@ export function AdminMarketingContentLibrary({locale,events=[],savedDrafts=[]}:{
  }
  const c=detail?.content,draft=detail?.draft,slides:Row[]=draft?.carousel_slides||[];
  const editable=!!c&&['blocked','failed'].includes(c.status)&&!['publish','complete'].includes(c.stage)&&slides.length>0;
+  const copyNeedsRepair=!!c&&['EDITORIAL_COPY_QUALITY_REJECTED','COPY_REVIEW_REQUIRED'].includes(String(c.error_code||''));
  async function action(name:string,body:Row={}){
   if(!c)return;const cid=c.id;
   await perform(async()=>{await api('/'+cid+'/'+name,{state_version:c.state_version,...body});await refresh(cid);});
@@ -87,8 +88,17 @@ export function AdminMarketingContentLibrary({locale,events=[],savedDrafts=[]}:{
   await action('resume',{confirm_paid:true,confirm_unknown:unknown,note,step});
  }
  async function save(){
-  if(!c||!Object.keys(edits).length)return;
-  await action('edit',{edits:Object.entries(edits).map(([index,fields])=>({index:Number(index),...fields})),caption});
+  if(!c||!dirty)return;
+  const cid=c.id,document=draft?.content_document||{};
+  const payload:Row={state_version:c.state_version,
+   edits:Object.entries(edits).map(([index,fields])=>({index:Number(index),...fields})),caption,
+   ...(captionKo!==String(document.caption_ko||'')?{caption_ko:captionKo}:{}),
+   ...(captionEn!==String(document.caption_en||'')?{caption_en:captionEn}:{})};
+  await perform(async()=>{
+   await api('/'+cid+'/edit',payload);
+   await refresh(cid);
+   setNotice(t('Edits saved as a new version. Review any remaining validation issues before continuing.','수정 내용을 새 버전으로 저장했습니다. 계속 진행하기 전 남은 검증 오류를 확인하세요.'));
+  });
  }
  function change(index:number,field:string,value:string){
   setEdits(old=>({...old,[index]:{title:slides[index].title,body:slides[index].body,secondary_body:slides[index].secondary_body||'',highlight:slides[index].highlight||'',...old[index],[field]:value}}));setDirty(true);
@@ -135,7 +145,8 @@ export function AdminMarketingContentLibrary({locale,events=[],savedDrafts=[]}:{
     <ol className="content-stages">{CONTENT_STAGES.filter(s=>s!=='complete').map(stage=><li key={stage} aria-current={c.stage===stage?'step':undefined}>{t(...CONTENT_STAGE_LABELS[stage])}</li>)}</ol>
     <section className="content-current-state" role="status"><strong>{t(...CONTENT_STATUS_LABELS[c.status as ContentStatus])}</strong><p>{c.required_action&&CONTENT_ACTION_LABELS[c.required_action]?t(...CONTENT_ACTION_LABELS[c.required_action]):t(...CONTENT_STAGE_LABELS[c.stage as ContentStage])}</p>
      {['queued','running'].includes(c.status)&&<p>{t('This task is stored on the server. You can leave this page and return later.','작업이 서버에 저장되어 있습니다. 페이지를 나갔다 돌아와도 진행 상태를 확인할 수 있습니다.')}</p>}
-     {c.error_code&&<details><summary>{t('Error details','오류 상세')}</summary><code>{c.error_code}</code><p>{c.error_message}</p></details>}
+     {c.error_code&&<details open={copyNeedsRepair}><summary>{t('Error details','오류 상세')}</summary><code>{c.error_code}</code><p className="content-error-message">{c.error_message}</p></details>}
+      {copyNeedsRepair&&<p className="content-repair-hint">{t('Review both caption languages, each story card translation and the length of text in the cards. Edit the saved copy below and save; this does not trigger a new paid AI request.','한국어 및 영어 캡션, 각 카드의 번역, 카드 본문 길이를 확인하세요. 아래에서 직접 수정 후 저장하면 AI를 다시 호출하지 않습니다.')}</p>}
     </section>
     {['blocked','failed'].includes(c.status)&&!['publish','complete'].includes(c.stage)&&<details><summary>{t('Refine the subject and start a new version','소재를 보완하고 새 버전으로 다시 작성')}</summary>
      <label>{t('Subject and reference notes','소재와 참고 메모')}<textarea value={refinedSubject} onChange={e=>setRefinedSubject(e.target.value)} rows={3} maxLength={500}/></label>
@@ -145,11 +156,19 @@ export function AdminMarketingContentLibrary({locale,events=[],savedDrafts=[]}:{
      {c.stage==='review'&&['blocked','failed'].includes(c.status)&&<><button type="button" className="admin-secondary" disabled={busy||dirty} onClick={()=>void resume('media')}>{t('Review photos again','사진 다시 확인')}</button><button type="button" className="admin-secondary" disabled={busy||dirty} onClick={()=>void resume('render')}>{t('Render images again','이미지만 다시 제작')}</button></>}
      {c.required_action==='final_approval_required'&&<button type="button" className="admin-primary" disabled={busy||dirty} onClick={()=>{if(window.confirm(t('Approve this exact version and reserve its Instagram publication?','이 버전의 이미지와 원고를 최종 승인하고 인스타그램 게시를 예약할까요?')))void action('approve',{confirm_publish:true});}}>{t('Approve and schedule','최종 승인 후 게시 예약')}</button>}
     </div>
-    {slides.length>0&&<section><div className="content-section-heading"><h4>{t('Saved copy and images','저장된 원고와 이미지')}</h4>{editable&&<button type="button" className="admin-secondary" disabled={busy||!dirty} onClick={()=>void save()}>{t('Save a new version','새 버전으로 저장')}</button>}</div>
+    {slides.length>0&&<section><div className="content-section-heading"><h4>{t('Saved copy and images','저장된 원고와 이미지')}</h4>{editable&&<button type="button" className="admin-primary content-save-inline" disabled={busy||!dirty} onClick={()=>void save()}>{busy?t('Saving…','저장 중…'):t('Save a new version','새 버전으로 저장')}</button>}</div>
      <div className="content-cards">{slides.map((slide,index)=>{const value=edits[index]||slide;return <article key={index}>{draft.images?.[index]&&<a href={draft.images[index]} target="_blank" rel="noreferrer"><img src={draft.images[index]} alt={slide.title}/></a>}<p className="admin-kicker">{index+1} / {slide.role==='brand_outro'?'ROUNDY':t('STORY','본문')}</p>
-      {editable&&slide.role!=='brand_outro'?<><label>{t('Title','제목')}<input value={value.title||''} onChange={e=>change(index,'title',e.target.value)} maxLength={72}/></label><label>{t('Body','본문')}<textarea value={value.body||''} rows={4} maxLength={260} onChange={e=>change(index,'body',e.target.value)}/></label><details><summary>{t('Translation','번역')}</summary><label>{t('Translated body','번역 본문')}<textarea value={value.secondary_body||''} rows={3} maxLength={260} onChange={e=>change(index,'secondary_body',e.target.value)}/></label></details></>:<><strong>{slide.title}</strong><p>{slide.body}</p></>}
+      {editable&&slide.role!=='brand_outro'?<><label>{t('Title','제목')}<input value={value.title||''} onChange={e=>change(index,'title',e.target.value)} maxLength={72}/></label><label>{t('Body','본문')}<textarea value={value.body||''} rows={4} maxLength={260} onChange={e=>change(index,'body',e.target.value)}/></label><details open={!String(value.secondary_body||'').trim()}><summary>{t('Translation','번역')} {!String(value.secondary_body||'').trim()&&<span className="content-field-warning">{t('Required','필수')}</span>}</summary><label>{draft.content_language==='en'?t('Korean body','한국어 본문'):t('English body','영어 본문')}<textarea value={value.secondary_body||''} rows={3} maxLength={260} onChange={e=>change(index,'secondary_body',e.target.value)}/></label></details></>:<><strong>{slide.title}</strong><p>{slide.body}</p></>}
      </article>;})}</div>
-     <details><summary>{t('Caption','캡션')}</summary><textarea value={dirty?caption:draft.caption||''} readOnly={!editable} onChange={e=>{setCaption(e.target.value);if(!Object.keys(edits).length&&slides[0])change(0,'title',slides[0].title);setDirty(true);}} maxLength={2000} rows={8}/></details>
+     <div className="content-caption-editor">
+       <h4>{t('Captions in both languages','한국어 및 영어 캡션')}</h4>
+       <p className="admin-help">{t('Edit the two caption bodies separately. Roundy account details, hashtags, verified sources and photo credits are managed by the server.','한국어와 영어 캡션 본문을 각각 수정하세요. 계정 정보, 해시태그, 검증된 출처와 사진 크레딧은 서버에서 관리합니다.')}</p>
+       <div className="content-caption-grid">
+        <label>{t('Korean caption','한국어 캡션')} <small>{captionKo.length}/400</small><textarea value={captionKo} readOnly={!editable} onChange={e=>{setCaptionKo(e.target.value);setDirty(true);}} maxLength={400} rows={5} placeholder={t('Write 2–4 short paragraphs in Korean.','한국어로 짧은 문단 2~4개를 작성하세요.')}/></label>
+        <label>{t('English caption','영어 캡션')} <small>{captionEn.length}/520</small><textarea value={captionEn} readOnly={!editable} onChange={e=>{setCaptionEn(e.target.value);setDirty(true);}} maxLength={520} rows={5} placeholder={t('Write 2–4 short paragraphs in English.','영어로 짧은 문단 2~4개를 작성하세요.')}/></label>
+       </div>
+       <details><summary>{t('Full Instagram caption preview','Instagram 전체 캡션 미리보기')}</summary><pre className="content-caption-preview">{draft.caption||''}</pre></details>
+      </div>
     </section>}
     {!!detail.photos?.length&&<section><h4>{t('Photo selection and rights review','사진 선택과 사용 권한 검수')}</h4><div className="content-photos">{detail.photos.map((photo:Row)=><article key={photo.slot}><img src={photo.preview_url||photo.image_url} alt={t('Photo for story card ','본문 카드 사진 ')+(photo.slot+1)}/><strong>{t('Card ','카드 ')}{photo.slot+1}</strong><p>{photo.review_status==='approved'?t('Approved','승인됨'):photo.review_status==='rejected'?t('Rejected','반려됨'):t('Review required','검수 필요')}</p><a href={photo.source_url} target="_blank" rel="noreferrer">{t('Original and rights','원본과 권리 확인')}</a>
      {c.stage==='media'&&c.status==='blocked'&&<div className="content-actions">{photo.review_status!=='approved'&&<button type="button" className="admin-secondary" disabled={busy||dirty} onClick={()=>{if(window.confirm(t('Have you checked this photo, its original source and commercial usage rights?','이 사진의 원본과 상업적 사용 권한, 콘텐츠 적합성을 확인했나요?')))void action('review-photo',{asset_id:photo.asset_id,choice:'approved',confirm_rights_reviewed:true});}}>{t('Approve','승인')}</button>}
@@ -160,6 +179,10 @@ export function AdminMarketingContentLibrary({locale,events=[],savedDrafts=[]}:{
     {(detail.steps||[]).some((s:Row)=>s.version===c.version&&(s.output?.research_context||s.output?.research_review))&&<details><summary>{t('Saved research','저장된 자료 조사')}</summary>{(detail.steps||[]).filter((s:Row)=>s.version===c.version&&(s.output?.research_context||s.output?.research_review)).map((s:Row)=>{const research=s.output.research_context||s.output.research_review;return <article key={s.id}><p>{research.notes}</p>{(research.sources||[]).map((source:Row,i:number)=><p key={i}><a href={source.url} target="_blank" rel="noreferrer">{source.title||source.url}</a></p>)}</article>;})}</details>}
     <details><summary>{t('Step history and errors','단계별 실행 이력과 오류')}</summary><div className="content-history">{(detail.steps||[]).map((step:Row)=><div key={step.id}><strong>v{step.version} / {t(...CONTENT_STAGE_LABELS[step.step as ContentStage])} / #{step.attempt}</strong><span>{step.status}</span>{step.error_code&&<p><code>{step.error_code}</code> {step.error_message}</p>}</div>)}</div></details>
     {!['running','scheduled','published','uncertain','archived'].includes(c.status)&&<button type="button" className="admin-secondary" disabled={busy||dirty} onClick={()=>{if(window.confirm(t('Archive this content and cancel unstarted tasks?','이 콘텐츠를 보관하고 시작 전 작업을 취소할까요?')))void action('archive',{confirm_archive:true});}}>{t('Archive content','콘텐츠 보관')}</button>}
+   {editable&&<div className="content-mobile-save-bar" role="group" aria-label={t('Save manual edits','수동 수정 저장')}>
+      <span>{dirty?t('Unsaved changes','저장되지 않은 수정'):t('Saved version','저장된 버전')} v{c.version}</span>
+      <button type="button" className="admin-primary" disabled={busy||!dirty} onClick={()=>void save()}>{busy?t('Saving…','저장 중…'):t('Finish editing & save','수정 완료 및 저장')}</button>
+     </div>}
    </>:<p>{t('Choose a content to inspect its saved workflow.','콘텐츠를 선택하면 저장된 단계와 결과를 확인할 수 있습니다.')}</p>}</div>
   </div>}
  </section>;
