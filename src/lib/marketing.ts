@@ -4,6 +4,7 @@ import sharp from 'sharp';
 import { marketingAdministrationApi } from './marketing-admin-api';
 import { CAMPAIGN_VERSION } from './marketing-campaign';
 import { contentWorkflowApi,startContentWorkflow } from './marketing-content-controller';
+import { marketingEditorialStudioApi } from './marketing-editorial-studio';
 import { draftQuality } from './marketing-editorial';
 import { generationOverview } from './marketing-generation';
 import { growthOverview } from './marketing-growth';
@@ -62,6 +63,8 @@ export async function marketingApi(req:NextRequest,db:Client,path:string[]){
  }
  if(id==='generation'&&path[1]==='jobs'&&req.method!=='GET')return json({error:'CONTENT_WORKFLOW_REQUIRED'},410);
  if(id==='contents'){const actor=(await db.auth.getUser()).data.user;if(!actor)return json({error:'Sign in required'},401);return contentWorkflowApi(req,service,path.slice(1),actor.id);}
+ if(id==='editorial'){const actor=(await db.auth.getUser()).data.user;if(!actor)return json({error:'Sign in required'},401);return marketingEditorialStudioApi(req,service,path.slice(1),actor.id);}
+
 
  async function recheckForPublishing(draft:Row){
   const preflight=await reviewMarketingDraft(service,draft),report=mergePreflightQuality(draftQuality(draft),preflight);
