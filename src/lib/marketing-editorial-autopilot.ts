@@ -74,14 +74,14 @@ const relevantWords=(text:string,pillar:EditorialPillar)=>{
  return words.filter(x=>hay.includes(x.toLowerCase())).length;
 };
 const distinguish=(text:string)=>text.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,'').slice(0,120);
-export function editorialPriority(source:Row,idea:Row,independent:boolean,observedAt:string):number{
+export function editorialPriority(source:Row,idea:Row,independent:boolean):number{
  const text=[source.title,source.summary,idea.angle].join(' ');
  const pillar=source.pillar as EditorialPillar;
  const relevance=Math.min(28,relevantWords(text,pillar)*9);
  const specificity=Math.min(15,Math.floor(text.length/16));
  const hookSignal=Array.isArray(idea.hooks)&&new Set(idea.hooks.map((h:string)=>distinguish(h))).size===3?15:0;
  const proof=15+(independent?12:0);
- return Math.max(0,Math.min(100,proof+relevance+specificity+hookSignal+dateFit(observedAt)));
+ return Math.max(0,Math.min(100,proof+relevance+specificity+hookSignal+dateFit(String(source.source_published_at||''))));
 }
 export function validateEditorialCandidates(raw:unknown,verified:Set<string>,old:readonly string[],limit=4){
  const data=raw&&typeof raw==='object'&&!Array.isArray(raw)?raw as Row:{};
@@ -105,7 +105,7 @@ export function validateEditorialCandidates(raw:unknown,verified:Set<string>,old
    if(normalizedHistory.has(canonicalTitle)||source.summary.trim().length<40)continue;
    const rationale=bounded(candidate.why_it_hooks,500);
    if(rationale.length<18)continue;
-   const score=editorialPriority(source,idea,independent,new Date().toISOString());
+   const score=editorialPriority(source,idea,independent);
    uniqueSources.add(rawUrl);
    if(score<45)continue;
    accepted.push({source,idea,score,rationale,evidence_urls:[rawUrl,...(independent?[support]:[])],independent});
