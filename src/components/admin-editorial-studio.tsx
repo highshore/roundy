@@ -42,7 +42,7 @@ export function AdminEditorialStudio({locale}:{locale:Locale}){
  useEffect(()=>{let active=true;fetch(ROOT,{cache:'no-store',credentials:'same-origin'}).then(async response=>{
   const result=await response.json().catch(()=>({}));
   if(!response.ok)throw new Error(result.error||'EDITORIAL_LOAD_FAILED');
-  if(active)setData(result as PageData);
+  if(active){setData(result as PageData);if((result as PageData).ideas?.some(i=>i.editorial_review==='pending'&&!i.content_id))setTab('ideas');}
  }).catch(e=>{if(active)setError(String(e.message||e));});return()=>{active=false;};},[]);
  const call=async(path:string,method:'POST'|'PATCH',body:unknown)=>{
   const response=await fetch(ROOT+path,{method,credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
@@ -98,6 +98,28 @@ export function AdminEditorialStudio({locale}:{locale:Locale}){
    await load();setNotice(t('Carousel production started. Review the resulting unpublished draft in Marketing.','캐러셀 제작을 시작했습니다. 마케팅의 미게시 초안을 검토하세요.')+' ID: '+result.content_id);
   });
  }
+ async function rejectIdea(){
+  if(!selectedIdea)return;
+  await run('reject',async()=>{
+   await call('/ideas/'+selectedIdea.id+'/reject','POST',{revision:selectedIdea.revision});
+   await load();setSelected('');setEditor(null);
+   setNotice(t('Idea rejected. No production was started.','기획안을 제외했습니다. 제작은 시작되지 않았습니다.'));
+  });
+ }
+ async function configureAutopilot(enabled:boolean,hour?:number){
+  await run('config',async()=>{
+   await call('/autopilot','PATCH',{enabled,...(hour===undefined?{}:{scan_hour_kst:hour})});
+   await load();
+   setNotice(enabled?t('Automatic discovery enabled.','자동 소재 발견을 켰습니다.'):t('Automatic discovery paused. Saved ideas remain.','자동 소재 발견을 중지했습니다. 기존 기획안은 유지됩니다.'));
+  });
+ }
+ async function scanNow(){
+  await run('scan',async()=>{
+   const result=await call('/autopilot/scan','POST',{confirm_paid:true});
+   await load();setTab('ideas');
+   setNotice(t('Discovery complete. New ideas: ','자동 자료 조사 완료. 새 기획안: ')+String(result.candidates?.length||0));
+  });
+ }
  async function toggleExcluded(source:Source){
   await run('exclude:'+source.id,async()=>{
    const excluded=source.status!=='excluded';
@@ -111,13 +133,16 @@ export function AdminEditorialStudio({locale}:{locale:Locale}){
   <header className="editorial-hero">
    <div><p className="admin-kicker">{t('ROUNDY / MARKETING','ROUNDY / 마케팅')}</p>
     <Heading level={1}>{t('Editorial Studio','에디토리얼 스튜디오')}</Heading>
-    <p>{t('Find what people already care about. Build an original carousel around its strongest angle.','사람들이 이미 관심을 보이는 소재를 찾아 새로운 시선의 캐러셀을 만드세요.')}</p>
+    <p>{t('Automated discovery, screening, hooks and storyboards. You review the editorial choice, media rights and final post.','소재 조사, 후보 선별, 후크와 기획안까지 자동으로 준비합니다. 사람은 기획, 이미지 사용권과 최종 게시를 승인합니다.')}</p>
    </div>
    <div className="editorial-hero-actions">
     <button className="editorial-soft-button" type="button" disabled={!!busy} onClick={()=>void run('refresh',async()=>{await load();})}><RefreshCw size={16}/>{t('Refresh','새로고침')}</button>
-    <button className="editorial-primary-button" type="button" onClick={()=>{setTab('discover');setShowImport(true);}}><Plus size={16}/>{t('Add source','출처 추가')}</button>
+    <button className="editorial-soft-button" type="button" onClick={()=>{setTab('discover');setShowImport(true);}}><Plus size={16}/>{t('Add source manually','직접 소재 추가')}</button>
    </div>
   </header>
+  <AdminEditorialAutopilot locale={locale} control={data?.autopilot} scans={data?.scans} busy={!!busy}
+   onControl={(enabled,hour)=>void configureAutopilot(enabled,hour)}
+   onScan={()=>void scanNow()}/>
   <div className="editorial-stats">
    <div><span>{t('Saved sources','저장한 출처')}</span><strong>{counts.sources}</strong></div>
    <div><span>{t('Editorial ideas','기획 중')}</span><strong>{counts.ideas}</strong></div>
