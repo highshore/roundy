@@ -3,6 +3,7 @@ import {createHash} from 'node:crypto';
 import {NextRequest,NextResponse} from 'next/server';
 import type {createServiceRoleClient} from './supabase/service';
 import {marketingProviderRequest} from './marketing-generation';
+import {runEditorialAutopilot} from './marketing-editorial-autopilot';
 import {startContentWorkflow} from './marketing-content-controller';
 import {canonicalEditorialUrl,editorialHandoffInstruction,editorialId,editorialReady,initialEditorialDraft,
  parseEditorialDraft,parseEditorialSource,type EditorialPillar,type EditorialSourceInput} from './editorial-studio-policy';
@@ -102,7 +103,7 @@ async function suggestPlan(db:DB,idea:Row,source:Row){
  }
  // Preserve paid output independently even if a concurrent admin edit has changed the idea revision.
  checked(await db.from('marketing_editorial_suggestion_runs').update({status:'completed',result:{...parsed,why_it_hooks:String(JSON.parse(output.message.content).why_it_hooks||'').slice(0,500)},completed_at:new Date().toISOString()}).eq('id',run.id).eq('status','running'));
- const updated=checked(await db.from('marketing_editorial_ideas').update({...parsed,status:'ready',revision:idea.revision+1,updated_at:new Date().toISOString()})
+ const updated=checked(await db.from('marketing_editorial_ideas').update({...parsed,status:'ready',editorial_review:'pending',review_by:null,reviewed_at:null,revision:idea.revision+1,updated_at:new Date().toISOString()})
    .eq('id',idea.id).eq('revision',idea.revision).is('content_id',null).select('*').maybeSingle());
  return {idea:updated||await ideaRow(db,idea.id),run_status:'completed',stale:!updated};
 }
@@ -110,16 +111,33 @@ async function suggestPlan(db:DB,idea:Row,source:Row){
 export async function marketingEditorialStudioApi(req:NextRequest,db:DB,path:string[],actor:string){
  const action=path[0]||'';
  if(req.method==='GET'&&!action){
-  const [sources,ideas,trends]=await Promise.all([
+  const [sources,ideas,trends,control,scans]=await Promise.all([
    db.from('marketing_editorial_sources').select('*').order('created_at',{ascending:false}).limit(150),
    db.from('marketing_editorial_ideas').select('*').order('updated_at',{ascending:false}).limit(150),
    db.from('marketing_trends').select('id,display_name,summary,source_urls,category,status,updated_at')
-    .in('status',['rising','emerging','peak']).order('updated_at',{ascending:false}).limit(15)
+    .in('status',['rising','emerging','peak']).order('updated_at',{ascending:false}).limit(15),
+   db.from('marketing_editorial_autopilot_control').select('*').eq('singleton',true).single(),
+   db.from('marketing_editorial_autopilot_scans').select('id,scan_key,status,stage,created_at,completed_at,candidate_count,error_code,error_message,reserved_usd').order('created_at',{ascending:false}).limit(25)
   ]);
-  return json({sources:checked(sources),ideas:checked(ideas),suggested_seoul_sources:trends.error?[]:(trends.data||[]).flatMap((t:Row)=>{
+  return json({sources:checked(sources),ideas:checked(ideas),autopilot:checked(control),scans:checked(scans),suggested_seoul_sources:trends.error?[]:(trends.data||[]).flatMap((t:Row)=>{
    const url=Array.isArray(t.source_urls)?t.source_urls.find((u:unknown)=>typeof u==='string'&&u.startsWith('https://')):null;
    return url?[{id:t.id,title:t.display_name,summary:t.summary,url,updated_at:t.updated_at}]:[];
   })});
+ }
+ if(action==='autopilot'&&path.length===1&&req.method==='PATCH'){
+  const body=await req.json().catch(()=>null);
+  if(!body||typeof body.enabled!=='boolean'||(body.scan_hour_kst!==undefined&&(!Number.isInteger(body.scan_hour_kst)||body.scan_hour_kst<0||body.scan_hour_kst>23)))
+   return json({error:'EDITORIAL_AUTOPILOT_SETTINGS_INVALID'},400);
+  const update:Row={enabled:body.enabled,updated_at:new Date().toISOString()};
+  if(body.scan_hour_kst!==undefined)update.scan_hour_kst=body.scan_hour_kst;
+  const result=checked(await db.from('marketing_editorial_autopilot_control').update(update).eq('singleton',true).select('*').single());
+  return json({autopilot:result});
+ }
+ if(action==='autopilot'&&path.length===2&&path[1]==='scan'&&req.method==='POST'){
+  const body=await req.json().catch(()=>null);
+  if(body?.confirm_paid!==true)return json({error:'EDITORIAL_SCAN_CONFIRMATION_REQUIRED'},400);
+  const key='editorial:manual:'+crypto.randomUUID();
+  return json(await runEditorialAutopilot(db,key,true),202);
  }
  if(action==='sources'&&path.length===1&&req.method==='POST'){
   const input=parseEditorialSource(await req.json().catch(()=>null));
@@ -157,7 +175,7 @@ export async function marketingEditorialStudioApi(req:NextRequest,db:DB,path:str
   if(idea.content_id)return json({error:'EDITORIAL_IDEA_LOCKED'},409);
   const proposal=validateBrief(body);
   const updated=checked(await db.from('marketing_editorial_ideas')
-   .update({...proposal,status:'ready',revision:idea.revision+1,updated_at:new Date().toISOString()})
+   .update({...proposal,status:'ready',editorial_review:'pending',review_by:null,reviewed_at:null,revision:idea.revision+1,updated_at:new Date().toISOString()})
    .eq('id',idea.id).eq('revision',idea.revision).is('content_id',null).select('*').maybeSingle());
   if(!updated)return json({error:'EDITORIAL_IDEA_CHANGED'},409);
   return json({idea:updated});
@@ -171,9 +189,21 @@ export async function marketingEditorialStudioApi(req:NextRequest,db:DB,path:str
   const result=await suggestPlan(db,idea,source);
   return json(result,result.error?409:200);
  }
+ if(action==='ideas'&&path.length===3&&path[2]==='reject'&&req.method==='POST'){
+  const idea=await ideaRow(db,path[1]),body=await req.json().catch(()=>null);
+  if(!Number.isInteger(body?.revision)||body.revision!==idea.revision||idea.content_id)
+   return json({error:'EDITORIAL_IDEA_CHANGED'},409);
+  const changed=checked(await db.from('marketing_editorial_ideas')
+   .update({editorial_review:'rejected',review_by:actor,reviewed_at:new Date().toISOString(),updated_at:new Date().toISOString()})
+   .eq('id',idea.id).eq('revision',idea.revision).is('content_id',null).select('*').maybeSingle());
+  if(!changed)return json({error:'EDITORIAL_IDEA_CHANGED'},409);
+  return json({idea:changed});
+ }
  if(action==='ideas'&&path.length===3&&path[2]==='handoff'&&req.method==='POST'){
   const idea=await ideaRow(db,path[1]),body=await req.json().catch(()=>null);
-  if(!Number.isInteger(body?.revision)||body.revision!==idea.revision)return json({error:'EDITORIAL_IDEA_CHANGED'},409);
+  if(!Number.isInteger(body?.revision)||body.revision!==idea.revision||body?.confirm_editorial_review!==true)return json({error:'EDITORIAL_REVIEW_CONFIRMATION_REQUIRED'},409);
+  if(idea.content_id)return json({content_id:idea.content_id,deduplicated:true});
+  if(idea.editorial_review==='rejected'||idea.status!=='ready')return json({error:'EDITORIAL_IDEA_NOT_APPROVABLE'},409);
   const source=await sourceRow(db,idea.source_id);
   if(source.status!=='saved'||source.rights_status==='restricted')throw new Error('EDITORIAL_SOURCE_EXCLUDED');
   const brief=validateBrief(idea);
@@ -188,7 +218,7 @@ export async function marketingEditorialStudioApi(req:NextRequest,db:DB,path:str
    instruction:editorialHandoffInstruction(sourceInput(source),brief)
   },actor,'manual',{editorial_idea_id:idea.id,editorial_source_url:source.source_url,editorial_pillar:source.pillar});
   const updated=checked(await db.from('marketing_editorial_ideas')
-   .update({content_id:result.content.id,status:'handed_off',updated_at:new Date().toISOString()})
+   .update({content_id:result.content.id,status:'handed_off',editorial_review:'approved',review_by:actor,reviewed_at:new Date().toISOString(),updated_at:new Date().toISOString()})
    .eq('id',idea.id).eq('revision',idea.revision).is('content_id',null).select('*').maybeSingle());
   // The content key is deterministic and idempotent. A lost link can be repaired on the next request.
   return json({content_id:result.content.id,idea:updated||await ideaRow(db,idea.id),deduplicated:result.deduplicated},202);

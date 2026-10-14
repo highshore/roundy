@@ -51,7 +51,7 @@ assert.match(client,/dating_opinions/);
 assert.match(client,/seoul_guides/);
 assert.match(client,/selected_hook/);
 assert.match(client,/storyboard/);
-assert.match(client,/Create unpublished carousel/);
+assert.match(client,/Approve & produce/);
 assert.doesNotMatch(client,/Publish now|Approve & schedule|reel studio/i);
 
 const db=new PGlite();
