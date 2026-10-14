@@ -6,6 +6,7 @@ import {EDITOR_FIRST_VERSION,seriesForTopic} from './marketing-editor-first';
 import {listStockSelections,reviewStockAsset} from './marketing-stock-photos';
 import {composeManualMagazineEdit} from './marketing-manual-slide';
 import {draftQuality} from './marketing-editorial';
+import {buildBilingualCaption} from './marketing-presentation';
 import {reviewMarketingDraft,mergePreflightQuality} from './marketing-preflight-service';
 import {createHash} from 'node:crypto';
 import {factPackReady} from './marketing-trend-guide';
@@ -123,7 +124,9 @@ export async function contentWorkflowApi(req:NextRequest,db:DB,path:string[],act
   result={content:contentResult(await db.rpc('refine_marketing_content_subject',{p_content:key,p_state:body.state_version,p_instruction:body.instruction.trim(),p_actor:actor,p_confirm_paid:body.confirm_paid===true}))};
   await wakeContentWorkers(db);
  }else if(action==='edit'){
-  if(!Array.isArray(body.edits)||body.edits.length<1||body.edits.length>5)throw new Error('CONTENT_EDITS_REQUIRED');
+  if(!Array.isArray(body.edits)||body.edits.length>5||
+   (!body.edits.length&&body.caption===undefined&&body.caption_ko===undefined&&body.caption_en===undefined))
+   throw new Error('CONTENT_EDITS_REQUIRED');
   let changed={...draft};const seen=new Set<number>();
   for(const edit of body.edits){
    if(!Number.isInteger(edit.index)||seen.has(edit.index))throw new Error('INVALID_MANUAL_SLIDE_INDEX');seen.add(edit.index);
@@ -131,6 +134,25 @@ export async function contentWorkflowApi(req:NextRequest,db:DB,path:string[],act
    changed={...changed,content_document:safe.document,carousel_slides:safe.slides};
   }
   if(body.caption!==undefined){if(typeof body.caption!=='string'||!body.caption.trim()||body.caption.length>2000)throw new Error('INVALID_CAPTION');changed.caption=body.caption.trim();}
+  // Edit both caption bodies without starting a new AI request. Rebuild the
+  // footer using server-controlled sources, hashtags and official account.
+  const captions:Row={...changed.content_document};let captionEdited=false;
+  for(const [field,limit] of [['caption_ko',400],['caption_en',520]] as const){
+   if(body[field]===undefined)continue;
+   if(typeof body[field]!=='string'||body[field].length>limit)throw new Error('INVALID_'+field.toUpperCase());
+   const value=body[field].replace(/\r\n?/g,'\n').trim();
+   if(captions[field]!==value){captions[field]=value;captionEdited=true;}
+  }
+  if(captionEdited){
+   const type=String(changed.growth_topic_type||changed.content_mode||'');
+   const entertainment=['mbti','dating_archetype','mini_quiz'].includes(type);
+   captions.caption=String(captions[changed.content_language==='en'?'caption_en':'caption_ko']||'');
+   changed.content_document=captions;
+   changed.caption=buildBilingualCaption(captions,Array.isArray(changed.research_sources)?changed.research_sources:[],
+    entertainment?'재미와 자기 성찰을 위한 콘텐츠이며 성격이나 궁합을 판정하지 않습니다.':'',
+    entertainment?'For entertainment and reflection, not a personality or compatibility assessment.':'');
+   if(changed.caption.length>2000)throw new Error('CAPTION_OVER_2000');
+  }
   // Persist invalidated downstream artifacts, not user-supplied approvals, roles or source IDs.
   // A previous formatting rejection is not a permanent approval latch. Re-evaluate
   // the edited copy below; keep factual/source and translation gates unchanged.
