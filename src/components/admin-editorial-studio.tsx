@@ -30,6 +30,7 @@ export function AdminEditorialStudio({locale}:{locale:Locale}){
  const [query,setQuery]=useState('');
  const [language,setLanguage]=useState<'ko'|'en'>('ko');
  const [showImport,setShowImport]=useState(false);
+ const [showExcluded,setShowExcluded]=useState(false);
  const load=useCallback(async()=>{
   const response=await fetch(ROOT,{cache:'no-store',credentials:'same-origin'});
   const result=await response.json().catch(()=>({}));
@@ -55,7 +56,8 @@ export function AdminEditorialStudio({locale}:{locale:Locale}){
  };
  const selectedIdea=data?.ideas.find(x=>x.id===selected)||null;
  const linkedSource=data?.sources.find(x=>x.id===selectedIdea?.source_id)||null;
- const filtered=(data?.sources||[]).filter(s=>s.pillar===pillar&&s.status==='saved'&&
+ const unsaved=Boolean(selectedIdea&&editor&&(editor.angle!==selectedIdea.angle||editor.selected_hook!==selectedIdea.selected_hook||JSON.stringify(editor.hooks)!==JSON.stringify(selectedIdea.hooks)||JSON.stringify(editor.storyboard)!==JSON.stringify(selectedIdea.storyboard)));
+ const filtered=(data?.sources||[]).filter(s=>s.pillar===pillar&&s.status===(showExcluded?'excluded':'saved')&&
   (!query.trim()||[s.title,s.creator,s.summary].some(k=>k.toLowerCase().includes(query.trim().toLowerCase()))));
  const ideas=[...(data?.ideas||[])].sort((a,b)=>b.updated_at.localeCompare(a.updated_at));
  const counts=useMemo(()=>({sources:data?.sources.filter(s=>s.status==='saved').length||0,
@@ -81,6 +83,7 @@ export function AdminEditorialStudio({locale}:{locale:Locale}){
  }
  async function suggest(){
   if(!selectedIdea||!editor)return;
+  if(unsaved){setError(t('Save your changes before generating hooks.','AI 후크 생성 전 변경 내용을 저장하세요.'));return;}
   await run('suggest',async()=>{
    const result=await call('/ideas/'+selectedIdea.id+'/suggest','POST',{revision:selectedIdea.revision,confirm_paid:true});
    await load();openIdea(result.idea);
@@ -92,6 +95,14 @@ export function AdminEditorialStudio({locale}:{locale:Locale}){
   await run('handoff',async()=>{
    const result=await call('/ideas/'+selectedIdea.id+'/handoff','POST',{revision:selectedIdea.revision,language});
    await load();setNotice(t('Carousel production started. Review the resulting unpublished draft in Marketing.','캐러셀 제작을 시작했습니다. 마케팅의 미게시 초안을 검토하세요.')+' ID: '+result.content_id);
+  });
+ }
+ async function toggleExcluded(source:Source){
+  await run('exclude:'+source.id,async()=>{
+   const excluded=source.status!=='excluded';
+   await call('/sources/'+source.id,'PATCH',{status:excluded?'excluded':'saved'});
+   await load();
+   setNotice(excluded?t('Source excluded from discovery.','소재를 보관함에서 제외했습니다.'):t('Source restored to discovery.','소재를 복구했습니다.'));
   });
  }
  const formField=(key:keyof SourceForm,value:string)=>setForm(s=>({...s,[key]:value}));
@@ -123,6 +134,7 @@ export function AdminEditorialStudio({locale}:{locale:Locale}){
    <div className="editorial-filter-row">
     {([['dating_opinions',t('Dating opinions & interviews','연애 의견과 인터뷰')],['seoul_guides',t('Seoul hotspots & guides','서울 핫플과 데이트 가이드')]] as const).map(([id,label])=><button key={id} type="button" aria-pressed={pillar===id} onClick={()=>{setPillar(id);setQuery('');}}>{label}</button>)}
     <input aria-label={t('Search saved sources','저장된 출처 검색')} value={query} onChange={e=>setQuery(e.target.value)} placeholder={t('Filter saved sources','소재 검색')}/>
+    <button type="button" aria-pressed={showExcluded} onClick={()=>setShowExcluded(v=>!v)}>{showExcluded?t('Show saved','저장된 소재 보기'):t('Show excluded','제외한 소재 보기')}</button>
    </div>
    {showImport&&<form className="editorial-import" onSubmit={e=>{e.preventDefault();void run('import',async()=>{
      const response=await call('/sources','POST',{...form,source_published_at:form.source_published_at||null});
@@ -148,7 +160,10 @@ export function AdminEditorialStudio({locale}:{locale:Locale}){
      <h3>{source.title}</h3><p className="editorial-source-creator">{source.creator||t('Creator not recorded','제작자 미기록')}{source.source_published_at?' / '+source.source_published_at:''}</p>
      <p>{compact(source.summary,200)}</p>
      <div className="editorial-source-footer"><span>{source.rights_status==='inspiration_only'?t('Inspiration only','아이디어 참고 전용'):source.rights_status==='restricted'?t('Restricted','사용 불가'):t('Rights review required','권리 검토 필요')}</span>
-      <button type="button" disabled={!!busy||source.rights_status==='restricted'} onClick={()=>void createIdea(source)}>{t('Develop idea','기획 시작')}<ChevronRight size={15}/></button></div>
+      <div className="editorial-source-actions">
+       <button type="button" disabled={!!busy} onClick={()=>void toggleExcluded(source)}>{source.status==='excluded'?t('Restore','복구'):t('Exclude','제외')}</button>
+       {source.status==='saved'&&<button type="button" disabled={!!busy||source.rights_status==='restricted'} onClick={()=>void createIdea(source)}>{t('Develop idea','기획 시작')}<ChevronRight size={15}/></button>}
+      </div></div>
     </article>)}
     {!filtered.length&&<div className="editorial-empty"><Compass size={24}/><strong>{t('No sources in this collection yet','이 주제에 저장된 출처가 없습니다.')}</strong><p>{t('Use Add source to save an Instagram post, article or public interview as inspiration.','출처 추가에서 공개 인터뷰, 인스타그램 게시물, 기사 링크를 저장하세요.')}</p></div>}
    </div>
@@ -175,7 +190,7 @@ export function AdminEditorialStudio({locale}:{locale:Locale}){
        <span className="editorial-revision">v{selectedIdea.revision}{selectedIdea.content_id?' / '+t('Handed off','전달 완료'):''}</span></header>
       <label className="editorial-field">{t('The editorial angle','이 소재에서 전달할 관점')}<textarea rows={2} maxLength={200} disabled={!!selectedIdea.content_id} value={editor.angle} onChange={e=>setEditor(s=>s&&({...s,angle:e.target.value}))}/></label>
       <div className="editorial-hook-heading"><div><h4>{t('Three hook candidates','후크 후보 3개')}</h4><p>{t('Pick the opening someone would stop scrolling for.','첫 장에서 스크롤을 멈출 만한 문장을 고르세요.')}</p></div>
-       <button type="button" className="editorial-soft-button" disabled={!!busy||!!selectedIdea.content_id} onClick={()=>void suggest()}><Sparkles size={15}/>{busy==='suggest'?t('Generating…','생성 중…'):t('AI propose hooks','AI 후크 제안')}</button></div>
+       <button type="button" className="editorial-soft-button" disabled={!!busy||!!selectedIdea.content_id||unsaved} onClick={()=>void suggest()}><Sparkles size={15}/>{busy==='suggest'?t('Generating…','생성 중…'):t('AI propose hooks','AI 후크 제안')}</button></div>
       <p className="editorial-fineprint">{t('AI suggestions are optional and explicitly requested. Each request reserves $0.02 of the existing marketing budget; no automatic retries. Save edits first.','AI 제안은 선택 기능입니다. 요청마다 기존 마케팅 예산에서 $0.02를 예약하며 자동 재시도하지 않습니다. 수정 내용은 먼저 저장하세요.')}</p>
       <div className="editorial-hook-list">{editor.hooks.map((hook,index)=><div className="editorial-hook" key={index}>
        <input type="radio" name="chosenHook" aria-label={t('Select hook','후크 선택')+' '+(index+1)} checked={editor.selected_hook===hook} disabled={!!selectedIdea.content_id} onChange={()=>setEditor(s=>s&&({...s,selected_hook:hook}))}/>
@@ -194,6 +209,7 @@ export function AdminEditorialStudio({locale}:{locale:Locale}){
         <button type="button" className="editorial-primary-button" disabled={!!busy||selectedIdea.status!=='ready'||editor.angle!==selectedIdea.angle||editor.selected_hook!==selectedIdea.selected_hook||JSON.stringify(editor.hooks)!==JSON.stringify(selectedIdea.hooks)||JSON.stringify(editor.storyboard)!==JSON.stringify(selectedIdea.storyboard)} onClick={()=>void handoff()}>{busy==='handoff'?t('Preparing…','준비 중…'):t('Create unpublished carousel','미게시 캐러셀 제작')}<ArrowRight size={16}/></button>
        </>}
       </div>
+      {unsaved&&<p className="editorial-notice" role="status">{t('Unsaved changes. Save your storyboard to enable production or AI suggestions.','저장되지 않은 변경 사항이 있습니다. 기획안을 저장한 뒤 제작이나 AI 제안을 진행하세요.')}</p>}
       {!selectedIdea.content_id&&<p className="editorial-fineprint">{t('Save your latest edits before creating content. This transfers a brief to the existing reviewed-photo and approval pipeline; it does not publish or schedule anything.','수정 내용을 먼저 저장하세요. 기존 이미지 권리 검수와 승인 파이프라인에 기획안을 전달할 뿐 자동 게시하거나 예약하지 않습니다.')}</p>}
      </>}
     </div>
