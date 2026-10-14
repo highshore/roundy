@@ -83,6 +83,7 @@ try{
  await db.query("update public.marketing_editorial_autopilot_scans set status='completed' where scan_key=$1",[key]);
  const second=await db.query(reserve,['editorial:manual:22222222-2222-4222-8222-222222222222',true]);
  assert.equal(second.rows[0].outcome.accepted,true);
+ await db.query("update public.marketing_editorial_autopilot_scans set status='completed' where scan_key=$1",['editorial:manual:22222222-2222-4222-8222-222222222222']);
  await assert.rejects(db.query(reserve,['editorial:manual:33333333-3333-4333-8333-333333333333',true]),/EDITORIAL_SCAN_DAILY_LIMIT/);
  assert.equal((await db.query("select has_function_privilege('anon','public.reserve_marketing_editorial_autopilot_scan(text,boolean)','EXECUTE') as allowed")).rows[0].allowed,false);
  assert.equal((await db.query("select has_function_privilege('service_role','public.reserve_marketing_editorial_autopilot_scan(text,boolean)','EXECUTE') as allowed")).rows[0].allowed,true);
