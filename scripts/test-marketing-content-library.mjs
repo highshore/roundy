@@ -40,6 +40,15 @@ for(const locale of ['ko','en']){
  const body=field(locale==='ko'?'본문':'Body','textarea');await act(async()=>body.props.onChange({target:{value:'Edited body'}}));
  await click(locale==='ko'?'새 버전으로 저장':'Save a new version');assert.equal(posts.at(-1).body.caption,'Saved nonempty caption');assert.equal(posts.at(-1).body.state_version,6);n++;
  assert.equal(posts.some(p=>p.route.endsWith('/approve')),false);n++;
+ // Caption-only edits are saved without a fake slide edit, in both languages.
+ current.draft.content_document={caption_ko:'이전 국문 문장.\n새로운 생각.',caption_en:'An older English line.\nOne more thought.'};
+ await act(async()=>{timer?.();await tick();});
+ const captionKoField=field(locale==='ko'?'한국어 캡션':'Korean caption','textarea');
+ await act(async()=>captionKoField.props.onChange({target:{value:'바뀐 한국어 훅.\n다음 대화에서 시도해 볼 말.'}}));
+ await click(locale==='ko'?'수정 완료 및 저장':'Finish editing & save');
+ assert.equal(posts.at(-1).body.edits.length,0);
+ assert.equal(posts.at(-1).body.caption_ko,'바뀐 한국어 훅.\n다음 대화에서 시도해 볼 말.');
+ assert.equal(posts.at(-1).body.caption_en,undefined);n++;
  await act(async()=>view.unmount());
 }
 console.log('PASS '+n+' Korean/English content-library interaction checks: stable create key across reload, canonical state, asynchronously arriving copy, immutable edits and no implicit publication. Mock HTTP only.');
