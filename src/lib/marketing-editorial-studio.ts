@@ -202,6 +202,7 @@ export async function marketingEditorialStudioApi(req:NextRequest,db:DB,path:str
  if(action==='ideas'&&path.length===3&&path[2]==='handoff'&&req.method==='POST'){
   const idea=await ideaRow(db,path[1]),body=await req.json().catch(()=>null);
   if(!Number.isInteger(body?.revision)||body.revision!==idea.revision||body?.confirm_editorial_review!==true)return json({error:'EDITORIAL_REVIEW_CONFIRMATION_REQUIRED'},409);
+  if(idea.content_id)return json({content_id:idea.content_id,deduplicated:true});
   if(idea.editorial_review==='rejected'||idea.status!=='ready')return json({error:'EDITORIAL_IDEA_NOT_APPROVABLE'},409);
   const source=await sourceRow(db,idea.source_id);
   if(source.status!=='saved'||source.rights_status==='restricted')throw new Error('EDITORIAL_SOURCE_EXCLUDED');
