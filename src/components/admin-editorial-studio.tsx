@@ -6,10 +6,11 @@ import {tr,type Locale} from '@/lib/locale';
 import {Heading} from './heading';
 import type {EditorialPillar,EditorialCard} from '@/lib/editorial-studio-policy';
 import './admin-editorial-studio.css';
-type Source={id:string;pillar:EditorialPillar;source_url:string;title:string;summary:string;creator:string;source_published_at:string|null;rights_status:string;status:string;created_at:string};
-type Idea={id:string;source_id:string;angle:string;hooks:string[];selected_hook:string;storyboard:EditorialCard[];status:string;revision:number;content_id:string|null;updated_at:string};
+import {AdminEditorialAutopilot,type AutopilotControl,type AutopilotScan} from './admin-editorial-autopilot';
+type Source={id:string;pillar:EditorialPillar;source_url:string;title:string;summary:string;creator:string;source_published_at:string|null;rights_status:string;status:string;created_at:string;origin?:'manual'|'automated';editorial_priority?:number|null};
+type Idea={id:string;source_id:string;angle:string;hooks:string[];selected_hook:string;storyboard:EditorialCard[];status:string;revision:number;content_id:string|null;updated_at:string;origin?:'manual'|'automated';editorial_review?:'pending'|'approved'|'rejected';editorial_rationale?:string};
 type Trend={id:string;title:string;summary:string;url:string};
-type PageData={sources:Source[];ideas:Idea[];suggested_seoul_sources:Trend[]};
+type PageData={sources:Source[];ideas:Idea[];suggested_seoul_sources:Trend[];autopilot:AutopilotControl;scans:AutopilotScan[]};
 type Tab='discover'|'ideas'|'review';
 type SourceForm={pillar:EditorialPillar;source_url:string;title:string;summary:string;creator:string;source_published_at:string};
 type EditorState={angle:string;hooks:string[];selected_hook:string;storyboard:EditorialCard[]};
@@ -59,9 +60,9 @@ export function AdminEditorialStudio({locale}:{locale:Locale}){
  const unsaved=Boolean(selectedIdea&&editor&&(editor.angle!==selectedIdea.angle||editor.selected_hook!==selectedIdea.selected_hook||JSON.stringify(editor.hooks)!==JSON.stringify(selectedIdea.hooks)||JSON.stringify(editor.storyboard)!==JSON.stringify(selectedIdea.storyboard)));
  const filtered=(data?.sources||[]).filter(s=>s.pillar===pillar&&s.status===(showExcluded?'excluded':'saved')&&
   (!query.trim()||[s.title,s.creator,s.summary].some(k=>k.toLowerCase().includes(query.trim().toLowerCase()))));
- const ideas=[...(data?.ideas||[])].sort((a,b)=>b.updated_at.localeCompare(a.updated_at));
+ const ideas=[...(data?.ideas||[])].sort((a,b)=>Number(a.editorial_review!=='pending')-Number(b.editorial_review!=='pending')||Number(Boolean(a.content_id))-Number(Boolean(b.content_id))||b.updated_at.localeCompare(a.updated_at));
  const counts=useMemo(()=>({sources:data?.sources.filter(s=>s.status==='saved').length||0,
-  ideas:data?.ideas.filter(i=>!i.content_id).length||0,prepared:data?.ideas.filter(i=>i.content_id).length||0}),[data]);
+  ideas:data?.ideas.filter(i=>i.editorial_review==='pending'&&!i.content_id).length||0,prepared:data?.ideas.filter(i=>i.content_id).length||0}),[data]);
  function openIdea(idea:Idea){
   setSelected(idea.id);setEditor({angle:idea.angle,hooks:[...idea.hooks],selected_hook:idea.selected_hook,
    storyboard:idea.storyboard.map(card=>({...card}))});setTab('ideas');setError('');setNotice('');
@@ -93,7 +94,7 @@ export function AdminEditorialStudio({locale}:{locale:Locale}){
  async function handoff(){
   if(!selectedIdea||!editor)return;
   await run('handoff',async()=>{
-   const result=await call('/ideas/'+selectedIdea.id+'/handoff','POST',{revision:selectedIdea.revision,language});
+   const result=await call('/ideas/'+selectedIdea.id+'/handoff','POST',{revision:selectedIdea.revision,language,confirm_editorial_review:true});
    await load();setNotice(t('Carousel production started. Review the resulting unpublished draft in Marketing.','캐러셀 제작을 시작했습니다. 마케팅의 미게시 초안을 검토하세요.')+' ID: '+result.content_id);
   });
  }
