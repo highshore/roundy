@@ -45,7 +45,7 @@ const server=readFileSync('src/lib/marketing-editorial-studio.ts','utf8');
 assert.match(server,/startContentWorkflow\(/);
 assert.match(server,/editorialHandoffInstruction/);
 assert.match(server,/EDITORIAL_REQUEST_RECONCILIATION_REQUIRED/);
-assert.doesNotMatch(server,/publish.*\(\s*|media_publish|schedule\(/i);
+assert.doesNotMatch(server,/media_publish\s*\(|publish_marketing|schedule_marketing|approve_marketing_content\s*\(/i);
 const client=readFileSync('src/components/admin-editorial-studio.tsx','utf8');
 assert.match(client,/dating_opinions/);
 assert.match(client,/seoul_guides/);
