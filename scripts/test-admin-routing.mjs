@@ -20,7 +20,7 @@ const modules = {
 const exports = {};
 new Function('require', 'exports', outputText)(name => modules[name], exports);
 const render = path => exports.default({ params: Promise.resolve({ path }) });
-for (const path of [[], ['marketing'], ['members'], ['events'], ['events', 'new'], ['members', '00000000-0000-0000-0000-000000000001']]) {
+for (const path of [[], ['marketing'], ['editorial'], ['members'], ['events'], ['events', 'new'], ['members', '00000000-0000-0000-0000-000000000001']]) {
   assert.deepEqual((await render(path)).path, path);
   role = false;
   await assert.rejects(render(path), /redirect:\/me/);
