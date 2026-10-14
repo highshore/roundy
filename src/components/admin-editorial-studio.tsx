@@ -145,18 +145,18 @@ export function AdminEditorialStudio({locale}:{locale:Locale}){
    onScan={()=>void scanNow()}/>
   <div className="editorial-stats">
    <div><span>{t('Saved sources','저장한 출처')}</span><strong>{counts.sources}</strong></div>
-   <div><span>{t('Editorial ideas','기획 중')}</span><strong>{counts.ideas}</strong></div>
+   <div><span>{t('Awaiting editorial approval','기획 승인 대기')}</span><strong>{counts.ideas}</strong></div>
    <div><span>{t('Carousels handed off','제작으로 전달')}</span><strong>{counts.prepared}</strong></div>
   </div>
   <nav className="editorial-tabs" aria-label={t('Editorial workflow','에디토리얼 작업 단계')}>
-   {([['discover',Search,t('Discover','소재 발견')],['ideas',Lightbulb,t('Angles & storyboard','기획과 후크')],['review',ShieldCheck,t('Prepared','제작 전달')]] as const).map(([id,Icon,label])=>
+   {([['discover',Search,t('Discovered sources','발견한 소재')],['ideas',Lightbulb,t('Approve editorial ideas','기획안 승인')],['review',ShieldCheck,t('Prepared','제작 전달')]] as const).map(([id,Icon,label])=>
     <button type="button" key={id} aria-current={tab===id?'page':undefined} onClick={()=>setTab(id)}><Icon size={16}/>{label}</button>)}
   </nav>
   {error&&<p className="editorial-alert" role="alert">{error}</p>}
   {notice&&<p className="editorial-notice" role="status">{notice}</p>}
   {!data&&!error&&<p className="admin-empty">{t('Loading the editorial library…','콘텐츠 라이브러리를 불러오는 중입니다…')}</p>}
   {data&&tab==='discover'&&<>
-   <div className="editorial-section-head"><div><Heading level={2}>{t('Discover source material','출처 찾아보기')}</Heading><p>{t('Research inspiration is not permission to reuse someone else’s media.','공개된 콘텐츠라도 타인의 영상이나 이미지를 임의로 재사용할 수는 없습니다.')}</p></div></div>
+   <div className="editorial-section-head"><div><Heading level={2}>{t('Discover source material','출처 찾아보기')}</Heading><p>{t('Auto-discovered research and optional manual imports. Public content is inspiration, not a media reuse license.','자동으로 발견한 자료와 직접 추가한 자료입니다. 공개된 콘텐츠라도 타인의 미디어를 무단으로 재사용할 수는 없습니다.')}</p></div></div>
    <div className="editorial-filter-row">
     {([['dating_opinions',t('Dating opinions & interviews','연애 의견과 인터뷰')],['seoul_guides',t('Seoul hotspots & guides','서울 핫플과 데이트 가이드')]] as const).map(([id,label])=><button key={id} type="button" aria-pressed={pillar===id} onClick={()=>{setPillar(id);setQuery('');}}>{label}</button>)}
     <input aria-label={t('Search saved sources','저장된 출처 검색')} value={query} onChange={e=>setQuery(e.target.value)} placeholder={t('Filter saved sources','소재 검색')}/>
@@ -185,10 +185,11 @@ export function AdminEditorialStudio({locale}:{locale:Locale}){
      <div className="editorial-source-top"><span>{source.pillar==='seoul_guides'?t('SEOUL GUIDE','서울 가이드'):t('DATING / PEOPLE','연애와 사람')}</span><a href={source.source_url} target="_blank" rel="noopener noreferrer" aria-label={t('Open original source','원본 출처 열기')}><ExternalLink size={16}/></a></div>
      <h3>{source.title}</h3><p className="editorial-source-creator">{source.creator||t('Creator not recorded','제작자 미기록')}{source.source_published_at?' / '+source.source_published_at:''}</p>
      <p>{compact(source.summary,200)}</p>
+     {source.origin==='automated'&&<div className="editorial-source-verification"><Sparkles size={13}/>{t('Auto discovered · Editorial priority ','자동 발견 · 편집 우선순위 ')}{source.editorial_priority??'—'}{t('/100 (not predicted engagement)','/100 (조회수 예측 아님)')}</div>}
      <div className="editorial-source-footer"><span>{source.rights_status==='inspiration_only'?t('Inspiration only','아이디어 참고 전용'):source.rights_status==='restricted'?t('Restricted','사용 불가'):t('Rights review required','권리 검토 필요')}</span>
       <div className="editorial-source-actions">
        <button type="button" disabled={!!busy} onClick={()=>void toggleExcluded(source)}>{source.status==='excluded'?t('Restore','복구'):t('Exclude','제외')}</button>
-       {source.status==='saved'&&<button type="button" disabled={!!busy||source.rights_status==='restricted'} onClick={()=>void createIdea(source)}>{t('Develop idea','기획 시작')}<ChevronRight size={15}/></button>}
+       {source.status==='saved'&&<button type="button" disabled={!!busy||source.rights_status==='restricted'} onClick={()=>{const found=data.ideas.find(i=>i.source_id===source.id);if(found)openIdea(found);else void createIdea(source);}}>{data.ideas.some(i=>i.source_id===source.id)?t('Review story','스토리 검토'):t('Develop idea','기획 시작')}<ChevronRight size={15}/></button>}
       </div></div>
     </article>)}
     {!filtered.length&&<div className="editorial-empty"><Compass size={24}/><strong>{t('No sources in this collection yet','이 주제에 저장된 출처가 없습니다.')}</strong><p>{t('Use Add source to save an Instagram post, article or public interview as inspiration.','출처 추가에서 공개 인터뷰, 인스타그램 게시물, 기사 링크를 저장하세요.')}</p></div>}
@@ -202,11 +203,11 @@ export function AdminEditorialStudio({locale}:{locale:Locale}){
    </section>}
   </>}
   {data&&tab==='ideas'&&<>
-   <div className="editorial-section-head"><div><Heading level={2}>{t('Angles, hooks and storyboard','관점, 후크와 스토리보드')}</Heading><p>{t('Select one source, choose the hook and shape the story before generating media.','소재 하나를 선택하고, 가장 강력한 후크와 카드 흐름을 먼저 확정하세요.')}</p></div></div>
+   <div className="editorial-section-head"><div><Heading level={2}>{t('Angles, hooks and storyboard','관점, 후크와 스토리보드')}</Heading><p>{t('The AI prepares proposals; you approve the best editorial angle or reject it. Approval starts the existing unpublished carousel pipeline.','AI가 기획안을 준비하고 사람은 승인 또는 거절합니다. 승인 시 기존 미게시 캐러셀 제작 파이프라인이 시작됩니다.')}</p></div></div>
    <div className="editorial-workbench">
     <aside className="editorial-idea-list" aria-label={t('Editorial ideas','기획안 목록')}>
      {ideas.map(idea=>{const src=data.sources.find(s=>s.id===idea.source_id);return <button className={selected===idea.id?'is-selected':''} key={idea.id} type="button" onClick={()=>openIdea(idea)}>
-      <span>{src?.pillar==='seoul_guides'?t('SEOUL','서울'):t('DATING','연애')} / {idea.content_id?t('In production','제작 전달'):t('Draft','기획안')}</span><strong>{compact(src?.title||idea.angle,95)}</strong><ChevronRight size={15}/></button>})}
+      <span>{src?.pillar==='seoul_guides'?t('SEOUL','서울'):t('DATING','연애')} / {idea.content_id?t('In production','제작 전달'):idea.editorial_review==='rejected'?t('Rejected','제외됨'):idea.origin==='automated'?t('Auto proposed · needs review','자동 제안 · 승인 대기'):t('Needs review','승인 대기')}</span><strong>{compact(src?.title||idea.angle,95)}</strong><ChevronRight size={15}/></button>})}
      {!ideas.length&&<div className="editorial-empty"><Lightbulb size={22}/><p>{t('Select Develop idea from a saved source.','저장된 출처에서 기획 시작을 선택하세요.')}</p><button type="button" onClick={()=>setTab('discover')}>{t('Go to sources','출처 보러 가기')}<ArrowRight size={15}/></button></div>}
     </aside>
     <div className="editorial-workspace">
@@ -214,6 +215,9 @@ export function AdminEditorialStudio({locale}:{locale:Locale}){
       <header className="editorial-workspace-head"><div><span className="editorial-overline">{linkedSource?.pillar==='seoul_guides'?t('SEOUL DISCOVERIES','서울 데이트 가이드'):t('DATING OPINIONS','연애 의견')}</span><h3>{linkedSource?.title}</h3>
        {linkedSource&&<a href={linkedSource.source_url} target="_blank" rel="noopener noreferrer"><ExternalLink size={14}/>{t('Original material','참고 원문')}</a>}</div>
        <span className="editorial-revision">v{selectedIdea.revision}{selectedIdea.content_id?' / '+t('Handed off','전달 완료'):''}</span></header>
+      {selectedIdea.origin==='automated'&&<p className="editorial-autogenerated-note"><Sparkles size={15}/>{t('AI prepared this source-backed hook and storyboard. Verify facts and choose whether the idea deserves production.','AI가 출처 기반으로 후크와 기획안을 만들었습니다. 사실을 검토하고 제작할지 판단하세요.')}</p>}
+      {selectedIdea.editorial_review==='rejected'&&<p className="editorial-alert">{t('Rejected. Editing and saving this story will reopen review.','제외한 기획안입니다. 수정 후 저장하면 다시 검토할 수 있습니다.')}</p>}
+      {selectedIdea.editorial_rationale&&<p className="editorial-review-reason"><strong>{t('Why it may resonate','독자가 관심을 가질 이유')}</strong>{selectedIdea.editorial_rationale}</p>}
       <label className="editorial-field">{t('The editorial angle','이 소재에서 전달할 관점')}<textarea rows={2} maxLength={200} disabled={!!selectedIdea.content_id} value={editor.angle} onChange={e=>setEditor(s=>s&&({...s,angle:e.target.value}))}/></label>
       <div className="editorial-hook-heading"><div><h4>{t('Three hook candidates','후크 후보 3개')}</h4><p>{t('Pick the opening someone would stop scrolling for.','첫 장에서 스크롤을 멈출 만한 문장을 고르세요.')}</p></div>
        <button type="button" className="editorial-soft-button" disabled={!!busy||!!selectedIdea.content_id||unsaved} onClick={()=>void suggest()}><Sparkles size={15}/>{busy==='suggest'?t('Generating…','생성 중…'):t('AI propose hooks','AI 후크 제안')}</button></div>
@@ -232,7 +236,8 @@ export function AdminEditorialStudio({locale}:{locale:Locale}){
        {selectedIdea.content_id?<Link className="editorial-primary-button" href="/admin/marketing">{t('Open content library','콘텐츠 라이브러리 열기')}<ArrowRight size={16}/></Link>:<>
         <button type="button" className="editorial-soft-button" disabled={!!busy} onClick={()=>void saveIdea()}><Check size={16}/>{busy==='save'?t('Saving…','저장 중…'):t('Save storyboard','기획안 저장')}</button>
         <label>{t('Language','언어')}<select value={language} onChange={e=>setLanguage(e.target.value==='en'?'en':'ko')}><option value="ko">한국어</option><option value="en">English</option></select></label>
-        <button type="button" className="editorial-primary-button" disabled={!!busy||selectedIdea.status!=='ready'||editor.angle!==selectedIdea.angle||editor.selected_hook!==selectedIdea.selected_hook||JSON.stringify(editor.hooks)!==JSON.stringify(selectedIdea.hooks)||JSON.stringify(editor.storyboard)!==JSON.stringify(selectedIdea.storyboard)} onClick={()=>void handoff()}>{busy==='handoff'?t('Preparing…','준비 중…'):t('Create unpublished carousel','미게시 캐러셀 제작')}<ArrowRight size={16}/></button>
+        <button type="button" className="editorial-soft-button" disabled={!!busy} onClick={()=>void rejectIdea()}><X size={15}/>{t('Reject idea','기획 제외')}</button>
+        <button type="button" className="editorial-primary-button" disabled={!!busy||selectedIdea.status!=='ready'||selectedIdea.editorial_review==='rejected'||unsaved} onClick={()=>void handoff()}>{busy==='handoff'?t('Starting production…','제작 시작 중…'):t('Approve & produce','기획 승인 후 제작')}<ArrowRight size={16}/></button>
        </>}
       </div>
       {unsaved&&<p className="editorial-notice" role="status">{t('Unsaved changes. Save your storyboard to enable production or AI suggestions.','저장되지 않은 변경 사항이 있습니다. 기획안을 저장한 뒤 제작이나 AI 제안을 진행하세요.')}</p>}
