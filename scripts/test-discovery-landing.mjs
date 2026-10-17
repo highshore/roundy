@@ -11,8 +11,8 @@ const [discover, classic, languageExchange, programContent, catchAll, eventScope
   read('src/lib/event-scope.ts'),
 ]);
 
-assert.match(discover, /import LanguageExchangePage from ['"]@\/app\/language-exchange\/page['"]/);
-assert.match(discover, /export default LanguageExchangePage/);
+assert.match(discover, /import { App } from ['"]@\/components\/app['"]/);
+assert.match(discover, /<App path="discover"/);
 assert.match(discover, /force-dynamic/);
 assert.match(classic, /<App path="discover"/);
 const siteFooter = await read('src/components/site-footer.tsx');
@@ -36,8 +36,13 @@ assert.match(programContent, /event.title_ko/);
 assert.match(programContent, /t\('UPCOMING SESSIONS', '모집 일정'\)/);
 assert.match(programContent, /t\('SAMPLE CURRICULUM', '예시 커리큘럼'\)/);
 assert.doesNotMatch(programContent, /<SiteFooter|className=\{styles\.header\}/);
-assert.match(catchAll, /import LanguageExchangePage from ['"]@\/app\/language-exchange\/page['"]/);
-assert.match(catchAll, /if \(path\.length === 0\) return <LanguageExchangePage\/>/);
+assert.doesNotMatch(catchAll, /LanguageExchangePage/);
+const app = await read('src/components/app.tsx');
+assert.match(app, /if\(route==='home'\|\|route==='discover'\)content=<LandingPage/);
+const seo = await read('src/lib/seo.ts');
+assert.match(seo, /서울 로테이션 소개팅/);
+assert.match(seo, /'\/language-exchange':/);
+assert.match(languageExchange, /publicMetadata\('\/language-exchange'\)/);
 assert.match(catchAll, /<App key=\{pathname\} path=\{path\.join\('\/'\)\}/);
 assert.match(eventScope, /1:1 Speed Mingle/);
-console.log('PASS: homepage and Discover localize all program sections with the global language selector while retaining live sessions and original Discovery');
+console.log('PASS: 1:1 rotation dating is the homepage and Discover; language exchange remains a separate localized program route');
