@@ -5,7 +5,7 @@ import LanguageExchangeContent, { type LanguageEvent } from './program-content';
 
 export const dynamic = 'force-dynamic';
 
-export const metadata: Metadata = publicMetadata('/');
+export const metadata: Metadata = publicMetadata('/language-exchange');
 
 export default async function LanguageExchangePage() {
   let events: LanguageEvent[] = [];

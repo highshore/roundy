@@ -1,11 +1,12 @@
 import { publicMetadata } from '@/lib/seo';
 import type { Metadata } from 'next';
-import LanguageExchangePage from '@/app/language-exchange/page';
+import { App } from '@/components/app';
 
-// Discovery now presents the language-exchange program. The independent
-// /language-exchange page remains available for direct links and PG review.
+// Restore the original 1:1 rotation-dating Discovery while keeping
+// the separate language-exchange program at /language-exchange.
 export const dynamic = 'force-dynamic';
-
 export const metadata: Metadata = publicMetadata('/');
 
-export default LanguageExchangePage;
+export default function DiscoverPage() {
+  return <App path="discover" />;
+}
